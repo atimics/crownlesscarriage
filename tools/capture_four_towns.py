@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -51,8 +52,9 @@ def capture(binary: Path, output: Path, scene: tuple, state: str) -> dict:
     stem = f'{town}-{name}-{state}'
     image = output / f'{stem}.png'
     image.unlink(missing_ok=True)  # A stale capture cannot make a failed run pass.
+    # The shipped screenshot API prefixes cwd; absolute names duplicate it.
     command = [str(binary), '--capture-town-state', str(town_id), str(x), str(z),
-               str(image), state]
+               os.path.relpath(image, Path.cwd()), state]
     with (output / f'{stem}.log').open('w') as log:
         subprocess.run(command, check=True, stdout=log, stderr=subprocess.STDOUT,
                        timeout=120)

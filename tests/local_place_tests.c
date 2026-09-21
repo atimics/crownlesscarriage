@@ -78,7 +78,12 @@ static int ProfileContract(void)
                 bool pony_yard = (profile->function == CC_SETTLEMENT_MARKET ||
                                  profile->function == CC_SETTLEMENT_FARMING) &&
                     camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD;
-                CHECK(camera->fovy <= (pony_yard ? 9.0f : 6.6f));
+                bool authored_street =
+                    (profile->function == CC_SETTLEMENT_MARKET ||
+                     profile->function == CC_SETTLEMENT_MINING) &&
+                    camera->kind == CC_LOCAL_TOWN_SCENE_CLOSE_FIRST;
+                CHECK(camera->fovy <=
+                      (authored_street ? 10.0f : pony_yard ? 9.0f : 6.6f));
             }
             if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
                 CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
@@ -640,7 +645,9 @@ static int FourAuthoredSceneContracts(void)
     CHECK(archive->trigger_x < 42.0f && archive->target_x < 38.0f);
     /* A fortress establishes the crossing and keep before its close-up walks. */
     CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 0)->fovy >= 20.0f);
-    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 2)->fovy >= 20.0f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 2)->fovy >= 30.0f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MARKET, 3)->fovy >= 9.5f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MINING, 3)->fovy >= 9.5f);
     return 0;
 }
 

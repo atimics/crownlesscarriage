@@ -4328,6 +4328,11 @@ static void DrawConstructedCompoundStructure(
     bool tower = structure->kind == CC_LOCAL_COMPOUND_TOWER;
     Color base = ShadeColor(stone, 0.70f);
 
+    if (tower && profile != NULL && profile->function == CC_SETTLEMENT_MINING) {
+        DrawSilverwickStack(structure, stone);
+        return;
+    }
+
     if (structure->kind == CC_LOCAL_COMPOUND_HALL ||
         structure->kind == CC_LOCAL_COMPOUND_STOREHOUSE) {
         int32_t style = structure->kind == CC_LOCAL_COMPOUND_HALL ?

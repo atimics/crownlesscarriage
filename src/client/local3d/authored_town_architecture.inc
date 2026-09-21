@@ -84,7 +84,7 @@ static void DrawThornfordArchitecture(const WorldBuilding *b, Color wall,
     bool granary = index == 2 || index < 0;
     bool shed = index == 0 || index == 5;
     if (granary) {
-        /* A wide raised food store, cross-braced gallery and an unloading hatch.
+        /* A wide raised food store, timber gallery and an unloading hatch.
            The lower stone store is solid: the gallery does not imply a shortcut. */
         DrawBox((Vector3){x + w * 0.5f, 0.65f, z + d * 0.5f},
                 (Vector3){w, 1.30f, d}, ShadeColor(wall, 0.72f));
@@ -244,7 +244,7 @@ static void DrawGloamgateArchitecture(const WorldBuilding *b, Color wall,
     Color cloth = burnt ? roof : BlendColor(WORLD_TEAL, wall, 0.15f);
     if (index == 1) {
         /* The archive is the only tall stepped facade: paired lancet windows,
-           stone stairs within the existing solid plot and a central record door. */
+           stepped masonry within the existing solid plot and a central record door. */
         DrawBox((Vector3){x + w * 0.5f,h * 0.5f,z + d * 0.5f},
                 (Vector3){w,h,d}, wall);
         DrawTownGableRoof(x,z,w,d,h,2.6f,wall,roof);
@@ -304,6 +304,17 @@ static void DrawGloamgateArchitecture(const WorldBuilding *b, Color wall,
                           ShadeColor(cloth,bay % 2 == 0 ? 1.0f : 0.77f));
             DrawBox((Vector3){px + bw * 0.5f,2.40f,z + d + 0.12f},
                     (Vector3){bw - 0.22f,0.45f,0.045f}, cloth);
+            /* Fixed shop dress, not a representation of saleable cloth stock. */
+            for (int32_t hanging = 0; hanging < 2; ++hanging) {
+                float hx = px + bw * (hanging == 0 ? 0.18f : 0.82f);
+                Color fabric = hanging == 0 ? cloth :
+                    BlendColor(cloth, WORLD_DANGER, 0.54f);
+                if (burnt) fabric = roof;
+                DrawBox((Vector3){hx,3.5f,z + d + 0.11f},
+                        (Vector3){bw * 0.19f,1.45f,0.04f}, fabric);
+                DrawBox((Vector3){hx,4.28f,z + d + 0.12f},
+                        (Vector3){bw * 0.25f,0.10f,0.16f}, trim);
+            }
         }
     }
     DrawTownPortal(x + w * 0.5f,z + d,w,h,trim,b->door);
@@ -360,4 +371,31 @@ static void DrawAlderwatchArchitecture(const WorldBuilding *b, Color wall,
         }
     }
     DrawTownPortal(x + w * 0.5f,z + d,w,eaves,iron,b->door);
+}
+
+/* Replace the mine compound's inherited military towers with industrial stacks.
+ * The broad base occupies exactly the old solid footprint. No lanes, collision
+ * extents, production state or simulated emissions are added by this facade. */
+static void DrawSilverwickStack(const WorldStructure *structure, Color stone)
+{
+    Rectangle plot = structure->footprint;
+    float h = structure->height;
+    float x = plot.x + plot.width * 0.5f;
+    float z = plot.y + plot.height * 0.5f;
+    Color soot = BlendColor(stone, WORLD_METAL_SHADOW, 0.62f);
+    DrawBox((Vector3){x,h * 0.18f,z},
+            (Vector3){plot.width,h * 0.36f,plot.height}, stone);
+    DrawBox((Vector3){x,h * 0.67f,z},
+            (Vector3){plot.width * 0.64f,h * 0.66f,plot.height * 0.64f}, soot);
+    for (int32_t band = 0; band < 3; ++band) {
+        DrawBox((Vector3){x,h * (0.44f + (float)band * 0.25f),z},
+                (Vector3){plot.width * 0.72f,0.20f,plot.height * 0.72f},
+                WORLD_METAL_SHADOW);
+    }
+    DrawBox((Vector3){x,h + 0.08f,z},
+            (Vector3){plot.width * 0.74f,0.16f,plot.height * 0.74f}, stone);
+    DrawBox((Vector3){x,h + 0.17f,z},
+            (Vector3){plot.width * 0.44f,0.025f,plot.height * 0.44f}, WORLD_INK);
+    DrawBox((Vector3){x,h * 0.18f,plot.y + plot.height + 0.025f},
+            (Vector3){plot.width * 0.36f,h * 0.18f,0.05f}, WORLD_INK);
 }
