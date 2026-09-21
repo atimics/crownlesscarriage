@@ -19,24 +19,9 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('src/sim/cc_oven_court.c')
-          s=p.read_text()
-          old="""    /* Duplicate inspection at unchanged terms does not generate evidence or
-                 consume the tape. Do not mutate day/time while reading. */
-              for (int32_t i=0; i<2; ++i) {
-                  const CcEvent *old = CcOvenCourtNote(sim, i);"""
-          new="""    /* Consecutive identical inspections are idempotent. Switching between
-                 a copied tally and a named explanation is a new acquisition: retain
-                 its source as the latest note rather than borrowing another speaker's
-                 event for the response. Reading never changes world time or stocks. */
-              {
-                  const CcEvent *old = CcOvenCourtNote(sim, 0);"""
-          # The continuation lines above retain six extra source-indent spaces
-          # from the readable workflow block; normalize only those lines.
-          def source(text):
-              rows=text.splitlines()
-              return '\n'.join([rows[0]]+[row[10:] for row in rows[1:]])
-          old=source(old); new=source(new)
+          p=Path('src/sim/cc_oven_court.c'); s=p.read_text()
+          old="    /* Duplicate inspection at unchanged terms does not generate evidence or\n       consume the tape. Do not mutate day/time while reading. */\n    for (int32_t i=0; i<2; ++i) {\n        const CcEvent *old = CcOvenCourtNote(sim, i);"
+          new="    /* Consecutive identical inspections are idempotent. Switching between\n       a copied tally and a named explanation is a new acquisition: retain\n       its source as the latest note rather than borrowing another speaker's\n       event for the response. Reading never changes world time or stocks. */\n    {\n        const CcEvent *old = CcOvenCourtNote(sim, 0);"
           assert s.count(old)==1, 'Unexpected source: do not apply heuristically'
           p.write_text(s.replace(old,new,1))
           p=Path('src/client/cc_oven_court.inc'); s=p.read_text()
