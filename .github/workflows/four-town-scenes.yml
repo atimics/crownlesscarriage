@@ -5,6 +5,8 @@ on:
     paths:
       - 'src/client/**'
       - 'tests/local*'
+      - 'tests/test_four_town_capture.py'
+      - 'tests/creature_captures.inc'
       - 'tools/capture_four_towns.py'
       - 'docs/design/four-authored-towns.md'
       - '.github/workflows/four-town-scenes.yml'
@@ -28,6 +30,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Check capture paths and receipts
+        run: python3 -m unittest discover -s tests -p test_four_town_capture.py
       - name: Install native client dependencies
         run: >-
           sudo apt-get update && sudo apt-get install -y
