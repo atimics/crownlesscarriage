@@ -46,7 +46,7 @@ jobs:
       - name: Check ordinary input and economic contracts
         run: |
           ulimit -s 65536
-          xvfb-run -a ctest --test-dir build-oven --output-on-failure --parallel 2 -R 'oven_court|town_production|bakery_support|food_relief|nutrition|custody|adventure_input|adventure_trade|adventure_town|capture.*(request|contract)|town_arrival|town_departure|shared_carriage_bridge'
+          xvfb-run -a ctest --test-dir build-oven --output-on-failure --parallel 2 -R 'oven_court|town_production|bakery_support|food_relief|nutrition|custody|adventure_input|adventure_trade|adventure_town|capture.*(request|contract)|town_arrival|town_departure|shared_carriage_bridge|simulation_resume|persistence_field_contract|production_contract'
       - name: Capture staged court states and large text
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: >-
