@@ -35,9 +35,20 @@ jobs:
       - name: Apply reviewed stabilization patch
         if: hashFiles('.github/carriage-stabilization.patch') != ''
         run: |
-          git apply --check .github/carriage-stabilization.patch
-          git apply .github/carriage-stabilization.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, zlib
+          content = Path('.github/carriage-stabilization.patch').read_text()
+          if content.startswith('zlib-base64\n'):
+              patch = zlib.decompress(base64.b64decode(content.split('\n', 1)[1]))
+          else:
+              patch = content.encode()
+          Path('/tmp/carriage.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/carriage.patch
+          git apply /tmp/carriage.patch
           git diff --check
+          git diff --stat
       - name: Install native build dependencies
         if: hashFiles('.github/carriage-stabilization.patch') != ''
         run: |
@@ -51,13 +62,13 @@ jobs:
           set -o pipefail
           cmake -S . -B build-gfx -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee gfx-configure.log
           cmake --build build-gfx --parallel 4 2>&1 | tee gfx-build.log
-          xvfb-run -a ctest --test-dir build-gfx --output-on-failure -R 'carriage|creature|travel|footing|town_arrival|renderer' 2>&1 | tee gfx-tests.log
+          xvfb-run -a ctest --test-dir build-gfx --output-on-failure -R 'carriage|creature|travel|footing|town_arrival|town_departure|roadbook_arrival|renderer' 2>&1 | tee gfx-tests.log
+          xvfb-run -a ./build-gfx/renderer_regression_tests --carriage-graphics /tmp/carriage.png 2>&1 | tee gfx-draw.log
       - name: Commit code only to the work branch
         if: hashFiles('.github/carriage-stabilization.patch') != ''
         run: |
           git config user.name 'chatgpt-codex-connector[bot]'
           git config user.email 'chatgpt-codex-connector[bot]@users.noreply.github.com'
-          git rm .github/workflows/carriage-stabilization-workbench.yml .github/carriage-stabilization.patch
           git add src tests cmake docs/design/pony-presentation-timeline.md
           git diff --cached --check
           git commit -m 'fix: stabilize carriage and pony presentation across travel transitions'
