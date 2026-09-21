@@ -1,39 +1,67 @@
-# Four authored towns — scene rebuild
+# Four authored towns — architecture and composed walks
 
-This branch implements the four-town concept board approved in the conversation.
-It is a scene/terrain/composition task, not a quest, economy, or save-schema rewrite.
-The linked PR remains a draft until its code and rendered checks are ready.
+Implements the approved four-town concept board in the existing procedural
+storybook renderer. These are connected town scenes, not painted backgrounds,
+new quest instances, or a replacement rendering engine.
 
-## Authored scenes
-
-| Place | Four scene commitments | Distinguishing spatial idea |
+| Town | Authored views | Architectural identity |
 | --- | --- | --- |
-| Thornford | River Crossing; Threshing Green; Granary Rise; Cartwright Yard | A working river village: horizontal fields and low crofts below raised food stores; water and wheelwork explain the settlement. |
-| Gloamgate | Market Circle; Archive Steps; Cloth Yard; Coach Court | A bowl-shaped market and branching courts: close awnings, a headless queen, tall archive facade and a covered coach court. |
-| Silverwick | Foundry Terrace; Company Store; Workers' Lane; Ore Wagon Yard | Industrial shelves: warm furnace mouths under dark gantries, retaining walls and a worn worker street, not another square with grey cottages. |
-| Alderwatch | Contested Bridge; Muster Spine; Keep; Lower Bailey | A fortress across a visible void: long controlled crossing, compact military street, dominant keep and a sheltered supply court. |
+| Thornford | River Crossing; Threshing Green; Granary Rise; Cartwright Yard | Raised cross-braced food stores, broad low threshing barns, mill gable and wheel-faced cartwright sheds among the existing river and field lanes. |
+| Gloamgate | Market Circle; Archive Steps; Cloth Yard; Coach Court | An octagonal exchange above the market, a stepped archive gable with paired tall windows, close merchant gables and hanging fabric fronts. The fountain remains the street anchor. |
+| Silverwick | Foundry Terrace; Company Store; Workers' Lane; Ore Wagon Yard | Sawtooth workshop roofs, iron headframes, narrow chimney-backed worker houses and the stopped clock on a severe company facade. |
+| Alderwatch | Contested Bridge; Muster Spine; Keep; Lower Bailey | Low long barracks rather than a turret on every building, buttressed fronts, crenellated public hall and a single dominant keep. Wider bridge/keep views reveal the fortress's geography. |
 
-The painted concept is a composition reference, not a demand for photorealistic
-assets or a new rendering engine. Express its forms with the existing model,
-material, lighting, and terrain system. Keep Crownless's scale and visual language.
+## Implementation boundaries
 
-## Acceptance
+`authored_town_architecture.inc` supplies four distinct building families through
+`DrawSettlementBuilding`, shared by the street and wider-world renderer. The
+original foundations, plot transforms, collision footprints, service-door
+centres, simulation-derived stock and repair presentation, and foreground reveal
+masks remain in charge. No saved positions, inventory, economy or schema change.
+Roofs remain inside the existing building-height-plus-three envelope. Decorative
+facades are not new interiors, walkable galleries or new archive services.
+The mill wheel and existing terrain stages remain live; no decorative stock is
+invented. Rosespire and Hollowbarrow retain their existing architecture.
 
-- Existing gates, carriage parking, service doors, actor approaches and saved
-  positions remain reachable. New visible solid geometry must agree with collision.
-- The player learns different silhouettes and street relationships, not four
-  colour variants of the same camera and building grid.
-- Each town has four intentionally composed playable views, including an ordinary
-  walking route between yard and service. Scenes are not disconnected dioramas.
-- Existing stock, fire, repair and security presentation still follows simulation
-  state. Scenery must not manufacture resources or change goods custody.
-- Review actual captures for all four towns. CI correctness alone does not certify
-  visual quality, phone readability, or a complete ordinary-control walkthrough.
+The sixteen principal views occupy existing camera slots. Close interaction and
+carriage-yard framing remains bounded. Gloamgate's landmark view moves from the
+customs keep to the archive; the fortress receives genuine establishing views
+instead of using a close camera for every scene. Streets and named pedestrian
+routes remain physical and save-compatible.
 
-## Review lane
+## Validation and reproduction
 
-`.github/workflows/four-town-scenes.yml` builds the native client on relevant PRs,
-checks the existing route/interaction/save tests, and publishes rendered scenes
-with the exact source revision. Its short-lived source receipt omits audio,
-Blender sources and documentation media; it is for reproducing scene review, not
-for distribution as a complete game. The normal browser CI remains separate.
+`tools/capture_four_towns.py` captures all sixteen scenes through the shipped
+native client; `--conditions` adds nine fire/recovery/hunger views. It records the
+exact tested revision, commands, PNG dimensions and hashes, rejects stale/missing
+captures and duplicate principal images, and retains partial results on failure.
+These are **staged captures**, not an ordinary-input end-to-end walkthrough.
+
+The scoped PR workflow builds with warnings as errors and runs town, route,
+interaction, terrain, renderer and save regressions. Captures still run after a
+test failure when compilation succeeded; the workflow does not hide that failure.
+Its artifact includes screenshots, logs, a revision receipt and native review
+executables. Browser CI remains a separate check; neither CI proves phone comfort.
+
+### Baseline finding
+
+Before any game code changed, the native build of `6bc48a29` passed and 21 of 22
+selected tests passed. `local_collision_space` failed because its Miller's Bend
+assertion compared a one-segment **direct-movement preview** with the navigation
+waypoint count. A direct target has no active navigation path. The assertion now
+compares navigation state, compares counts for navigated previews, and requires
+zero stored waypoints for direct targets. Exact command-point equality and the
+subsequent movement/arrival checks remain intact. This corrects the fixture's
+expectation rather than changing movement or weakening the destination check.
+
+Run locally:
+
+```sh
+cmake -S . -B build-towns -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON
+cmake --build build-towns --parallel 4
+xvfb-run -a ctest --test-dir build-towns --output-on-failure -R 'town|local|carriage|interaction|save|renderer|terrain'
+xvfb-run -a python3 tools/capture_four_towns.py build-towns/crownless_carriage --output out/four-town-review --conditions
+```
+
+On a desktop with a display, omit `xvfb-run -a`. On macOS use the executable
+inside the built `.app/Contents/MacOS/` directory.
