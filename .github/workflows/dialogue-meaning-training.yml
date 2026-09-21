@@ -46,6 +46,7 @@ jobs:
           python tests/meaning_language_tests.py
           python tests/meaning_data_tests.py
           python tests/dialogue_fact_policy_tests.py
+          python tests/dialogue_fact_question_tests.py
 
   detect:
     if: github.event_name != 'pull_request'
@@ -116,6 +117,7 @@ jobs:
           python tests/meaning_language_tests.py
           python tests/meaning_data_tests.py
           python tests/dialogue_fact_policy_tests.py
+          python tests/dialogue_fact_question_tests.py
       - name: Train semantic model
         run: |
           case "$STEPS" in (*[!0-9]*|'') echo 'steps must be an integer from 1 to 6000' >&2; exit 1;; esac

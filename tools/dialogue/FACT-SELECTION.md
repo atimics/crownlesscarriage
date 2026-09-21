@@ -85,11 +85,20 @@ by 21 points.
 
 ## Integration path
 
+`fact_question.py` connects the typed selection to real accounts: it maps parsed
+grammar fields to typed facts and parses a natural question to a role.
+`fact_demo.py` runs the trained model on real grammar accounts and renders the
+chosen fact. See
+[`docs/reviews/fact-selection-2026-09-21/DIALOGUE.md`](../../docs/reviews/fact-selection-2026-09-21/DIALOGUE.md)
+for samples. The parser maps all eight held-out `question-contrasts` questions
+to the right role; the remaining misses are parser wording and grammar field
+roles.
+
 `event_facts.build_facts` already produces owner-bound, source-tagged,
 certainty-tagged facts for all 139 simulation event kinds. Its `report`, `ask`
 and `warn` acts map onto this candidate shape. The next step is to feed that
-table into `fact_policy.encode_input`, add a natural-question parser that emits
-the typed role, and render the chosen fact through the language packs.
+table into `fact_policy.encode_input`, widen the question parser, and render the
+chosen fact through the language packs.
 
 ## Reproduction
 
