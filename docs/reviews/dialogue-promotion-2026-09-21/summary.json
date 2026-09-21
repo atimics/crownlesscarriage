@@ -1,0 +1,65 @@
+{
+  "task": "held account -> spoken line (in-game Chat path)",
+  "arms": {
+    "A": "authored",
+    "B": "shipped core.ccv2"
+  },
+  "all": {
+    "cases": 93,
+    "exact": [
+      91,
+      93
+    ],
+    "field_preserved": [
+      136,
+      136
+    ],
+    "cases_all_fields": [
+      93,
+      93
+    ],
+    "cases_no_invented": [
+      93,
+      93
+    ]
+  },
+  "confident": {
+    "cases": 33,
+    "exact": [
+      33,
+      33
+    ],
+    "field_preserved": [
+      49,
+      49
+    ],
+    "cases_all_fields": [
+      33,
+      33
+    ],
+    "cases_no_invented": [
+      33,
+      33
+    ]
+  },
+  "uncertain": {
+    "cases": 60,
+    "exact": [
+      58,
+      60
+    ],
+    "field_preserved": [
+      87,
+      87
+    ],
+    "cases_all_fields": [
+      60,
+      60
+    ],
+    "cases_no_invented": [
+      60,
+      60
+    ]
+  },
+  "model_sha256": "7d1c3cd5e46738ba7cd60673e58f05e12535ac46204b07a8449f41a6fcb936c9"
+}
