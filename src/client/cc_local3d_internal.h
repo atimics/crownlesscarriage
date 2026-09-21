@@ -37,6 +37,8 @@ bool CcLocalCreatureGaitTargetInternal(int32_t slot,
     CcLocalSceneKind scene);
 bool CcLocalCreatureGaitPoseInternal(int32_t slot, Vector3 ground_position,
     float yaw, CcCreatureRigPose *pose);
+Vector3 CcLocalRoadCarriageSocketInternal(Vector3 base, float yaw,
+    float pitch, float sway, float lateral, float height, float forward);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time);
