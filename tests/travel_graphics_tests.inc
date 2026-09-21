@@ -68,13 +68,20 @@ static void TestTravelForestCameraTurn(void)
     RequireRenderer(found, "camera turn fixture needs a wilderness tree");
     CcLocalWorldCarriageState carriage = {.storybook_travel = true,
         .position = {tree.x - 8, tree.y, tree.z - 4.5f},
+        .render_position = {tree.x - 8, tree.y, tree.z - 4.5f},
         .camera_heading_yaw = atan2f(-20, 19) - 0.001f};
     CcLocalAgent agent = {.position = carriage.position};
     RenderTexture2D target = LoadRenderTexture(320, 180);
-    BeginDrawing();
-    CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
-        target, (Rectangle){0, 0, 320, 180});
-    EndDrawing();
+    /* Cache construction is amortized to one cell per frame, so warm up until
+       every visible cell is resident before measuring reuse. */
+    for (int warm = 0; warm < 200; ++warm) {
+        uint64_t before = storybook_forest_uploads;
+        BeginDrawing();
+        CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,
+            target, (Rectangle){0, 0, 320, 180});
+        EndDrawing();
+        if (storybook_forest_uploads == before) break;
+    }
     uint64_t first_uploads = storybook_forest_uploads;
     RequireRenderer(first_uploads > 0, "travel forest must draw");
     unsigned int buffers[STORYBOOK_FOREST_CELL_COUNT] = {0};
@@ -103,6 +110,7 @@ static void TestTravelForestCameraTurn(void)
             "resident cells must keep their GPU buffers");
     }
     carriage.position.x += 32.0f;
+    carriage.render_position.x += 32.0f;
     agent.position = carriage.position;
     BeginDrawing();
     CcLocalDrawOpenWorld3D(&sim, &stream, &agent, NULL, &carriage, 0,

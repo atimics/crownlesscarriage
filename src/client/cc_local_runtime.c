@@ -84,6 +84,16 @@ int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
     return steps;
 }
 
+float CcLocalCourseAlpha(const CcLocalCourse *course)
+{
+    if (course == NULL) return 0.0f;
+    const double fixed_step = 1.0 / 60.0;
+    double amount = course->world_simulation_accumulator / fixed_step;
+    if (amount < 0.0) amount = 0.0;
+    if (amount > 1.0) amount = 1.0;
+    return (float)amount;
+}
+
 void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time,
                         bool market_interior)
 {

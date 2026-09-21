@@ -1305,7 +1305,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             &stream->manifest, sim->journey.destination_id) : NULL;
     if (arrival_place != NULL) {
         float scale = fmaxf(0.1f, arrival_place->profile_scale);
-        float heading = carriage->heading_yaw;
+        float heading = carriage->render_heading_yaw;
         Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
         Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
         close_focus = Vector3Add(
@@ -1355,7 +1355,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         camera = SnapCameraToArtPixels(camera, target.texture.height);
     }
     if (carriage != NULL && carriage->visible) {
-        camera = PonyConversationCamera(camera, CarriageRenderAnchor(carriage), carriage->heading_yaw, sim);
+        camera = PonyConversationCamera(camera, CarriageRenderAnchor(carriage), carriage->render_heading_yaw, sim);
         focus = camera.target;
     }
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,
@@ -1434,8 +1434,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         rlScalef(carriage_scale, carriage_scale, carriage_scale);
         rlTranslatef(-carriage_base.x, -carriage_base.y, -carriage_base.z);
         DrawRoadCarriage(carriage_base, sim, clock,
-                         carriage->pace, carriage->travelled,
-                         carriage->heading_yaw,
+                         carriage->pace, carriage->render_travelled,
+                         carriage->render_heading_yaw,
                          true, false, CC_LOCAL_SCENE_ROAD);
         rlPopMatrix();
         if (kingdom_view) {
@@ -1459,7 +1459,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     }
     CcLocalAgent passenger;
     if (hero_embarked && crew_exchange != NULL) {
-        PrepareCrewPassenger(agent, CarriageRenderAnchor(carriage), carriage->heading_yaw, &passenger);
+        PrepareCrewPassenger(agent, CarriageRenderAnchor(carriage), carriage->render_heading_yaw, &passenger);
         DrawRobotShell(&passenger);
     }
     DrawCrew(hero_embarked && crew_exchange != NULL ? &passenger : agent, 6);
