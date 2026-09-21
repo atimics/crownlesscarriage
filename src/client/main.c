@@ -1694,7 +1694,7 @@ static bool SetOpenWorldCarriageOnRoute(
     if (!CcWorldRoutePose(route, origin_id, amount, &point, &heading)) {
         return false;
     }
-    CcWorldStreamFollowRoute(&local->world_stream, route, origin_id, amount, 4);
+    CcWorldStreamFollowRouteTimed(&local->world_stream, route, origin_id, amount, 4, 0.0015);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1793,7 +1793,7 @@ static void PositionOpenWorldDeparture(const CcSim *sim, LocalState *local)
             &point, &heading)) {
         return;
     }
-    CcWorldStreamFollowRoute(&local->world_stream, route, sim->player.location_id, journey_amount, 4);
+    CcWorldStreamFollowRouteTimed(&local->world_stream, route, sim->player.location_id, journey_amount, 4, 0.0015);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -1845,7 +1845,7 @@ static bool PositionOpenWorldArrival(const CcSim *sim, LocalState *local)
                           &point, &heading)) {
         return false;
     }
-    CcWorldStreamFollowRoute(&local->world_stream, route, origin_id, journey_amount, 4);
+    CcWorldStreamFollowRouteTimed(&local->world_stream, route, origin_id, journey_amount, 4, 0.0015);
     local->world_carriage.position = (Vector3){
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
@@ -2024,7 +2024,7 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
     float heading = 0.0f;
     if (!CcWorldRoutePose(route, sim->journey.origin_id, amount,
                           &point, &heading)) return;
-    CcWorldStreamFollowRoute(&local->world_stream, route, sim->journey.origin_id, amount, 4);
+    CcWorldStreamFollowRouteTimed(&local->world_stream, route, sim->journey.origin_id, amount, 4, 0.0015);
     CcLocalWorldCarriageState *carriage = &local->world_carriage;
     if (ticks > 0) {
         carriage->previous_tick_position = carriage->position;
