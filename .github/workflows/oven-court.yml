@@ -1,5 +1,7 @@
 name: Oven Court
 on:
+  push:
+    branches: ['codex/silverwick-oven-court']
   pull_request:
     paths:
       - '.github/workflows/oven-court.yml'
