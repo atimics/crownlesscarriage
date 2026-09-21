@@ -1912,13 +1912,13 @@ static CcLimbVec3 CreaturePoseDirectionForDraw(CcLimbVec3 v, float yaw)
    this is a jump no step could cover. */
 #define CC_CREATURE_GAIT_REANCHOR_RANGE 3.0f
 
-bool CcLocalCreatureGaitPoseInternal(
+bool CcLocalCreatureGaitTargetInternal(
     int32_t slot, CcCreatureRigProfile profile,
     CcCreatureRigGait gait, float clock, float initial_phase,
     Vector3 ground_position,
-    float yaw, float scale, CcLocalSceneKind scene, CcCreatureRigPose *pose)
+    float yaw, float scale, CcLocalSceneKind scene)
 {
-    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT ||
         !isfinite(clock) || !isfinite(scale) || scale <= 0.0f) return false;
     CreatureGaitCache *cache = &creature_gaits[slot];
     /* The controller walks toward where it is told to be, and the drawn pose
@@ -1961,6 +1961,17 @@ bool CcLocalCreatureGaitPoseInternal(
             &cache->command, 0.0f, ProbeLocalSurface, ProbeLocalCollision,
             &context, &cache->pose)) return false;
     }
+    return true;
+}
+
+bool CcLocalCreatureGaitPoseInternal(
+    int32_t slot, Vector3 ground_position,
+    float yaw, CcCreatureRigPose *pose)
+{
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
+        !isfinite(yaw)) return false;
+    const CreatureGaitCache *cache = &creature_gaits[slot];
+    if (!cache->ready) return false;
     *pose = cache->pose;
     pose->body = CreaturePosePointForDraw(pose->body, cache, ground_position, yaw);
     for (int32_t limb = 0; limb < pose->limb_count; ++limb) {
@@ -1974,9 +1985,9 @@ bool CcLocalCreatureGaitPoseInternal(
     pose->forward = CreaturePoseDirectionForDraw(pose->forward, turn);
     pose->right = CreaturePoseDirectionForDraw(pose->right, turn);
     pose->support_normal = CreaturePoseDirectionForDraw(pose->support_normal, turn);
-    pose->body_width /= scale;
-    pose->body_depth /= scale;
-    pose->body_length /= scale;
+    pose->body_width /= cache->scale;
+    pose->body_depth /= cache->scale;
+    pose->body_length /= cache->scale;
     return pose->valid;
 }
 
