@@ -138,27 +138,6 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw, float rig_scale)
     }
 }
 
-/* The carriage leans over the ground and rocks as it rolls. Its hitch sockets
-   ride on that chassis, so a trace drawn from one must use the same lean the
-   carriage model is drawn with -- otherwise the trace starts at the old,
-   untilted socket and cuts into or pulls away from the wagon. The lean is a
-   rotation about the carriage base, so level ground and a still carriage
-   leave the socket exactly where the plain local offset puts it. */
-Vector3 CcLocalRoadCarriageSocketInternal(Vector3 base, float yaw,
-                                          float pitch, float sway,
-                                          float lateral, float height,
-                                          float forward)
-{
-    Vector3 point = LocalPoint(base, lateral, height, forward, yaw);
-    if (pitch == 0.0f && sway == 0.0f) return point;
-    Vector3 pitch_axis = {cosf(yaw), 0.0f, -sinf(yaw)};
-    Vector3 sway_axis = {sinf(yaw), 0.0f, cosf(yaw)};
-    Vector3 rel = Vector3Subtract(point, base);
-    rel = Vector3Transform(rel, MatrixRotate(pitch_axis, pitch));
-    rel = Vector3Transform(rel, MatrixRotate(sway_axis, sway * DEG2RAD));
-    return Vector3Add(base, rel);
-}
-
 typedef struct RoadHorsePlacement {
     int32_t horse;
     int32_t slot;
@@ -305,9 +284,11 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
         Vector3 trace_start = CcLocalRoadCarriageSocketInternal(
             base, yaw, pitch, sway, (float)horse * 0.42f * vehicle_scale,
             0.77f * vehicle_scale, 3.05f * vehicle_scale);
-        Vector3 trace_end = LocalPoint(
-            horse_base, 0.0f, 0.91f * vehicle_scale,
-            -0.52f * vehicle_scale, yaw);
+        /* The far end rides the pony's own collar socket, so a moving neck or
+           head carries the trace instead of a fixed nominal point. */
+        Vector3 trace_end = RoadPonySkinPoint(horse_base, yaw,
+            (Vector3){(float)horse * 0.47f, 1.15f, 0.08f},
+            CC_QUADRUPED_CHEST, rig_scale);
         DrawCylinderEx(trace_start, trace_end, 0.020f * vehicle_scale,
                        0.016f * vehicle_scale, 6, WORLD_WOOD_SHADOW);
         DrawOrientedBox(horse_base,
@@ -355,6 +336,25 @@ static Camera3D PonyConversationCamera(Camera3D road, Vector3 carriage, float ya
                                    SmoothStep01(pony_conversation_weight));
 }
 
+/* The ground pitch and rolling sway the carriage chassis is drawn with. */
+static void CarriageChassisTilt(Vector3 base, float yaw, float pace,
+                                float clock, CcLocalSceneKind scene,
+                                bool bridge_checkpoint, float vehicle_scale,
+                                float *pitch, float *sway)
+{
+    *pitch = 0.0f;
+    *sway = 0.0f;
+    bool follow_ground = (active_world_stream != NULL ||
+                          scene == CC_LOCAL_SCENE_STREET) && !bridge_checkpoint;
+    if (!follow_ground) return;
+    Vector3 front = LocalPoint(base, 0.0f, 0.0f, 1.38f * vehicle_scale, yaw);
+    Vector3 rear = LocalPoint(base, 0.0f, 0.0f, -1.38f * vehicle_scale, yaw);
+    *pitch = atan2f(
+        CcLocalTerrainHeightAt(rear.x, rear.z) -
+        CcLocalTerrainHeightAt(front.x, front.z), 2.76f * vehicle_scale);
+    *sway = pace > 0.02f ? sinf(clock * 2.4f) * 0.7f : 0.0f;
+}
+
 static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                              float clock, float pace, float travelled,
                              float yaw,
@@ -368,14 +368,8 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     float chassis_pitch = 0.0f;
     float chassis_sway = 0.0f;
     if (follow_ground) {
-        Vector3 front = LocalPoint(base, 0.0f, 0.0f,
-                                   1.38f * vehicle_scale, yaw);
-        Vector3 rear = LocalPoint(base, 0.0f, 0.0f,
-                                  -1.38f * vehicle_scale, yaw);
-        chassis_pitch = atan2f(
-            CcLocalTerrainHeightAt(rear.x, rear.z) -
-            CcLocalTerrainHeightAt(front.x, front.z), 2.76f * vehicle_scale);
-        chassis_sway = pace > 0.02f ? sinf(clock * 2.4f) * 0.7f : 0.0f;
+        CarriageChassisTilt(base, yaw, pace, clock, scene, bridge_checkpoint,
+                            vehicle_scale, &chassis_pitch, &chassis_sway);
         rlPushMatrix();
         rlTranslatef(base.x, base.y, base.z);
         rlRotatef(chassis_pitch * RAD2DEG, cosf(yaw), 0.0f, -sinf(yaw));
@@ -798,7 +792,8 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
         clock * 0.28f + 1.0f, CC_TRAVERSAL_IDLE, camera.target);
     if (crew_exchange != NULL) {
         CcLocalAgent passenger;
-        PrepareCrewPassenger(agent, carriage, carriage_heading, &passenger);
+        PrepareCrewPassenger(agent, carriage, carriage_heading, 0.0f, 0.0f,
+                             1.0f, &passenger);
         DrawRobotShell(&passenger);
         DrawCrew(&passenger, 7);
     }
@@ -1873,7 +1868,8 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     }
     CcLocalAgent passenger;
     if (travelling && crew_exchange != NULL) {
-        PrepareCrewPassenger(agent, carriage, 0.5f * PI, &passenger);
+        PrepareCrewPassenger(agent, carriage, 0.5f * PI, 0.0f, 0.0f, 1.0f,
+                             &passenger);
         DrawRobotShell(&passenger);
     }
     DrawCrew(travelling && crew_exchange != NULL ? &passenger : agent, 2 + (int32_t)site);

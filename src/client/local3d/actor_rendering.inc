@@ -12,6 +12,35 @@ static Vector3 LocalPoint(Vector3 base, float x, float y, float z, float yaw)
                      base.z - x * sine + z * cosine};
 }
 
+/* A socket bolted to the carriage chassis. The carriage leans over the ground
+   and rocks as it rolls, so a socket, trace, or seated passenger has to carry
+   the same pitch and sway the model is drawn with. The lean is a rotation
+   about the carriage base, so level ground and a still carriage leave the
+   socket exactly where the plain local offset puts it. */
+static Vector3 CarriageSocketPoint(Vector3 base, float yaw, float pitch,
+                                   float sway, float lateral, float height,
+                                   float forward)
+{
+    Vector3 point = LocalPoint(base, lateral, height, forward, yaw);
+    if (pitch == 0.0f && sway == 0.0f) return point;
+    Vector3 pitch_axis = {cosf(yaw), 0.0f, -sinf(yaw)};
+    Vector3 sway_axis = {sinf(yaw), 0.0f, cosf(yaw)};
+    Vector3 rel = Vector3Subtract(point, base);
+    rel = Vector3Transform(rel, MatrixRotate(pitch_axis, pitch));
+    rel = Vector3Transform(rel, MatrixRotate(sway_axis, sway * DEG2RAD));
+    return Vector3Add(base, rel);
+}
+
+/* Public name used by the renderer tests. */
+Vector3 CcLocalRoadCarriageSocketInternal(Vector3 base, float yaw,
+                                          float pitch, float sway,
+                                          float lateral, float height,
+                                          float forward)
+{
+    return CarriageSocketPoint(base, yaw, pitch, sway, lateral, height,
+                               forward);
+}
+
 static void DrawOrientedBox(Vector3 base, Vector3 local_center, Vector3 size,
                             float yaw, Color color)
 {

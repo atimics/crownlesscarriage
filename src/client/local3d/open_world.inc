@@ -1418,6 +1418,12 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         (course->alarm_active || course->road_encounter)) {
         DrawCourseRunners(course, focus);
     }
+    Vector3 crew_carriage = carriage != NULL ?
+        CarriageRenderAnchor(carriage) : (Vector3){0};
+    float crew_heading = carriage != NULL ? carriage->render_heading_yaw : 0.0f;
+    float crew_pitch = 0.0f;
+    float crew_sway = 0.0f;
+    float crew_scale = 1.0f;
     if (carriage != NULL && carriage->visible) {
         Vector3 carriage_base = CarriageRenderAnchor(carriage);
         if (storybook) carriage_base.y += 0.13f;
@@ -1429,6 +1435,12 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             carriage_scale = arrival_place->profile_scale +
                 (1.0f - arrival_place->profile_scale) * camera_weight;
         }
+        CarriageChassisTilt(carriage_base, carriage->render_heading_yaw,
+                            carriage->pace, clock, CC_LOCAL_SCENE_ROAD, false,
+                            carriage_scale, &crew_pitch, &crew_sway);
+        crew_carriage = carriage_base;
+        crew_heading = carriage->render_heading_yaw;
+        crew_scale = carriage_scale;
         /* Fold the arrival scale into the carriage instead of a graphics-only
            matrix, so the team is supported where it is drawn. */
         DrawRoadCarriage(carriage_base, sim, clock,
@@ -1456,7 +1468,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     }
     CcLocalAgent passenger;
     if (hero_embarked && crew_exchange != NULL) {
-        PrepareCrewPassenger(agent, CarriageRenderAnchor(carriage), carriage->render_heading_yaw, &passenger);
+        PrepareCrewPassenger(agent, crew_carriage, crew_heading, crew_pitch,
+                             crew_sway, crew_scale, &passenger);
         DrawRobotShell(&passenger);
     }
     DrawCrew(hero_embarked && crew_exchange != NULL ? &passenger : agent, 6);
