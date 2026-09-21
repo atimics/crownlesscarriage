@@ -655,6 +655,7 @@ float CcLocalRoadCarriageRouteLengthInternal(const CcSim *sim);
 float CcLocalRoadCarriageTravelInternal(int32_t progress_milli,
                                         float route_length);
 float CcLocalCarriageWheelRadiusInternal(int32_t wheel);
+float CcLocalCarriageWheelWorldRadiusInternal(int32_t wheel);
 float CcLocalCarriageWheelAngleInternal(float travelled, float radius);
 float CcLocalRoadTeamStrideInternal(void);
 float CcLocalRoadTeamGaitPhaseInternal(float travelled);

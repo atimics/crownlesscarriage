@@ -74,10 +74,33 @@ static void DriveJourney(int32_t frames, float seconds_per_frame,
 
 static void WheelsRollWithTheRoad(void)
 {
-    float front = CcLocalCarriageWheelRadiusInternal(0);
-    float rear = CcLocalCarriageWheelRadiusInternal(2);
-    Require(Near(front, 0.81f, 0.0001f) && Near(rear, 0.63f, 0.0001f),
-            "the wheels roll on the radii the model hangs their hubs at");
+    float front_model = CcLocalCarriageWheelRadiusInternal(0);
+    float rear_model = CcLocalCarriageWheelRadiusInternal(2);
+    Require(Near(front_model, 0.81f, 0.0001f) &&
+                Near(rear_model, 0.63f, 0.0001f),
+            "the model hangs the wheel hubs at the authored radii");
+
+    /* The carriage draws at CARRIAGE_ASSET_SCALE, so the wheel that touches the
+       road is smaller than its model radius. Rolling must use the world radius
+       or the wheel slips by that scale, and one displayed circumference no
+       longer turns it once. */
+    float front = CcLocalCarriageWheelWorldRadiusInternal(0);
+    float rear = CcLocalCarriageWheelWorldRadiusInternal(2);
+    Require(front < front_model && rear < rear_model,
+            "the drawn wheel is smaller than its model-space radius");
+    for (int32_t wheel = 0; wheel < 4; ++wheel) {
+        float world = CcLocalCarriageWheelWorldRadiusInternal(wheel);
+        float circumference = 2.0f * PI * world;
+        float rolled =
+            CcLocalCarriageWheelAngleInternal(circumference, world);
+        float back =
+            CcLocalCarriageWheelAngleInternal(-circumference, world);
+        Require(Near(rolled, 0.0f, 0.01f) ||
+                    Near(rolled, 2.0f * PI, 0.01f),
+                "one displayed circumference turns the wheel once");
+        Require(Near(back, 0.0f, 0.01f) || Near(back, 2.0f * PI, 0.01f),
+                "reverse travel turns the wheel back one revolution");
+    }
 
     /* Most of the road book, drawn twice: once at sixty frames a second on a
        rising clock, once at twenty on a clock that jumps backwards partway,
@@ -192,7 +215,9 @@ static void RealRouteLengthsDriveBothDirections(void)
                     "a real route has a finite physical length");
             float distance = CcLocalRoadCarriageTravelInternal(progress,
                                                                  length);
-            float wheel = CcLocalCarriageWheelAngleInternal(distance, 0.81f);
+            float wheel =
+                CcLocalCarriageWheelAngleInternal(
+                    distance, CcLocalCarriageWheelWorldRadiusInternal(0));
             float gait = CcLocalRoadTeamGaitPhaseInternal(distance);
             Require(isfinite(distance) && distance > 0.0f &&
                         isfinite(wheel) && isfinite(gait),

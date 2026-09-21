@@ -83,12 +83,20 @@ static const Vector3 carriage_wheel_centers[4] = {
 
 /* The shipped tyres measure 0.808 and 0.628 across their radius and sit with
    their bottoms on the ground, so the front pair is the tall one and each hub
-   hangs at the height its wheel rolls on. One number both picks a wheel's
-   meshes out of the model and turns them: a wheel measured at one size and
-   rolled at another slips. */
+   hangs at the height its wheel rolls on. This is the model-space radius: it
+   picks a wheel's meshes out of the model and measures it in the frame the
+   asset was authored in. Roll it against model-space distance only. */
 float CcLocalCarriageWheelRadiusInternal(int32_t wheel)
 {
     return wheel < 2 ? 0.81f : 0.63f;
+}
+
+/* Distance along the road is world-space, so a wheel that rolls on it needs
+   its radius in world space too: the model radius times the scale the carriage
+   is drawn at. One displayed circumference then turns the wheel once. */
+float CcLocalCarriageWheelWorldRadiusInternal(int32_t wheel)
+{
+    return CcLocalCarriageWheelRadiusInternal(wheel) * CARRIAGE_ASSET_SCALE;
 }
 
 static void ClassifyCarriageWheels(const Model *model)
