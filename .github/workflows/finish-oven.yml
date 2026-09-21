@@ -1,0 +1,81 @@
+name: Finish reviewed Oven Court corrections
+on:
+  push:
+    branches: ['codex/silverwick-oven-court']
+    paths: ['.github/workflows/finish-oven.yml']
+permissions:
+  contents: write
+jobs:
+  finish:
+    if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/codex/silverwick-oven-court'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - name: Apply the three reviewed source changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/sim/cc_oven_court.c')
+          s=p.read_text()
+          old="""    /* Duplicate inspection at unchanged terms does not generate evidence or
+                 consume the tape. Do not mutate day/time while reading. */
+              for (int32_t i=0; i<2; ++i) {
+                  const CcEvent *old = CcOvenCourtNote(sim, i);"""
+          new="""    /* Consecutive identical inspections are idempotent. Switching between
+                 a copied tally and a named explanation is a new acquisition: retain
+                 its source as the latest note rather than borrowing another speaker's
+                 event for the response. Reading never changes world time or stocks. */
+              {
+                  const CcEvent *old = CcOvenCourtNote(sim, 0);"""
+          # The continuation lines above retain six extra source-indent spaces
+          # from the readable workflow block; normalize only those lines.
+          def source(text):
+              rows=text.splitlines()
+              return '\n'.join([rows[0]]+[row[10:] for row in rows[1:]])
+          old=source(old); new=source(new)
+          assert s.count(old)==1, 'Unexpected source: do not apply heuristically'
+          p.write_text(s.replace(old,new,1))
+          p=Path('src/client/cc_oven_court.inc'); s=p.read_text()
+          assert s.count('size = AdventureTextSize(15)')==2
+          p.write_text(s.replace('size = AdventureTextSize(15)','size = AdventureTextSize(22)'))
+          p=Path('tests/oven_court_tests.c');s=p.read_text()
+          fixture='''static void CheckAlternatingSources(void)
+          {
+              Prepare();
+              CcId source = CcSimBakerySupportPlan(&sim, Town()->id).contact_id;
+              CcCommand inspect = {.kind = CC_COMMAND_OBSERVE_OVEN_COURT, .target_id = Town()->id};
+              CcCommand ask = {.kind = CC_COMMAND_OBSERVE_OVEN_COURT, .target_id = source, .amount = 1};
+              CC_CHECK(source != 0U);
+              for (int32_t i = 0; i < 3; ++i) {
+                  CC_CHECK(CcSimApply(&sim, &inspect, error, sizeof(error)));
+                  CC_CHECK(CcOvenCourtNote(&sim, 0)->actor_id == sim.player.id);
+                  uint64_t hash = CcSimHash(&sim);
+                  CC_CHECK(CcSimApply(&sim, &inspect, error, sizeof(error)) && CcSimHash(&sim) == hash);
+                  CC_CHECK(CcSimApply(&sim, &ask, error, sizeof(error)));
+                  CC_CHECK(CcOvenCourtNote(&sim, 0)->actor_id == source);
+                  CC_CHECK(CcOvenCourtNote(&sim, 1)->actor_id == sim.player.id);
+                  hash = CcSimHash(&sim);
+                  CC_CHECK(CcSimApply(&sim, &ask, error, sizeof(error)) && CcSimHash(&sim) == hash);
+              }
+              CC_CHECK(sim.current_day == 6 && Town()->stock[CC_GOOD_WHEAT] == 0);
+          }
+
+          '''
+          assert s.count('static void CheckSharedCommand(void)')==1
+          s=s.replace('static void CheckSharedCommand(void)', fixture+'static void CheckSharedCommand(void)',1)
+          assert s.count('    CheckSharedCommand(); CheckReadAndAdvice();')==1
+          p.write_text(s.replace('    CheckSharedCommand(); CheckReadAndAdvice();','    CheckAlternatingSources(); CheckSharedCommand(); CheckReadAndAdvice();',1))
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin codex/silverwick-oven-court
+          test "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD)"
+          rm .github/workflows/finish-oven.yml
+          git add src/sim/cc_oven_court.c src/client/cc_oven_court.inc tests/oven_court_tests.c .github/workflows/finish-oven.yml
+          git commit -m 'Improve court reading size and preserve the latest consulted source'
+          git push origin HEAD:refs/heads/codex/silverwick-oven-court
