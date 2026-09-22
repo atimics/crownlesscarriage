@@ -30,7 +30,14 @@ static int RunCaptureRequestRegression(void)
         !request.capture_ux || request.capture_ux_view != 24 ||
         strcmp(request.capture_path, "mine-notes.png") != 0)
         return ClientRegressionFailure("Mine notes capture must retain its portrait fixture.");
-    ux[2] = "25";
+    for (int32_t scene = 25; scene <= 30; ++scene) {
+        char number[8];
+        (void)snprintf(number, sizeof(number), "%d", scene);
+        ux[2] = number;
+        if (!CcCaptureRequestParse(6, ux, &request) || request.capture_ux_view != scene)
+            return ClientRegressionFailure("Oven Court captures must retain the economic case.");
+    }
+    ux[2] = "31";
     if (CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("UX capture must enforce its view range.");
     char *storybook[] = {"crownless", "--capture-storybook", "0.25", "0.75", "story.png"};

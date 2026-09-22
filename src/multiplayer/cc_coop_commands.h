@@ -70,7 +70,8 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "road_leg",
         "mine_learn_lead", "mine_report_return",
         "food_relief_propose", "food_relief_accept", "food_relief_execute",
+        "observe_oven_court",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_FOOD_RELIEF_EXECUTE ? names[(int)kind] : "";
+    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_OBSERVE_OVEN_COURT ? names[(int)kind] : "";
 }
 #endif

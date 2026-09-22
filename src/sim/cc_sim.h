@@ -670,7 +670,9 @@ typedef enum CcCommandKind {
     /* Schema 107: internal participant food agreement lifecycle. */
     CC_COMMAND_FOOD_RELIEF_PROPOSE = 75,
     CC_COMMAND_FOOD_RELIEF_ACCEPT = 76,
-    CC_COMMAND_FOOD_RELIEF_EXECUTE = 77
+    CC_COMMAND_FOOD_RELIEF_EXECUTE = 77,
+    /* Dated, explicitly acquired court notes use the existing event journal. */
+    CC_COMMAND_OBSERVE_OVEN_COURT = 78
 } CcCommandKind;
 
 typedef enum CcHorseSex {

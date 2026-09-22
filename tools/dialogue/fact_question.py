@@ -96,20 +96,26 @@ def is_negated(text):
     return any(key in lowered for key in NEGATION)
 
 
-def _certainty(confidence):
-    if confidence is None:
-        return 'told'
-    if confidence >= 70:
-        return 'witnessed'
-    if confidence >= 40:
-        return 'told'
-    return 'doubtful'
+def _certainty(confidence, source):
+    # Legacy categorical tokens remain compatible; acquisition is supplied
+    # separately and can never be inferred from confidence.
+    if confidence is not None and (type(confidence) is not int or not 0 <= confidence <= 100):
+        raise ValueError('confidence must be an integer from 0 to 100 or None')
+    if confidence is not None and confidence < 40:
+        return 'doubtful'
+    return 'witnessed' if source == 'observed' else 'told'
 
 
-def facts_from_fields(fields, owner, event_id, confidence=None, day=0):
-    """Turn parsed account fields into disclosable typed facts."""
-    certainty = _certainty(confidence)
-    source = 'observed' if certainty == 'witnessed' else 'told'
+def facts_from_fields(fields, owner, event_id, confidence=None, day=0, *, source='told'):
+    """Turn disclosable fields into facts without upgrading hearsay to sight.
+
+    `source` describes acquisition, not reliability. Old accounts without
+    acquisition metadata conservatively remain received accounts. The numeric
+    confidence is retained as metadata, without changing the model token format.
+    """
+    if source not in ('observed', 'told'):
+        raise ValueError('source must be observed or told')
+    certainty = _certainty(confidence, source)
     facts = []
     for field in fields:
         role = ROLE_BY_NUMBER.get(field.get('role'))
@@ -120,7 +126,7 @@ def facts_from_fields(fields, owner, event_id, confidence=None, day=0):
             continue
         facts.append({'owner': owner, 'fact_id': f'F{event_id}-{field.get("field")}', 'event_id': event_id,
                       'role': role, 'value': value, 'source': source,
-                      'certainty': certainty, 'day': day, 'private': False})
+                      'certainty': certainty, 'confidence': confidence, 'day': day, 'private': False})
     return facts
 
 

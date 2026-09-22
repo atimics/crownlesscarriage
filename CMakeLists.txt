@@ -133,6 +133,7 @@ add_library(crownless_sim
     src/sim/cc_journey_encounter.c
     src/sim/cc_journey_runtime.c
     src/sim/cc_production.c
+    src/sim/cc_oven_court.c
     src/sim/cc_food_economy.c
     src/sim/cc_food_relief.c
     src/sim/cc_goods.c

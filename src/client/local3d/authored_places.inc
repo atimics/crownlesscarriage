@@ -3233,8 +3233,36 @@ static void DrawFarmTerrainStage(const CcSettlement *place,
 
 }
 
-static void DrawMiningTerrainStage(Vector3 focus)
+static void DrawMiningTerrainStage(const CcSettlement *place, Vector3 focus)
 {
+    /* A wall alcove beside the store, not a new collision obstacle in the lane.
+       Loaves represent existing stocks. No flame implies a fabricated batch. */
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    CcLocalLanePoint oven = CcLocalOvenCourtAnchor(profile);
+    if (place != NULL && SceneryPointVisible(oven.x, oven.z, focus)) {
+        float y = CcLocalTerrainHeightAt(oven.x, oven.z);
+        Color stone = place->fire_damage > 0 ? WORLD_STONE_SHADOW : WORLD_STONE;
+        DrawBox((Vector3){oven.x, y + 1.12f, oven.z}, (Vector3){2.2f, 2.24f, 0.30f}, stone);
+        DrawBox((Vector3){oven.x - 0.40f, y + 0.9f, oven.z + 0.17f},
+            (Vector3){0.82f, 1.15f, 0.04f}, WORLD_INK);
+        DrawBox((Vector3){oven.x + 0.60f, y + 1.52f, oven.z + 0.19f},
+            (Vector3){0.58f, 0.88f, 0.05f}, WORLD_WOOD_SHADOW);
+        for (int32_t row = 0; row < 3; ++row)
+            DrawBox((Vector3){oven.x + 0.60f, y + 1.76f - (float)row * 0.22f, oven.z + 0.23f},
+                (Vector3){0.39f, 0.035f, 0.02f}, CC_VISUAL_PALETTE.parchment.light);
+        DrawBox((Vector3){oven.x, y + 0.36f, oven.z + 0.2f},
+            (Vector3){1.92f, 0.10f, 0.38f}, WORLD_WOOD_SHADOW);
+        int32_t loaves = place->stock[CC_GOOD_BREAD] > 0 ? 1 + (place->stock[CC_GOOD_BREAD] - 1) / 8 : 0;
+        if (loaves > 4) loaves = 4;
+        if (CcSettlementIsAbandoned(place)) loaves = 0;
+        for (int32_t i = 0; i < loaves; ++i)
+            DrawBox((Vector3){oven.x - 0.65f + (float)i * 0.42f, y + 0.48f, oven.z + 0.23f},
+                (Vector3){0.30f, 0.14f, 0.25f}, CC_VISUAL_PALETTE.parchment.base);
+        if (!CcSettlementHasService(place, CC_SERVICE_BAKERY))
+            DrawTiltedBox((Vector3){oven.x - 0.40f, y + 0.92f, oven.z + 0.22f},
+                (Vector3){1.08f, 0.12f, 0.06f}, (Vector3){0, 0, 1}, 35.0f, WORLD_WOOD_SHADOW);
+    }
+
     TerrainDetailBegin();
     for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
         const TerrainLanePath *path = &terrain_lanes[lane];
@@ -3642,7 +3670,7 @@ static void DrawTownTerrainStage(const CcSettlement *place, uint32_t conditions,
     switch (place->function) {
         case CC_SETTLEMENT_FARMING:
             DrawFarmTerrainStage(place, focus, clock); break;
-        case CC_SETTLEMENT_MINING: DrawMiningTerrainStage(focus); break;
+        case CC_SETTLEMENT_MINING: DrawMiningTerrainStage(place, focus); break;
         case CC_SETTLEMENT_MARKET: DrawMarketTerrainStage(focus); break;
         case CC_SETTLEMENT_FORTRESS: DrawFortressTerrainStage(focus); break;
         case CC_SETTLEMENT_CAPITAL: DrawCapitalTerrainStage(focus); break;

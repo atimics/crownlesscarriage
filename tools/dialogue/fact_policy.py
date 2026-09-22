@@ -162,6 +162,9 @@ def render(act, person):
     if act['kind'] == 'defer':
         return 'I do not hold that account.'
     fact = next(f for f in facts(person) if f['fact_id'] == act['fact_id'])
-    prefix = {'witnessed': 'I saw it myself', 'told': 'I was told',
-              'doubtful': 'I have a doubtful account'}[fact['certainty']]
+    # Acquisition controls the claim of witnessing, even for legacy tables
+    # carrying an inconsistent certainty label. Reliability is a separate cue.
+    prefix = 'I saw it myself' if fact['source'] == 'observed' else 'I was told'
+    if fact['certainty'] == 'doubtful':
+        prefix += ', but I am uncertain'
     return f'{prefix}: {fact["value"]} (on day {fact["day"]}).'

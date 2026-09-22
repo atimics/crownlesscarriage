@@ -37,7 +37,8 @@ def build(account, question):
         return None, f'account has no {role_from_question(question)} field'
     # Ask in the resolved field's own role so the selection model can match it.
     role = ROLE_BY_NUMBER.get(next(field['role'] for field in account['fields'] if field['field'] == target))
-    facts = facts_from_fields(account['fields'], '1', event_id, account.get('confidence'), day=10)
+    facts = facts_from_fields(account['fields'], '1', event_id, account.get('confidence'), day=10,
+                              source=account.get('source', 'told'))
     if not facts:
         return None, 'account has no typed facts'
     # When a predicate override resolves a duplicated spoken role, drop the
