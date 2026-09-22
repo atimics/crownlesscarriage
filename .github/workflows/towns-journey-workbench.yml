@@ -22,18 +22,23 @@ jobs:
           persist-credentials: false
       - name: Export exact integration inputs
         run: |
-          mkdir -p /tmp/town-inputs
-          for entry in main:e69765e60a939143e6e14050331c735a530963df towns:dbe44f532effeaf083e47378907b467180750899 oven:d1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6; do
-            name=${entry%%:*}; sha=${entry#*:}
-            git archive "$sha" src tests tools cmake docs .github CMakeLists.txt CMakePresets.json Makefile | gzip > "/tmp/town-inputs/$name.tar.gz"
-            echo "$name $sha" >> /tmp/town-inputs/revisions.txt
-          done
-          for entry in towns:dbe44f532effeaf083e47378907b467180750899 oven:d1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6; do
-            name=${entry%%:*}; sha=${entry#*:}
-            base=$(git merge-base e69765e60a939143e6e14050331c735a530963df "$sha")
-            git archive "$base" src tests tools cmake docs .github CMakeLists.txt CMakePresets.json Makefile | gzip > "/tmp/town-inputs/$name-base.tar.gz"
-            git diff "$base" "$sha" > "/tmp/town-inputs/$name.diff"
-          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess, gzip
+          output = Path('/tmp/town-inputs'); output.mkdir()
+          refs = {'main': 'e69765e60a939143e6e14050331c735a530963df', 'towns': 'dbe44f532effeaf083e47378907b467180750899', 'oven': 'd1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6'}
+          for name in ('towns', 'oven'):
+              base = subprocess.check_output(['git', 'merge-base', refs['main'], refs[name]], text=True).strip()
+              refs[name + '-base'] = base
+              (output / (name + '.diff')).write_bytes(subprocess.check_output(['git', 'diff', base, refs[name]]))
+          for name, sha in refs.items():
+              extra = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', sha, 'tools', 'docs/design'], text=True).splitlines()
+              extra = [p for p in extra if Path(p).suffix in ('.py', '.c', '.cjs', '.js', '.md', '.sh')]
+              paths = ['src', 'tests', 'cmake', '.github', 'CMakeLists.txt', 'CMakePresets.json', 'Makefile'] + extra
+              data = subprocess.check_output(['git', 'archive', sha, *paths])
+              with gzip.open(output / (name + '.tar.gz'), 'wb') as f: f.write(data)
+          (output / 'revisions.txt').write_text('\n'.join(f'{name} {sha}' for name, sha in refs.items()))
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: town-integration-inputs
