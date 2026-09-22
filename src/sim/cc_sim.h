@@ -2450,6 +2450,8 @@ const CcRoadSite *CcSimRoadSiteAt(const CcSim *sim, int32_t index);
 const CcRoadSite *CcSimRoadHouseSite(const CcSim *sim, CcId route_id);
 const char *CcRoadSiteKindName(CcRoadSiteKind kind);
 const CcRoadSite *CcSimJourneyRoadSiteStop(const CcSim *sim);
+/* A mine's advance notice is not its entrance: reach the branch before holding. */
+bool CcSimJourneyRequiresRoadChoice(const CcSim *sim);
 const CcRoute *CcSimRouteBetween(const CcSim *sim, CcId a, CcId b);
 const CcMap *CcSimMap(const CcSim *sim, CcId id);
 const CcMap *CcSimMapForRoute(const CcSim *sim, CcId route_id, CcId owner_id);

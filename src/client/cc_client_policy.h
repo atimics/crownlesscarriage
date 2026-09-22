@@ -58,6 +58,15 @@ typedef struct CcClientArrivalTransition {
 float CcClientConvoyPaceStep(float pace, bool road_phase,
                              bool urge, bool rein_in, bool stopped,
                              float delta_time);
+typedef struct CcClientTravelSample {
+    double from, target, position;
+    double age, duration, since_update;
+    uint64_t tick;
+    bool valid;
+} CcClientTravelSample;
+/* Interpolate received progress, never advance past the host's last position. */
+double CcClientTravelSampleStep(CcClientTravelSample *sample,
+    double progress, uint64_t tick, float dt, bool discontinuity);
 float CcClientTravelBlendStep(float blend, bool fast_forward, float delta_time);
 float CcClientTravelTimeScale(float blend);
 float CcClientRoadApproachStep(float progress, float pace, float delta_time);

@@ -5,8 +5,31 @@
 #include <stdio.h>
 #include <string.h>
 
+static int TestTravelSamples(void)
+{
+    for (int delay = 45; delay <= 90; delay += 45) {
+        CcClientTravelSample sample = {0};
+        double actual = 0.2, last = actual;
+        uint64_t tick = 10;
+        for (int f = 0; f < 720; ++f) {
+            if (f > 0 && f % delay == 0) { actual += 0.02; tick += 60; }
+            double p = CcClientTravelSampleStep(&sample, actual, tick, 1.0f/60, false);
+            CC_CHECK(p >= last - 1e-9 && p <= actual + 1e-9);
+            if (f > delay + 1 && f % delay > 1 && actual-last > 1e-7) CC_CHECK(p > last);
+            last = p;
+        }
+        for (int f = 0; f < 600; ++f)
+            last = CcClientTravelSampleStep(&sample, actual, tick, 1.0f/60, false);
+        CC_CHECK(fabs(last - actual) < 1e-9);
+        CC_CHECK(CcClientTravelSampleStep(&sample, 0.01, 3, 0, true) == 0.01);
+        CC_CHECK(CcClientTravelSampleStep(&sample, 0.05, 4, NAN, false) == 0.01);
+    }
+    return 0;
+}
+
 int main(void)
 {
+    CC_CHECK(TestTravelSamples() == 0);
     float travel_blend = 0.0f;
     CC_CHECK(CcClientTravelTimeScale(travel_blend) == 1.0f);
     for (int frame = 0; frame < 90; ++frame) {

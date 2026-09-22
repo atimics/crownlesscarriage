@@ -336,6 +336,10 @@ typedef struct CreatureGaitCache {
     float pending_seconds;
     CcCreatureRigGait requested_gait;
     bool ready;
+    CcId travel_route;
+    Vector3 pre_transport_ground;
+    float pre_transport_yaw;
+    bool travel_transported;
 } CreatureGaitCache;
 
 static CreatureGaitCache creature_gaits[CREATURE_GAIT_SLOT_COUNT] = {0};
@@ -1857,8 +1861,11 @@ void CcLocalCreatureGaitsFixedStepInternal(float delta_time)
         CreatureGaitCache *cache = &creature_gaits[i];
         if (!cache->ready) continue;
         cache->previous_pose = cache->pose;
-        cache->previous_ground = FromLimbVector(cache->controller.ground_position);
-        cache->previous_yaw = cache->controller.body_yaw;
+        cache->previous_ground = cache->travel_transported ? cache->pre_transport_ground :
+            FromLimbVector(cache->controller.ground_position);
+        cache->previous_yaw = cache->travel_transported ? cache->pre_transport_yaw :
+            cache->controller.body_yaw;
+        cache->travel_transported = false;
         cache->previous_valid = cache->pose.valid;
         CcCreatureRigWorldCommand command = cache->command;
         CcLimbVec3 previous = cache->controller.ground_position;
@@ -1976,6 +1983,48 @@ bool CcLocalCreatureGaitTargetInternal(
             &context, &cache->pose)) return false;
     }
     return true;
+}
+
+/* A road journey compresses kilometres into seconds. Do not force that map
+   displacement through a metre-scale leg solver: it would replant every frame.
+   Translate its coordinate frame, then let one real-time stride finish. The
+   cache remains at the actual rendered pony anchor and still probes terrain.
+   Route changes, scene resets and explicit placements retain the reset path. */
+static bool CreatureTravelTarget(int32_t slot, CcCreatureRigGait gait,
+    float phase, Vector3 ground, float yaw, float scale,
+    CcId route, float pace, float dt)
+{
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || !isfinite(dt) ||
+        !isfinite(pace) || dt < 0.0f || !isfinite(scale) || scale <= 0.0f)
+        return false;
+    CreatureGaitCache *cache = &creature_gaits[slot];
+    dt = fminf(dt, 0.1f);
+    float clock = cache->ready ? cache->last_clock + dt : 0.0f;
+    bool continuous = cache->ready && cache->travel_route == route &&
+        cache->profile == CC_CREATURE_RIG_HORSE && cache->scene == CC_LOCAL_SCENE_ROAD;
+    if (continuous && dt > 0.0f) {
+        float stride = fmaxf(0.0f, fminf(1.0f, pace)) * 2.2f * scale * dt;
+        CcLimbVec3 start = {ground.x - sinf(yaw) * stride,
+            ground.y, ground.z - cosf(yaw) * stride};
+        cache->pre_transport_ground = FromLimbVector(cache->controller.ground_position);
+        cache->pre_transport_yaw = cache->controller.body_yaw;
+        cache->travel_transported = CcCreatureRigControllerTransport(&cache->controller, start, yaw);
+        /* No catch-up queue: only this fixed step's physical stride remains. */
+        cache->pending_seconds = 0.0f;
+    } else if (cache->travel_route != route) {
+        cache->ready = false;
+    }
+    bool ok = CcLocalCreatureGaitTargetInternal(slot, CC_CREATURE_RIG_HORSE,
+        gait, clock, phase, ground, yaw, scale, CC_LOCAL_SCENE_ROAD);
+    cache->travel_route = route;
+    return ok;
+}
+
+void CcLocalCarriageResetGaitsInternal(void)
+{
+    creature_gaits[CREATURE_GAIT_ROAD_HORSE_LEFT] = (CreatureGaitCache){0};
+    creature_gaits[CREATURE_GAIT_ROAD_HORSE_RIGHT] = (CreatureGaitCache){0};
+    creature_gaits[CREATURE_GAIT_ROAD_PONY] = (CreatureGaitCache){0};
 }
 
 void CcLocalCarriageGaitInterpolateInternal(float alpha)

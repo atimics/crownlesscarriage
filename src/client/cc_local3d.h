@@ -182,6 +182,7 @@ float CcLocalOpenWorldCarriageScaleInternal(const CcSim *sim,
 void CcLocalOpenWorldCarriageTargetsInternal(const CcSim *sim,
     const CcLocalWorldCarriageState *carriage, float clock, float delta_time);
 void CcLocalCarriageGaitInterpolateInternal(float alpha);
+void CcLocalCarriageResetGaitsInternal(void);
 
 typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,

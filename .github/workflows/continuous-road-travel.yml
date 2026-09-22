@@ -1,0 +1,65 @@
+name: Continuous road travel
+on:
+  pull_request:
+    paths: ['src/client/**', 'src/locomotion/**', 'src/multiplayer/**', 'src/sim/cc_journey*', 'src/sim/cc_sim.h', 'tools/coop/**', 'web/coop_game.js', 'tests/**', 'cmake/tests/80-client.cmake', '.github/workflows/continuous-road-travel.yml']
+  push:
+    branches: [main]
+    paths: ['src/client/**', 'src/locomotion/**', 'src/multiplayer/**', 'src/sim/cc_journey*', 'src/sim/cc_sim.h', 'tools/coop/**', 'web/coop_game.js', 'tests/**', 'cmake/tests/80-client.cmake', '.github/workflows/continuous-road-travel.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: continuous-road-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install native review dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb ffmpeg
+      - name: Build and exercise road input, motion and shared authority
+        run: |
+          set -o pipefail
+          ulimit -s 65536
+          mkdir -p out/travel/frames
+          git rev-parse HEAD > out/travel/revision.txt
+          git rev-parse HEAD^{tree} > out/travel/tree.txt
+          cmake -S . -B build-road -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/travel/configure.log
+          cmake --build build-road --parallel 4 2>&1 | tee out/travel/build.log
+          xvfb-run -a ctest --test-dir build-road --output-on-failure --no-tests=error -R 'continuous_road|travel|carriage|creature|daily_play_policy|native_shared|saved_road_position|roadside_camp|rainbow_pony|road_journey_save|road_encounter_session|distinct_local_places|local_collision_space|town_arrival|town_departure|roadbook_arrival|oven_court|silverwick_mine|renderer' 2>&1 | tee out/travel/tests.log
+          xvfb-run -a build-road/renderer_regression_tests --carriage-graphics unused 2>&1 | tee out/travel/read-only-draw.log
+          node tests/web_coop_tests.mjs 2>&1 | tee out/travel/browser-transport.log
+      - name: Record actual input sequence and retain a hash manifest
+        run: |
+          set -o pipefail
+          xvfb-run -a build-road/crownless_carriage --capture-continuous-road "$PWD/out/travel/frames" 2>&1 | tee out/travel/capture.log
+          ffmpeg -hide_banner -loglevel warning -y -framerate 15 -i out/travel/frames/frame-%03d.png -c:v libx264 -crf 20 -pix_fmt yuv420p out/travel/road-input.mp4
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          root = pathlib.Path('out/travel')
+          frames = sorted((root/'frames').glob('frame-*.png'))
+          assert len(frames) == 120
+          (root/'manifest.json').write_text(json.dumps({
+              'revision': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'capture': 'generated road departure; production Space/pointer input; eight seconds at 15fps',
+              'files': [{'path':str(p.relative_to(root)), 'bytes':p.stat().st_size,
+                         'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+                        for p in [*frames, root/'road-input.mp4']]}, indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: continuous-road-travel-review
+          path: |
+            out/travel/
+            build-road/Testing/Temporary/LastTest.log
+          retention-days: 14
+          if-no-files-found: error

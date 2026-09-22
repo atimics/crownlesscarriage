@@ -35,6 +35,7 @@ EM_JS(int, CoopOwner, (), { return Module.ccCoop.owner() ? 1 : 0; });
 EM_JS(void, CoopLobby, (), { Module.ccCoop.openLobby(); });
 EM_JS(void, CoopTitle, (), { location.assign(location.pathname); });
 EM_JS(void, CoopCompany, (), { Module.ccCoop.openCompany(); });
+EM_JS(int, CoopTravelStopped, (), { return Module.ccCoop.travelStopped() ? 1 : 0; });
 EM_JS(int, CoopPaused, (), { return Module.ccCoop.paused() ? 1 : 0; });
 EM_ASYNC_JS(int, CoopSetAppearance, (int choices, char *error, int capacity), {
     try { await Module.ccCoop.saveAppearance(choices); return 1; }
@@ -110,6 +111,7 @@ bool CcCoopClientDelete(char *error, size_t capacity) { return CoopDelete(error,
 void CcCoopClientOpenLobby(void) { CoopLobby(); }
 void CcCoopClientReturnToTitle(void) { CoopTitle(); }
 void CcCoopClientOpenCompany(void) { CoopCompany(); }
+bool CcCoopClientTravelStopped(void) { return CoopTravelStopped() != 0; }
 bool CcCoopClientPaused(void) { return CoopPaused() != 0; }
 bool CcCoopClientTogglePause(char *error, size_t capacity) { return CoopTogglePause(error, (int)capacity) != 0; }
 bool CcCoopClientSetAppearance(uint32_t choices, char *error, size_t capacity)
@@ -164,6 +166,19 @@ bool CcCoopClientApply(CcSim *sim, const CcCommand *command, char *error, size_t
     }
     return applied && refreshed;
 }
+bool CcCoopClientSetTravelStopped(CcSim *sim, bool stopped, char *error, size_t capacity)
+{
+    char target[24];
+    (void)snprintf(target, sizeof(target), "%" PRIu64, sim->journey.route_id);
+    bool applied = CoopApply(stopped ? "stop_travel" : "resume_travel", target,
+                             0, 0, error, (int)capacity) != 0;
+    char sync_error[256];
+    bool refreshed = CcCoopClientPoll(sim, sync_error, sizeof(sync_error));
+    if (applied && !refreshed)
+        (void)snprintf(error, capacity, "Road action saved. Reconnect to refresh the carriage.");
+    return applied && refreshed;
+}
+
 bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
 {
     bool applied = CoopApply("skip_watch", "0", 0, 0, error, (int)capacity) != 0;

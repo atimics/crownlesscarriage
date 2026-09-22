@@ -148,6 +148,7 @@ static void WriteViewportFixture(const char *path)
 #include "travel_graphics_tests.inc"
 #include "camera_continuity_tests.inc"
 #include "carriage_graphics_tests.inc"
+#include "continuous_road_gait_tests.inc"
 
 static void TestBodyText(void)
 {
@@ -193,6 +194,8 @@ int main(int argc, char **argv)
     }
     TestTownSkyContract();
     if (argc == 2 && strcmp(argv[1], "--sky-data") == 0) return 0;
+    TestContinuousRoadGait();
+    if (argc == 2 && strcmp(argv[1], "--road-gait") == 0) return 0;
     TestCarriageWorldTargets();
     TestCarriagePlantedInterpolation();
     TestGroundTownCameras();

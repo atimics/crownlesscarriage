@@ -26,7 +26,19 @@ int main(int argc, char **argv)
     CC_CHECK(CcCompanyList(&company, error, sizeof(error)) && company.world_count == 1);
     CC_CHECK(CcCompanyLoad(&company, argv[3], error, sizeof(error)) && company.crew_count == 2);
     CC_CHECK(CcCompanyInvite(&company, false, error, sizeof(error)) && strlen(company.invitation) == 97);
-    if (strcmp(argv[4], "resume") == 0) {
+    if (strcmp(argv[4], "travel") == 0) {
+        CcCommand travel = {.kind = CC_COMMAND_TRAVEL,
+            .target_id = sim->routes[0].to_id};
+        CC_CHECK(CcCoopClientApply(sim, &travel, error, sizeof(error)));
+        uint64_t hash = CcSimHash(sim);
+        CC_CHECK(!CcCoopClientTravelStopped());
+        CC_CHECK(CcCoopClientSetTravelStopped(sim, true, error, sizeof(error)));
+        CC_CHECK(CcCoopClientTravelStopped() && CcSimHash(sim) == hash);
+        CC_CHECK(CcCoopClientSetTravelStopped(sim, false, error, sizeof(error)));
+        CC_CHECK(!CcCoopClientTravelStopped() && CcSimHash(sim) == hash);
+        CC_CHECK(CcCoopClientSetTravelStopped(sim, true, error, sizeof(error)));
+        CC_CHECK(CcCoopClientTravelStopped() && CcSimHash(sim) == hash);
+    } else if (strcmp(argv[4], "resume") == 0) {
         CC_CHECK(CcCoopClientHasSession());
         (void)snprintf(path, sizeof(path), "%s.shared-%s.session", argv[2], argv[3]);
         CcClientSession session;

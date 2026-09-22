@@ -24,7 +24,7 @@
       avatar = CcAvatar.normalize(next.appearance);
       avatarRevision = next.revision;
     }
-    say(travellerDead ? 'You have fallen. Your party carries on.' : next.paused ? 'Company paused' : `${next.crew.filter(p => p.online).length} aboard · shared carriage · saved`);
+    say(travellerDead ? 'You have fallen. Your party carries on.' : next.paused ? 'Company paused' : next.travel_stopped ? 'Carriage stopped · choose Travel to resume' : `${next.crew.filter(p => p.online).length} aboard · shared carriage · saved`);
   }
   async function request(path, body) {
     const response = await fetch(`/api/worlds/${worldId}/${path}`, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) });
@@ -203,6 +203,7 @@
     partyWipes:() => state?.party_wipes || 0,
     avatar:() => CcAvatar.pack(avatar), checkpoint:captureSession, hasSession:() => restoredSession,
     owner() { return Boolean(state?.owner); },
+    travelStopped() { return Boolean(state?.travel_stopped); },
     paused() { return Boolean(state?.paused); },
     ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
     take() { const value = pending; pending = null; return value; } };

@@ -1,4 +1,5 @@
 #include "sim/cc_journey_internal.h"
+#include "sim/cc_mine.h"
 
 #include "sim/cc_route_rules_internal.h"
 
@@ -336,4 +337,14 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
         .sponsored_guide = sponsored_night_passage
     };
     return true;
+}
+
+bool CcSimJourneyRequiresRoadChoice(const CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active) return false;
+    if (sim->journey.road_waiting_choice) return true;
+    const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+    if (site == NULL) return false;
+    int32_t branch = site == CcMineSite(sim) ? CcMineBranchSubtick(sim) : -1;
+    return branch < 0 || sim->journey.elapsed_subticks >= branch;
 }

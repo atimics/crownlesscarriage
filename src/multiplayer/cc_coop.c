@@ -125,9 +125,9 @@ bool CcCoopAdvanceTravel(CcSim *sim, int32_t ticks, int32_t scale, char *error, 
     *candidate = *sim;
     /* Watches flow into a short break or overnight camp automatically. */
     for (int32_t tick = 0; tick < ticks * scale; ++tick) {
-        if (tick % scale != 0 && (candidate->carriage.progress_milli <= 100 ||
-            candidate->carriage.progress_milli >= 900 ||
-            candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+        if (CcSimJourneyRequiresRoadChoice(candidate) ||
+            candidate->pony_company.encounter >= 0) break;
+        if (tick % scale != 0 && (candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
             candidate->pony_company.encounter >= 0 ||
             CcSimJourneyRoadSiteStop(candidate) != NULL)) continue;
         if (candidate->journey.active && candidate->journey.phase == CC_JOURNEY_PHASE_RESTING) {

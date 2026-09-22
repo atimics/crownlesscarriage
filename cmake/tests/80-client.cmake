@@ -169,3 +169,11 @@ if(CC_BUILD_CLIENT)
     add_test(NAME seeded_hilly_terrain COMMAND terrain_tests)
 
 endif()
+
+if(TARGET renderer_regression_tests)
+  add_test(NAME continuous_road_gait COMMAND renderer_regression_tests --road-gait)
+endif()
+
+if(TARGET crownless_carriage)
+  add_test(NAME continuous_road_input COMMAND crownless_carriage --test-continuous-road)
+endif()

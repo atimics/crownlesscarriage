@@ -17,7 +17,7 @@ static struct {
     char program[1024], campaign[640], world[33], save[704], pending_path[768], session_path[768];
     char context[65], visit[33], member[17], error[256];
     long long revision, action_revision, sequence, session_sequence, session_saved;
-    bool connected, owner, paused, dead, restored, closed, needs_enter;
+    bool connected, owner, paused, travel_stopped, dead, restored, closed, needs_enter;
     int32_t wipes, seat, scene, peer_count;
     uint32_t appearance;
     char *campaign_data, *checkpoint;
@@ -112,6 +112,7 @@ static void NativeAccept(const char *json)
     coop_native.wipes = wipes;
     coop_native.dead = coop_native.dead || CcCompanyJsonNumber(json, "$.dead") != 0;
     coop_native.owner = CcCompanyJsonNumber(json, "$.owner") != 0;
+    coop_native.travel_stopped = CcCompanyJsonNumber(json, "$.travel_stopped") != 0;
     coop_native.paused = CcCompanyJsonNumber(json, "$.paused") != 0;
     coop_native.action_revision = CcCompanyJsonNumber(json, "$.action_revision");
     coop_native.sequence = CcCompanyJsonNumber(json, "$.next_sequence");
@@ -246,6 +247,7 @@ bool CcCoopClientDead(void) { return coop_native.dead; }
 int32_t CcCoopClientPartyWipes(void) { return coop_native.wipes; }
 void CcCoopClientLife(bool dead) { coop_native.dead = coop_native.dead || dead; }
 bool CcCoopClientOwner(void) { return coop_native.owner; }
+bool CcCoopClientTravelStopped(void) { return coop_native.travel_stopped; }
 bool CcCoopClientPaused(void) { return coop_native.paused; }
 uint32_t CcCoopClientAppearance(void) { return coop_native.appearance; }
 bool CcCoopClientHasSession(void) { return coop_native.restored; }
@@ -390,6 +392,13 @@ bool CcCoopClientApply(CcSim *sim, const CcCommand *command, char *error, size_t
     (void)snprintf(target, sizeof(target), "%" PRIu64, command->target_id);
     int amount = command->kind == CC_COMMAND_CHANGE_DUNGEON ? (int)command->dungeon_state : command->amount;
     return NativeApply(sim, CcCoopActionName(command->kind), target, (int)command->good, amount, error, capacity);
+}
+bool CcCoopClientSetTravelStopped(CcSim *sim, bool stopped, char *error, size_t capacity)
+{
+    char target[24];
+    (void)snprintf(target, sizeof(target), "%" PRIu64, sim->journey.route_id);
+    return NativeApply(sim, stopped ? "stop_travel" : "resume_travel", target,
+                       0, 0, error, capacity);
 }
 bool CcCoopClientSkip(CcSim *sim, char *error, size_t capacity)
 { return NativeApply(sim, "skip_watch", "0", 0, 0, error, capacity); }

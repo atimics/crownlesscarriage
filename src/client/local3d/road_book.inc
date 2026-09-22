@@ -237,8 +237,11 @@ void CcLocalRoadTravelHorseTargetsInternal(const CcSim *sim,
     RoadHorsePlacement placements[2];
     int32_t count = RoadHorsePlacements(sim, base, yaw, false,
                                         CC_LOCAL_SCENE_ROAD, 1.0f, placements);
-    PublishRoadHorseTargets(placements, count, RoadHorseRigGait(pace), clock,
-                            yaw, CC_LOCAL_SCENE_ROAD);
+    for (int32_t i = 0; i < count; ++i) {
+        (void)CreatureTravelTarget(placements[i].slot, RoadHorseRigGait(pace),
+            placements[i].initial_phase, placements[i].base, yaw,
+            placements[i].rig_scale, sim->journey.route_id, pace, 1.0f / 60.0f);
+    }
 }
 
 /* Pace still says which gait the team is in; the road says how fast it steps.
@@ -264,7 +267,9 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
                                         scene, vehicle_scale, placements);
     /* Open-world targets belong to the update path, in world coordinates.
        Local-only scenes retain their legacy publisher until migrated. */
-    if (active_world_stream == NULL) {
+    if (active_world_stream == NULL && !(sim->journey.active &&
+        !bridge_checkpoint && scene == CC_LOCAL_SCENE_ROAD && count > 0 &&
+        creature_gaits[placements[0].slot].travel_route == sim->journey.route_id)) {
         PublishRoadHorseTargets(placements, count, rig_gait, clock, yaw, scene);
     }
     for (int32_t i = 0; i < count; ++i) {
