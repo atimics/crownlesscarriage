@@ -63,6 +63,7 @@ if(CC_BUILD_CLIENT)
     target_compile_definitions(renderer_regression_tests PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(renderer_regression_tests)
+    add_test(NAME town_sky_data COMMAND renderer_regression_tests --sky-data)
     add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
     add_test(NAME physical_goods_displays COMMAND renderer_regression_tests --physical-goods)
     add_custom_target(run_renderer_graphics_tests
