@@ -776,6 +776,25 @@ bool CcCreatureRigControllerSetGait(CcCreatureRigController *controller,
     return true;
 }
 
+bool CcCreatureRigControllerSetScale(CcCreatureRigController *controller,
+                                    float scale)
+{
+    if (controller == NULL || !controller->initialized ||
+        !isfinite(scale) || scale <= 0.0f) return false;
+    if (scale == controller->scale) return true;
+    CcCreatureRigController dimensions;
+    if (!CcCreatureRigControllerInit(&dimensions, controller->profile,
+                                     controller->skeleton.gait_phase, scale)) return false;
+    (void)CcCreatureRigControllerSetGait(&dimensions, controller->gait);
+    /* Only replace anatomy and its muscle rest geometry. Runtime feet,
+       requested gait, swing progress, support state and phase stay intact. */
+    controller->skeleton.morphology = dimensions.skeleton.morphology;
+    controller->skeleton.walking_morphology = dimensions.skeleton.walking_morphology;
+    controller->muscles = dimensions.muscles;
+    controller->scale = scale;
+    return true;
+}
+
 bool CcCreatureRigControllerStep(CcCreatureRigController *controller,
                                  float forward_speed, float movement,
                                  float delta_time,

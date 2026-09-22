@@ -145,6 +145,14 @@ typedef struct CcLocalWorldCarriageState {
     float previous_heading_yaw;
     float render_travelled;
     float previous_travelled;
+    bool presentation_valid;
+    /* Rolling history is presentation-only, never campaign/save state. */
+    double rolling_distance;
+    float rolling_last_travelled;
+    float rolling_last_scale;
+    float rolling_last_heading;
+    CcId rolling_route_id;
+    bool rolling_valid;
     float route_amount;
     float pace;
     float camera_weight;
@@ -160,6 +168,20 @@ typedef struct CcLocalWorldCarriageState {
     bool town_arrival;
     bool storybook_travel;
 } CcLocalWorldCarriageState;
+
+void CcLocalCarriagePublishPose(CcLocalWorldCarriageState *carriage,
+    Vector3 position, float heading, float travelled, bool advance_sample,
+    float alpha);
+void CcLocalCarriageInterpolate(CcLocalWorldCarriageState *carriage, float alpha);
+void CcLocalCarriageRoll(CcLocalWorldCarriageState *carriage, float scale);
+Vector3 CcLocalCarriageRenderPosition(const CcLocalWorldCarriageState *carriage);
+float CcLocalCarriageRenderHeading(const CcLocalWorldCarriageState *carriage);
+float CcLocalCarriageRenderDistance(const CcLocalWorldCarriageState *carriage);
+float CcLocalOpenWorldCarriageScaleInternal(const CcSim *sim,
+    const CcLocalWorldCarriageState *carriage);
+void CcLocalOpenWorldCarriageTargetsInternal(const CcSim *sim,
+    const CcLocalWorldCarriageState *carriage, float clock, float delta_time);
+void CcLocalCarriageGaitInterpolateInternal(float alpha);
 
 typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,
