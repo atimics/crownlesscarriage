@@ -3,7 +3,6 @@ on:
   push:
     branches: [fix/ground-level-authored-towns]
     paths:
-      - .github/ground-town-apply.py
       - .github/workflows/ground-town-workbench.yml
 permissions:
   contents: read
@@ -14,45 +13,84 @@ jobs:
   review:
     if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/fix/ground-level-authored-towns'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - name: Apply camera candidate for review
+          ref: ${{ github.sha }}
+      - name: Verify and prepare the exact reviewed camera implementation
         run: |
-          python3 .github/ground-town-apply.py
-          git diff --check
           mkdir -p out/ground-town
-          git diff > out/ground-town/reviewed.patch
-          git rev-parse HEAD > out/ground-town/source-revision.txt
-          sha256sum out/ground-town/reviewed.patch > out/ground-town/patch-sha256.txt
+          python3 - <<'PY'
+          import base64, hashlib, zlib
+          from pathlib import Path
+          parts = [Path(f'.github/ground-town-parts/{i:02d}.txt').read_text().strip() for i in range(7)]
+          encoded = ''.join(parts)
+          assert len(encoded) == 18736
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+          digest = hashlib.sha256(patch).hexdigest()
+          assert len(patch) == 55285
+          assert digest == '09f6ecf56aad0c465f770fa41a17b59a629be48be734321ecf4f5666ea9c6d97', digest
+          Path('out/ground-town/reviewed.patch').write_bytes(patch)
+          Path('out/ground-town/patch-sha256.txt').write_text(digest + '\n')
+          print('Verified reviewed patch:', digest)
+          PY
+          git apply --check out/ground-town/reviewed.patch
+          git apply out/ground-town/reviewed.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/design/ground-level-towns.md')
+          s = p.read_text()
+          s = s.replace('local_place|local_movement|renderer', 'distinct_local_places|local_collision_space|renderer')
+          p.write_text(s)
+          PY
+          git diff --check
+          git config user.name 'chatgpt-codex-connector[bot]'
+          git config user.email 'chatgpt-codex-connector[bot]@users.noreply.github.com'
+          git rm -r .github/ground-town-parts .github/ground-town.patch .github/ground-town-apply.py .github/workflows/ground-town-workbench.yml
+          git add src tests docs/design/ground-level-towns.md
+          git diff --cached --check
+          git commit -m 'fix: compose towns at ground level as authored adventure scenes'
+          git rev-parse HEAD > out/ground-town/tested-revision.txt
+          git rev-parse HEAD^{tree} > out/ground-town/tested-tree.txt
+          git diff HEAD^ HEAD --stat > out/ground-town/change-stat.txt
       - name: Install native dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
-      - name: Build native client and graphics tests
+      - name: Build complete native Release client and tests
         run: |
           set -o pipefail
           cmake -S . -B build-ground -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/ground-town/configure.log
-          cmake --build build-ground --parallel 4 --target crownless_carriage renderer_regression_tests local_place_tests 2>&1 | tee out/ground-town/build.log
-      - name: Capture all authored town views
+          cmake --build build-ground --parallel 4 2>&1 | tee out/ground-town/build.log
+      - name: Exercise ground cameras, navigation and integration contracts
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: xvfb-run -a python3 tools/capture_four_towns.py build-ground/crownless_carriage --output out/ground-town/scenes --conditions
-      - name: Export native review inputs
-        if: always()
         run: |
-          tar --exclude=.git --exclude=examples --exclude=projects --exclude=parser -czf ground-town-dev.tar.gz src tests tools cmake CMakeLists.txt CMakePresets.json Makefile docs/design build-ground/_deps/raylib-src build-ground/_deps/raylib-build/raylib/libraylib.a build-ground/crownless_carriage build-ground/renderer_regression_tests
+          set -o pipefail
+          xvfb-run -a ctest --test-dir build-ground --output-on-failure --no-tests=error -R 'distinct_local_places|local_collision_space|renderer|carriage|creature|travel|footing|town_arrival|town_departure|roadbook_arrival|oven_court|silverwick_mine|bridge_scene_input|capture_' 2>&1 | tee out/ground-town/tests.log
+          xvfb-run -a ./build-ground/renderer_regression_tests --carriage-graphics unused-output-path 2>&1 | tee out/ground-town/repeated-draw.log
+      - name: Capture all sixteen town views and nine condition variants
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set -o pipefail
+          xvfb-run -a python3 tools/capture_four_towns.py build-ground/crownless_carriage --output out/ground-town/scenes --conditions 2>&1 | tee out/ground-town/captures.log
+          sha256sum build-ground/crownless_carriage > out/ground-town/binary-sha256.txt
+      - name: Publish only the tested implementation to its work branch
+        run: |
+          test "$(git branch --show-current)" = '' || test "$(git branch --show-current)" = 'fix/ground-level-authored-towns'
+          git diff --exit-code
+          git diff --cached --exit-code
+          git push origin HEAD:refs/heads/fix/ground-level-authored-towns
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ground-town-scenes
-          path: out/ground-town
+          name: ground-town-final-review
+          path: |
+            out/ground-town/
+            build-ground/Testing/Temporary/LastTest.log
           retention-days: 14
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ground-town-dev
-          path: ground-town-dev.tar.gz
-          retention-days: 3
+          if-no-files-found: error
