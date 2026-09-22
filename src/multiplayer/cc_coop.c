@@ -128,7 +128,6 @@ bool CcCoopAdvanceTravel(CcSim *sim, int32_t ticks, int32_t scale, char *error, 
         if (CcSimJourneyRequiresRoadChoice(candidate) ||
             candidate->pony_company.encounter >= 0) break;
         if (tick % scale != 0 && (candidate->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
-            candidate->pony_company.encounter >= 0 ||
             CcSimJourneyRoadSiteStop(candidate) != NULL)) continue;
         if (candidate->journey.active && candidate->journey.phase == CC_JOURNEY_PHASE_RESTING) {
             CcCommand rest = {.kind = CcSimJourneyStop(candidate) == CC_JOURNEY_STOP_MIDDAY ?
