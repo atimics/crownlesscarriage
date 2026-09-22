@@ -661,6 +661,7 @@ static const StreetBoundaryExit STREET_BOUNDARY_EXITS[] = {
 };
 
 typedef struct FixedCameraRig {
+    Vector3 ground_station_offset; /* Ground-only retreat; never a vertical crane. */
     Camera3D output_camera;
     Vector3 output_hero_position;
     bool output_valid;

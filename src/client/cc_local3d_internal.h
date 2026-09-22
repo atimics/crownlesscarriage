@@ -56,6 +56,8 @@ float CcLocalRoomArtRayDistanceInternal(Ray ray, Vector3 focus);
 bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
                                             Vector3 proposed);
 
+/* Current authored screen ID, for input/capture diagnostics; -1 before a view. */
+int32_t CcLocalStreetCameraSceneInternal(void);
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height);
 Camera3D CcLocalCombatCameraInternal(Camera3D base,

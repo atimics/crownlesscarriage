@@ -182,6 +182,8 @@ static void TestBodyText(void)
 
 #include "abandoned_town_captures.inc"
 
+#include "ground_town_camera_tests.inc"
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "--physical-goods") == 0) {
@@ -190,6 +192,7 @@ int main(int argc, char **argv)
     }
     TestCarriageWorldTargets();
     TestCarriagePlantedInterpolation();
+    TestGroundTownCameras();
     TestCameraContinuity();
     TestStableVisibility();
     TestBuildingRevealTiming();

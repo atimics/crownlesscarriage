@@ -2103,7 +2103,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     camera = StreetCameraClearVolume(camera);
     if (camera_subject != NULL && !arrival_pan &&
         conversation_partner == NULL) {
-        camera = KeepHeroInsideStreetFrame(
+        camera = GroundStreetFrameHero(
             camera,
             Vector3Add(camera_subject->position,
                        (Vector3){0.0f, 1.05f, 0.0f}),

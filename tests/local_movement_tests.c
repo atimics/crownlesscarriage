@@ -2856,9 +2856,14 @@ static void TestTownSquareGroundSightlines(void)
             feet.y += 0.15f;
             Vector2 screen = GetWorldToScreenEx(feet, camera, 630, 320);
             Ray sightline = GetScreenToWorldRayEx(screen, camera, 630, 320);
-            if (sightline.direction.y > -0.25f) {
+            /* The old -0.25 requirement forced an aerial lens. Test the
+               ground station and real unobstructed feet ray instead. */
+            float eye = camera.position.y - CcLocalTerrainHeightAt(
+                camera.position.x, camera.position.z);
+            if (eye < 1.79f || eye > 4.01f ||
+                fabsf(sightline.direction.y) > 0.40f) {
                 (void)fprintf(stderr,
-                    "town square view needs ground depth: seed %u town %d ray y %.3f\n",
+                    "town square view must keep a low feet sightline: seed %u town %d ray y %.3f\n",
                     seeds[seed], town, sightline.direction.y);
                 exit(1);
             }
@@ -3048,9 +3053,8 @@ int main(void)
         CcLocalTerrainHeightAt(alley_camera.position.x,
                                alley_camera.position.z);
     if (alley_camera.projection != CAMERA_PERSPECTIVE ||
-        CameraViewSpan(alley_camera) < 5.8f || CameraViewSpan(alley_camera) > 6.6f ||
-        alley_eye_height < 0.45f ||
-        alley_camera.position.y < alley_camera.target.y + 2.0f ||
+        CameraViewSpan(alley_camera) < 8.0f || CameraViewSpan(alley_camera) > 12.0f ||
+        alley_eye_height < 1.79f || alley_eye_height > 4.01f ||
         alley_hero_screen.x < (88.0f * 630.0f / 457.0f) || alley_hero_screen.x > (369.0f * 630.0f / 457.0f) ||
         alley_hero_screen.y < (54.0f * 320.0f / 285.0f) || alley_hero_screen.y > (231.0f * 320.0f / 285.0f)) {
         (void)fprintf(stderr,
@@ -3124,6 +3128,8 @@ int main(void)
     int32_t current_motion_frames = 0;
     int32_t longest_motion_run = 0;
     float largest_camera_step = 0.0f;
+    int32_t previous_scene = CcLocalStreetCameraSceneInternal();
+    int32_t authored_cuts = 0;
     for (int32_t frame = 0; frame < 720; ++frame) {
         float amount = (float)frame / 719.0f;
         miller_camera_agent.position.x = 54.6f + 17.0f * amount;
@@ -3149,7 +3155,12 @@ int main(void)
             return 1;
         }
         float camera_step = VectorDistance3(previous_camera_target, miller_camera.target);
-        largest_camera_step = fmaxf(largest_camera_step, camera_step);
+        int32_t scene = CcLocalStreetCameraSceneInternal();
+        if (scene == previous_scene)
+            largest_camera_step = fmaxf(largest_camera_step, camera_step);
+        else
+            authored_cuts += 1;
+        previous_scene = scene;
         bool camera_moving = camera_step > 0.002f;
         if (camera_moving && !camera_was_moving) camera_motion_runs += 1;
         if (camera_moving) camera_moving_frames += 1;
@@ -3160,7 +3171,7 @@ int main(void)
         camera_was_moving = camera_moving;
         previous_camera_target = miller_camera.target;
     }
-    if (largest_camera_step > 0.60f || camera_moving_frames == 0) {
+    if (largest_camera_step > 0.60f || camera_moving_frames == 0 || authored_cuts > 2) {
         (void)fprintf(stderr,
                       "Miller's Row camera motion: %d runs, %d moving frames, longest %d frames, largest step %.3f\n",
                       camera_motion_runs, camera_moving_frames,
