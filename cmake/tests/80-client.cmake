@@ -4,6 +4,7 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(carriage_presentation_tests)
     add_test(NAME carriage_presentation_timeline COMMAND carriage_presentation_tests)
     add_test(NAME carriage_client_update_order COMMAND crownless_carriage --test-carriage-client)
+    add_test(NAME carriage_overview_layout COMMAND crownless_carriage --test-carriage-overview)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_CLIENT_SELF_TESTS=1
     )
