@@ -1963,10 +1963,13 @@ static void GenerateUnderroadNetwork(CcSim *sim)
 
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         const CcSettlement *settlement = &sim->settlements[i];
-        UnderroadAddNode(
-            sim, CC_UNDERROAD_NODE_ENTRANCE, i, -1, settlement->name,
-            settlement->map_x + UnderroadRange(&state, 41) - 20,
-            settlement->map_y + UnderroadRange(&state, 41) - 20, &state);
+        /* Consume x, then y, then depth in UnderroadAddNode. C does not
+           specify argument evaluation order; inline RNG calls gave GCC and
+           Clang different networks when loading the same old campaign. */
+        int32_t map_x = settlement->map_x + UnderroadRange(&state, 41) - 20;
+        int32_t map_y = settlement->map_y + UnderroadRange(&state, 41) - 20;
+        UnderroadAddNode(sim, CC_UNDERROAD_NODE_ENTRANCE, i, -1,
+                         settlement->name, map_x, map_y, &state);
     }
 
     int32_t lair_settlement =
@@ -1980,10 +1983,10 @@ static void GenerateUnderroadNetwork(CcSim *sim)
         int32_t anchor_y = lair_settlement >= 0
                                ? sim->settlements[lair_settlement].map_y
                                : 0;
+        int32_t map_x = anchor_x + UnderroadRange(&state, 81) - 40;
+        int32_t map_y = anchor_y + UnderroadRange(&state, 81) - 40;
         UnderroadAddNode(sim, CC_UNDERROAD_NODE_LAIR, lair_settlement, clan,
-                         lair_names[clan],
-                         anchor_x + UnderroadRange(&state, 81) - 40,
-                         anchor_y + UnderroadRange(&state, 81) - 40, &state);
+                         lair_names[clan], map_x, map_y, &state);
     }
 
     int32_t dragon_settlement =
