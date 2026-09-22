@@ -3220,8 +3220,10 @@ int main(void)
     Vector3 projected_command = miller_click_agent.command_point;
     if (VectorDistance3(projected_command,
                         miller_preview.resolved_point) > 0.00001f ||
-        miller_click_agent.navigation_point_count !=
-            miller_preview.path_count) {
+        miller_click_agent.navigation_active != miller_preview.navigation ||
+        (miller_preview.navigation && miller_click_agent.navigation_point_count !=
+            miller_preview.path_count) ||
+        (!miller_preview.navigation && miller_click_agent.navigation_point_count != 0)) {
         (void)fprintf(stderr,
                       "movement preview and committed path disagreed\n");
         return 1;
@@ -3237,10 +3239,12 @@ int main(void)
         return 1;
     }
     for (int32_t frame = 0;
-         frame < 2400 && miller_click_agent.navigation_active; ++frame) {
+         frame < 2400 && (miller_click_agent.navigation_active ||
+                          miller_click_agent.exact_target_valid); ++frame) {
         CcLocalAgentUpdate(&miller_click_agent, 1.0f / 60.0f, false);
     }
     if (miller_click_agent.navigation_active ||
+        miller_click_agent.exact_target_valid ||
         VectorDistance2(
             (Vector2){miller_click_agent.position.x,
                       miller_click_agent.position.z},
