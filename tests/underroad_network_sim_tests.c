@@ -37,8 +37,47 @@ static int32_t Connected(const CcUnderroadNetwork *network)
     return 1;
 }
 
+/* This small layout pins the RNG order, rather than comparing two worlds
+   produced by the same compiler (which cannot expose argument-order drift). */
+static void TestCanonicalCoordinateOrder(void)
+{
+    static CcSim fixture;
+    fixture = (CcSim){0};
+    fixture.schema_version = 108U;
+    fixture.world_seed = 7U;
+    fixture.random_state = UINT32_C(0x12345678);
+    fixture.settlement_count = 2;
+    fixture.settlements[0].id = 1U;
+    fixture.settlements[0].map_x = 100;
+    fixture.settlements[0].map_y = 200;
+    fixture.settlements[1].id = 2U;
+    fixture.settlements[1].map_x = -80;
+    fixture.settlements[1].map_y = 40;
+    fixture.goblins.lair_settlement_id = 2U;
+    fixture.dragon.lair_settlement_id = 1U;
+    CcSimInitializeUnderroadNetwork(&fixture);
+    static const int32_t expected[6][3] = {
+        {112, 186, 1}, {-95, 57, 3},
+        {-109, 38, 1}, {-56, 60, 0}, {-47, 58, 2}, {100, 200, 1}
+    };
+    CC_CHECK(fixture.underroad.layout_seed == UINT32_C(3454611271));
+    CC_CHECK(fixture.underroad.node_count == 6);
+    for (int32_t i = 0; i < 6; ++i) {
+        CC_CHECK(fixture.underroad.nodes[i].map_x == expected[i][0]);
+        CC_CHECK(fixture.underroad.nodes[i].map_y == expected[i][1]);
+        CC_CHECK(fixture.underroad.nodes[i].depth == expected[i][2]);
+    }
+    CC_CHECK(fixture.random_state == UINT32_C(0x12345678));
+    /* Already generated topology is historical state, not a recipe to rerun. */
+    fixture.underroad.nodes[0].map_x += 9;
+    CcUnderroadNetwork retained = fixture.underroad;
+    CcSimInitializeUnderroadNetwork(&fixture);
+    CC_CHECK(memcmp(&retained, &fixture.underroad, sizeof(retained)) == 0);
+}
+
 int main(void)
 {
+    TestCanonicalCoordinateOrder();
     char error[256] = {0};
     CcSim first;
     CcSim second;
@@ -70,12 +109,19 @@ int main(void)
 
     const char *save_path = "underroad-network-round-trip.ccsave";
     RemoveSave(save_path);
+    /* Existing schema-108 saves may contain the older compiler's layout.
+       Preserve stored nodes on load rather than regenerating a canonical one. */
+    first.underroad.nodes[0].map_x += 9;
+    first.underroad.revision++;
     uint64_t saved_hash = CcSimHash(&first);
     CC_CHECK(CcSaveWrite(save_path, &first, error, sizeof(error)));
     CcSim restored;
     CC_CHECK(CcSaveRead(save_path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == saved_hash);
     CC_CHECK(restored.underroad.generated);
+    CC_CHECK(restored.underroad.nodes[0].map_x == first.underroad.nodes[0].map_x);
+    CcSimInitializeUnderroadNetwork(&restored);
+    CC_CHECK(CcSimHash(&restored) == saved_hash);
     CC_CHECK(restored.underroad.node_count == network->node_count);
     CC_CHECK(restored.underroad.road_count == network->road_count);
     RemoveSave(save_path);
