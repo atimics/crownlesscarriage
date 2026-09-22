@@ -15,32 +15,67 @@ jobs:
     if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/integration/towns-and-journey-cut'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Export exact integration inputs
+      - name: Integrate pinned town and Oven Court heads without changing main
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import subprocess, gzip
-          output = Path('/tmp/town-inputs'); output.mkdir()
-          refs = {'main': 'e69765e60a939143e6e14050331c735a530963df', 'towns': 'dbe44f532effeaf083e47378907b467180750899', 'oven': 'd1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6'}
-          for name in ('towns', 'oven'):
-              base = subprocess.check_output(['git', 'merge-base', refs['main'], refs[name]], text=True).strip()
-              refs[name + '-base'] = base
-              (output / (name + '.diff')).write_bytes(subprocess.check_output(['git', 'diff', base, refs[name]]))
-          for name, sha in refs.items():
-              extra = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', sha, 'tools', 'docs/design'], text=True).splitlines()
-              extra = [p for p in extra if Path(p).suffix in ('.py', '.c', '.cjs', '.js', '.md', '.sh')]
-              paths = ['src', 'tests', 'cmake', '.github', 'CMakeLists.txt', 'CMakePresets.json', 'Makefile'] + extra
-              data = subprocess.check_output(['git', 'archive', sha, *paths])
-              with gzip.open(output / (name + '.tar.gz'), 'wb') as f: f.write(data)
-          (output / 'revisions.txt').write_text('\n'.join(f'{name} {sha}' for name, sha in refs.items()))
-          PY
+          git config user.name 'Integration review'
+          git config user.email 'integration-review@users.noreply.github.com'
+          git checkout --detach e69765e60a939143e6e14050331c735a530963df
+          git merge --no-ff --no-edit ca92901d9564ebb1ca349c1f0dcf1d418dee9ba5
+          git merge --no-ff --no-edit d1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6
+          git diff --check
+          mkdir -p out/integration
+          git rev-parse HEAD > out/integration/revision.txt
+          git rev-parse HEAD^{tree} > out/integration/tree.txt
+          git diff e69765e60a939143e6e14050331c735a530963df > out/integration/combined.diff
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb ffmpeg
+      - name: Build combined native client
+        id: build
+        run: |
+          set -o pipefail
+          cmake -S . -B build-integration -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/integration/configure.log
+          cmake --build build-integration --parallel 4 2>&1 | tee out/integration/build.log
+      - name: Exercise integration regressions
+        run: |
+          set -o pipefail
+          ulimit -s 65536
+          xvfb-run -a ctest --test-dir build-integration --output-on-failure --parallel 2 -R 'carriage|creature|travel|footing|town|local_movement|mine|oven|production|custody|interaction|capture.*(request|contract)|renderer|adventure_input|adventure_trade|simulation_resume|persistence_field' 2>&1 | tee out/integration/tests.log
+          xvfb-run -a ./build-integration/renderer_regression_tests --carriage-graphics /tmp/unused.png 2>&1 | tee out/integration/repeated-draw.log
+          python3 tests/test_four_town_capture.py
+          python3 tests/dialogue_fact_question_tests.py
+          python3 tests/dialogue_fact_policy_tests.py
+          python3 tools/language/model_identity.py --check
+      - name: Capture the combined authored towns and Oven Court
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          xvfb-run -a python3 tools/capture_four_towns.py build-integration/crownless_carriage --output out/integration/towns --conditions
+          xvfb-run -a python3 tools/capture_oven_court.py build-integration/crownless_carriage --out out/integration/oven --revision "$(git rev-parse HEAD)"
+      - name: Bundle native review runtime
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          tar -czf /tmp/integration-native.tar.gz build-integration/crownless_carriage build-integration/renderer_regression_tests build-integration/carriage_presentation_tests assets
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
         with:
-          name: town-integration-inputs
-          path: /tmp/town-inputs/
+          name: combined-town-integration-evidence
+          path: |
+            out/integration/
+            build-integration/Testing/Temporary/LastTest.log
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        with:
+          name: combined-town-native-runtime
+          path: /tmp/integration-native.tar.gz
           retention-days: 7
+          compression-level: 0
