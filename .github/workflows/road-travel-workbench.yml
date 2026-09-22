@@ -62,7 +62,7 @@ jobs:
           xvfb-run -a build-road/renderer_regression_tests --road-gait 2>&1 | tee out/travel/stride-metrics.log
           xvfb-run -a build-road/renderer_regression_tests --carriage-graphics unused 2>&1 | tee out/travel/read-only-draw.log
           node tests/web_coop_tests.mjs 2>&1 | tee out/travel/browser-transport.log
-          python3 tests/coop_tests.py 2>&1 | tee out/travel/shared-host.log
+          python3 tests/coop_tests.py build-road/libcrownless_coop.so 2>&1 | tee out/travel/shared-host.log
       - name: Record the production input sequence
         run: |
           set -o pipefail
