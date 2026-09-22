@@ -1,0 +1,65 @@
+name: Town skies and horizons
+on:
+  pull_request:
+    paths:
+      - 'src/client/local3d/**'
+      - 'src/client/cc_local3d*'
+      - 'src/client/cc_local_place*'
+      - 'tests/*sky*'
+      - 'tests/renderer_regression_tests.c'
+      - 'tools/capture_town_skies.py'
+      - '.github/workflows/town-skies.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/client/local3d/**'
+      - 'src/client/cc_local3d*'
+      - 'src/client/cc_local_place*'
+      - 'tests/*sky*'
+      - 'tests/renderer_regression_tests.c'
+      - 'tools/capture_town_skies.py'
+      - '.github/workflows/town-skies.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: town-skies-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install native graphics dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
+      - name: Build and test the native renderer
+        run: |
+          set -o pipefail
+          mkdir -p out/sky-review
+          git rev-parse HEAD > out/sky-review/tested-revision.txt
+          git rev-parse HEAD^{tree} > out/sky-review/tested-tree.txt
+          cmake -S . -B build-sky -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/sky-review/configure.log
+          cmake --build build-sky --parallel 4 2>&1 | tee out/sky-review/build.log
+          xvfb-run -a ctest --test-dir build-sky --output-on-failure --no-tests=error -R 'town_sky|distinct_local_places|local_collision_space|renderer|carriage|creature|travel|footing|town_arrival|town_departure|roadbook_arrival|oven_court|silverwick_mine|bridge_scene_input|capture_' 2>&1 | tee out/sky-review/tests.log
+          xvfb-run -a ./build-sky/renderer_regression_tests --sky-graphics unused 2>&1 | tee out/sky-review/graphics.log
+          xvfb-run -a ./build-sky/renderer_regression_tests --carriage-graphics unused 2>&1 | tee out/sky-review/carriage.log
+      - name: Capture authored views, conditions and all sky moods
+        run: |
+          xvfb-run -a python3 tools/capture_four_towns.py build-sky/crownless_carriage --output out/sky-review/towns --conditions
+          xvfb-run -a python3 tools/capture_town_skies.py build-sky/renderer_regression_tests --output out/sky-review/moods
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: town-sky-review
+          path: |
+            out/sky-review/
+            build-sky/Testing/Temporary/LastTest.log
+          retention-days: 14
+          if-no-files-found: error
