@@ -1,0 +1,27 @@
+name: Road travel workbench
+on:
+  push:
+    branches: [feat/continuous-road-travel]
+    paths: [.github/workflows/road-travel-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/feat/continuous-road-travel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export exact baseline source
+        run: |
+          mkdir -p /tmp/road-source
+          git archive 6104310654ee522481ddff0c8f30e27486131626 src tests tools cmake web .github CMakeLists.txt CMakePresets.json Makefile | gzip > /tmp/road-source/source.tar.gz
+          git ls-tree -r 6104310654ee522481ddff0c8f30e27486131626 > /tmp/road-source/tree.txt
+          echo 6104310654ee522481ddff0c8f30e27486131626 > /tmp/road-source/revision.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: road-travel-source
+          path: /tmp/road-source/
+          retention-days: 3
