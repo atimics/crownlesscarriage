@@ -177,6 +177,34 @@ static float ClampPace(float pace)
     return fmaxf(0.0f, fminf(1.0f, pace));
 }
 
+double CcClientTravelSampleStep(CcClientTravelSample *sample,
+    double progress, uint64_t tick, float dt, bool discontinuity)
+{
+    if (sample == NULL) return 0.0;
+    if (!isfinite(progress)) return sample->valid ? sample->position : 0.0;
+    progress = fmax(0.0, fmin(1.0, progress));
+    double step = isfinite(dt) ? fmax(0.0, fmin(0.1, (double)dt)) : 0.0;
+    if (!sample->valid || discontinuity || tick < sample->tick ||
+        progress < sample->target) {
+        *sample = (CcClientTravelSample){.from=progress, .target=progress,
+            .position=progress, .tick=tick, .duration=0.75, .valid=true};
+        return progress;
+    }
+    if (tick != sample->tick) {
+        sample->from = sample->position;
+        sample->target = progress;
+        sample->duration = fmax(1.0/60.0, fmin(1.5, sample->since_update));
+        sample->age = 0.0;
+        sample->since_update = 0.0;
+        sample->tick = tick;
+    }
+    sample->age += step;
+    sample->since_update += step;
+    double alpha = fmin(1.0, sample->age / sample->duration);
+    sample->position = sample->from + (sample->target - sample->from) * alpha;
+    return sample->position;
+}
+
 float CcClientTravelBlendStep(float blend, bool fast_forward, float delta_time)
 {
     if (!isfinite(blend)) blend = 0.0f;

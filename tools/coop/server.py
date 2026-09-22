@@ -42,7 +42,7 @@ def away_days(seconds):
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 WORLD_ID = re.compile(r"^[0-9a-f]{32}$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 '\-]{0,30}$")
-ACTIONS = {'deliver_prophecy', 'repair_road_site', 'transfer_road_site', 'clear_road_site', 'exchange_gossip', 'camp_road_site', 'pass_road_site', 'meet_pony', 'help_pony', 'swap_pony', 'leave_pony', 'skip_watch', 'negotiate', 'refuse', 'retrieve_map', 'return_treasure', 'goblin_intercept', 'provisions', 'pace', 'abandon', 'fight', 'withdraw', 'breed_horses', 'buy_map', 'dungeon_encounter', 'goblin_trade', 'enter_dungeon', 'press_on', 'trade', 'goblin_warn', 'goblin_tunnel', 'sell_map', 'intercept_tribute', 'search_dungeon', 'break', 'accept', 'open_shortcut', 'return_named_treasure', 'change_dungeon', 'camp', 'repair', 'archive_map', 'assign_horse', 'lodge', 'sell_treasure', 'talk', 'buy_treasure', 'leave_dungeon', 'move_dungeon', 'steal_named_treasure', 'travel', 'steal_hoard', 'visit_mine', 'mine_step', 'mine_use', 'mine_pack', 'mine_inspect', 'mine_take', 'mine_cache', 'mine_bargain', 'mine_break_contact', 'road_leg', 'mine_learn_lead', 'mine_report_return'}
+ACTIONS = {'stop_travel', 'resume_travel', 'deliver_prophecy', 'repair_road_site', 'transfer_road_site', 'clear_road_site', 'exchange_gossip', 'camp_road_site', 'pass_road_site', 'meet_pony', 'help_pony', 'swap_pony', 'leave_pony', 'skip_watch', 'negotiate', 'refuse', 'retrieve_map', 'return_treasure', 'goblin_intercept', 'provisions', 'pace', 'abandon', 'fight', 'withdraw', 'breed_horses', 'buy_map', 'dungeon_encounter', 'goblin_trade', 'enter_dungeon', 'press_on', 'trade', 'goblin_warn', 'goblin_tunnel', 'sell_map', 'intercept_tribute', 'search_dungeon', 'break', 'accept', 'open_shortcut', 'return_named_treasure', 'change_dungeon', 'camp', 'repair', 'archive_map', 'assign_horse', 'lodge', 'sell_treasure', 'talk', 'buy_treasure', 'leave_dungeon', 'move_dungeon', 'steal_named_treasure', 'travel', 'steal_hoard', 'visit_mine', 'mine_step', 'mine_use', 'mine_pack', 'mine_inspect', 'mine_take', 'mine_cache', 'mine_bargain', 'mine_break_contact', 'road_leg', 'mine_learn_lead', 'mine_report_return'}
 
 
 class ApiError(Exception):
@@ -139,6 +139,8 @@ class Worlds:
           accounted_at REAL NOT NULL, owed_days REAL NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS world_passes (
           pass_hash TEXT PRIMARY KEY, claimed_world TEXT);
+        CREATE TABLE IF NOT EXISTS road_holds (
+          world TEXT PRIMARY KEY REFERENCES worlds(id), journey_key TEXT NOT NULL);
         PRAGMA user_version=1;
         """)
         self.seen, self.last_tick, self.failed = {}, {}, set()
@@ -197,6 +199,20 @@ class Worlds:
         self.db.execute("UPDATE away_clocks SET last_human=?,accounted_at=?,owed_days=? WHERE world=?", (last_human, wall, owed, world))
         return owed, max(0.0, wall - last_human - AWAY_GRACE)
 
+    @staticmethod
+    def journey_key(view):
+        journey = view["journey"]
+        if not journey["active"]:
+            return ""
+        road = view.get("road_position") or {}
+        return json.dumps([journey["route"], journey["origin"],
+                           journey["destination"], road.get("journey", "0")])
+
+    def travel_stopped(self, world, view):
+        key = self.journey_key(view)
+        row = self.db.execute("SELECT journey_key FROM road_holds WHERE world=?", (world,)).fetchone()
+        return bool(key and row and key == row["journey_key"])
+
     def view(self, world, token, campaign=False, after=None, present=True, enter=False):
         with self.lock:
             member = self.member(world, token)
@@ -210,6 +226,7 @@ class Worlds:
                           owner=row["owner"] == digest(token), member=member["id"],
                           next_sequence=member["sequence"] + 1, state=json.loads(row["view"]),
                           recovery_required=world in self.failed)
+            result["travel_stopped"] = self.travel_stopped(world, result["state"])
             owed, absent = self.account_away(world, time.time(), present, bool(row["paused"]))
             result["catching_up"] = owed >= 1.0
             result["away_clock"] = {"days_pending": int(owed), "absent_seconds": int(absent),
@@ -312,6 +329,7 @@ class Worlds:
                 self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
                                 (sim.save(), json.dumps(sim.snapshot()), world))
             self.db.execute("INSERT INTO party_wipes(world,count) VALUES(?,1) ON CONFLICT(world) DO UPDATE SET count=count+1", (world,))
+            self.db.execute("DELETE FROM road_holds WHERE world=?", (world,))
             self.db.execute("DELETE FROM party_lives WHERE world=?", (world,))
             self.db.execute("DELETE FROM sessions WHERE world=?", (world,))
         self.poses = {key: value for key, value in self.poses.items() if key[0] != world}
@@ -464,13 +482,37 @@ class Worlds:
                 require(not self.member_dead(world, member["id"]), "Your traveller has fallen. The living party carries on.", 409)
                 owed, _ = self.account_away(world, time.time(), present=True)
                 require(owed < 1, "The world is catching up. Your company can act when it is ready.", 409)
-                with self.engine.open(saved=row["state"]) as sim:
-                    accepted, message = sim.apply(action, target, good, amount)
-                    if sim.repaired or (accepted and sim.snapshot() != json.loads(row["view"])):
-                        self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
-                                        (sim.save(), json.dumps(sim.snapshot()), world))
-                    result = {"accepted": accepted, "message": message or "Company action completed.",
-                              "sequence": sequence, "duplicate": False}
+                before = json.loads(row["view"])
+                if action in ("stop_travel", "resume_travel"):
+                    journey = before["journey"]
+                    accepted = bool(journey["active"] and journey["phase"] in (1, 3)
+                                    and target == journey["route"] and good == 0 and amount == 0)
+                    if accepted:
+                        stopped = action == "stop_travel"
+                        if stopped != self.travel_stopped(world, before):
+                            if stopped:
+                                self.db.execute("INSERT INTO road_holds VALUES(?,?) ON CONFLICT(world) DO UPDATE SET journey_key=excluded.journey_key",
+                                                (world, self.journey_key(before)))
+                            else:
+                                self.db.execute("DELETE FROM road_holds WHERE world=?", (world,))
+                            self.db.execute("UPDATE worlds SET revision=revision+1,action_revision=action_revision+1 WHERE id=?", (world,))
+                        # A halt must not accumulate host ticks to spend on resume.
+                        self.last_tick[world] = time.monotonic()
+                        message = "Carriage stopped." if stopped else "Travelling."
+                    else:
+                        message = "The road has changed. Review the current journey."
+                else:
+                    with self.engine.open(saved=row["state"]) as sim:
+                        accepted, message = sim.apply(action, target, good, amount)
+                        after = sim.snapshot()
+                        if sim.repaired or (accepted and after != before):
+                            self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
+                                            (sim.save(), json.dumps(after), world))
+                        if accepted and (self.journey_key(after) != self.journey_key(before) or
+                                action in ("travel", "road_leg", "pass_road_site", "visit_mine", "withdraw")):
+                            self.db.execute("DELETE FROM road_holds WHERE world=?", (world,))
+                result = {"accepted": accepted, "message": message or "Company action completed.",
+                          "sequence": sequence, "duplicate": False}
                 self.db.execute("INSERT INTO receipts VALUES(?,?,?,?,?)", (world, member["id"], sequence, payload_hash, json.dumps(result)))
                 self.db.execute("UPDATE members SET sequence=? WHERE world=? AND id=?", (sequence, world, member["id"]))
                 self.db.execute("DELETE FROM receipts WHERE world=? AND member=? AND sequence<=?", (world, member["id"], sequence - 128))
@@ -505,7 +547,7 @@ class Worlds:
                                 self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
                                                 (sim.save(), json.dumps(sim.snapshot()), world))
                                 self.db.execute("UPDATE away_clocks SET owed_days=owed_days-? WHERE world=?", (days, world))
-                        elif online and ticks > 0 and before["journey"]["active"] and before["journey"]["phase"] in (1, 3):
+                        elif online and ticks > 0 and not self.travel_stopped(world, before) and before["journey"]["active"] and before["journey"]["phase"] in (1, 3):
                             with self.engine.open(saved=saved["state"]) as sim:
                                 if before["journey"].get("road_site"):
                                     ticks = max(1, ticks // 2)
@@ -545,6 +587,7 @@ class Worlds:
                 self.db.execute("DELETE FROM party_wipes WHERE world=?", (world,))
                 self.db.execute("DELETE FROM members WHERE world=?", (world,))
                 self.db.execute("DELETE FROM world_starts WHERE world=?", (world,))
+                self.db.execute("DELETE FROM road_holds WHERE world=?", (world,))
                 self.db.execute("DELETE FROM worlds WHERE id=?", (world,))
             self.seen = {key: value for key, value in self.seen.items() if key[0] != world}
             self.visits = {key: value for key, value in self.visits.items() if key[0] != world}

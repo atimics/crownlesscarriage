@@ -442,8 +442,7 @@ static int RunAdventureMineRoadRegression(void)
         &other, &other_local, (RenderTexture2D){0}, (Rectangle){0});
     const CcInteractionTarget *other_card = NULL;
     for (int32_t i = 0; i < other_local.interactions.count; ++i) {
-        const CcInteractionTarget *candidate =
-            &other_local.interactions.targets[i];
+        const CcInteractionTarget *candidate = &other_local.interactions.targets[i];
         if (candidate->key.kind == CC_INTERACTION_SITE &&
             candidate->key.object == CC_LOCAL_SITE_DUNGEON) {
             other_card = candidate;
@@ -495,6 +494,56 @@ static bool DispatchDisplayedRoadChoice(
             preview = &previews[i];
     }
     if (preview == NULL) return false;
+    /* Mid-leg reversal lives behind Stop -> Road options. Exercise the
+       player's inputs, not a direct flag write, and preserve the exact road
+       coordinate, clock and resources before selecting the displayed token. */
+    if (!sim->journey.road_waiting_choice) {
+        uint64_t before_options = CcSimHash(sim);
+        char feedback[128] = "";
+        float feedback_age = 0.0f;
+        if (!local->carriage_stopped) {
+            ContextActionSet moving = BuildContextActions(
+                sim, local, *view, *selected, *selected_situation);
+            for (int32_t i = 0; i < moving.count; ++i)
+                if (moving.items[i].kind == CONTEXT_ACTION_CHOOSE_ROAD_LEG)
+                    return false;
+            queued_key_press[KEY_SPACE] = true;
+            HandleInput(journal, sim, selected, selected_situation, view,
+                return_view, local, (RenderTexture2D){0}, (Rectangle){0},
+                1.0f / 60.0f, path, "", message, message_capacity,
+                feedback, sizeof(feedback), &feedback_age);
+            ClientInputClearPressed();
+        }
+        if (!local->carriage_stopped || CcSimHash(sim) != before_options)
+            return false;
+        ContextActionSet stopped = BuildContextActions(
+            sim, local, *view, *selected, *selected_situation);
+        int32_t options_index = -1;
+        for (int32_t i = 0; i < stopped.count; ++i) {
+            if (stopped.items[i].kind == CONTEXT_ACTION_ROAD_OPTIONS &&
+                strcmp(stopped.items[i].label, "Road options") == 0)
+                options_index = i;
+        }
+        if (options_index < 0) return false;
+        local->card_page = options_index / ContextActionPageSize(&stopped);
+        int32_t first = ContextCardFirst(local, &stopped);
+        Rectangle bounds = ContextActionBounds(options_index - first,
+            ContextCardCount(&stopped, first), stopped.combat);
+        client_test_pointer_active = true;
+        client_test_pointer = (Vector2){
+            bounds.x + bounds.width * 0.5f,
+            bounds.y + bounds.height * 0.5f
+        };
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+        HandleInput(journal, sim, selected, selected_situation, view,
+            return_view, local, (RenderTexture2D){0}, (Rectangle){0},
+            1.0f / 60.0f, path, "", message, message_capacity,
+            feedback, sizeof(feedback), &feedback_age);
+        client_test_pointer_active = false;
+        ClientInputClearPressed();
+        if (!local->carriage_stopped || !local->road_actions_expanded ||
+            CcSimHash(sim) != before_options) return false;
+    }
     ContextActionSet actions = BuildContextActions(
         sim, local, *view, *selected, *selected_situation);
     int32_t action_index = -1;

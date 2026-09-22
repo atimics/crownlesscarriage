@@ -565,6 +565,8 @@ class CoopTests(unittest.TestCase):
         self.worlds.close()
         self.worlds = Worlds(self.path, self.engine)
         self.assertEqual(self.worlds.view(self.id, self.b)['state'], stopped)
+        apply(self.a, 'stop_travel', stopped['journey']['route'])
+        self.assertTrue(self.worlds.view(self.id, self.b)['travel_stopped'])
         body = self.command(self.b, 'camp')
         camp = self.worlds.command(self.id, self.b, body)
         self.assertTrue(camp['accepted'],
@@ -576,6 +578,9 @@ class CoopTests(unittest.TestCase):
         self.assertIsNone(camped['journey']['road_site'])
         self.assertEqual(self.worlds.command(self.id, self.b, body)['world']['state'], camped)
         self.assertEqual(self.worlds.view(self.id, self.a)['state'], camped)
+        self.assertTrue(self.worlds.view(self.id, self.a)['travel_stopped'])
+        apply(self.b, 'resume_travel', camped['journey']['route'])
+        self.assertFalse(self.worlds.view(self.id, self.a)['travel_stopped'])
         next_stop = apply(self.a, 'skip_watch')
         self.assertNotEqual(
             (next_stop['road_position']['coordinate'],
@@ -728,6 +733,56 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(health['worlds_needing_recovery'], len(self.worlds.failed))
         self.assertEqual(self.request('/api/worlds/' + other + '/state')[0], 200)
         self.assertTrue(self.worlds.view(self.id, self.a)['recovery_required'])
+
+    def test_road_stop_is_authoritative_durable_and_idempotent(self):
+        target = self.worlds.view(self.id, self.a)['state']['travel'][0]['id']
+        started = self.worlds.command(self.id, self.a, self.command(self.a, 'travel', target=target))
+        self.assertTrue(started['accepted'])
+        route = started['world']['state']['journey']['route']
+        saved = self.worlds.db.execute('SELECT state FROM worlds WHERE id=?', (self.id,)).fetchone()[0]
+        stale_resume = self.command(self.b, 'resume_travel', target=route)
+        stop = self.command(self.a, 'stop_travel', target=route)
+        stopped = self.worlds.command(self.id, self.a, stop)
+        self.assertTrue(stopped['accepted'])
+        self.assertTrue(stopped['world']['travel_stopped'])
+        self.assertEqual(saved, self.worlds.db.execute('SELECT state FROM worlds WHERE id=?', (self.id,)).fetchone()[0])
+        with self.assertRaises(ApiError):
+            self.worlds.command(self.id, self.b, stale_resume)
+        retry = self.worlds.command(self.id, self.a, stop)
+        self.assertTrue(retry['duplicate'])
+        self.assertEqual(retry['world']['revision'], stopped['world']['revision'])
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now - 10
+        self.worlds.tick(now=now)
+        still = self.worlds.view(self.id, self.b)
+        self.assertTrue(still['travel_stopped'])
+        self.assertEqual(still['state'], stopped['world']['state'])
+        self.assertEqual(self.worlds.last_tick[self.id], now)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertTrue(self.worlds.view(self.id, self.b)['travel_stopped'])
+        wrong = self.worlds.command(self.id, self.b, self.command(self.b, 'resume_travel', target='0'))
+        self.assertFalse(wrong['accepted'])
+        self.assertTrue(wrong['world']['travel_stopped'])
+        resumed = self.worlds.command(self.id, self.b, self.command(self.b, 'resume_travel', target=route))
+        self.assertTrue(resumed['accepted'])
+        self.assertFalse(resumed['world']['travel_stopped'])
+        self.assertEqual(saved, self.worlds.db.execute('SELECT state FROM worlds WHERE id=?', (self.id,)).fetchone()[0])
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now - .1
+        self.worlds.tick(now=now)
+        self.assertGreater(self.worlds.view(self.id, self.a)['state']['tick'], stopped['world']['state']['tick'])
+        # A retry of the earlier Stop acknowledges its receipt, not a second stop.
+        self.assertFalse(self.worlds.command(self.id, self.a, stop)['world']['travel_stopped'])
+        self.worlds.command(self.id, self.a, self.command(self.a, 'stop_travel', target=route))
+        self.worlds.owner_action(self.id, self.a, 'delete')
+        self.assertIsNone(self.worlds.db.execute('SELECT * FROM road_holds WHERE world=?', (self.id,)).fetchone())
+
+    def test_road_stop_rejects_unrelated_states(self):
+        result = self.worlds.command(self.id, self.a, self.command(self.a, 'stop_travel', target='0'))
+        self.assertFalse(result['accepted'])
+        self.assertFalse(result['world']['travel_stopped'])
+        self.assertEqual(self.worlds.db.execute('SELECT count(*) FROM road_holds').fetchone()[0], 0)
 
     def test_travel_hold_expires_and_releases(self):
         target = self.worlds.view(self.id, self.a)['state']['travel'][0]['id']

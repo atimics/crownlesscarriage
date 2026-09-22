@@ -1508,12 +1508,19 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         sim->player.coins, CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity),
         24, 43, AdventureTextSize(13), CC_GOLD);
     const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);
-    const char *detail = stop != NULL ? TextFormat("Passing %s / Choose a stop below", stop->name) :
+    const char *detail = local->journey_travel_active && sim->journey.road_waiting_choice ?
+        "Stopped at a junction / Choose your road below" :
+        stop != NULL && CcSimJourneyRequiresRoadChoice(sim) ?
+            TextFormat("Stopped at %s / Travel on or inspect", stop->name) :
         local->journey_travel_active && sim->journey.active ?
             TextFormat("%s / %d%% / ETA %dh / %s", local->carriage_stopped ? "Stopped" :
                 CcJourneyPaceName(sim->journey.pace), sim->carriage.progress_milli / 10,
                 (CcSimJourneyEtaMinutes(sim) + 59) / 60,
-                sim->journey.phase == CC_JOURNEY_PHASE_RESTING ? "Time to rest" : "On the road") :
+                local->carriage_stopped ? "Choose Travel to resume" :
+                sim->journey.phase == CC_JOURNEY_PHASE_RESTING ? "Resting automatically" :
+                CcCoopClientActive() && local->shared_travel_sample.valid &&
+                    local->shared_travel_sample.since_update >= 1.5 ?
+                    "Waiting for shared world" : "Travelling / Space to stop") :
         local->road_choice_active ? "Choose a road card or tap its sign" :
         local->site_travel_active ? "Tap the carriage to stop or drive" :
         local->market_interior ? profile->interior_service : profile->identity;

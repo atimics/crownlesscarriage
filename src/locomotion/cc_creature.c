@@ -554,6 +554,21 @@ static void ReframeSkeleton(CcLimbRig *skeleton,
         next_origin, next_yaw);
 }
 
+bool CcCreatureRigControllerTransport(CcCreatureRigController *controller,
+    CcLimbVec3 ground, float yaw)
+{
+    if (controller == NULL || !controller->initialized || !controller->world_bound ||
+        !FiniteVector(ground) || !isfinite(yaw)) return false;
+    CcLimbVec3 previous = controller->ground_position;
+    float previous_yaw = controller->body_yaw;
+    ReframeSkeleton(&controller->skeleton, previous, previous_yaw, ground, yaw);
+    controller->skeleton.body_position = ReframePoint(
+        controller->skeleton.body_position, previous, previous_yaw, ground, yaw);
+    controller->ground_position = ground;
+    controller->body_yaw = WrapAngle(yaw);
+    return true;
+}
+
 static void ReplantReframedSkeleton(CcLimbRig *skeleton,
                                     CcLimbVec3 ground, float yaw,
                                     CcLimbTerrainProbe probe,

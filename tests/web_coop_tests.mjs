@@ -240,3 +240,16 @@ client('/index.html').openLobby();
 assert.equal(navigations.at(-1), 'https://crownless.ratimics.com/');
 assert.equal(responses.length, 0);
 console.log('Shared browser recovery, ordering, menus, and save ownership passed.');
+
+// Road stopping is reliable command state, not an ephemeral pose vote.
+coop = client();
+responses.push({...state(0), travel_stopped: false});
+await coop.connect();
+assert.equal(coop.travelStopped(), false);
+responses.push({accepted:true, world:{...state(1), travel_stopped:true}});
+await coop.apply('stop_travel', '42', 0, 0);
+assert.equal(coop.travelStopped(), true);
+responses.push({accepted:true, world:{...state(2), travel_stopped:false}});
+await coop.apply('resume_travel', '42', 0, 0);
+assert.equal(coop.travelStopped(), false);
+assert.equal(JSON.parse(requests.at(-1).body).action, 'resume_travel');

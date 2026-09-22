@@ -124,6 +124,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_WORLD_TARGET,
     CONTEXT_ACTION_STOP_APPROACH,
     CONTEXT_ACTION_HOLD_TRAVEL,
+    CONTEXT_ACTION_ROAD_OPTIONS,
     CONTEXT_ACTION_SET_PACE,
     CONTEXT_ACTION_APPROACH_ENTRANCE,
     CONTEXT_ACTION_PONY_MEET,
@@ -244,6 +245,10 @@ typedef struct LocalState {
     Vector2 presented_card_origin;
     ClientView interaction_view;
     bool carriage_stopped;
+    bool road_actions_expanded;
+    CcClientTravelSample shared_travel_sample;
+    CcId shared_travel_route, shared_travel_origin, shared_travel_segment;
+    int32_t shared_travel_direction;
     /* A roadside inspection is a read-only overlay.  Keep the route and
        progress that selected the current carriage so boarding can reject a
        carriage that has since moved. */
@@ -1170,7 +1175,9 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
                                               float delta_time)
 {
     CcLocalConvoyState *convoy = &local->convoy;
-    bool stopped = local->carriage_stopped || IsKeyDown(KEY_SPACE);
+    bool stopped = local->carriage_stopped ||
+        (sim != NULL && sim->journey.active &&
+         CcSimJourneyRequiresRoadChoice(sim));
     bool journey_halt = local->journey_travel_active && sim != NULL &&
         sim->journey.active &&
         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
@@ -1249,6 +1256,8 @@ static void ResetLocalState(LocalState *local)
     local->world_cards_presented = false;
     local->presented_target_count = 0;
     local->carriage_stopped = false;
+    local->road_actions_expanded = false;
+    local->shared_travel_sample = (CcClientTravelSample){0};
     local->conversation_gossip_slot = -1;
     local->conversation_gossip_source = false;
     local->introduced_count = 0;
@@ -2025,6 +2034,22 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
     float progress = sim->journey.total_subticks > 0 ? ClampUnit(
         (float)sim->journey.elapsed_subticks /
         (float)sim->journey.total_subticks) : 0.0f;
+    if (CcCoopClientActive()) {
+        bool reset = local->shared_travel_route != sim->journey.route_id ||
+            local->shared_travel_origin != sim->journey.origin_id ||
+            local->shared_travel_segment != sim->journey.road_segment_id ||
+            local->shared_travel_direction != sim->journey.road_direction;
+        bool boundary = local->carriage_stopped ||
+            sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+            CcSimJourneyRequiresRoadChoice(sim);
+        progress = (float)CcClientTravelSampleStep(&local->shared_travel_sample,
+            progress, sim->clock.tick, sample_steps > 0 ? 1.0f / 60.0f : 0.0f,
+            reset || boundary);
+        local->shared_travel_route = sim->journey.route_id;
+        local->shared_travel_origin = sim->journey.origin_id;
+        local->shared_travel_segment = sim->journey.road_segment_id;
+        local->shared_travel_direction = sim->journey.road_direction;
+    }
     float amount = CcWorldRouteJourneyAmount(
         route, sim->journey.origin_id, progress);
     CcWorldPoint point;
@@ -2041,20 +2066,23 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
        route walked the other way still counts up. */
     float travelled = amount * CcWorldRouteLength(route);
     PublishCarriagePose(local, position, heading, travelled, sample_steps > 0, alpha);
-    local->agent.position = position;
-    local->agent.target_valid = false;
-    local->agent.exact_target_valid = false;
-    local->agent.facing_yaw = heading;
+    if (local->world_carriage.hero_embarked || !local->world_carriage.storybook_travel) {
+        local->agent.position = position;
+        local->agent.target_valid = false;
+        local->agent.exact_target_valid = false;
+        local->agent.facing_yaw = heading;
+    }
     local->world_carriage.route_amount =
         route->from_id == sim->journey.origin_id ? amount : 1.0f - amount;
     local->world_carriage.pace =
         sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
-            CcSimJourneyRoadSiteStop(sim) == NULL ?
+            !local->carriage_stopped && !sim->journey.road_waiting_choice &&
+            (!CcCoopClientActive() || local->shared_travel_sample.since_update < 1.5) &&
+            !CcSimJourneyRequiresRoadChoice(sim) ?
             local->convoy.pace : 0.0f;
     local->world_carriage.camera_target = local->travel_time_blend;
     local->world_carriage.route_id = sim->journey.route_id;
     local->world_carriage.visible = true;
-    local->world_carriage.hero_embarked = true;
     local->world_carriage.storybook_travel = true;
 }
 
@@ -2699,6 +2727,8 @@ static void BeginRoadLocalState(const CcSim *sim, LocalState *local,
 
 static void BeginRoadTravelState(const CcSim *sim, LocalState *local)
 {
+    /* Loading/re-entering a road is a discontinuity even on the same route. */
+    CcLocalCarriageResetGaitsInternal();
     float lateral_offset = local->convoy.lateral_offset;
     float pace = local->convoy.pace;
     ResetLocalStatePreservingAthletics(local);
@@ -2732,10 +2762,7 @@ static bool TravelNeedsSlowTime(const CcSim *sim)
 {
     return !sim->journey.active ||
         sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
-        sim->pony_company.encounter >= 0 ||
-        sim->carriage.progress_milli <= 100 ||
-        sim->carriage.progress_milli >= 900 ||
-        CcSimJourneyRoadSiteStop(sim) != NULL;
+        sim->pony_company.encounter >= 0 || CcSimJourneyRequiresRoadChoice(sim);
 }
 
 /* Advance one tick at a time so a warning remains a visible travel beat. */
@@ -2744,6 +2771,7 @@ static bool AdvanceStorybookTravel(CcJournal *journal, CcSim *sim,
                                    char *error, size_t error_capacity)
 {
     bool slow_before = TravelNeedsSlowTime(sim);
+    if (local->carriage_stopped || CcSimJourneyRequiresRoadChoice(sim)) return true;
     bool warned = sim->journey.ambush_warned;
     bool resolved = sim->journey.ambush_resolved;
     for (int32_t tick = 0; tick < ticks; ++tick) {
@@ -2759,6 +2787,7 @@ static bool AdvanceStorybookTravel(CcJournal *journal, CcSim *sim,
             return false;
         }
         if (sim->pony_company.encounter >= 0 || !sim->journey.active ||
+            CcSimJourneyRequiresRoadChoice(sim) ||
             (sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING &&
              sim->journey.phase != CC_JOURNEY_PHASE_RESTING) ||
             (local->travel_fast_forward && !slow_before &&
@@ -2786,7 +2815,9 @@ static bool AdvanceCarriagePresentationSteps(CcJournal *journal, CcSim *sim,
     bool warned_before = sim->journey.ambush_warned;
     bool ambush_resolved_before = sim->journey.ambush_resolved;
     for (int32_t step = 0; step < fixed_steps; ++step) {
-        local->convoy.runtime_tick_accumulator += road_motion *
+        bool held = local->carriage_stopped || CcSimJourneyRequiresRoadChoice(sim);
+        if (held) local->convoy.runtime_tick_accumulator = 0.0f;
+        local->convoy.runtime_tick_accumulator += (held ? 0.0f : road_motion) *
             (local->travel_fast_forward ?
                 CcClientTravelTimeScale(local->travel_time_blend) : 1.0f) *
             (road_stop ? 0.5f : 1.0f);
@@ -3156,22 +3187,14 @@ static const char *TravelForecastLine(const CcSim *sim)
 
 static const char *TravelActionDetail(const CcSim *sim, const LocalState *local)
 {
-    if (sim == NULL || local == NULL) return "Move on";
-    if (sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-        return "Choice ahead";
-    }
-    if (sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
-        return "Resting until morning";
-    }
-    if (local->travel_hold_armed) {
-        return TravelNeedsSlowTime(sim) ? "Choice ahead" : "Moving automatically";
-    }
-    if (sim->journey.active &&
-        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-        return local->journey_travel_active ?
-            "Hold to travel faster" : "Resume road travel";
-    }
-    return "Tap to start travel";
+    if (sim == NULL || local == NULL) return "Travel";
+    if (local->carriage_stopped) return "RESUME THIS JOURNEY / SPACE";
+    if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED ||
+        CcSimJourneyRequiresRoadChoice(sim)) return "CHOOSE HOW TO PROCEED";
+    if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) return "ROUTINE REST / SPACE TO STOP";
+    if (CcCoopClientActive() && local->shared_travel_sample.valid &&
+        local->shared_travel_sample.since_update >= 1.5) return "WAITING FOR SHARED WORLD";
+    return "MOVING AUTOMATICALLY / SPACE TO STOP";
 }
 
 static bool LocalCombatActive(const LocalState *local)
@@ -4613,7 +4636,7 @@ static ContextActionSet BuildContextActions(
             &set,
             away_from_town ? CONTEXT_ACTION_RETURN_FROM_SITE :
                              CONTEXT_ACTION_CHOOSE_ROAD,
-            away_from_town ? "Drive back to town" : "Take the reins",
+            away_from_town ? "Travel back to town" : "Travel",
             "ENTER",
             away_from_town ? "RETURN ALONG THE SITE ROAD" :
                              "OPEN THE DEPARTURE ROAD",
@@ -4709,8 +4732,8 @@ static ContextActionSet BuildContextActions(
     }
     if (view == VIEW_ROADS) {
         if (RoadBookDepartureInProgress(local)) {
-            AddDetailedContextAction(&set, CONTEXT_ACTION_HOLD_TRAVEL,
-                "Travel", "", "Travel", true, local->travel_hold_armed);
+            AddDetailedContextAction(&set, CONTEXT_ACTION_NONE,
+                "Leaving town", "", "FOLLOWING THE DEPARTURE ROAD", false, false);
             return set;
         }
         for (int32_t i = 0; i < sim->route_count; ++i) {
@@ -4739,13 +4762,15 @@ static ContextActionSet BuildContextActions(
 
     if (local->road_choice_active || local->site_travel_active) {
         AddDetailedContextAction(&set, CONTEXT_ACTION_HOLD_TRAVEL,
-            "Travel", "",
-            TravelActionDetail(sim, local), true, local->travel_hold_armed);
+            local->carriage_stopped ? "Travel" : "Stop", "SPACE",
+            TravelActionDetail(sim, local), true, false);
         return set;
     }
 
     if (local->journey_travel_active) {
-        if (sim->journey.road_position_active) {
+        if (sim->journey.road_position_active &&
+            (sim->journey.road_waiting_choice ||
+             (local->carriage_stopped && local->road_actions_expanded))) {
             CcRoadLegPreview previews[3];
             int32_t preview_count = CcRoadNextLegPreviews(
                 sim, previews, 3);
@@ -4754,13 +4779,16 @@ static ContextActionSet BuildContextActions(
                     sim, previews[i].destination_anchor_id);
                 const CcRoadSite *site = CcSimRoadSite(
                     sim, previews[i].destination_anchor_id);
+                const CcRoute *current_route = CcSimRoute(sim, sim->journey.route_id);
+                const CcSettlement *toward = current_route != NULL ? CcSimSettlement(sim,
+                    previews[i].direction > 0 ? current_route->to_id : current_route->from_id) : NULL;
                 const char *name = town != NULL ? town->name :
                     site != NULL ? site->name :
                     previews[i].destination_anchor_id ==
                         CC_PILOT_ROAD_JUNCTION_ID ? "Stag's Mill junction" :
                     previews[i].destination_anchor_id ==
-                        CC_PILOT_ROAD_CHECKPOINT_ID ? "reserved checkpoint" :
-                        "road anchor";
+                        CC_PILOT_ROAD_CHECKPOINT_ID && toward != NULL ? toward->name :
+                        "the next road marker";
                 AddDetailedContextAction(
                     &set, CONTEXT_ACTION_CHOOSE_ROAD_LEG,
                     sim->journey.road_waiting_choice ?
@@ -4778,26 +4806,53 @@ static ContextActionSet BuildContextActions(
             }
             if (sim->journey.road_waiting_choice) return set;
         }
-        /* Travel is the company moving; stopping hands the road back to the
-           same walk the town uses, so the countryside is not a separate game. */
-        if (CcSimJourneyCanCampOnRoad(sim)) {
-            AddDetailedContextAction(&set, CONTEXT_ACTION_MAKE_ROAD_CAMP,
-                "Make camp", "", "REST HERE UNTIL MORNING", true, false);
-        }
-        if (local->open_world) {
-            if (local->world_carriage.hero_embarked) {
-                AddDetailedContextAction(&set, CONTEXT_ACTION_INSPECT_CARRIAGE,
-                    "Inspect carriage", "F", "TEAM AND CARRIED GOODS", true, false);
-                AddDetailedContextAction(&set, CONTEXT_ACTION_STEP_DOWN,
-                    "Stop and step down", "",
-                    "WALK THE ROADSIDE", true, false);
+        const CcRoadSite *road_stop = CcSimJourneyRequiresRoadChoice(sim) ?
+            CcSimJourneyRoadSiteStop(sim) : NULL;
+        if (road_stop == NULL && sim->journey.active) {
+            if (!local->open_world || local->world_carriage.hero_embarked) {
+                if (!local->carriage_stopped || !local->road_actions_expanded) {
+                    AddDetailedContextAction(&set, CONTEXT_ACTION_HOLD_TRAVEL,
+                        local->carriage_stopped ? "Travel" : "Stop", "SPACE",
+                        TravelActionDetail(sim, local), true, false);
+                    AddDetailedContextAction(&set, CONTEXT_ACTION_INSPECT_CARRIAGE,
+                        "Inspect carriage", "F", "TEAM AND CARRIED GOODS", true, false);
+                }
+                if (local->carriage_stopped) {
+                    AddDetailedContextAction(&set, CONTEXT_ACTION_ROAD_OPTIONS,
+                        local->road_actions_expanded ? "Back to road" : "Road options", "",
+                        "STEP DOWN / CAMP / TURN BACK", true, false);
+                    if (local->road_actions_expanded) {
+                        if (local->open_world) AddDetailedContextAction(&set,
+                            CONTEXT_ACTION_STEP_DOWN, "Step down", "", "WALK THE ROADSIDE", true, false);
+                        if (CcSimJourneyCanCampOnRoad(sim)) AddDetailedContextAction(&set,
+                            CONTEXT_ACTION_MAKE_ROAD_CAMP, "Camp until morning", "",
+                            "ADVANCES TIME / USES PROVISIONS", true, false);
+                    }
+                }
             } else {
                 AddDetailedContextAction(&set, CONTEXT_ACTION_BOARD_CARRIAGE,
-                    "Board the carriage", "",
-                    "TAKE UP THE ROAD AGAIN", true, false);
+                    "Board carriage", "F", "RETURN TO YOUR WAITING TEAM", true, false);
             }
+            return set;
         }
-        const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
+        if (road_stop != NULL && !local->road_actions_expanded) {
+            bool mine = road_stop == CcMineSite(sim) && CcMineBranchSubtick(sim) >= 0 &&
+                sim->journey.elapsed_subticks >= CcMineBranchSubtick(sim);
+            if (mine) {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_VISIT_MINE,
+                    "Enter Low Silver Pit", "", FirstDeliveryComplete(sim) ?
+                    "PARK IN THE MINE YARD" : "AFTER YOUR FIRST DELIVERY", FirstDeliveryComplete(sim), false);
+            }
+            AddDetailedContextAction(&set, CONTEXT_ACTION_PASS_ROAD_SITE,
+                "Travel on", "", TextFormat("PASS %.28s", road_stop->name), true, false);
+            set.items[set.count - 1].target = (CcInteractionKey){
+                sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
+            AddDetailedContextAction(&set, CONTEXT_ACTION_ROAD_OPTIONS,
+                "Site options", "", "INSPECT / CLEAR / STORE GOODS", true, false);
+            return set;
+        }
+        if (road_stop != NULL) AddDetailedContextAction(&set, CONTEXT_ACTION_ROAD_OPTIONS,
+            "Back to road", "", "RETURN TO THE TURN-OFF CHOICE", true, false);
         if (road_stop != NULL && !road_stop->accessible) {
             bool tree = road_stop->blocker == CC_ROAD_SITE_BLOCKER_TREE;
             AddDetailedContextAction(&set, CONTEXT_ACTION_CLEAR_ROAD_SITE,
@@ -4847,13 +4902,13 @@ static ContextActionSet BuildContextActions(
                     right ? "Turn right to Low Silver Pit" : "Turn left to Low Silver Pit", "",
                     "MINE YARD / PARK AND WALK",true,false);
                 AddDetailedContextAction(&set,CONTEXT_ACTION_PASS_ROAD_SITE,
-                    "Continue along the road", "", "PASS THE MINE BRANCH",true,false);
+                    "Travel on", "", "PASS THE MINE BRANCH",true,false);
             } else {
                 AddDetailedContextAction(&set, CONTEXT_ACTION_VISIT_MINE,
                     "Low Silver Pit", "",
                     "AFTER YOUR FIRST DELIVERY",false,false);
                 AddDetailedContextAction(&set,CONTEXT_ACTION_PASS_ROAD_SITE,
-                    "Continue along the road", "", "PASS THE MINE BRANCH",true,false);
+                    "Travel on", "", "PASS THE MINE BRANCH",true,false);
             }
             return set;
         }
@@ -4865,7 +4920,7 @@ static ContextActionSet BuildContextActions(
                offered at every site, because the carriage holds here and a site
                with nothing else to give would otherwise strand it. */
             AddDetailedContextAction(&set, CONTEXT_ACTION_PASS_ROAD_SITE,
-                "Continue along the road", "",
+                "Travel on", "",
                 TextFormat("STAY ON THE ROAD PAST %.20s", road_stop->name),
                 true, false);
             set.items[set.count - 1].target = (CcInteractionKey){sim->player.location_id, road_stop->id, CC_INTERACTION_ACTION};
@@ -4873,11 +4928,8 @@ static ContextActionSet BuildContextActions(
         bool parking = !sim->journey.active &&
             (RoadBookArrivalInProgress(local) ||
              local->convoy.phase == CC_LOCAL_CONVOY_ARRIVING);
-        if (sim->journey.active || parking) {
-            AddDetailedContextAction(&set, CONTEXT_ACTION_HOLD_TRAVEL,
-                "Travel", "",
-                TravelActionDetail(sim, local), true, local->travel_hold_armed);
-            if (parking) AddDetailedContextAction(&set, CONTEXT_ACTION_SKIP_TRAVEL,
+        if (road_stop == NULL && parking) {
+            AddDetailedContextAction(&set, CONTEXT_ACTION_SKIP_TRAVEL,
                 "Park carriage", "ENTER", "Finish arriving", true, false);
         }
         return set;
@@ -5178,32 +5230,11 @@ static void UpdateTravelHold(const CcSim *sim, LocalState *local,
     ClientView view, int32_t selected, int32_t selected_situation,
     Vector2 pointer, bool down, float delta_time)
 {
-    ContextActionSet actions = BuildContextActions(
-        sim, local, view, selected, selected_situation);
-    int32_t first = ContextCardFirst(local, &actions);
-    int32_t shown = ContextCardCount(&actions, first);
-    bool over_travel = false;
-    for (int32_t i = first; i < first + shown; ++i) {
-        if (actions.items[i].kind == CONTEXT_ACTION_HOLD_TRAVEL &&
-            actions.items[i].enabled && CheckCollisionPointRec(pointer,
-                ContextActionBounds(i - first, shown, actions.combat))) over_travel = true;
-    }
-    if (!over_travel) {
-        ContextAction world = WorldContextActionAt(sim, local, view, &actions, pointer);
-        over_travel = world.kind == CONTEXT_ACTION_HOLD_TRAVEL && world.enabled;
-    }
-    if (!down || !over_travel) local->travel_hold_armed = false;
-    else if (!local->travel_pointer_down) local->travel_hold_armed = true;
-    local->travel_pointer_down = down;
-    if (view != VIEW_LOCAL && view != VIEW_ROADS) {
-        local->travel_hold_armed = false;
-    } else if (local->journey_travel_active && !local->carriage_stopped &&
-               !TravelNeedsSlowTime(sim)) {
-        local->travel_hold_armed = true;
-    }
-    if (local->travel_hold_armed) local->carriage_stopped = false;
-    local->travel_fast_forward = local->travel_hold_armed &&
-        local->journey_travel_active && !TravelNeedsSlowTime(sim);
+    (void)selected; (void)selected_situation; (void)pointer; (void)down;
+    bool visible = view == VIEW_LOCAL || view == VIEW_ROADS;
+    local->travel_hold_armed = visible && local->journey_travel_active &&
+        !local->carriage_stopped && !TravelNeedsSlowTime(sim);
+    local->travel_fast_forward = local->travel_hold_armed;
     local->travel_time_blend = CcClientTravelBlendStep(
         local->travel_time_blend, local->travel_fast_forward, delta_time);
 }
@@ -5576,7 +5607,8 @@ static void UpdateMovementPreview(
     if (local == NULL) return;
     Vector2 mouse = ClientPointerPosition();
     bool unavailable = view != VIEW_LOCAL || local->site_travel_active ||
-        local->road_choice_active || local->journey_travel_active ||
+        local->road_choice_active || (local->journey_travel_active &&
+        (!local->open_world || local->world_carriage.hero_embarked)) ||
         local->journey_parley_active ||
         !CheckCollisionPointRec(mouse, local_bounds) ||
         PointerOverContextAction(
@@ -7146,36 +7178,52 @@ static int RunTravelHoldRegression(void)
     sim.journey.route_id = sim.routes[0].id;
     sim.journey.active = true;
     sim.journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
-    sim.carriage.progress_milli = 500;
     sim.pony_company.encounter = -1;
     local.journey_travel_active = true;
+    sim.carriage.progress_milli = 0;
+    uint64_t before = CcSimHash(&sim);
+    /* Every part of an uneventful road moves without held input. */
+    const int progress[] = {0, 100, 500, 900, 999};
+    for (unsigned i = 0; i < sizeof(progress)/sizeof(progress[0]); ++i) {
+        sim.carriage.progress_milli = progress[i];
+        for (int f = 0; f < 90; ++f)
+            UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, (Vector2){0}, false, 1.0f/60);
+        ContextActionSet actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+        int toggle = 0;
+        for (int j = 0; j < actions.count; ++j) {
+            if (actions.items[j].kind == CONTEXT_ACTION_HOLD_TRAVEL) {
+                toggle++;
+                if (strcmp(actions.items[j].label, "Stop") != 0) return 1;
+            }
+            if (actions.items[j].kind == CONTEXT_ACTION_MAKE_ROAD_CAMP ||
+                actions.items[j].kind == CONTEXT_ACTION_PASS_ROAD_SITE) return 1;
+        }
+        if (!local.travel_fast_forward || CcClientTravelTimeScale(local.travel_time_blend) != 8 ||
+            toggle != 1 || actions.count > 3) return 1;
+    }
+    sim.carriage.progress_milli = 0;
+    if (CcSimHash(&sim) != before) { fprintf(stderr,"Travel control assertion line %d\n",__LINE__); return 1; }
     local.carriage_stopped = true;
-    ContextActionSet actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
-    int32_t last = actions.count - 1;
-    if (last < 0 || strcmp(actions.items[last].label, "Travel") != 0) return 1;
-    Rectangle bounds = ContextActionBounds(last, actions.count, false);
-    Vector2 pointer = {bounds.x + 10, bounds.y + 10};
-    for (int frame = 0; frame < 90; ++frame)
-        UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, true, 1.0f / 60.0f);
-    if (!local.travel_fast_forward || local.carriage_stopped ||
-        CcClientTravelTimeScale(local.travel_time_blend) != 8.0f) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    sim.carriage.progress_milli = 900;
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, true, 1.0f / 60.0f);
-    if (local.travel_fast_forward) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    sim.carriage.progress_milli = 100;
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, true, 1.0f / 60.0f);
-    if (local.travel_fast_forward) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    sim.carriage.progress_milli = 500;
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, false, 1.0f / 60.0f);
-    if (!local.travel_fast_forward || !local.travel_hold_armed || local.carriage_stopped) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, (Vector2){0, 0}, false, 1.0f / 60.0f);
-    if (!local.travel_fast_forward) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    local.carriage_stopped = true;
-    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, pointer, true, 1.0f / 60.0f);
-    if (!local.travel_fast_forward) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    UpdateTravelHold(&sim, &local, VIEW_PAUSE, 0, 0, pointer, false, 1.0f / 60.0f);
-    if (local.travel_fast_forward || local.travel_hold_armed) { (void)fprintf(stderr, "Travel hold failed at %d: actions=%d blend=%f fast=%d held=%d\n", __LINE__, actions.count, local.travel_time_blend, local.travel_fast_forward, local.travel_hold_armed); return 1; }
-    (void)puts("Travel moves on while held, slows at junctions, and pauses from the menu.");
+    for (int f = 0; f < 120; ++f)
+        UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, (Vector2){0}, true, 1.0f/60);
+    ContextActionSet stopped = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+    int toggle = 0;
+    for (int j = 0; j < stopped.count; ++j)
+        if (stopped.items[j].kind == CONTEXT_ACTION_HOLD_TRAVEL &&
+            strcmp(stopped.items[j].label, "Travel") == 0) toggle++;
+    if (local.travel_fast_forward || !local.carriage_stopped || toggle != 1 || stopped.count > 4) return 1;
+    local.carriage_stopped = false;
+    sim.journey.road_waiting_choice = true;
+    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, (Vector2){0}, false, 1.0f/60);
+    if (local.travel_fast_forward) { fprintf(stderr,"Travel control assertion line %d\n",__LINE__); return 1; }
+    sim.journey.road_waiting_choice = false;
+    sim.pony_company.encounter = 0;
+    UpdateTravelHold(&sim, &local, VIEW_LOCAL, 0, 0, (Vector2){0}, false, 1.0f/60);
+    if (local.travel_fast_forward) { fprintf(stderr,"Travel control assertion line %d\n",__LINE__); return 1; }
+    sim.pony_company.encounter = -1;
+    UpdateTravelHold(&sim, &local, VIEW_PAUSE, 0, 0, (Vector2){0}, false, 1.0f/60);
+    if (local.travel_fast_forward) { fprintf(stderr,"Travel control assertion line %d\n",__LINE__); return 1; }
+    puts("Continuous travel: two moving actions, explicit stopped options, no hold-to-resume.");
     return 0;
 }
 
@@ -7239,13 +7287,16 @@ static int RunStorybookTravelRegression(void)
         CcCommand pace = {.kind = CC_COMMAND_SET_JOURNEY_PACE,
                            .amount = (int32_t)sim.journey.pace};
         if (!CcSimApply(&sim, &pace, error, sizeof(error))) return 1;
+        if (scenario < 4 || scenario == 6)
+            sim.journey.road_site_stop_mask = (UINT32_C(1) << sim.road_site_count) - 1U;
         expected = sim;
         if (scenario == 2) {
             CcSimAdvanceRuntimeTicks(&expected, 1);
             CcCommand rest = {.kind = CC_COMMAND_TAKE_JOURNEY_BREAK};
             if (!CcSimApply(&expected, &rest, error, sizeof(error))) return 1;
             CcSimAdvanceRuntimeTicks(&expected, 119);
-        } else CcSimAdvanceRuntimeTicks(&expected, scenario == 1 || scenario == 3 || scenario == 6 ? 1 : 120);
+        } else CcSimAdvanceRuntimeTicks(&expected,
+            scenario == 4 || scenario == 5 ? 0 : scenario == 1 || scenario == 3 ? 1 : 120);
         CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
         if (journal == NULL) {
             (void)fprintf(stderr, "Storybook journal: %s\n", error);
@@ -7257,19 +7308,22 @@ static int RunStorybookTravelRegression(void)
             if (!InitializeOpenWorld(&sim, &local, false)) return 1;
             BeginRoadTravelState(&sim, &local);
         }
+        local.journey_travel_active = true;
         local.travel_fast_forward = scenario == 1 || scenario == 3 || scenario == 6;
         local.travel_time_blend = 1.0f;
         local.convoy.runtime_tick_accumulator = 0.75f;
         bool passed = AdvanceStorybookTravel(journal, &sim, &local,
                                              120, error, sizeof(error));
         passed = passed && CcSimHash(&sim) == CcSimHash(&expected);
-        if (scenario == 1 || scenario == 3 || scenario == 6) {
+        if (scenario == 1 || scenario == 3) {
             passed = passed && !local.travel_fast_forward &&
                 local.travel_attention && local.convoy.runtime_tick_accumulator == 0.0f;
         }
         if (scenario == 4 || scenario == 5) {
-            passed = passed && sim.journey.elapsed_subticks >
-                (int32_t)((int64_t)sim.journey.total_subticks * sim.road_sites[0].progress_milli / 1000);
+            passed = passed && CcSimJourneyRoadSiteStop(&sim) != NULL;
+            ContextActionSet stop_actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
+            for (int32_t i = 0; i < stop_actions.count; ++i)
+                if (stop_actions.items[i].kind == CONTEXT_ACTION_HOLD_TRAVEL) passed = false;
         }
         if (scenario == 3) {
             Vector3 before_arrival = local.world_carriage.position;
@@ -7310,7 +7364,12 @@ static int RunStorybookTravelRegression(void)
            verge offers the way back aboard. */
         local.journey_travel_active = true;
         local.open_world = true;
+        sim.journey.active = true;
+        sim.journey.phase = CC_JOURNEY_PHASE_TRAVELLING;
+        sim.road_site_count = 0;
         local.world_carriage.hero_embarked = true;
+        local.carriage_stopped = true;
+        local.road_actions_expanded = true;
         ContextActionSet aboard = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
         bool offers_step_down = false, offers_board = false;
         for (int32_t i = 0; i < aboard.count; ++i)
@@ -7829,7 +7888,7 @@ static int RunTownDepartureRegression(void)
     }
     ContextActionSet rising_actions = BuildContextActions(
         &sim, &local, VIEW_ROADS, selected, -1);
-    if (rising_actions.count != 1 || rising_actions.items[0].kind != CONTEXT_ACTION_HOLD_TRAVEL) {
+    if (rising_actions.count != 1 || rising_actions.items[0].kind != CONTEXT_ACTION_NONE || rising_actions.items[0].enabled) {
         (void)fprintf(stderr,
                       "The departure needs its Travel control until the junction.\n");
         return 1;
@@ -9108,6 +9167,27 @@ static int RunSoloPartyWipeRegression(void)
 }
 #endif
 
+static bool SetRoadTravelStopped(CcSim *sim, LocalState *local, bool stopped,
+    char *message, size_t capacity)
+{
+    if (CcCoopClientActive() && sim->journey.active &&
+        !CcCoopClientSetTravelStopped(sim, stopped, message, capacity)) return false;
+    local->carriage_stopped = stopped;
+    local->road_actions_expanded = false;
+    local->card_page = 0;
+    local->travel_hold_armed = false;
+    local->travel_fast_forward = false;
+    local->convoy.runtime_tick_accumulator = 0.0f;
+    if (stopped) {
+        local->convoy.pace = 0.0f;
+        local->world_carriage.pace = 0.0f;
+    }
+    (void)snprintf(message, capacity, "%s", stopped ?
+        "Stopped. Travel resumes this road; camp spends time and provisions." :
+        "Travelling. The team keeps moving until a decision or you stop.");
+    return true;
+}
+
 static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         int32_t *selected_situation, ClientView *view,
                         ClientView *return_view, LocalState *local,
@@ -9204,6 +9284,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
+    if (context_action == CONTEXT_ACTION_NONE && ClientKeyPressed(KEY_SPACE)) {
+        for (int32_t i = 0; i < available_cards.count; ++i) {
+            if (available_cards.items[i].kind == CONTEXT_ACTION_HOLD_TRAVEL &&
+                available_cards.items[i].enabled) {
+                context_action = CONTEXT_ACTION_HOLD_TRAVEL;
+                pressed_action = available_cards.items[i];
+                break;
+            }
+        }
+    }
     if (context_action == CONTEXT_ACTION_NONE && *view == VIEW_LOCAL &&
         local->journey_travel_active &&
         sim->journey.road_position_active) {
@@ -9260,6 +9350,16 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         return;
     }
+    if (context_action == CONTEXT_ACTION_ROAD_OPTIONS) {
+        local->road_actions_expanded = !local->road_actions_expanded;
+        local->card_page = 0;
+        return;
+    }
+    if (context_action == CONTEXT_ACTION_HOLD_TRAVEL) {
+        (void)SetRoadTravelStopped(sim, local, !local->carriage_stopped,
+            message, message_capacity);
+        return;
+    }
     if (context_action == CONTEXT_ACTION_MAKE_ROAD_CAMP) {
         CcCommand camp = {.kind = CC_COMMAND_MAKE_CAMP};
         if (ApplyCommand(*journal, sim, camp, message, message_capacity)) {
@@ -9274,7 +9374,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             .kind = CC_COMMAND_CHOOSE_ROAD_LEG,
             .target_id = pressed_action.target.object
         };
-        (void)ApplyCommand(*journal, sim, choice, message, message_capacity);
+        if (ApplyCommand(*journal, sim, choice, message, message_capacity)) {
+            local->carriage_stopped = false;
+            local->road_actions_expanded = false;
+            local->card_page = 0;
+        }
         return;
     }
     if (HandleRoadCarriageInteraction(sim, local, view, context_action,
@@ -9301,7 +9405,11 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         const CcRoadSite *site=CcSimJourneyRoadSiteStop(sim);
         if(site != NULL) {
             CcCommand command={.kind=context_action == CONTEXT_ACTION_VISIT_MINE ? CC_COMMAND_VISIT_MINE : CC_COMMAND_PASS_ROAD_SITE,.target_id=site->id};
-            (void)ApplyCommand(*journal,sim,command,message,message_capacity);
+            if (ApplyCommand(*journal,sim,command,message,message_capacity)) {
+                local->carriage_stopped = false;
+                local->road_actions_expanded = false;
+                local->card_page = 0;
+            }
         }
         return;
     }
@@ -9311,9 +9419,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         CcInteractionCancel(&local->interaction, "");
         CcLocalAgentStop(&local->agent);
         return;
-    }
-    if (context_action == CONTEXT_ACTION_HOLD_TRAVEL) {
-        local->carriage_stopped = false;
     }
 
     if (context_action == CONTEXT_ACTION_APPROACH_ENTRANCE) {
@@ -9937,6 +10042,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->site_travel_active) {
+            if (local->carriage_stopped) return;
             SiteTravelResult result = UpdateSiteTravelState(
                 local, delta_time);
             if (result == SITE_TRAVEL_ARRIVED) {
@@ -9950,6 +10056,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->road_choice_active) {
+            if (local->carriage_stopped) return;
             if (UpdateRoadChoiceApproach(local, delta_time)) {
                 const CcRoute *route = SelectedOutgoingRoute(
                     sim, *selected);
@@ -9963,7 +10070,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             return;
         }
-        if (local->journey_travel_active) {
+        if (local->journey_travel_active && local->open_world &&
+            !local->world_carriage.hero_embarked && CcCoopClientActive()) {
+            (void)UpdateDrivenConvoy(local, sim, delta_time);
+            PositionOpenWorldJourneyAt(sim, local, 1, 1.0f);
+            CcLocalOpenWorldCarriageTargetsInternal(sim, &local->world_carriage,
+                (float)GetTime(), delta_time);
+        }
+        if (local->journey_travel_active &&
+            (!local->open_world || local->world_carriage.hero_embarked)) {
             const CcRoadSite *road_stop = CcSimJourneyRoadSiteStop(sim);
             if (road_stop != NULL && context_action == CONTEXT_ACTION_CAMP_ROAD_SITE) {
                 CcCommand choice = {.kind = CC_COMMAND_CAMP_ROAD_SITE, .target_id = road_stop->id};
@@ -10317,6 +10432,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 local->movement_reticle_valid = false;
             }
         }
+        if (local->journey_travel_active && local->open_world &&
+            !local->world_carriage.hero_embarked) return;
         if (!local->market_interior &&
             CcLocalAgentConsumeWorldExit(&local->agent)) {
             (void)snprintf(
@@ -11256,9 +11373,17 @@ static int RunTravelAudioRegression(void)
 #include "cc_render_benchmark_tests.inc"
 #endif
 
+#if defined(CC_CLIENT_SELF_TESTS)
+#include "../../tests/road_travel_input_tests.inc"
+#endif
+
 int main(int argc, char **argv)
 {
 #if defined(CC_CLIENT_SELF_TESTS)
+    if (argc == 2 && strcmp(argv[1], "--test-continuous-road") == 0)
+        return RunRoadTravelInputRegression(NULL);
+    if (argc == 3 && strcmp(argv[1], "--capture-continuous-road") == 0)
+        return RunRoadTravelInputRegression(argv[2]);
     if (argc == 3 && strcmp(argv[1], "--test-core-language") == 0)
         return RunCoreLanguageRegression(argv[2]);
 #endif
@@ -11767,6 +11892,10 @@ int main(int argc, char **argv)
                         "Twenty years later. A new company takes up the carriage.");
                 }
             }
+            if (sim.journey.active && local.journey_travel_active) {
+                local.carriage_stopped = CcCoopClientTravelStopped();
+                if (local.carriage_stopped) local.convoy.pace = local.world_carriage.pace = 0;
+            }
             if (CcCoopClientDead()) CcLocalAgentDie(&local.agent);
         }
         CcCapturePresentation presentation = CcCapturePresentationFor(
@@ -11954,7 +12083,9 @@ int main(int argc, char **argv)
         BindOpenWorldForLocalState(&local);
         bool movement_preview_visible = view == VIEW_LOCAL && !local.interaction.approaching &&
             !local.site_travel_active && !local.road_choice_active &&
-            !local.journey_travel_active && !local.journey_parley_active;
+            (!local.journey_travel_active ||
+                (local.open_world && !local.world_carriage.hero_embarked)) &&
+            !local.journey_parley_active;
         CcLocalRendererSetMovementPreview(
             movement_preview_visible ? &local.movement_preview : NULL);
         if (strcmp(previous_message, message) != 0) {

@@ -1291,19 +1291,34 @@ void CcLocalOpenWorldCarriageTargetsInternal(const CcSim *sim,
     for (int32_t i = 0; i < count; ++i) {
         CreatureGaitCache *cache = &creature_gaits[placements[i].slot];
         float gait_clock = cache->ready ? cache->last_clock + dt : 0.0f;
-        (void)CcLocalCreatureGaitTargetInternal(placements[i].slot,
-            CC_CREATURE_RIG_HORSE, RoadHorseRigGait(carriage->pace), gait_clock,
-            placements[i].initial_phase, placements[i].base, yaw,
-            placements[i].rig_scale, CC_LOCAL_SCENE_ROAD);
+        if (carriage->storybook_travel && !carriage->town_arrival) {
+            (void)CreatureTravelTarget(placements[i].slot,
+                RoadHorseRigGait(carriage->pace), placements[i].initial_phase,
+                placements[i].base, yaw, placements[i].rig_scale,
+                carriage->route_id, carriage->pace, dt);
+        } else {
+            cache->travel_route = 0;
+            (void)CcLocalCreatureGaitTargetInternal(placements[i].slot,
+                CC_CREATURE_RIG_HORSE, RoadHorseRigGait(carriage->pace), gait_clock,
+                placements[i].initial_phase, placements[i].base, yaw,
+                placements[i].rig_scale, CC_LOCAL_SCENE_ROAD);
+        }
     }
     if (CcPonyOnRoad(sim) >= 0) {
         Vector3 pony = LocalPoint(base, 2.7f * scale, 0.0f, 3.3f * scale, yaw);
         pony.y = CcLocalTerrainHeightAt(pony.x, pony.z);
         CreatureGaitCache *cache = &creature_gaits[CREATURE_GAIT_ROAD_PONY];
         float gait_clock = cache->ready ? cache->last_clock + dt : 0.0f;
-        (void)CcLocalCreatureGaitTargetInternal(CREATURE_GAIT_ROAD_PONY,
-            CC_CREATURE_RIG_HORSE, RoadHorseRigGait(carriage->pace), gait_clock,
-            0.25f, pony, yaw, 0.96f * scale, CC_LOCAL_SCENE_ROAD);
+        if (carriage->storybook_travel && !carriage->town_arrival) {
+            (void)CreatureTravelTarget(CREATURE_GAIT_ROAD_PONY,
+                RoadHorseRigGait(carriage->pace), .25f, pony, yaw, .96f * scale,
+                carriage->route_id, carriage->pace, dt);
+        } else {
+            cache->travel_route = 0;
+            (void)CcLocalCreatureGaitTargetInternal(CREATURE_GAIT_ROAD_PONY,
+                CC_CREATURE_RIG_HORSE, RoadHorseRigGait(carriage->pace), gait_clock,
+                0.25f, pony, yaw, 0.96f * scale, CC_LOCAL_SCENE_ROAD);
+        }
     }
 }
 
