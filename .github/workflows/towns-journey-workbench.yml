@@ -1,0 +1,41 @@
+name: Towns and journey integration workbench
+on:
+  push:
+    branches: [integration/towns-and-journey-cut]
+    paths:
+      - .github/workflows/towns-journey-workbench.yml
+      - .github/towns-journey-workbench.py
+permissions:
+  contents: read
+concurrency:
+  group: towns-journey-workbench
+  cancel-in-progress: true
+jobs:
+  integration:
+    if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/integration/towns-and-journey-cut'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact integration inputs
+        run: |
+          mkdir -p /tmp/town-inputs
+          for entry in main:e69765e60a939143e6e14050331c735a530963df towns:dbe44f532effeaf083e47378907b467180750899 oven:d1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6; do
+            name=${entry%%:*}; sha=${entry#*:}
+            git archive "$sha" src tests tools cmake docs .github CMakeLists.txt CMakePresets.json Makefile | gzip > "/tmp/town-inputs/$name.tar.gz"
+            echo "$name $sha" >> /tmp/town-inputs/revisions.txt
+          done
+          for entry in towns:dbe44f532effeaf083e47378907b467180750899 oven:d1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6; do
+            name=${entry%%:*}; sha=${entry#*:}
+            base=$(git merge-base e69765e60a939143e6e14050331c735a530963df "$sha")
+            git archive "$base" src tests tools cmake docs .github CMakeLists.txt CMakePresets.json Makefile | gzip > "/tmp/town-inputs/$name-base.tar.gz"
+            git diff "$base" "$sha" > "/tmp/town-inputs/$name.diff"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: town-integration-inputs
+          path: /tmp/town-inputs/
+          retention-days: 7
