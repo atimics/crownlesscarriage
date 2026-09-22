@@ -1,0 +1,58 @@
+name: Ground-level town camera workbench
+on:
+  push:
+    branches: [fix/ground-level-authored-towns]
+    paths:
+      - .github/ground-town-apply.py
+      - .github/workflows/ground-town-workbench.yml
+permissions:
+  contents: read
+concurrency:
+  group: ground-town-workbench
+  cancel-in-progress: true
+jobs:
+  review:
+    if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/fix/ground-level-authored-towns'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Apply camera candidate for review
+        run: |
+          python3 .github/ground-town-apply.py
+          git diff --check
+          mkdir -p out/ground-town
+          git diff > out/ground-town/reviewed.patch
+          git rev-parse HEAD > out/ground-town/source-revision.txt
+          sha256sum out/ground-town/reviewed.patch > out/ground-town/patch-sha256.txt
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
+      - name: Build native client and graphics tests
+        run: |
+          set -o pipefail
+          cmake -S . -B build-ground -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/ground-town/configure.log
+          cmake --build build-ground --parallel 4 --target crownless_carriage renderer_regression_tests local_place_tests 2>&1 | tee out/ground-town/build.log
+      - name: Capture all authored town views
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: xvfb-run -a python3 tools/capture_four_towns.py build-ground/crownless_carriage --output out/ground-town/scenes --conditions
+      - name: Export native review inputs
+        if: always()
+        run: |
+          tar --exclude=.git --exclude=examples --exclude=projects --exclude=parser -czf ground-town-dev.tar.gz src tests tools cmake CMakeLists.txt CMakePresets.json Makefile docs/design build-ground/_deps/raylib-src build-ground/_deps/raylib-build/raylib/libraylib.a build-ground/crownless_carriage build-ground/renderer_regression_tests
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ground-town-scenes
+          path: out/ground-town
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ground-town-dev
+          path: ground-town-dev.tar.gz
+          retention-days: 3
