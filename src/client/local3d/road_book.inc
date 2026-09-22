@@ -2128,7 +2128,10 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     ClearBackground(background);
     rlSetClipPlanes(0.10, 512.0);
     BeginMode3D(camera);
+    DrawTownSky(sim, place, camera, clock);
+    DrawTownHorizon(sim, place);
     BeginWorldLighting(camera, &street_art);
+    SetTownSkyFog(sim, place);
 
     uint32_t town_conditions = CcSimTownConditions(sim, place->id);
     DrawExteriorTerrain(place, town_conditions, scenery_focus, clock);

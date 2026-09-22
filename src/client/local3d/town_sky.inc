@@ -223,7 +223,7 @@ static void DrawTownHorizon(const CcSim *sim, const CcSettlement *place)
         Color base=BlendColor(top,colors.horizon,layer==0 ? 0.52f : 0.28f);
         for (int32_t i=0; i<TOWN_RIDGE_SECTORS; ++i) {
             float u=(float)i*(2.0f*PI/(float)TOWN_RIDGE_SECTORS);
-            float v=(float)(i+1)*(2.0f*PI/(float)TOWN_RIDGE_SECTORS;
+            float v=(float)(i+1)*(2.0f*PI/(float)TOWN_RIDGE_SECTORS);
             Vector3 a=TownHorizonPoint(u,radius,ground-75), b=TownHorizonPoint(v,radius,ground-75);
             Vector3 c=TownHorizonPoint(v,radius,ground+TownRidgeHeight(p,v,layer,seed));
             Vector3 d=TownHorizonPoint(u,radius,ground+TownRidgeHeight(p,u,layer,seed));
