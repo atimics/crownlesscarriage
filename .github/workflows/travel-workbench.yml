@@ -1,0 +1,29 @@
+name: Travel enhancement workbench
+on:
+  push:
+    branches: [fix/continuous-road-travel]
+    paths: [.github/workflows/travel-workbench.yml, .github/travel-apply.py]
+permissions:
+  contents: read
+concurrency:
+  group: travel-enhancement-workbench
+  cancel-in-progress: true
+jobs:
+  source:
+    if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/fix/continuous-road-travel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export exact baseline
+        run: |
+          mkdir -p /tmp/travel-source
+          git archive 6104310654ee522481ddff0c8f30e27486131626 src tests tools cmake web .github CMakeLists.txt CMakePresets.json Makefile | gzip > /tmp/travel-source/source.tar.gz
+          echo 6104310654ee522481ddff0c8f30e27486131626 > /tmp/travel-source/revision.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: travel-source
+          path: /tmp/travel-source
+          retention-days: 3
