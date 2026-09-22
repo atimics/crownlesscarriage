@@ -222,7 +222,7 @@ static int RunPresentedTargetRegression(void)
         return ClientRegressionFailure("Consume a removed card's click at its shown bounds.");
     RememberPresentedTargets(&local, VIEW_LOCAL, &moved);
     pressed = PressedContextAction(&sim, &local, VIEW_LOCAL, 0, 0);
-    if (!CcInteractionKeyEqual(pressed.target, moved.items[0].target, chosen))
+    if (!CcInteractionKeyEqual(pressed.target, moved.items[0].target))
         return ClientRegressionFailure("A new drawing must replace the presented target.");
     RememberPresentedTargets(&local, VIEW_CHARACTER, &moved);
     if (local.presented_target_count != 0)
@@ -442,8 +442,7 @@ static int RunAdventureMineRoadRegression(void)
         &other, &other_local, (RenderTexture2D){0}, (Rectangle){0});
     const CcInteractionTarget *other_card = NULL;
     for (int32_t i = 0; i < other_local.interactions.count; ++i) {
-        const CcInteractionTarget *candidate =
-            &other_local.interactions.targets[i];
+        const CcInteractionTarget *candidate = &other_local.interactions.targets[i];
         if (candidate->key.kind == CC_INTERACTION_SITE &&
             candidate->key.object == CC_LOCAL_SITE_DUNGEON) {
             other_card = candidate;
