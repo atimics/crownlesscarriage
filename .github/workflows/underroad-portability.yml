@@ -1,0 +1,45 @@
+name: Underroad save portability
+on:
+  pull_request:
+    paths:
+      - 'src/sim/**'
+      - 'src/persistence/**'
+      - 'tests/mine_tests.c'
+      - 'tests/underroad_network_sim_tests.c'
+      - 'tests/fixtures/shipped/**'
+      - '.github/workflows/underroad-portability.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sim/**'
+      - 'src/persistence/**'
+      - 'tests/mine_tests.c'
+      - 'tests/underroad_network_sim_tests.c'
+      - '.github/workflows/underroad-portability.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: underroad-portability-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  portable-save:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite development headers
+        run: sudo apt-get update -qq && sudo apt-get install -y libsqlite3-dev
+      - name: Build migration and topology tests
+        run: |
+          cmake -S . -B build-portable -DCC_BUILD_CLIENT=OFF -DCC_WARNINGS_AS_ERRORS=ON -DCMAKE_C_COMPILER=${{ matrix.compiler }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build build-portable --parallel 4 --target mine_tests underroad_network_sim_tests
+      - name: Test historical mine save and canonical network
+        run: |
+          ulimit -s 65536
+          ctest --test-dir build-portable --output-on-failure -R '^(silverwick_mine_roundtrip|simulated_underroad_network)$'
