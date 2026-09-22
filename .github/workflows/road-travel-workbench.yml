@@ -13,13 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 6104310654ee522481ddff0c8f30e27486131626
           persist-credentials: false
       - name: Export exact baseline source
+        shell: bash
         run: |
+          set -o pipefail
           mkdir -p /tmp/road-source
-          git archive 6104310654ee522481ddff0c8f30e27486131626 src tests tools cmake web .github CMakeLists.txt CMakePresets.json Makefile | gzip > /tmp/road-source/source.tar.gz
-          git ls-tree -r 6104310654ee522481ddff0c8f30e27486131626 > /tmp/road-source/tree.txt
-          echo 6104310654ee522481ddff0c8f30e27486131626 > /tmp/road-source/revision.txt
+          git archive HEAD src tests tools cmake web .github CMakeLists.txt CMakePresets.json Makefile | gzip > /tmp/road-source/source.tar.gz
+          git ls-tree -r HEAD > /tmp/road-source/tree.txt
+          git rev-parse HEAD > /tmp/road-source/revision.txt
       - uses: actions/upload-artifact@v4
         with:
           name: road-travel-source
