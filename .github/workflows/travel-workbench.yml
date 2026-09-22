@@ -2,33 +2,81 @@ name: Travel enhancement workbench
 on:
   push:
     branches: [fix/continuous-road-travel]
-    paths: [.github/workflows/travel-workbench.yml, .github/travel-apply.py]
+    paths: [.github/workflows/travel-workbench.yml]
 permissions:
   contents: read
 concurrency:
   group: travel-enhancement-workbench
   cancel-in-progress: true
 jobs:
-  source:
+  verify:
     if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/fix/continuous-road-travel'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 6104310654ee522481ddff0c8f30e27486131626
           persist-credentials: false
-      - name: Export exact baseline
+      - name: Verify the review patch without changing repository refs
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/travel-source
-          test "$(git rev-parse HEAD)" = 6104310654ee522481ddff0c8f30e27486131626
-          git archive HEAD src tests tools cmake web .github CMakeLists.txt CMakePresets.json Makefile | gzip > /tmp/travel-source/source.tar.gz
-          tar -tzf /tmp/travel-source/source.tar.gz >/dev/null
-          git rev-parse HEAD > /tmp/travel-source/revision.txt
+          mkdir -p out/travel-review
+          python3 - <<'PY'
+          import base64, hashlib, zlib
+          from pathlib import Path
+          names = ['00', '01', '02', '03a', '03b', '03c', '04', '05']
+          encoded = ''.join(Path(f'.github/travel-parts/{name}.b64').read_text().strip() for name in names)
+          for name in names:
+              data = Path(f'.github/travel-parts/{name}.b64').read_bytes()
+              print(name, len(data), hashlib.sha256(data).hexdigest())
+          assert len(encoded) == 38484, len(encoded)
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+          assert len(patch) == 107129, len(patch)
+          digest = hashlib.sha256(patch).hexdigest()
+          assert digest == '2f7f99ce3a91b7a4c95dfda312554de1fae1305a95996dfc8ac913d74045f715', digest
+          Path('out/travel-review/reviewed.patch').write_bytes(patch)
+          Path('out/travel-review/patch-sha256.txt').write_text(digest + '\n')
+          PY
+          git apply --check out/travel-review/reviewed.patch
+          git apply out/travel-review/reviewed.patch
+          git diff --check
+          git rev-parse HEAD > out/travel-review/transport-revision.txt
+          printf '%s\n' '6104310654ee522481ddff0c8f30e27486131626 plus reviewed.patch; implementation not yet committed' > out/travel-review/tested-source.txt
+      - name: Install native graphics and recording dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb ffmpeg
+      - name: Build complete native Release client and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-travel -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/travel-review/configure.log
+          cmake --build build-travel --parallel 4 2>&1 | tee out/travel-review/build.log
+      - name: Test real input, accelerated hoof motion and shared authoritative holds
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -s 65536
+          xvfb-run -a ctest --test-dir build-travel --output-on-failure --no-tests=error -R 'daily_play_policy|road_|carriage|creature|travel|footing|town_arrival|town_departure|roadbook_arrival|oven_court|silverwick_mine|world_card|adventure_input|renderer' 2>&1 | tee out/travel-review/tests.log
+          ./build-travel/renderer_regression_tests --road-motion 2>&1 | tee out/travel-review/hoof-motion.log
+          xvfb-run -a ./build-travel/renderer_regression_tests --carriage-graphics unused 2>&1 | tee out/travel-review/repeated-draw.log
+          python3 tests/coop_tests.py ./build-travel/libcrownless_coop.so 2>&1 | tee out/travel-review/shared-host.log
+          node tests/web_coop_tests.mjs 2>&1 | tee out/travel-review/browser-wire.log
+      - name: Record continuous motion and normal stop and resume input
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a python3 tools/capture_road_travel.py build-travel/crownless_carriage --output out/travel-review/recording 2>&1 | tee out/travel-review/capture.log
+          sha256sum build-travel/crownless_carriage > out/travel-review/binary-sha256.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: travel-source
-          path: /tmp/travel-source
-          retention-days: 3
+          name: travel-enhancement-readonly-review
+          path: |
+            out/travel-review/
+            build-travel/Testing/Temporary/LastTest.log
+          retention-days: 14
+          if-no-files-found: error
