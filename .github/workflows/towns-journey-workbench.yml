@@ -4,17 +4,17 @@ on:
     branches: [integration/towns-and-journey-cut]
     paths:
       - .github/workflows/towns-journey-workbench.yml
-      - .github/towns-journey-workbench.py
+      - .github/carriage-overview.patch
 permissions:
   contents: read
 concurrency:
   group: towns-journey-workbench
   cancel-in-progress: true
 jobs:
-  integration:
+  overview:
     if: github.repository == 'atimics/crownlesscarriage' && github.ref == 'refs/heads/integration/towns-and-journey-cut'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     permissions:
       contents: write
     env:
@@ -23,80 +23,70 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply the reviewed portability repair on its isolated branch
+      - name: Apply the exact reviewed overview patch on its work branch
         run: |
-          cp .github/towns-journey-workbench.py /tmp/portable-repair.py
-          git config user.name 'chatgpt-codex-connector[bot]'
-          git config user.email 'chatgpt-codex-connector[bot]@users.noreply.github.com'
-          git checkout --detach f5f329464b0fd4d077d91119622b71e2196e63e8
-          python3 /tmp/portable-repair.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import zlib, base64, hashlib
+          patch = zlib.decompress(base64.b64decode(Path('.github/carriage-overview.patch').read_text()))
+          assert hashlib.sha256(patch).hexdigest() == 'a39a9ab9953d95d014e8f668a7dacfe18567fcabcc2d36e54d15cd6860b4e84e'
+          Path('/tmp/overview.patch').write_bytes(patch)
+          PY
+          git checkout --detach c5589afee97710e199d40a380cb27f0fa1d830f6
+          git apply --check /tmp/overview.patch
+          git apply /tmp/overview.patch
           git diff --check
-          mkdir -p out/integration
-          git diff > out/integration/portability.diff
-      - name: Verify the unchanged mine fixture on both native compilers
-        run: |
-          set -o pipefail
-          ulimit -s 65536
-          for compiler in gcc clang; do
-            cmake -S . -B "build-$compiler" -DCC_BUILD_CLIENT=OFF -DCC_WARNINGS_AS_ERRORS=ON -DCMAKE_C_COMPILER="$compiler" -DCMAKE_BUILD_TYPE=Release
-            cmake --build "build-$compiler" --parallel 4 --target mine_tests underroad_network_sim_tests
-            ctest --test-dir "build-$compiler" --output-on-failure -R '^(silverwick_mine_roundtrip|simulated_underroad_network)$' 2>&1 | tee "out/integration/$compiler-portability.log"
-          done
-      - name: Commit only the tested portability repair to its work branch
-        run: |
-          git add src/sim/cc_sim.c tests/underroad_network_sim_tests.c
-          git commit -m 'fix: sequence Underroad random coordinates across compilers'
-          git push origin HEAD:refs/heads/fix/portable-underroad-migration
-          git rev-parse HEAD > out/integration/portability-revision.txt
-      - name: Integrate pinned town and Oven Court heads without changing main
-        run: |
-          git merge --no-ff --no-edit ca92901d9564ebb1ca349c1f0dcf1d418dee9ba5
-          git merge --no-ff --no-edit d1fb5c9aa6f39f0e6959e2050d5ff0b629b0c4d6
-          git diff --check
-          git rev-parse HEAD > out/integration/revision.txt
-          git rev-parse HEAD^{tree} > out/integration/tree.txt
-          git diff e69765e60a939143e6e14050331c735a530963df > out/integration/combined.diff
+          mkdir -p out/overview
+          cp /tmp/overview.patch out/overview/reviewed.patch
       - name: Install native dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
-      - name: Build combined native client
+      - name: Build native client
         id: build
         run: |
           set -o pipefail
-          cmake -S . -B build-integration -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/integration/configure.log
-          cmake --build build-integration --parallel 4 2>&1 | tee out/integration/build.log
-      - name: Exercise integration regressions
+          cmake -S . -B build-overview -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/overview/configure.log
+          cmake --build build-overview --parallel 4 2>&1 | tee out/overview/build.log
+      - name: Exercise carriage, input and integration contracts
         run: |
           set -o pipefail
           ulimit -s 65536
-          xvfb-run -a ctest --test-dir build-integration --output-on-failure --parallel 2 -R 'carriage|creature|travel|footing|town|local_movement|mine|oven|production|custody|interaction|underroad|capture.*(request|contract)|renderer|adventure_input|adventure_trade|simulation_resume|persistence_field' 2>&1 | tee out/integration/tests.log
-          xvfb-run -a ./build-integration/renderer_regression_tests --carriage-graphics /tmp/unused.png 2>&1 | tee out/integration/repeated-draw.log
-          python3 tests/test_four_town_capture.py
-          python3 tests/dialogue_fact_question_tests.py
-          python3 tests/dialogue_fact_policy_tests.py
-          python3 tools/language/model_identity.py --check
-      - name: Capture the combined authored towns and Oven Court
+          xvfb-run -a ctest --test-dir build-overview --output-on-failure --parallel 2 -R 'carriage|creature|travel|town|capture|mine|oven|adventure_input|adventure_trade|interaction' 2>&1 | tee out/overview/tests.log
+      - name: Capture supported widths, large text, final rows and empty manifest
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
-          xvfb-run -a python3 tools/capture_four_towns.py build-integration/crownless_carriage --output out/integration/towns --conditions
-          xvfb-run -a python3 tools/capture_oven_court.py build-integration/crownless_carriage --out out/integration/oven --revision "$(git rev-parse HEAD)"
-      - name: Bundle native review binaries
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+          for width in 1040 1200 1280; do
+            xvfb-run -a ./build-overview/crownless_carriage --capture-ux 31 "out/overview/manifest-$width.png" "$width" 0
+          done
+          xvfb-run -a ./build-overview/crownless_carriage --capture-ux 31 out/overview/manifest-large.png 1040 2
+          xvfb-run -a ./build-overview/crownless_carriage --capture-ux 32 out/overview/manifest-end-large.png 1040 2
+          xvfb-run -a ./build-overview/crownless_carriage --capture-ux 33 out/overview/manifest-empty.png 1040 0
+      - name: Commit tested implementation only to the overview work branch
         run: |
-          tar -czf /tmp/integration-binaries.tar.gz build-integration/crownless_carriage build-integration/renderer_regression_tests build-integration/carriage_presentation_tests build-integration/mine_tests
+          git config user.name 'chatgpt-codex-connector[bot]'
+          git config user.email 'chatgpt-codex-connector[bot]@users.noreply.github.com'
+          git add src/client/main.c src/client/cc_carriage_overview.inc src/client/cc_capture_request.inc src/client/cc_capture_request_tests.inc src/client/cc_capture_scenes.inc tests/carriage_overview_tests.inc cmake/tests/80-client.cmake
+          git diff --cached --check
+          git commit -m 'fix: keep the carriage manifest readable above departure controls'
+          git push origin HEAD:refs/heads/fix/carriage-overview-layout
+          git rev-parse HEAD > out/overview/tested-revision.txt
+          git rev-parse HEAD^{tree} > out/overview/tested-tree.txt
+      - name: Bundle review binaries
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: tar -czf /tmp/overview-binaries.tar.gz build-overview/crownless_carriage
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: combined-town-integration-evidence
+          name: carriage-overview-review
           path: |
-            out/integration/
-            build-integration/Testing/Temporary/LastTest.log
+            out/overview/
+            build-overview/Testing/Temporary/LastTest.log
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         with:
-          name: combined-town-native-binaries
-          path: /tmp/integration-binaries.tar.gz
+          name: carriage-overview-native
+          path: /tmp/overview-binaries.tar.gz
           retention-days: 7
