@@ -53,38 +53,18 @@ static int ProfileContract(void)
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
 
-            CHECK(camera->target_y >= 0.08f);
-            CHECK(camera->target_y <= 0.25f);
-            CHECK(camera->camera_offset_y >= 0.55f);
-            CHECK(camera->camera_offset_y <= 0.70f);
+            /* Ground-level adventure compositions: look at people/facades,
+               stand on the camera station's ground, not above the roofs. */
+            CHECK(camera->target_y >= 2.5f && camera->target_y <= 5.5f);
+            CHECK(camera->camera_offset_y >= 1.8f && camera->camera_offset_y <= 4.0f);
             float camera_distance_squared =
                 camera->camera_offset_x * camera->camera_offset_x +
                 camera->camera_offset_z * camera->camera_offset_z;
-            CHECK(camera_distance_squared >= 5.0f * 5.0f);
-            bool valley_view = (profile->function == CC_SETTLEMENT_FARMING ||
-                                profile->function == CC_SETTLEMENT_MARKET ||
-                                profile->function == CC_SETTLEMENT_MINING ||
-                                profile->function == CC_SETTLEMENT_FORTRESS) &&
-                (camera->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ||
-                 camera->kind == CC_LOCAL_TOWN_SCENE_HEART ||
-                 camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK);
-            float maximum_span = valley_view ? 45.0f : 24.0f;
-            CHECK(camera_distance_squared <= maximum_span * maximum_span);
-            CHECK(camera->fovy >= 5.8f && camera->fovy <=
-                  (valley_view ? 38.0f : 10.0f));
-            if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
-                CHECK(camera->fovy >= 9.0f);
-            } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
-                bool pony_yard = (profile->function == CC_SETTLEMENT_MARKET ||
-                                 profile->function == CC_SETTLEMENT_FARMING) &&
-                    camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD;
-                bool authored_street =
-                    (profile->function == CC_SETTLEMENT_MARKET ||
-                     profile->function == CC_SETTLEMENT_MINING) &&
-                    camera->kind == CC_LOCAL_TOWN_SCENE_CLOSE_FIRST;
-                CHECK(camera->fovy <=
-                      (authored_street ? 10.0f : pony_yard ? 9.0f : 6.6f));
-            }
+            CHECK(camera_distance_squared >= 9.0f * 9.0f);
+            CHECK(camera_distance_squared <= 30.0f * 30.0f);
+            CHECK(camera->fovy >= 8.0f && camera->fovy <= 22.0f);
+            if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST)
+                CHECK(camera->fovy <= 12.0f);
             if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
                 CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
                 CHECK(camera->trigger_z >= 54.5f && camera->trigger_z <= 56.0f);
@@ -644,8 +624,8 @@ static int FourAuthoredSceneContracts(void)
         CC_SETTLEMENT_MARKET, CC_LOCAL_TOWN_SCENE_LANDMARK);
     CHECK(archive->trigger_x < 42.0f && archive->target_x < 38.0f);
     /* A fortress establishes the crossing and keep before its close-up walks. */
-    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 0)->fovy >= 20.0f);
-    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 2)->fovy >= 30.0f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 0)->fovy >= 16.0f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 2)->fovy >= 16.0f);
     CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MARKET, 3)->fovy >= 9.5f);
     CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MINING, 3)->fovy >= 9.5f);
     return 0;

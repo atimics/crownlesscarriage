@@ -719,8 +719,12 @@ static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
         float z = focus.z - candidate->trigger_z;
         float distance = x * x + z * z;
 
+        /* The southern carriage court also owns its approach road. Keeping
+           its old close-up radius sent walkers behind the heart's low lens. */
+        float activation_radius = candidate->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD ?
+            22.0f : close_activation_radius;
         if (candidate->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST &&
-            distance > close_activation_radius * close_activation_radius) {
+            distance > activation_radius * activation_radius) {
             continue;
         }
         if (distance >= nearest_distance) continue;
@@ -737,7 +741,8 @@ static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
         float current_distance = sqrtf(x * x + z * z);
         bool current_is_eligible =
             current->kind < CC_LOCAL_TOWN_SCENE_CLOSE_FIRST ||
-            current_distance <= close_activation_radius + 1.25f;
+            current_distance <= (current->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD ?
+                22.0f : close_activation_radius) + 1.25f;
         if (current_is_eligible &&
             sqrtf(nearest_distance) + 2.25f >= current_distance) {
             return current_scene;
@@ -806,39 +811,110 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
     return &composition;
 }
 
-static float StreetCameraClearanceHeight(float x, float z)
+/* Town cameras stand in the scene; a wall is not a licence to lift the
+   camera above its roof. Find the nearest clear ground-level station instead. */
+static bool StreetCameraStationClear(Vector3 station)
 {
-    float floor_height = CcLocalTerrainHeightAt(x, z) + 0.5f;
-    const Vector2 corners[] = {{-0.4f, -0.4f}, {0.4f, -0.4f},
-                               {-0.4f, 0.4f}, {0.4f, 0.4f}};
-    for (int i = 0; i < 4; ++i) {
-        floor_height = fmaxf(floor_height,
-            CcLocalTerrainHeightAt(x + corners[i].x, z + corners[i].y) + 0.5f);
-    }
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
-        Vector2 local = BuildingUnrotatedPoint(i, x, z);
-        float distance = TerrainDistanceToRectangle(local.x, local.y, building.footprint);
-        float influence = 1.0f - SmoothStep01((distance - 0.4f) / 3.0f);
-        float roof = TerrainFootprintHeight(building.footprint) + building.height + 3.0f;
-        floor_height = fmaxf(floor_height,
-            floor_height + fmaxf(0.0f, roof - floor_height) * influence);
+        Vector2 local = BuildingUnrotatedPoint(i, station.x, station.z);
+        if (TerrainDistanceToRectangle(local.x, local.y, building.footprint) < 0.8f &&
+            station.y < TerrainFootprintHeight(building.footprint) + building.height + 0.8f)
+            return false;
     }
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
         WorldStructure structure = ActiveCompoundStructureAt(i);
-        float distance = TerrainDistanceToRectangle(x, z, structure.footprint);
-        float influence = 1.0f - SmoothStep01((distance - 0.4f) / 3.0f);
-        float roof = TerrainFootprintHeight(structure.footprint) + structure.height + 1.2f;
-        floor_height = fmaxf(floor_height,
-            floor_height + fmaxf(0.0f, roof - floor_height) * influence);
+        if (TerrainDistanceToRectangle(station.x, station.z, structure.footprint) < 0.8f &&
+            station.y < TerrainFootprintHeight(structure.footprint) + structure.height + 0.5f)
+            return false;
     }
-    return floor_height;
+    return true;
 }
 
 static Camera3D StreetCameraClearVolume(Camera3D camera)
 {
-    camera.position.y = fmaxf(camera.position.y,
-        StreetCameraClearanceHeight(camera.position.x, camera.position.z));
+    float eye = CombatClamp(camera.position.y - CcLocalTerrainHeightAt(
+        camera.position.x, camera.position.z), 1.8f, 4.0f);
+    Vector3 station = camera.position;
+    station.y = CcLocalTerrainHeightAt(station.x, station.z) + eye;
+    if (!StreetCameraStationClear(station)) {
+        bool found = false;
+        for (int32_t ring = 1; ring <= 12 && !found; ++ring) {
+            for (int32_t side = 0; side < 16; ++side) {
+                float angle = (float)side * (2.0f * PI / 16.0f);
+                Vector3 candidate = {station.x + cosf(angle) * (float)ring,
+                    0.0f, station.z + sinf(angle) * (float)ring};
+                candidate.y = CcLocalTerrainHeightAt(candidate.x, candidate.z) + eye;
+                if (!StreetCameraStationClear(candidate)) continue;
+                station = candidate;
+                found = true;
+                break;
+            }
+        }
+    }
+    camera.position = station;
+    return camera;
+}
+
+/* The frame guard may pan along the ground and aim the lens, but never crane
+   the camera back into the aerial projection this town mode replaces. */
+static Camera3D GroundStreetFrameHero(Camera3D camera, Vector3 hero,
+                                      int32_t art_height, Rectangle safe_area)
+{
+    if (art_height <= 0) return camera;
+    const float aspect = (float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT;
+    const int32_t art_width = (int32_t)lroundf((float)art_height * aspect);
+    const float left = fmaxf(0.195f, safe_area.x) * (float)art_width;
+    const float right_edge = fminf(0.805f, safe_area.x + safe_area.width) * (float)art_width;
+    const float top = fmaxf(0.195f, safe_area.y) * (float)art_height;
+    const float bottom = fminf(0.805f, safe_area.y + safe_area.height) * (float)art_height;
+    const float slope = tanf(camera.fovy * DEG2RAD * 0.5f);
+    Vector3 planar = Vector3Subtract(camera.target, camera.position);
+    planar.y = 0.0f;
+    float focus_distance = fmaxf(1.0f, Vector3Length(planar));
+    planar = Vector3Normalize(planar);
+    /* Keep a walking foreground actor away from the eye plane without
+       looking steeply down or letting them walk behind the camera. */
+    float depth = Vector3DotProduct(Vector3Subtract(hero, camera.position), planar);
+    if (depth < 8.0f) {
+        float eye = CombatClamp(camera.position.y - CcLocalTerrainHeightAt(
+            camera.position.x, camera.position.z), 1.8f, 4.0f);
+        Vector3 retreat = Vector3Scale(planar, depth - 8.0f);
+        camera.position = Vector3Add(camera.position, retreat);
+        camera.target = Vector3Add(camera.target, retreat);
+        camera.position.y = CcLocalTerrainHeightAt(camera.position.x, camera.position.z) + eye;
+    }
+    /* Hold the authored station. At the frame edge aim the lens rather than
+       sliding it sideways through the next building or climbing its roof. */
+    for (int pass = 0; pass < 8; ++pass) {
+        Vector2 screen = GetWorldToScreenEx(hero, camera, art_width, art_height);
+        depth = Vector3DotProduct(Vector3Subtract(hero, camera.position), planar);
+        float x = CombatClamp(screen.x, left, right_edge);
+        if (depth <= 0.0f || fabsf(x - screen.x) > 0.01f) {
+            if (depth <= 0.0f) x = (left + right_edge) * 0.5f;
+            float azimuth = atan2f(hero.x - camera.position.x, hero.z - camera.position.z);
+            float pitch = atan2f(camera.target.y - camera.position.y, focus_distance);
+            float k = (2.0f * x / (float)art_width - 1.0f) * slope * aspect;
+            float planar_distance = fmaxf(0.25f, hypotf(
+                hero.x - camera.position.x, hero.z - camera.position.z));
+            float a = k * cosf(pitch);
+            float b = k * (hero.y - camera.position.y) / planar_distance * sinf(pitch);
+            float relative = atanf(a) + asinf(CombatClamp(
+                b / sqrtf(1.0f + a * a), -1.0f, 1.0f));
+            float heading = azimuth + relative;
+            planar = (Vector3){sinf(heading), 0.0f, cosf(heading)};
+            camera.target.x = camera.position.x + planar.x * focus_distance;
+            camera.target.z = camera.position.z + planar.z * focus_distance;
+        }
+        screen = GetWorldToScreenEx(hero, camera, art_width, art_height);
+        float y = CombatClamp(screen.y, top, bottom);
+        if (fabsf(y - screen.y) > 0.01f) {
+            depth = fmaxf(0.25f, Vector3DotProduct(Vector3Subtract(hero, camera.position), planar));
+            float elevation = atan2f(hero.y - camera.position.y, depth);
+            float relative = atanf((1.0f - 2.0f * y / (float)art_height) * slope);
+            camera.target.y = camera.position.y + tanf(elevation - relative) * focus_distance;
+        }
+    }
     return camera;
 }
 
@@ -869,6 +945,7 @@ static void FixedCameraRigAim(FixedCameraRig *rig, int32_t shot,
         rig->fovy_destination = fovy;
         rig->transition_duration = 0.0f;
         rig->transition_elapsed = 0.0f;
+        rig->ground_station_offset = (Vector3){0};
         rig->framing_offset = (Vector3){0};
         rig->framing_from = (Vector3){0};
         rig->framing_destination = (Vector3){0};
@@ -980,8 +1057,8 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
             0.0f, rig->framing_hold_seconds - rig->delta_time);
     }
 
+    camera.position = Vector3Add(camera.position, rig->ground_station_offset);
     camera.target = Vector3Add(camera.target, rig->framing_offset);
-    camera.position = Vector3Add(camera.position, rig->framing_offset);
     bool authored_transition_done =
         rig->transition_duration <= 0.0f ||
         rig->transition_elapsed >= rig->transition_duration;
@@ -1019,19 +1096,13 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     if (fabsf(target_x - screen.x) < 0.5f &&
         fabsf(target_y - screen.y) < 0.5f) return camera;
 
-    Vector3 forward = Vector3Normalize(
-        Vector3Subtract(camera.target, camera.position));
-    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
-    Vector3 screen_up = Vector3Normalize(
-        Vector3CrossProduct(right, forward));
-    float view_height = camera.projection == CAMERA_PERSPECTIVE ?
-        2.0f * fmaxf(0.25f, Vector3DotProduct(
-            Vector3Subtract(hero, camera.position), forward)) *
-            tanf(camera.fovy * DEG2RAD * 0.5f) : camera.fovy;
-    float pixel_world = view_height / (float)art_height;
-    Vector3 adjustment = Vector3Add(
-        Vector3Scale(right, (screen.x - target_x) * pixel_world),
-        Vector3Scale(screen_up, (target_y - screen.y) * pixel_world));
+    /* Reframe in the same ground-constrained geometry used by the final
+       guard. Screen-plane translation would keep moving the eye vertically
+       and repeatedly schedule an impossible reframe after ground clamping. */
+    Camera3D reframed = GroundStreetFrameHero(camera, hero, art_height,
+        (Rectangle){target_x / (float)art_width,
+                    target_y / (float)art_height, 0.0f, 0.0f});
+    Vector3 adjustment = Vector3Subtract(reframed.target, camera.target);
     rig->framing_from = rig->framing_offset;
     rig->framing_destination = Vector3Add(rig->framing_offset, adjustment);
     rig->framing_elapsed = 0.0f;
@@ -1042,6 +1113,11 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
     return camera;
 }
 
+int32_t CcLocalStreetCameraSceneInternal(void)
+{
+    return street_camera_rig.initialized ? street_camera_rig.shot : -1;
+}
+
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height)
 {
@@ -1050,10 +1126,19 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
         Vector3Distance(requested_focus, street_camera_rig.output_hero_position) < 0.0001f) {
         return street_camera_rig.output_camera;
     }
-    bool fresh_view = !street_camera_rig.initialized;
+    bool arrival_handoff = street_camera_rig.initialized &&
+        street_camera_rig.shot == -1 && street_camera_rig.output_valid;
+    Camera3D arrival_view = street_camera_rig.output_camera;
     Vector3 focus = agent != NULL ? agent->position : (Vector3){0};
     int32_t shot = TownCameraSceneFor(focus, street_camera_rig.shot);
     const StreetCameraShot *composition = StreetCameraShotAt(shot);
+    /* These are composed adventure-game screens, not stops on a camera rail.
+       Cut between authored stations after the existing scene hysteresis;
+       a low travelling lens would otherwise pass through walls and trees. */
+    if (advance && street_camera_rig.initialized && !arrival_handoff &&
+        shot != street_camera_rig.shot) {
+        street_camera_rig = (FixedCameraRig){0};
+    }
     Vector3 destination = composition->target;
     destination.y += CcLocalTerrainHeightAt(destination.x, destination.z);
     Vector3 camera_offset = composition->camera_offset;
@@ -1061,19 +1146,21 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     float camera_x = destination.x + camera_offset.x;
     float camera_z = destination.z + camera_offset.z;
     float camera_ground = CcLocalTerrainHeightAt(camera_x, camera_z);
-    float horizontal_span = sqrtf(camera_offset.x * camera_offset.x +
-                                   camera_offset.z * camera_offset.z);
-    /* Keep a view down onto the street when the camera stands on lower land. */
-    camera_offset.y = fmaxf(
-        camera_ground + composition->camera_offset.y - destination.y,
-        horizontal_span * 0.55f);
+    /* The authored vertical component is eye height over the camera's own
+       ground, not a pitch ratio. Do not impose the former 29-degree dive. */
+    camera_offset.y = camera_ground + composition->camera_offset.y - destination.y;
     FixedCameraRigAim(&street_camera_rig, shot, destination,
                       camera_offset, composition->fovy,
                       clock, advance);
-    Camera3D camera = ExteriorCameraComposed(
+    if (arrival_handoff) {
+        street_camera_rig.output_hero_position = focus;
+        /* Preserve the incoming frame once, then cut to the yard's station. */
+        street_camera_rig.transition_duration = 0.0f;
+        return arrival_view;
+    }
+    Camera3D camera = PerspectiveCameraComposed(
         street_camera_rig.displayed_target,
-        street_camera_rig.displayed_offset,
-        street_camera_rig.displayed_fovy);
+        street_camera_rig.displayed_offset, 40.0f);
     camera = StreetCameraClearVolume(camera);
     camera.fovy = 2.0f * atanf(street_camera_rig.displayed_fovy * 0.5f /
         Vector3Distance(camera.position, camera.target)) * RAD2DEG;
@@ -1082,34 +1169,20 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
         camera = FixedCameraRigFrameHero(
             &street_camera_rig, camera, hero, art_height,
             composition->art.quiet_area, advance);
-        Camera3D authored_camera = camera;
-        Vector3 authored_offset = Vector3Subtract(camera.position, camera.target);
-        float angle = street_camera_rig.tree_angle;
-        camera.position = Vector3Add(camera.target, Vector3RotateByAxisAngle(
-            authored_offset, (Vector3){0, 1, 0}, angle));
-        if (advance) {
-            street_camera_rig.tree_hold = fmaxf(0.0f,
-                street_camera_rig.tree_hold - street_camera_rig.delta_time);
-            if (fresh_view || (street_camera_rig.tree_hold <= 0.0f &&
-                CcLocalCameraTreeOcclusionScoreInternal(camera, hero, hero) > 0.06f)) {
-                float chosen = 0.0f;
-                (void)CcLocalCameraClearSightlinesInternal(authored_camera, hero, hero,
-                    street_camera_rig.tree_goal, &chosen);
-                street_camera_rig.tree_goal = chosen;
-                street_camera_rig.tree_hold = 0.50f;
-                if (fresh_view) street_camera_rig.tree_angle = chosen;
-            }
-            street_camera_rig.tree_angle += WrapAngle(
-                street_camera_rig.tree_goal - street_camera_rig.tree_angle) *
-                (1.0f - expf(-street_camera_rig.delta_time * 3.5f));
-            camera.position = Vector3Add(camera.target, Vector3RotateByAxisAngle(
-                authored_offset, (Vector3){0, 1, 0}, street_camera_rig.tree_angle));
-        }
+        /* Reframing must retain the authored eye height, not accumulate a
+           vertical drift from screen-plane pans over uneven town ground. */
+        camera.position.y = CcLocalTerrainHeightAt(
+            camera.position.x, camera.position.z) + composition->camera_offset.y;
         camera = StreetCameraClearVolume(camera);
         Vector3 before_guard = camera.target;
-        camera = KeepHeroInsideStreetFrame(
+        Vector3 before_station = camera.position;
+        camera = GroundStreetFrameHero(
             camera, hero, art_height,
             (Rectangle){0.10f, 0.12f, 0.80f, 0.76f});
+        Vector3 station_delta = Vector3Subtract(camera.position, before_station);
+        station_delta.y = 0.0f;
+        street_camera_rig.ground_station_offset = Vector3Add(
+            street_camera_rig.ground_station_offset, station_delta);
         Vector3 guard = Vector3Subtract(camera.target, before_guard);
         street_camera_rig.framing_offset = Vector3Add(street_camera_rig.framing_offset, guard);
         street_camera_rig.framing_from = Vector3Add(street_camera_rig.framing_from, guard);
@@ -1124,43 +1197,17 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
 static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
                                   float clock, int32_t art_height)
 {
-    typedef struct TownTravelCamera {
-        float target_height;
-        Vector3 offset;
-    } TownTravelCamera;
-    TownTravelCamera travel = {
-        .target_height = 2.0f,
-        .offset = {-25.0f, 15.0f, 38.0f},
-    };
-    switch (active_place_function) {
-        case CC_SETTLEMENT_FARMING:
-            travel = (TownTravelCamera){
-                1.8f, {-24.0f, 15.0f, 36.0f}};
-            break;
-        case CC_SETTLEMENT_MINING:
-            travel = (TownTravelCamera){
-                2.5f, {-25.0f, 13.0f, 36.0f}};
-            break;
-        case CC_SETTLEMENT_FORTRESS:
-            travel = (TownTravelCamera){
-                2.8f, {24.0f, 14.0f, 35.0f}};
-            break;
-        case CC_SETTLEMENT_CAPITAL:
-            travel = (TownTravelCamera){
-                3.4f, {-28.0f, 18.0f, 40.0f}};
-            break;
-        case CC_SETTLEMENT_DUNGEON_TOWN:
-            travel = (TownTravelCamera){
-                1.8f, {-23.0f, 13.0f, 36.0f}};
-            break;
-        case CC_SETTLEMENT_MARKET:
-        default:
-            break;
-    }
     const CcLocalTownScene *arrival = CcLocalTownSceneAt(
         active_place_function, CC_LOCAL_TOWN_SCENE_ARRIVAL);
+    float target_height = arrival != NULL ? arrival->target_y : 3.0f;
+    Vector3 travel_offset = arrival != NULL ?
+        (Vector3){arrival->camera_offset_x, 0.0f, arrival->camera_offset_z} :
+        (Vector3){-8.0f, 0.0f, 20.0f};
     if (convoy == NULL || arrival == NULL) {
-        return ExteriorCameraAt((Vector3){81.0f, 2.0f, 34.0f}, 21.0f);
+        Vector3 target = {81.0f, CcLocalTerrainHeightAt(81.0f, 34.0f) + 3.0f, 34.0f};
+        Vector3 offset = {-8.0f,
+            CcLocalTerrainHeightAt(73.0f, 54.0f) + 3.0f - target.y, 20.0f};
+        return PerspectiveCameraComposed(target, offset, 43.0f);
     }
 
     float heading = convoy->town_heading_yaw;
@@ -1174,18 +1221,19 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         convoy->town_position,
         Vector3Add(Vector3Scale(forward, -10.5f),
                    Vector3Add(Vector3Scale(right, 3.8f),
-                              (Vector3){0.0f, 5.2f, 0.0f})));
+                              (Vector3){0.0f, 3.0f, 0.0f})));
     Vector3 wide_target = {
         arrival->target_x,
-        travel.target_height + CcLocalTerrainHeightAt(
+        target_height + CcLocalTerrainHeightAt(
             arrival->target_x, arrival->target_z),
         arrival->target_z,
     };
     Vector3 parked_target = Vector3Add(convoy->town_position,
-        (Vector3){0.0f, travel.target_height, 0.0f});
+        (Vector3){0.0f, target_height, 0.0f});
     wide_target = Vector3Lerp(wide_target, parked_target,
         SmoothStep01((convoy->phase_progress - 0.12f) / 0.72f));
-    Vector3 wide_position = Vector3Add(wide_target, travel.offset);
+    Vector3 wide_position = Vector3Add(wide_target, travel_offset);
+    wide_position.y = CcLocalTerrainHeightAt(wide_position.x, wide_position.z) + 3.0f;
     float pull_out = SmoothStep01(
         (convoy->phase_progress - 0.08f) / 0.78f);
     Camera3D camera = {
@@ -1202,11 +1250,13 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         tanf(camera.fovy * DEG2RAD * 0.5f);
     street_camera_rig = (FixedCameraRig){
         .displayed_target = camera.target,
-        .displayed_offset = Vector3Scale(arrival_offset, 1.0f / 2.5f),
+        .displayed_offset = arrival_offset,
         .displayed_fovy = arrival_span,
         .shot = -1,
         .last_clock = clock,
         .initialized = true,
+        .output_valid = true,
+        .output_camera = camera,
     };
     return SnapCameraToArtPixels(camera, art_height);
 }
