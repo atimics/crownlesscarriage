@@ -120,6 +120,8 @@ static CcSituation *PreparePromisedJourney(CcSim *sim, char *error,
         .target_id = situation->id
     };
     CC_CHECK(CcSimApply(sim, &accept, error, error_capacity));
+    CC_CHECK(CcTestLoadReliefCrates(
+        sim, situation, error, error_capacity));
     sim->routes[0].closed = true;
     const CcMap *map = CcSimMapForRoute(sim, sim->routes[0].id,
                                         sim->player.id);
@@ -1133,12 +1135,40 @@ int main(void)
         .kind = CC_COMMAND_ACCEPT_SITUATION,
         .target_id = blocked_relief->id
     };
-    CC_CHECK(!CcSimApply(&blocked_loading, &blocked_accept,
-                         error, sizeof(error)));
-    CC_CHECK(strstr(error, "Clear cargo space") != NULL);
-    CC_CHECK(blocked_loading.player.accepted_situation_id == 0U);
+    CC_CHECK(CcSimApply(&blocked_loading, &blocked_accept,
+                        error, sizeof(error)));
+    CC_CHECK(blocked_loading.player.accepted_situation_id ==
+             blocked_relief->id);
     CC_CHECK(blocked_loading.player.cargo[CC_GOOD_FOOD] == 0);
     CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] == blocked_origin_food);
+    CcCommand blocked_pickup = {
+        .kind = CC_COMMAND_PICKUP_RELIEF_CRATE,
+        .target_id = blocked_relief->id
+    };
+    CC_CHECK(!CcSimApply(&blocked_loading, &blocked_pickup,
+                         error, sizeof(error)));
+    CC_CHECK(strstr(error, "cargo slot") != NULL);
+    CC_CHECK(!blocked_relief->loading_crate_carried);
+    CC_CHECK(blocked_relief->loading_progress == 0);
+    CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] == blocked_origin_food);
+    CcCommand blocked_stow = {
+        .kind = CC_COMMAND_STOW_RELIEF_CRATE,
+        .target_id = blocked_relief->id
+    };
+    CC_CHECK(!CcSimApply(&blocked_loading, &blocked_stow,
+                         error, sizeof(error)));
+    CC_CHECK(strstr(error, "Lift a relief crate") != NULL);
+    blocked_loading.player.cargo[CC_GOOD_TOOLS] -= 1;
+    CC_CHECK(CcSimApply(&blocked_loading, &blocked_pickup,
+                        error, sizeof(error)));
+    CC_CHECK(blocked_relief->loading_crate_carried);
+    CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] ==
+             blocked_origin_food - 1);
+    CC_CHECK(CcSimApply(&blocked_loading, &blocked_stow,
+                        error, sizeof(error)));
+    CC_CHECK(!blocked_relief->loading_crate_carried);
+    CC_CHECK(blocked_relief->loading_progress == 1);
+    CC_CHECK(blocked_loading.player.cargo[CC_GOOD_FOOD] == 1);
 
     static CcSim empty_granary;
     CcSimInit(&empty_granary, UINT32_C(0x6a6a));
@@ -1280,6 +1310,8 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&washed_load, &accept_washed,
                         error, sizeof(error)));
+    CC_CHECK(CcTestLoadReliefCrates(
+        &washed_load, washed_delivery, error, sizeof(error)));
     CcCommand wrong_way = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = washed_load.settlements[1].id

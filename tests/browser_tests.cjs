@@ -622,7 +622,7 @@ async function main() {
       assert.equal(await mobile.locator('#canvas').getAttribute('aria-label'), 'Company Book');
       const bookReading = await controls.reading();
       assert(bookReading.length > 30);
-      assert.match(bookReading, /food boxes are aboard/i);
+      assert.match(bookReading, /Next: Load 8 food boxes from the granary stack/i);
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
 
       const backButton = mobile.locator('#touch-actions button').filter({hasText: /^Back/});

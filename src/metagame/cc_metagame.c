@@ -1711,6 +1711,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "Make commitments:\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
            "Move goods and people:\n"
+           "  relief pickup|stow (carry Thornford food crates to the carriage)\n"
            "  buy bread|wheat|meat|iron|tools|weapons|gold|gems|wood|wool|stone COUNT\n"
            "  sell bread|wheat|meat|iron|tools|weapons|gold|gems|wood|wool|stone COUNT\n"
            "  buy-map NUMBER, sell-map NUMBER\n"
@@ -2219,12 +2220,39 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         const CcSituation *situation = &metagame->sim.situations[index];
         if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
             Append(output, output_capacity,
-                   "You accept %s's job. Mara loads all %d food boxes into the carriage at no charge.\n",
+                   "You accept %s's job. Carry all %d food boxes from the granary stack. Mara will steady each crate at the carriage.\n",
                    situation->sponsor_name, situation->quantity);
         } else {
             Append(output, output_capacity,
                    "You accept %s's job. You can only carry one job at a time.\n",
                    situation->sponsor_name);
+        }
+    } else if (strcmp(command, "relief") == 0) {
+        const CcSituation *situation = CcSimAcceptedSituation(&metagame->sim);
+        CcCommand action = {
+            .target_id = situation != NULL ? situation->id : 0U
+        };
+        if (first != NULL && strcmp(first, "pickup") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_PICKUP_RELIEF_CRATE;
+        } else if (first != NULL && strcmp(first, "stow") == 0 && second == NULL) {
+            action.kind = CC_COMMAND_STOW_RELIEF_CRATE;
+        } else {
+            Append(output, output_capacity,
+                   "Use 'relief pickup' at the granary stack or 'relief stow' at the carriage.\n");
+            return false;
+        }
+        if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
+        if (action.kind == CC_COMMAND_PICKUP_RELIEF_CRATE) {
+            Append(output, output_capacity,
+                   "You lift one food crate. Carry it to the carriage.\n");
+        } else if (CcSimReliefLoadingComplete(situation)) {
+            Append(output, output_capacity,
+                   "Mara steadies the final crate. All %d are aboard.\n",
+                   situation->quantity);
+        } else {
+            Append(output, output_capacity,
+                   "Mara steadies the crate. %d still wait at the granary.\n",
+                   CcSimReliefCratesToLoad(situation));
         }
     } else if (strcmp(command, "abandon") == 0) {
         CcCommand action = {.kind = CC_COMMAND_ABANDON_SITUATION};
@@ -2797,6 +2825,7 @@ static void DescribeAgentActions(const CcMetagame *metagame,
            "Send exactly one command on the next line. Available command families:\n"
            "  look, people, talk NUMBER, rumors, charters, roads, council, causes, notes, cargo, status\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
+           "  relief pickup|stow\n"
            "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"
            "  archive-map NUMBER, retrieve-map NUMBER\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
@@ -2923,7 +2952,8 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
         strcmp(command, "causes") == 0 || strcmp(command, "notes") == 0 ||
         strcmp(command, "maps") == 0 || strcmp(command, "cargo") == 0 ||
         strcmp(command, "status") == 0 ||
-        strcmp(command, "abandon") == 0 || strcmp(command, "buy") == 0 ||
+        strcmp(command, "abandon") == 0 || strcmp(command, "relief") == 0 ||
+        strcmp(command, "buy") == 0 ||
         strcmp(command, "sell") == 0 || strcmp(command, "wait") == 0 ||
         strcmp(command, "debrief") == 0 || strcmp(command, "quit") == 0) {
         return true;

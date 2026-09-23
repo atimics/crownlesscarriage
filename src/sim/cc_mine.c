@@ -106,6 +106,20 @@ int32_t CcMinePackGood(const CcSim *sim, CcGood good)
         CC_CUSTODY_MINE_PACK,sim->player.id,good);
     return total > INT_MAX ? INT_MAX : (int32_t)total;
 }
+int32_t CcMineCarriedCrates(const CcSim *sim)
+{
+    if (sim == NULL || sim->schema_version < 109U) return 0;
+    int64_t total=0;
+    for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
+        const CcCustodyEntry *entry=&sim->custody.entries[i];
+        if (entry->active && entry->kind == CC_CUSTODY_GOODS &&
+            entry->owner_id == sim->goblins.id &&
+            entry->holder.kind == CC_CUSTODY_MINE_PACK &&
+            entry->holder.id == sim->player.id &&
+            CcSimMineEntryTracked(sim,entry)) total+=entry->quantity;
+    }
+    return total > INT_MAX ? INT_MAX : (int32_t)total;
+}
 int32_t CcMineSourceGood(const CcSim *sim, CcGood good)
 {
     return sim == NULL ? 0 : MineCustodyGood(sim,CC_CUSTODY_SITE,sim->mine.source_id,good);
@@ -468,7 +482,11 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
             m->x=x; m->y=y;
             if (m->phase == CC_MINE_LEVEL) {
                 m->steps=(m->steps+1)%6;
-                if (m->steps == 0) { if(m->light > 0) m->light-=1; SpendMinutes(sim,5); }
+                bool carrying_crate=CcMineCarriedCrates(sim)>0;
+                if (m->steps == 0 || (carrying_crate && m->steps == 3)) {
+                    if(m->light > 0) m->light-=1;
+                    SpendMinutes(sim,5);
+                }
                 int32_t chamber=CcMineChamber(x,y);
                 if (chamber >= 0) m->seen |= UINT32_C(1) << chamber;
                 /* The Gatehouse, Rope Store, and Stair Hall form the mine's
@@ -581,7 +599,9 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
             if (command->amount > CcMineSourceGood(sim,command->good))
                 return Fail(error,capacity,"The haulers have not released that quantity.");
             if (CcMinePackUsed(sim)+command->amount > CC_MINE_PACK_CAPACITY)
-                return Fail(error,capacity,"Make room in the eight-slot pack before taking more.");
+                return Fail(error,capacity,sim->schema_version >= 109U ?
+                    "Make room in the carried crate before taking more." :
+                    "Make room in the eight-slot pack before taking more.");
             if (!MineTransfer(sim,(CcCustodyHolder){CC_CUSTODY_SITE,m->source_id},
                 (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},command->good,
                 command->amount,error,capacity)) return false;

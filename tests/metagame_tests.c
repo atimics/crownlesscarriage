@@ -92,6 +92,12 @@ static void CheckJourneyContext(void)
     const char *path = "metagame-journey-context.ccsave";
     CcMetagameInit(&game, 42U);
     CC_CHECK(CcMetagameExecute(&game, "accept 1", output, sizeof(output)));
+    for (int32_t crate = 0; crate < 8; ++crate) {
+        CC_CHECK(CcMetagameExecute(&game, "relief pickup", output,
+                                   sizeof(output)));
+        CC_CHECK(CcMetagameExecute(&game, "relief stow", output,
+                                   sizeof(output)));
+    }
     CC_CHECK(CcMetagameExecute(&game, "travel 1", output, sizeof(output)));
     CC_CHECK(strstr(output, "road choose") != NULL);
     ResolveRoadRhythm(&game, output, sizeof(output));
@@ -316,6 +322,12 @@ int main(void)
                    "accept %d", journaled_relief);
     CC_CHECK(CcMetagameAgentExecute(
         &agent_view, agent_action, output, sizeof(output)));
+    for (int32_t crate = 0; crate < 8; ++crate) {
+        CC_CHECK(CcMetagameAgentExecute(
+            &agent_view, "relief pickup", output, sizeof(output)));
+        CC_CHECK(CcMetagameAgentExecute(
+            &agent_view, "relief stow", output, sizeof(output)));
+    }
     CC_CHECK(CcMetagameAgentExecute(
         &agent_view, "travel 1", output, sizeof(output)));
     CcRoadLegPreview agent_previews[3];
@@ -593,6 +605,17 @@ int main(void)
     relief_number = SituationNumber(&lawful, CC_SITUATION_RELIEF_DELIVERY);
     ExecuteNumber(&lawful, "accept", relief_number, output, sizeof(output));
     CC_CHECK(strstr(output, "You accept Mara Venn's job") != NULL);
+    CC_CHECK(strstr(output, "granary stack") != NULL);
+    CC_CHECK(lawful.sim.player.cargo[CC_GOOD_FOOD] == 0);
+    for (int32_t crate = 0; crate < 8; ++crate) {
+        CC_CHECK(CcMetagameExecute(&lawful, "relief pickup", output,
+                                   sizeof(output)));
+        CC_CHECK(strstr(output, "lift one food crate") != NULL);
+        CC_CHECK(CcMetagameExecute(&lawful, "relief stow", output,
+                                   sizeof(output)));
+        CC_CHECK(strstr(output, crate == 7 ? "All 8 are aboard" :
+                                        "wait at the granary") != NULL);
+    }
     CC_CHECK(lawful.sim.player.cargo[CC_GOOD_FOOD] == 8);
     CC_CHECK(CcMetagameExecute(&lawful, "travel 1", output,
                                sizeof(output)));

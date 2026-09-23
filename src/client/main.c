@@ -208,6 +208,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_MINE_LEAD,
     CONTEXT_ACTION_MINE_SHIFT_RECORD,
     CONTEXT_ACTION_MINE_REPORT,
+    CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
+    CONTEXT_ACTION_STOW_RELIEF_CRATE,
     CONTEXT_ACTION_OVEN_QUESTION
 } ContextActionKind;
 
@@ -589,6 +591,7 @@ static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
 static const Vector2 LOCAL_CARRIAGE_BAY = {
     CC_LOCAL_CARRIAGE_APPROACH_X, CC_LOCAL_CARRIAGE_APPROACH_Z
 };
+static const Vector2 LOCAL_RELIEF_CRATES = {44.40f,26.80f};
 static const Vector2 LOCAL_NOTICE = {CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z};
 static const Vector2 LOCAL_DUNGEON = {CC_LOCAL_DUNGEON_X,
                                      CC_LOCAL_DUNGEON_Z};
@@ -897,6 +900,19 @@ static void SituationNextAction(const CcSim *sim,
     if (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
         situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
         int32_t remaining = situation->quantity - situation->progress;
+        if (situation->kind == CC_SITUATION_RELIEF_DELIVERY &&
+            !CcSimReliefLoadingComplete(situation) &&
+            sim->player.location_id == CcSimSituationOfferSettlementId(
+                sim,situation)) {
+            if (situation->loading_crate_carried)
+                (void)snprintf(label,capacity,
+                    "Carry the relief crate to the carriage.");
+            else
+                (void)snprintf(label,capacity,
+                    "Load %d food boxes from the granary stack.",
+                    CcSimReliefCratesToLoad(situation));
+            return;
+        }
         if (here && sim->player.cargo[situation->good] > 0) {
             if (situation->good == CC_GOOD_FOOD) {
                 (void)snprintf(label, capacity,
@@ -4369,6 +4385,26 @@ static ContextActionSet BuildContextActions(
         }
     }
     if (view == VIEW_LOCAL && AdventureScene(local) && !LocalCombatActive(local)) {
+        const CcSituation *relief = CcSimAcceptedSituation(sim);
+        if (relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+            sim->player.location_id == CcSimSituationOfferSettlementId(sim, relief)) {
+            Vector2 position = LocalPosition(local);
+            if (!relief->loading_crate_carried &&
+                CcSimReliefCratesToLoad(relief) > 0 &&
+                GridDistance(position, LOCAL_RELIEF_CRATES) < 2.1f) {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
+                    "Lift one relief crate", "F",
+                    TextFormat("%d STILL AT GRANARY", CcSimReliefCratesToLoad(relief)),
+                    true, false);
+            } else if (relief->loading_crate_carried &&
+                (GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
+                 GridDistance(position, LOCAL_CARRIAGE) < 1.85f)) {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_STOW_RELIEF_CRATE,
+                    "Place crate in carriage", "F",
+                    TextFormat("%d OF %d ABOARD", relief->loading_progress,
+                        relief->quantity), true, false);
+            }
+        }
         for (int32_t i = 0; i < local->interactions.count; ++i) {
             const CcInteractionTarget *target = &local->interactions.targets[i];
             if (target->key.kind == CC_INTERACTION_ACTION) continue;
@@ -5144,6 +5180,26 @@ static ContextActionSet BuildContextActions(
             character != NULL ? TextFormat("Talk to %.28s",
                                             character->name) :
                                 "Talk to witness");
+    }
+    const CcSituation *relief=CcSimAcceptedSituation(sim);
+    if (relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        sim->player.location_id == CcSimSituationOfferSettlementId(sim,relief)) {
+        if (!relief->loading_crate_carried &&
+            CcSimReliefCratesToLoad(relief)>0 &&
+            GridDistance(position,LOCAL_RELIEF_CRATES)<2.1f) {
+            AddDetailedContextAction(&set,CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
+                "Lift one relief crate","F",
+                TextFormat("%d STILL AT GRANARY",CcSimReliefCratesToLoad(relief)),
+                true,false);
+        }
+        if (relief->loading_crate_carried &&
+            (GridDistance(position,LOCAL_CARRIAGE_BAY)<1.85f ||
+             GridDistance(position,LOCAL_CARRIAGE)<1.85f)) {
+            AddDetailedContextAction(&set,CONTEXT_ACTION_STOW_RELIEF_CRATE,
+                "Place crate in carriage","F",
+                TextFormat("%d OF %d ABOARD",relief->loading_progress,
+                    relief->quantity),true,false);
+        }
     }
     if (GridDistance(position, LOCAL_NOTICE) < 1.15f) {
         AddContextAction(&set, CONTEXT_ACTION_OPEN_PROMISES,
@@ -9606,7 +9662,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         *selected_situation = opening_index;
                         (void)snprintf(
                             message, message_capacity,
-                            "Mara loads %d food boxes and gives you the carriage key.",
+                            "Carry %d food boxes from the granary stack to the carriage. Mara will steady each load.",
                             updated->quantity - updated->progress);
                     } else {
                         (void)snprintf(
@@ -10376,6 +10432,33 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         Vector2 position = LocalPosition(local);
 
         bool interact = ClientKeyPressed(KEY_F);
+        if (interact && context_action == CONTEXT_ACTION_NONE) {
+            const CcSituation *relief = CcSimAcceptedSituation(sim);
+            if (relief != NULL &&
+                relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+                sim->player.location_id ==
+                    CcSimSituationOfferSettlementId(sim, relief)) {
+                if (!relief->loading_crate_carried &&
+                    CcSimReliefCratesToLoad(relief) > 0 &&
+                    GridDistance(position, LOCAL_RELIEF_CRATES) < 2.1f) {
+                    context_action = CONTEXT_ACTION_PICKUP_RELIEF_CRATE;
+                } else if (relief->loading_crate_carried &&
+                    (GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
+                     GridDistance(position, LOCAL_CARRIAGE) < 1.85f)) {
+                    context_action = CONTEXT_ACTION_STOW_RELIEF_CRATE;
+                }
+            }
+        }
+        if (context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ||
+            context_action == CONTEXT_ACTION_STOW_RELIEF_CRATE) {
+            const CcSituation *relief=CcSimAcceptedSituation(sim);
+            CcCommand carry={
+                .kind=context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ?
+                    CC_COMMAND_PICKUP_RELIEF_CRATE : CC_COMMAND_STOW_RELIEF_CRATE,
+                .target_id=relief != NULL ? relief->id : 0U};
+            (void)ApplyCommand(*journal,sim,carry,message,message_capacity);
+            return;
+        }
         if (interact || context_action != CONTEXT_ACTION_NONE) {
             if (local->open_world && !local->market_interior &&
                 context_action == CONTEXT_ACTION_CHOOSE_ROAD) {

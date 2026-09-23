@@ -50,6 +50,18 @@ static void PrepareReviewJourney(CcSim *sim, CcReviewJourneyOptions options)
         };
         (void)CcSimApply(sim, &accept, setup_error,
                          sizeof(setup_error));
+        while (CcSimReliefCratesToLoad(charter) > 0) {
+            CcCommand pickup = {
+                .kind = CC_COMMAND_PICKUP_RELIEF_CRATE,
+                .target_id = charter->id
+            };
+            CcCommand stow = {
+                .kind = CC_COMMAND_STOW_RELIEF_CRATE,
+                .target_id = charter->id
+            };
+            if (!CcSimApply(sim, &pickup, setup_error, sizeof(setup_error)) ||
+                !CcSimApply(sim, &stow, setup_error, sizeof(setup_error))) return;
+        }
         if (options.clear_route_knowledge) {
             const CcRoute *route = CcSimRouteBetween(
                 sim, sim->player.location_id, sim->settlements[1].id);

@@ -1321,6 +1321,10 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     };
     CC_CHECK(CcSimApply(&legacy_journey, &accept,
                         error, error_capacity));
+    if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
+        CC_CHECK(legacy_journey.player.cargo[CC_GOOD_FOOD] ==
+                 situation->quantity);
+    }
     legacy_journey.routes[0].closed = true;
     CcCommand travel = {
         .kind = CC_COMMAND_TRAVEL,
@@ -2734,8 +2738,8 @@ static void CheckSchema104RoadMigration(char *error,
              topology.main_length_units);
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
-    /* Schema 108 includes the generated Underroad network in the state hash. */
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(18110105845800813772));
+    /* Schema 109 includes the Underroad network and relief loading. */
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(14146795584524193123));
 
     char stop_file[512];
     (void)snprintf(
@@ -2784,7 +2788,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
     CC_CHECK(CcRoadSavedPositionValid(&stopped));
     CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
-    CC_CHECK(CcSimHash(&stopped) == UINT64_C(3206404198459072751));
+    CC_CHECK(CcSimHash(&stopped) == UINT64_C(10319494334460381272));
     CcCommand pass_pending = {
         .kind = CC_COMMAND_PASS_ROAD_SITE,
         .target_id = pending->id
@@ -2830,7 +2834,7 @@ static void CheckSchema104RoadMigration(char *error,
              topology.checkpoint_distance_units);
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
-    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(10911209645573133119));
+    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(2744101947371416524));
 
     CcSim blocked = checkpoint;
     ClearSavedRoadPosition(&blocked.journey);
@@ -2922,7 +2926,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mill_choice);
     CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
     CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
-    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(10237461091671469068));
+    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(11342158728752490583));
 
     char mine_file[512];
     (void)snprintf(
@@ -2956,7 +2960,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
     CC_CHECK(mine.mine.player_injury == 0);
     CC_CHECK(CcSimValidate(&mine, error, error_capacity));
-    CC_CHECK(CcSimHash(&mine) == UINT64_C(1834099014451032488));
+    CC_CHECK(CcSimHash(&mine) == UINT64_C(13400895851922989107));
 }
 
 static void CheckDragonHairPersistence(void)
@@ -3022,6 +3026,38 @@ static void CheckSchema41Upgrade(void)
     free(restored);
     free(legacy);
     RemoveDatabase(path);
+}
+
+static void CheckSchema108ReliefJournalUpgrade(char *error,
+                                                size_t error_capacity)
+{
+    /* Produced by the schema-108 simulation build at 026ce96e with seed 0x6a6a.
+       The accepted relief command remains in the journal after the snapshot. */
+    const char *fixture = CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/schema-108-generator-25-relief-accept-journal.ccsave";
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT schema_version=108 AND generator_version=25 AND "
+        "journal_generation=1 AND journal_cursor=0 AND "
+        "state_hash='01ebeccd6306fcd9' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT COUNT(*) FROM action_journal WHERE ordinal=1 AND "
+        "command_kind=7 AND sim_schema_version=108 AND "
+        "post_state_hash='8e20a66f02d57985';") == 1);
+    static CcSim restored, reloaded;
+    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    const CcSituation *relief = CcSimAcceptedSituation(&restored);
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION &&
+        relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        relief->quantity == 8 && relief->loading_progress == 8 &&
+        !relief->loading_crate_carried &&
+        restored.player.cargo[CC_GOOD_FOOD] == 8);
+    uint64_t migrated_hash = CcSimHash(&restored);
+    const char *copy = "schema108-relief-upgraded.ccsave";
+    RemoveDatabase(copy);
+    CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
+    CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
+    CC_CHECK(CcSimHash(&reloaded) == migrated_hash);
+    RemoveDatabase(copy);
 }
 
 /* The set of (schema, generator) pairs a save may carry is a compatibility
@@ -3742,6 +3778,7 @@ int main(void)
     CheckSchema89HistoricalCast();
     CheckSchema90RecruitmentLifetimeJournal();
     CheckSchema104RoadMigration(error, sizeof(error));
+    CheckSchema108ReliefJournalUpgrade(error, sizeof(error));
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();

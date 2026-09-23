@@ -56,6 +56,7 @@ static void CheckPaymentsAtEncounter(bool carriage_away)
     offer->target_id = sim.settlements[1].id;
     CcCommand accept = {.kind = CC_COMMAND_ACCEPT_SITUATION, .target_id = offer->id};
     CC_CHECK(CcSimApply(&sim, &accept, error, sizeof(error)));
+    CC_CHECK(CcTestLoadReliefCrates(&sim, offer, error, sizeof(error)));
     CcRoute *route = NULL;
     for (int32_t i = 0; i < sim.route_count; ++i) {
         if ((sim.routes[i].from_id == sim.player.location_id && sim.routes[i].to_id == offer->target_id) ||

@@ -69,6 +69,16 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     bool full_contract_load = delivery &&
         sim->player.cargo[accepted->good] >=
             accepted->quantity - accepted->progress;
+    if (sim->schema_version >= 109U && accepted != NULL &&
+        accepted->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        sim->player.location_id == CcSimSituationOfferSettlementId(sim,accepted) &&
+        !CcSimReliefLoadingComplete(accepted)) {
+        SetError(error,error_capacity,
+            accepted->loading_crate_carried ?
+                "Place the relief crate in the carriage before taking the road." :
+                "Carry every promised relief crate from the granary to the carriage first.");
+        return false;
+    }
     bool sanctioned_closed_crossing = route->closed &&
         accepted != NULL &&
         accepted->kind == CC_SITUATION_RELIEF_DELIVERY &&

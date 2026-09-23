@@ -54,7 +54,11 @@ static void CheckCurrentSharedCommandNames(void)
                     "mine_learn_lead")==0);
     CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_MINE_REPORT_RETURN),
                     "mine_report_return")==0);
-    for (int32_t kind=1;kind<=(int32_t)CC_COMMAND_MINE_REPORT_RETURN;++kind) {
+    CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_PICKUP_RELIEF_CRATE),
+                    "pickup_relief_crate")==0);
+    CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_STOW_RELIEF_CRATE),
+                    "stow_relief_crate")==0);
+    for (int32_t kind=1;kind<=(int32_t)CC_COMMAND_STOW_RELIEF_CRATE;++kind) {
         const char *name=CcCoopActionName((CcCommandKind)kind);
         CC_CHECK(name[0]!='\0');
         for (int32_t prior=1;prior<kind;++prior)
@@ -272,6 +276,12 @@ static void CheckJourneyQuestRetirement(void)
                          0, 0, error, sizeof(error))) {
             fprintf(stderr, "Journey retirement fixture: %s\n", error);
             CC_CHECK(false);
+        }
+        while (CcSimReliefCratesToLoad(offer) > 0) {
+            CC_CHECK(CcCoopApply(sim, "pickup_relief_crate", situation_id,
+                                0, 0, error, sizeof(error)));
+            CC_CHECK(CcCoopApply(sim, "stow_relief_crate", situation_id,
+                                0, 0, error, sizeof(error)));
         }
         sim->routes[0].closed = true;
         CC_CHECK(CcCoopApply(sim, "travel", offer->target_id,

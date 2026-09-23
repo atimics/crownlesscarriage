@@ -180,6 +180,62 @@ static void TestMinePartyWipeConservation(void)
     CC_CHECK(gold_in_carriage);
 }
 
+static void TestReliefCratePersistence(void)
+{
+    CcSim sim,restored;
+    CcSimInit(&sim,UINT32_C(0x107ca77e));
+    CcSituation *relief=NULL;
+    for (int32_t i=0;i<sim.situation_count;++i)
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            relief=&sim.situations[i];
+            break;
+        }
+    CC_CHECK(relief!=NULL);
+    CcId relief_id=relief->id;
+    CcId origin=CcSimSituationOfferSettlementId(&sim,relief);
+    sim.player.location_id=origin;
+    sim.carriage.location_id=origin;
+    CcCommand accept={.kind=CC_COMMAND_ACCEPT_SITUATION,
+        .target_id=relief_id};
+    Check(CcSimApply(&sim,&accept,error,sizeof(error)));
+    CcCommand pickup={.kind=CC_COMMAND_PICKUP_RELIEF_CRATE,
+        .target_id=relief_id};
+    Check(CcSimApply(&sim,&pickup,error,sizeof(error)));
+    CC_CHECK(relief->loading_crate_carried&&relief->loading_progress==0);
+    Check(CcSaveWrite("relief-crate-carry.ccsave",&sim,error,sizeof(error)));
+    Check(CcSaveRead("relief-crate-carry.ccsave",&restored,error,sizeof(error)));
+    relief=(CcSituation *)CcSimSituation(&restored,relief_id);
+    CC_CHECK(relief!=NULL&&relief->loading_crate_carried&&
+        relief->loading_progress==0&&CcSimHash(&restored)==CcSimHash(&sim));
+    CcCommand stow={.kind=CC_COMMAND_STOW_RELIEF_CRATE,
+        .target_id=relief_id};
+    Check(CcSimApply(&restored,&stow,error,sizeof(error)));
+    CC_CHECK(!relief->loading_crate_carried&&relief->loading_progress==1&&
+        restored.player.cargo[CC_GOOD_FOOD]==1);
+    (void)remove("relief-crate-carry.ccsave");
+
+    CcSimInit(&sim,UINT32_C(0x106ca77e));
+    relief=NULL;
+    for (int32_t i=0;i<sim.situation_count;++i)
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            relief=&sim.situations[i];
+            break;
+        }
+    CC_CHECK(relief!=NULL);
+    relief_id=relief->id;
+    CcCommand legacy_accept={.kind=CC_COMMAND_ACCEPT_SITUATION,
+        .target_id=relief_id};
+    Check(CcSimApply(&sim,&legacy_accept,error,sizeof(error)));
+    sim.player.cargo[relief->good]=relief->quantity;
+    sim.schema_version=107U;
+    Check(CcSaveWrite("relief-crate-carry.ccsave",&sim,error,sizeof(error)));
+    Check(CcSaveRead("relief-crate-carry.ccsave",&restored,error,sizeof(error)));
+    relief=(CcSituation *)CcSimSituation(&restored,relief_id);
+    CC_CHECK(relief!=NULL&&CcSimReliefLoadingComplete(relief)&&
+        relief->loading_progress==relief->quantity);
+    (void)remove("relief-crate-carry.ccsave");
+}
+
 static void CarryThreeTrackedGold(CcSim *sim)
 {
     AtBranch(sim,false);
@@ -455,15 +511,15 @@ static void TestMineSurveyMigrationAndReturns(void)
     Check(CcSaveRead(fixture,&restored,error,sizeof(error)));
     Check(CcSimValidate(&restored,error,sizeof(error)));
     uint64_t migrated_hash=CcSimHash(&restored);
-    /* Schema 108 includes the generated Underroad network in the state hash. */
-    CC_CHECK(migrated_hash==UINT64_C(1031472869659562917));
+    /* Schema 109 includes the Underroad network and relief loading. */
+    CC_CHECK(migrated_hash==UINT64_C(17759649421993544614));
     Check(CcSaveRead(fixture,&reloaded,error,sizeof(error)));
     CC_CHECK(CcSimHash(&reloaded)==migrated_hash);
     const CcCustodyEntry *depleted_gold=NULL;
     for(int32_t i=0;i<CcCustodyEffectiveCapacity(&restored.custody);++i)
         if(restored.custody.entries[i].id==restored.mine.gold_source_entry_id)
             depleted_gold=&restored.custody.entries[i];
-    CC_CHECK(restored.schema_version==108U&&restored.generator_version==25U&&
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION&&restored.generator_version==25U&&
         restored.mine.return_revision==1&&restored.mine.surveyed&&
         restored.mine.survey_event_id==0U&&
         restored.mine.survey_read_day==0&&restored.mine.survey_observed_day==0&&
@@ -555,6 +611,7 @@ int main(int argc,char **argv)
     if(argc==4 && strcmp(argv[1],"--write-shared-mine-fixture")==0)
         return WriteSharedMineFixture(argv[2],argv[3]);
     static CcSim sim,restored,changed,haul,loaded,legacy,capacity,prechange;
+    static CcSim old_pace,new_pace;
     static CcSim bargain,contest,withdrawn,failed;
     (void)remove("mine-load-replay.ccsave");
     (void)remove("mine-load-roundtrip-103.ccsave");
@@ -749,6 +806,19 @@ int main(int argc,char **argv)
     Check(CcSimValidate(&haul,error,sizeof(error)));
     CC_CHECK(CcMineSourceGood(&haul,CC_GOOD_IRON)==5 && CcMinePackGood(&haul,CC_GOOD_IRON)==3);
     CC_CHECK(CcSimTrackedGood(&haul,CC_GOOD_IRON)==iron_total);
+    /* A schema-108 journal must keep the old walking pace when it replays
+       a step with the haulers' tracked goods in the pack. */
+    old_pace=haul;new_pace=haul;
+    old_pace.schema_version=108U;
+    old_pace.mine.steps=2;new_pace.mine.steps=2;
+    CC_CHECK(CcMineCarriedCrates(&old_pace)==0);
+    CC_CHECK(CcMineCarriedCrates(&new_pace)==3);
+    int32_t old_minutes=old_pace.clock.minute_subticks;
+    int32_t new_minutes=new_pace.clock.minute_subticks;
+    Apply(&old_pace,CC_COMMAND_MINE_STEP,3);
+    Apply(&new_pace,CC_COMMAND_MINE_STEP,3);
+    CC_CHECK(old_pace.clock.minute_subticks==old_minutes);
+    CC_CHECK(new_pace.clock.minute_subticks==new_minutes+5*CC_WORLD_MINUTE_SUBTICKS);
     CcCommand stale_take={.kind=CC_COMMAND_MINE_TAKE,.target_id=(CcId)haul.mine.revision,
         .good=CC_GOOD_IRON,.amount=1};
     ApplyGood(&haul,CC_COMMAND_MINE_TAKE,CC_GOOD_IRON,4);
@@ -1012,6 +1082,7 @@ int main(int argc,char **argv)
     TestMineReturnRecords();
     TestMineSurveyMigrationAndReturns();
     TestMinePartyWipeConservation();
+    TestReliefCratePersistence();
     TestMineCargoReconciliation();
     TestMineTrackedRepack();
     (void)remove(path);(void)remove("mine-replay.ccsave");

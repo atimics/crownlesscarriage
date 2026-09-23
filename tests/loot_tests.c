@@ -32,6 +32,8 @@ static CcBanditGroup *PrepareBlockedEncounter(CcSim *sim, uint32_t seed,
         .target_id = situation->id
     };
     CC_CHECK(CcSimApply(sim, &accept, error, error_capacity));
+    CC_CHECK(CcTestLoadReliefCrates(
+        sim, situation, error, error_capacity));
     sim->routes[0].closed = true;
     CcCommand travel = {
         .kind = CC_COMMAND_TRAVEL,

@@ -566,10 +566,20 @@ bool CcStoryCharacterText(
                                    situation->quantity);
                     return true;
                 case CC_STORY_BEAT_PROMISED:
-                    (void)snprintf(
-                        text, text_capacity,
-                        "All %d food boxes are aboard. %s will meet you in %s.",
-                        situation->quantity, affected_name, target_name);
+                    if (CcSimReliefLoadingComplete(situation)) {
+                        (void)snprintf(
+                            text, text_capacity,
+                            "All %d food boxes are aboard. %s will meet you in %s.",
+                            situation->quantity, affected_name, target_name);
+                    } else if (situation->loading_crate_carried) {
+                        (void)snprintf(text,text_capacity,
+                            "Bring that crate to the carriage. I will steady it while you load.");
+                    } else {
+                        (void)snprintf(text,text_capacity,
+                            "Carry %d food boxes from the granary stack. %s will meet you in %s.",
+                            CcSimReliefCratesToLoad(situation),affected_name,
+                            target_name);
+                    }
                     return true;
                 case CC_STORY_BEAT_HELPED:
                 case CC_STORY_BEAT_RESOLVED:
