@@ -268,8 +268,6 @@ typedef struct LocalState {
     int32_t oven_page;
     int32_t conversation_gossip_slot;
     bool conversation_gossip_source;
-    CcId introduced_ids[64];
-    int32_t introduced_count;
     Vector3 conversation_position;
     int32_t book_page;
     int32_t book_offset;
@@ -1277,7 +1275,6 @@ static void ResetLocalState(LocalState *local)
     local->shared_travel_sample = (CcClientTravelSample){0};
     local->conversation_gossip_slot = -1;
     local->conversation_gossip_source = false;
-    local->introduced_count = 0;
     local->conversation_object = 0;
     local->conversation_position = (Vector3){0};
     local->conversation_name[0] = '\0';
@@ -9471,8 +9468,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             delta_time, message, message_capacity)) {
         if (*view == VIEW_CHARACTER && local->conversation_situation_id == 0U &&
             local->conversation_character_id != 0U) {
-            (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
-                .target_id = local->conversation_character_id}, message, message_capacity);
+            if (ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
+                    .target_id = local->conversation_character_id}, message, message_capacity)) {
+                const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
+                if (person != NULL) (void)snprintf(local->conversation_name,
+                    sizeof(local->conversation_name), "%s", person->name);
+            } else {
+                *view = VIEW_LOCAL;
+            }
         }
         return;
     }

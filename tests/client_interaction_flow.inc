@@ -1041,10 +1041,98 @@ static int RunReliefCrateInputRegression(void)
     return 0;
 }
 
+static int RunLearnedNameRegression(void)
+{
+    static CcSim sim, loaded;
+    static LocalState local, restored;
+    const char *path = "learned-name.ccsave";
+    char error[256] = "", message[256] = "", feedback[256] = "";
+    float feedback_age = 0.0f;
+    int32_t selected = 0, selected_situation = 0;
+    ClientView view = VIEW_LOCAL, return_view = VIEW_LOCAL;
+    (void)remove(path);
+    CcSimInit(&sim, 42U);
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    uint64_t before_scene = CcSimHash(&sim);
+    BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+    if (CcSimHash(&sim) != before_scene)
+        return ClientRegressionFailure("Reading town labels must preserve the world.");
+    CcInteractionTarget *target = NULL;
+    for (int32_t i = 0; i < local.interactions.count; ++i) {
+        CcInteractionTarget *candidate = &local.interactions.targets[i];
+        const CcCharacter *person = CcSimCharacter(&sim, candidate->character_id);
+        if (candidate->key.kind == CC_INTERACTION_PERSON && person != NULL &&
+            !AdventureKnownPerson(&sim, person)) { target = candidate; break; }
+    }
+    if (target == NULL) return ClientRegressionFailure("The town needs an unknown named resident.");
+    CcId person_id = target->character_id;
+    char role[64], name[CC_NAME_CAPACITY];
+    (void)snprintf(role, sizeof(role), "%s", target->name);
+    (void)snprintf(name, sizeof(name), "%s", CcSimCharacter(&sim, person_id)->name);
+    if (strcmp(role, name) == 0)
+        return ClientRegressionFailure("A stranger's card must show the role first.");
+    target->visible = true;
+    target->x = local.agent.position.x;
+    target->z = local.agent.position.z;
+    target->approach_x = target->x;
+    target->approach_z = target->z;
+    target->radius = 2.0f;
+    local.interaction.focus = target->key;
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    if (journal == NULL) return ClientRegressionFailure(error);
+#define NAME_CHECK(condition, text) do { if (!(condition)) { \
+    CcJournalAbandon(&journal); \
+    (void)remove(path); return ClientRegressionFailure(text); } } while (0)
+    queued_key_press[KEY_F] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+        &local, (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "",
+        message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    NAME_CHECK(view == VIEW_CHARACTER && local.conversation_character_id == person_id &&
+        strcmp(local.conversation_name, name) == 0 &&
+        CcSimCharacter(&sim, person_id)->introduced_day > 0,
+        "Talk must save the resident's introduction and show the name immediately.");
+    NAME_CHECK(AdventureKnownPerson(&sim, CcSimCharacter(&sim, person_id)),
+        "The saved company must know the person after Talk.");
+    NAME_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)),
+        "Save the introduced person.");
+    uint64_t saved = CcSimHash(&sim);
+    (void)CcJournalClose(&journal, &sim, error, sizeof(error));
+    journal = CcJournalResume(path, &loaded, error, sizeof(error));
+    NAME_CHECK(journal != NULL && CcSimHash(&loaded) == saved,
+        "Reload the same world and introduction.");
+    ResetLocalState(&restored);
+    restored.adventure_ui = true;
+    BuildAdventureTargets(&loaded, &restored, (RenderTexture2D){0}, (Rectangle){0});
+    NAME_CHECK(CcSimHash(&loaded) == saved,
+        "Rebuilding labels after reload must preserve the world.");
+    CcInteractionTarget *returned = NULL;
+    for (int32_t i = 0; i < restored.interactions.count; ++i)
+        if (restored.interactions.targets[i].character_id == person_id)
+            returned = &restored.interactions.targets[i];
+    NAME_CHECK(returned != NULL && strcmp(returned->name, name) == 0,
+        "The learned name must return with the same lifetime identity.");
+    CcJournalAbandon(&journal);
+    CcCharacter *departed = (CcCharacter *)CcSimCharacter(&loaded, person_id);
+    NAME_CHECK(departed != NULL, "The learned person must remain in the loaded world.");
+    departed->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
+    BuildAdventureTargets(&loaded, &restored, (RenderTexture2D){0}, (Rectangle){0});
+    for (int32_t i = 0; i < restored.interactions.count; ++i)
+        NAME_CHECK(restored.interactions.targets[i].character_id != person_id,
+            "A departed person must leave the town cast.");
+    (void)remove(path);
+#undef NAME_CHECK
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
     int relief_result = RunReliefCrateInputRegression();
     if (relief_result != 0) return relief_result;
+    int name_result = RunLearnedNameRegression();
+    if (name_result != 0) return name_result;
     int moving_person_result = RunMovingPresentedPersonRegression();
     if (moving_person_result != 0) return moving_person_result;
     int mine_road_result = RunAdventureMineRoadRegression();

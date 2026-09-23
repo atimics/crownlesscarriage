@@ -55,24 +55,20 @@ static void AdventurePersonLabel(const CcSim *sim, const CcCharacter *person,
         CcCharacterRoutineName(CcSimCharacterRoutine(sim, person)));
 }
 
-/* A resident is introduced once the player speaks with them; before that the
-   figure keeps its occupation label. */
-static bool AdventureIntroduced(const LocalState *local, CcId id)
+/* Direct introductions and visible reports belong to the saved company. */
+static bool AdventureKnownPerson(const CcSim *sim, const CcCharacter *person)
 {
-    if (local == NULL || id == 0U) return false;
-    for (int32_t i = 0; i < local->introduced_count; ++i)
-        if (local->introduced_ids[i] == id) return true;
-    return false;
-}
-
-static void AdventureIntroduce(LocalState *local, CcId id)
-{
-    if (local == NULL || id == 0U) return;
-    if (AdventureIntroduced(local, id)) return;
-    if (local->introduced_count <
-        (int32_t)(sizeof(local->introduced_ids) / sizeof(local->introduced_ids[0]))) {
-        local->introduced_ids[local->introduced_count++] = id;
+    if (sim == NULL || person == NULL) return false;
+    if (person->introduced_day > 0) return true;
+    for (int32_t i = 0; i < sim->situation_count; ++i) {
+        const CcSituation *situation = &sim->situations[i];
+        if (!SituationVisibleToPlayer(sim, i) &&
+            situation->id != sim->player.accepted_situation_id) continue;
+        if (person->id == situation->affected_character_id ||
+            person->id == situation->sponsor_character_id ||
+            person->id == situation->witness_character_id) return true;
     }
+    return false;
 }
 
 static bool AdventurePersonEligible(const CcSim *sim,
@@ -312,7 +308,7 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
             if (runner != NULL &&
                 AdventureNamePresented(sim, local, runner, CC_NPC_ROLE_GUARD,
                     residents, resident_count, i)) {
-                if (!AdventureIntroduced(local, runner->character_id))
+                if (!AdventureKnownPerson(sim, CcSimCharacter(sim, runner->character_id)))
                     (void)snprintf(runner->name, sizeof(runner->name), "%s", "Town guard");
             } else {
                 --local->interactions.count;
@@ -338,7 +334,8 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 if (person == NULL) break;
                 Vector2 position = {45.0f + (float)i * 1.3f, 52.0f};
                 CcInteractionTarget *visitor = AdventureTarget(local, sim, CC_INTERACTION_PERSON,
-                    person->id, person->name, "Talk", (Vector3){position.x, 0, position.y},
+                    person->id, AdventureKnownPerson(sim, person) ? person->name :
+                        CcCharacterRoleName(person->role), "Talk", (Vector3){position.x, 0, position.y},
                     0.9f, 2.0f, 0.7f, position, 1.8f);
                 if (visitor != NULL) visitor->character_id = person->id;
             }
@@ -364,7 +361,7 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
             if (resident != NULL &&
                 AdventureNamePresented(sim, local, resident, figure_role,
                     residents, resident_count, i)) {
-                if (!AdventureIntroduced(local, resident->character_id))
+                if (!AdventureKnownPerson(sim, CcSimCharacter(sim, resident->character_id)))
                     (void)snprintf(resident->name, sizeof(resident->name), "%s",
                                    AdventureRoleName(figure_role));
             } else {
@@ -399,15 +396,6 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->conversation_oven_response = false;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
-            if (target->character_id != 0U) {
-                AdventureIntroduce(local, target->character_id);
-                const CcCharacter *introduced =
-                    CcSimCharacter(sim, target->character_id);
-                if (introduced != NULL) {
-                    (void)snprintf(local->conversation_name,
-                        sizeof(local->conversation_name), "%s", introduced->name);
-                }
-            }
             local->conversation_position = (Vector3){target->x, target->y, target->z};
             (void)snprintf(local->conversation_name, sizeof(local->conversation_name), "%s", target->name);
             (void)snprintf(local->conversation_line, sizeof(local->conversation_line),
@@ -1047,17 +1035,6 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
         } else (void)snprintf(message, capacity, "%s", quote.reason);
     }
     return true;
-}
-
-static bool AdventureKnownPerson(const CcSim *sim, const CcCharacter *person)
-{
-    for (int32_t i = 0; i < sim->situation_count; ++i) {
-        const CcSituation *situation = &sim->situations[i];
-        if (!SituationVisibleToPlayer(sim, i) && situation->id != sim->player.accepted_situation_id) continue;
-        if (person->id == situation->affected_character_id || person->id == situation->sponsor_character_id ||
-            person->id == situation->witness_character_id) return true;
-    }
-    return false;
 }
 
 static Rectangle AdventureBookPageBounds(Rectangle panel, int32_t page)

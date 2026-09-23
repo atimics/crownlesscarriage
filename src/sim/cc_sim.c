@@ -19746,6 +19746,12 @@ static bool ApplyPartyWipe(CcSim *sim, const CcCommand *command,
     };
     sim->clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
     CcSimAdvanceDays(sim, CC_PARTY_WIPE_DAYS);
+    if (sim->schema_version >= 110U) {
+        /* The new crew learns living people's names again. Older journals
+           replay the introduction rule that was current when they began. */
+        for (int32_t i = 0; i < sim->character_count; ++i)
+            sim->characters[i].introduced_day = 0;
+    }
     (void)PushEvent(sim, CC_EVENT_PARTY_WIPED, sim->player.id,
                     sim->player.location_id, 0U, 20,
                     "The whole company fell. Twenty years pass, and a new company takes up the carriage.");
