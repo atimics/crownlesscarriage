@@ -112,11 +112,14 @@ class SpeechGateway:
         Version identifier for the PocketTTS model. Part of the render key.
     effects_version : str or None
         Version identifier for post-processing effects.
-    worker_pool : int or None
-        How many inline generation workers to start. Default: 1 (inline
-        mode) or 0 (object-storage-only / worker-proxy mode).
+    worker_pool : int
+        Number of inline generation workers. The constructor defaults to zero;
+        the CLI starts one worker in inline mode.
+    generation_mode : str or None
+        ``inline``, ``proxy``, or ``storage-only`` for health diagnostics.
     auth_token : str or None
-        When set, every request must carry ``Authorization: Bearer <token>``.
+        When set, GET and POST requests must carry
+        ``Authorization: Bearer <token>``.
     rate_limit_burst : int
         Maximum requests per client within the rate-limit window.
     rate_limit_window : int
@@ -129,7 +132,8 @@ class SpeechGateway:
                  effects_version='voice-style-v1',
                  worker_pool=0, auth_token=None,
                  rate_limit_burst=RATE_LIMIT_BURST,
-                 rate_limit_window=RATE_LIMIT_WINDOW):
+                 rate_limit_window=RATE_LIMIT_WINDOW,
+                 generation_mode=None):
         self.cast = cast
         self.storage = storage
         self.engine_factory = engine_factory
@@ -137,6 +141,8 @@ class SpeechGateway:
         self.model_version = model_version
         self.effects_version = effects_version
         self.auth_token = auth_token
+        self.generation_mode = generation_mode or (
+            'inline' if engine_factory is not None else 'storage-only')
         self.rate_limiter = RateLimiter(burst=rate_limit_burst,
                                         window=rate_limit_window)
 
@@ -222,14 +228,24 @@ class SpeechGateway:
         with self._lock:
             queued = sum(1 for j in self._jobs.values() if j['state'] == 'queued')
             running = sum(1 for j in self._jobs.values() if j['state'] == 'running')
+        if self.generation_mode == 'proxy':
+            worker_state = 'external_unverified'
+        elif self.generation_mode == 'storage-only':
+            worker_state = 'none'
+        elif self._closed.is_set() or not any(t.is_alive() for t in self._workers):
+            worker_state = 'stopped'
+        else:
+            worker_state = 'running' if running else 'idle'
         return {
-            'status': 'ready',
+            'status': 'degraded' if worker_state == 'stopped' else 'ready',
             'voices': list(self.cast.keys()),
             'voices_count': len(self.cast),
             'model_version': self.model_version,
             'effects_version': self.effects_version or 'none',
             'reference_hashes_pinned': len(self.reference_hashes) > 0,
             'inline_generation': self.engine_factory is not None,
+            'generation_mode': self.generation_mode,
+            'worker_state': worker_state,
             'storage': self.storage.health(),
             'queue': {'queued': queued, 'running': running, 'limit': self._queue.maxsize},
             'auth_required': self.auth_token is not None,
@@ -364,8 +380,12 @@ def make_handler(gateway, allowed_origins=None):
             if not self._origin_allowed():
                 self._respond(403, {'error': 'origin not allowed'})
                 return
+            if not gateway.check_auth(self.headers):
+                self._respond(401, {'error': 'unauthorised'})
+                return
             if self.path == '/health':
-                self._respond(200, gateway.health())
+                health = gateway.health()
+                self._respond(200 if health['status'] == 'ready' else 503, health)
                 return
             match = re.fullmatch(r'/v1/speech/([0-9a-f]{16})', self.path)
             if match is None:
@@ -490,6 +510,7 @@ def main():
         auth_token=args.auth_token,
         rate_limit_burst=args.rate_limit_burst,
         rate_limit_window=args.rate_limit_window,
+        generation_mode='inline' if args.engine == 'pocket' else args.engine,
     )
 
     allowed_origins = list(args.allow_origin)

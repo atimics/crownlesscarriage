@@ -157,6 +157,18 @@ class HttpServiceContractTests(unittest.TestCase):
             self.assertIn('status', body)
             self.assertEqual(body['status'], 'ready')
             self.assertEqual(body['inline_generation'], False)
+            self.assertEqual(body['generation_mode'], 'storage-only')
+            self.assertEqual(body['worker_state'], 'none')
+            self.assertFalse(body['auth_required'])
+
+    def test_health_marks_external_worker_unverified_and_inline_worker_absent(self):
+        from speech_gateway import SpeechGateway
+        proxy = SpeechGateway(self.cast, self.storage, generation_mode='proxy')
+        self.assertEqual(proxy.health()['worker_state'], 'external_unverified')
+        inline = SpeechGateway(self.cast, self.storage, engine_factory=lambda: None,
+                               generation_mode='inline', worker_pool=0)
+        self.assertEqual(inline.health()['worker_state'], 'stopped')
+        self.assertEqual(inline.health()['status'], 'degraded')
 
     def test_submit_new_speech_returns_queued(self):
         request = Request(
@@ -221,16 +233,34 @@ class HttpServiceContractTests(unittest.TestCase):
 
     def test_auth_enforced_when_configured(self):
         self.gateway.auth_token = 's3cr3t'
+        record = self.record('Authenticated audio.')
+        render_key = derive_render_key(record, self.gateway.model_version,
+                                       self.gateway.reference_hashes,
+                                       self.gateway.effects_version)
+        wav_data = b'RIFF' + b'\0' * 52
+        self.storage.store(render_key, wav_data, {'key': record['key']})
+        for path in ('/health', f'/v1/speech/{render_key}'):
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(f'{self.base}{path}', timeout=2)
+            self.assertEqual(ctx.exception.code, 401)
+            ctx.exception.close()
+        with urlopen(Request(f'{self.base}/health',
+                             headers={'Authorization': 'Bearer s3cr3t'}), timeout=2) as response:
+            self.assertTrue(json.loads(response.read())['auth_required'])
+        with urlopen(Request(f'{self.base}/v1/speech/{render_key}',
+                             headers={'Authorization': 'Bearer s3cr3t'}), timeout=2) as response:
+            self.assertEqual(response.read(), wav_data)
         request = Request(
             f'{self.base}/v1/speech',
-            data=json.dumps(self.record()).encode(),
+            data=json.dumps(record).encode(),
             headers={'Content-Type': 'application/json'})
         with self.assertRaises(HTTPError) as ctx:
             urlopen(request, timeout=2)
         self.assertEqual(ctx.exception.code, 401)
         request.add_header('Authorization', 'Bearer s3cr3t')
         with urlopen(request, timeout=2) as response:
-            self.assertIn(response.status, (200, 202))
+            self.assertEqual(response.status, 200)
+            self.assertEqual(json.loads(response.read())['render_key'], render_key)
 
     def test_rate_limiting(self):
         self.gateway.rate_limiter.burst = 2
