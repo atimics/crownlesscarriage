@@ -128,6 +128,37 @@ class SpeechWorkerTests(unittest.TestCase):
         self.assertEqual(jobs.submit(self.record), (key, 'ready'))
         self.assertEqual(len(calls), 1)
 
+    def test_health_reports_live_queue_cache_and_worker_state(self):
+        started, finish = threading.Event(), threading.Event()
+        def blocked(record, path):
+            started.set()
+            finish.wait(3)
+            tone(record, path)
+        jobs = self.jobs(blocked, limit=2, budget=10000, engine_version='test-pocket')
+        self.addCleanup(finish.set)
+        idle = jobs.health()
+        self.assertEqual(idle['status'], 'ready')
+        self.assertEqual(idle['worker_state'], 'idle')
+        self.assertEqual(idle['engine_version'], 'test-pocket')
+        self.assertEqual(idle['cast_count'], len(self.cast))
+        self.assertEqual(idle['cache']['path'], str(self.folder.resolve()))
+        self.assertEqual(idle['cache']['budget_bytes'], 10000)
+        self.assertEqual(idle['cache']['audio_bytes'], 0)
+        jobs.submit(self.record)
+        self.assertTrue(started.wait(1))
+        second = dict(self.record, text='Nine boxes.', key=audio_key('mara-v1', 'Nine boxes.'))
+        jobs.submit(second)
+        busy = jobs.health()
+        self.assertEqual(busy['worker_state'], 'running')
+        self.assertTrue(busy['engine_loaded'])
+        self.assertEqual(busy['queue'], {'queued': 1, 'running': 1, 'failed': 0, 'limit': 2})
+        finish.set()
+        jobs.queue.join()
+        self.assertGreater(jobs.health()['cache']['audio_bytes'], 0)
+        jobs.close()
+        self.assertEqual(jobs.health()['status'], 'degraded')
+        self.assertEqual(jobs.health()['worker_state'], 'stopped')
+
     def test_failed_generation_can_be_observed(self):
         def broken(record, path):
             raise ValueError('test model failure')
@@ -195,6 +226,11 @@ class SpeechWorkerTests(unittest.TestCase):
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         base = f'http://127.0.0.1:{server.server_port}'
+        with urlopen(base + '/health', timeout=2) as response:
+            health = json.loads(response.read())
+            self.assertEqual(health['status'], 'ready')
+            self.assertEqual(health['worker_state'], 'idle')
+            self.assertEqual(health['queue']['limit'], jobs.limit)
         request = Request(base + '/v1/speech', data=json.dumps(self.record).encode(),
             headers={'Content-Type': 'application/json'})
         with urlopen(request, timeout=2) as response:

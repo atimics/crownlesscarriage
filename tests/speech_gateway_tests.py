@@ -157,6 +157,80 @@ class HttpServiceContractTests(unittest.TestCase):
             self.assertIn('status', body)
             self.assertEqual(body['status'], 'ready')
             self.assertEqual(body['inline_generation'], False)
+            self.assertEqual(body['generation_mode'], 'storage-only')
+            self.assertEqual(body['worker_state'], 'none')
+            self.assertFalse(body['auth_required'])
+
+    def test_health_marks_external_worker_unverified_and_inline_worker_absent(self):
+        from speech_gateway import SpeechGateway
+        proxy = SpeechGateway(self.cast, self.storage, generation_mode='proxy')
+        self.assertEqual(proxy.health()['worker_state'], 'external_unverified')
+        inline = SpeechGateway(self.cast, self.storage, engine_factory=lambda: None,
+                               generation_mode='inline', worker_pool=0)
+        self.assertEqual(inline.health()['worker_state'], 'stopped')
+        self.assertEqual(inline.health()['status'], 'degraded')
+
+    def test_factory_failure_marks_job_failed_and_later_retry_recovers(self):
+        from speech_gateway import SpeechGateway
+        attempts = []
+
+        def engine_factory():
+            attempts.append(None)
+            if len(attempts) == 1:
+                raise RuntimeError('model load failed')
+            return lambda record, path: tone_wav(path)
+
+        gateway = SpeechGateway(self.cast, self.storage,
+                                engine_factory=engine_factory, worker_pool=1)
+        self.addCleanup(gateway.close)
+        record = self.record()
+        speech_key, render_key, state, _ = gateway.submit(record)
+        self.assertEqual(state, 'queued')
+        gateway._queue.join()
+        self.assertEqual(gateway.status(render_key), 'failed')
+        failed_health = gateway.health()
+        self.assertEqual(failed_health['worker_state'], 'idle')
+        self.assertEqual(failed_health['queue'], {
+            'queued': 0, 'running': 0, 'failed': 1, 'limit': 0})
+
+        retry = gateway.submit(record)
+        self.assertEqual(retry[:3], (speech_key, render_key, 'queued'))
+        gateway._queue.join()
+        self.assertEqual(gateway.status(render_key), 'ready')
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(gateway.health()['queue']['failed'], 0)
+
+    def test_stopped_inline_gateway_rejects_new_work_but_serves_cached_audio(self):
+        from speech_gateway import make_handler
+        self.gateway.engine_factory = lambda: (lambda record, path: tone_wav(path))
+        self.gateway.generation_mode = 'inline'
+        server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(self.gateway))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        base = f'http://127.0.0.1:{server.server_port}'
+
+        missing = self.record('No worker available.')
+        request = Request(base + '/v1/speech', data=json.dumps(missing).encode(),
+                          headers={'Content-Type': 'application/json'})
+        with self.assertRaises(HTTPError) as error:
+            urlopen(request, timeout=2)
+        self.assertEqual(error.exception.code, 503)
+        error.exception.close()
+
+        cached = self.record('Cached audio remains available.')
+        render_key = derive_render_key(cached, self.gateway.model_version,
+                                       self.gateway.reference_hashes,
+                                       self.gateway.effects_version)
+        wav_path = Path(self.temp.name) / 'cached.wav'
+        tone_wav(wav_path)
+        self.storage.store(render_key, wav_path.read_bytes(), {'key': cached['key']})
+        request = Request(base + '/v1/speech', data=json.dumps(cached).encode(),
+                          headers={'Content-Type': 'application/json'})
+        with urlopen(request, timeout=2) as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(json.loads(response.read())['state'], 'ready')
 
     def test_submit_new_speech_returns_queued(self):
         request = Request(
@@ -221,16 +295,34 @@ class HttpServiceContractTests(unittest.TestCase):
 
     def test_auth_enforced_when_configured(self):
         self.gateway.auth_token = 's3cr3t'
+        record = self.record('Authenticated audio.')
+        render_key = derive_render_key(record, self.gateway.model_version,
+                                       self.gateway.reference_hashes,
+                                       self.gateway.effects_version)
+        wav_data = b'RIFF' + b'\0' * 52
+        self.storage.store(render_key, wav_data, {'key': record['key']})
+        for path in ('/health', f'/v1/speech/{render_key}'):
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(f'{self.base}{path}', timeout=2)
+            self.assertEqual(ctx.exception.code, 401)
+            ctx.exception.close()
+        with urlopen(Request(f'{self.base}/health',
+                             headers={'Authorization': 'Bearer s3cr3t'}), timeout=2) as response:
+            self.assertTrue(json.loads(response.read())['auth_required'])
+        with urlopen(Request(f'{self.base}/v1/speech/{render_key}',
+                             headers={'Authorization': 'Bearer s3cr3t'}), timeout=2) as response:
+            self.assertEqual(response.read(), wav_data)
         request = Request(
             f'{self.base}/v1/speech',
-            data=json.dumps(self.record()).encode(),
+            data=json.dumps(record).encode(),
             headers={'Content-Type': 'application/json'})
         with self.assertRaises(HTTPError) as ctx:
             urlopen(request, timeout=2)
         self.assertEqual(ctx.exception.code, 401)
         request.add_header('Authorization', 'Bearer s3cr3t')
         with urlopen(request, timeout=2) as response:
-            self.assertIn(response.status, (200, 202))
+            self.assertEqual(response.status, 200)
+            self.assertEqual(json.loads(response.read())['render_key'], render_key)
 
     def test_rate_limiting(self):
         self.gateway.rate_limiter.burst = 2

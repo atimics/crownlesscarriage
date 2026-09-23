@@ -137,8 +137,11 @@ python tools/audio/speech_worker.py --engine pocket --cache out/voice-cache --al
 The worker binds to `127.0.0.1:8766`. Submit an exported speech record to
 `POST /v1/speech`. The response contains its key and queue state. Fetch
 `GET /v1/speech/<key>` for a completed WAV. Pending work returns HTTP 202;
-failed generation returns 503. `/health` reports the cast and queue
-configuration. The default queue holds 16 jobs and the cache holds 256 MiB.
+failed generation returns 503. `/health` reports the Pocket package version,
+cast count, queued/running/failed jobs, cache path and audio bytes, and worker
+state (`idle`, `running`, or `stopped`). `engine_loaded` shows whether the
+model has loaded. A stopped worker returns HTTP 503 with `status: degraded`.
+The default queue holds 16 jobs and the cache holds 256 MiB.
 Duplicate requests share a job. Cache receipts include the speech-cache
 format, Pocket version, voice-reference hash, post-processing version and WAV
 hash. A model, reference, effect or format change invalidates old audio
@@ -158,8 +161,20 @@ the macOS bundle. Review/audition files are not runtime files until promoted.
 
 For a browser on another local port, pass its exact origin with
 `--allow-origin http://localhost:8000`. The worker uses a single model instance
-and serial generation. `/health` reports that the request service is ready;
-the model loads with the first generation request.
+and serial generation. `/health` reports `ready` while the worker thread is
+alive; the model loads with the first generation request. `failed` counts
+recent failed jobs retained for retry diagnostics.
+
+The separate speech gateway reports its model version, cast count, object
+storage, auth requirement, queue, generation mode, and worker state at
+`GET /health`. In proxy mode, `external_unverified` marks the external worker
+state as unknown; gateway health covers its process and storage. When
+`--auth-token` is set, send the Bearer token for health checks and audio
+fetches as well as speech submission. Native and browser clients currently
+use the local worker's speech keys and anonymous requests. A stopped inline
+gateway returns HTTP 503 for new generation requests while keeping stored
+recordings available. Gateway clients use renderer keys and send the token on
+both POST and GET requests.
 
 Run the foundation checks with `ctest --test-dir <build> -R
 'speech_identity|authored_story' --output-on-failure`.

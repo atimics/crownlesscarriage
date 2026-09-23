@@ -17,7 +17,7 @@ from speech_format import (ROOT, cached_record, expected_cache_metadata,
 
 class SpeechJobs:
     def __init__(self, cast, folder, engine_factory, metadata_factory=None,
-                 limit=16, budget=256 * 1024 * 1024):
+                 limit=16, budget=256 * 1024 * 1024, engine_version=None):
         self.cast = cast
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -26,6 +26,7 @@ class SpeechJobs:
         self.engine = None
         self.limit = limit
         self.budget = budget
+        self.engine_version = engine_version or package_version('pocket-tts')
         self.jobs = OrderedDict()
         self.lock = threading.RLock()
         self.queue = queue.Queue(maxsize=limit)
@@ -63,6 +64,35 @@ class SpeechJobs:
         with self.lock:
             item = self.jobs.get(key)
             return item['state'] if item else 'missing'
+
+    def health(self):
+        with self.lock:
+            queued = sum(item['state'] == 'queued' for item in self.jobs.values())
+            running = sum(item['state'] == 'running' for item in self.jobs.values())
+            failed = sum(item['state'] == 'failed' for item in self.jobs.values())
+            worker_state = ('stopped' if self.closed.is_set() or not self.worker.is_alive()
+                            else 'running' if running else 'idle')
+            engine_loaded = self.engine is not None
+        cache_bytes = 0
+        for path in self.folder.glob('*.wav'):
+            try:
+                cache_bytes += path.stat().st_size
+            except FileNotFoundError:
+                pass  # A finished job can evict a recording during this scan.
+        return {
+            'status': 'degraded' if worker_state == 'stopped' else 'ready',
+            'voices': len(self.cast),
+            'cast_count': len(self.cast),
+            'engine': 'pocket',
+            'engine_version': self.engine_version,
+            'engine_loaded': engine_loaded,
+            'worker_state': worker_state,
+            'queue_limit': self.limit,
+            'queue': {'queued': queued, 'running': running, 'failed': failed,
+                      'limit': self.limit},
+            'cache': {'path': str(self.folder.resolve()), 'audio_bytes': cache_bytes,
+                      'budget_bytes': self.budget},
+        }
 
     def run(self):
         while not self.closed.is_set():
@@ -175,7 +205,8 @@ def make_handler(jobs, allowed_origins=()):
                 self.respond(403, {'error': 'Origin is not enabled'})
                 return
             if self.path == '/health':
-                self.respond(200, {'status': 'ready', 'voices': len(jobs.cast), 'queue_limit': jobs.limit})
+                health = jobs.health()
+                self.respond(200 if health['status'] == 'ready' else 503, health)
                 return
             match = re.fullmatch(r'/v1/speech/([0-9a-f]{16})', self.path)
             if match is None:
@@ -221,7 +252,7 @@ def main():
     jobs = SpeechJobs(cast, args.cache,
         lambda: SpeechEngine(args.device, args.references, args.engine, args.allow_download),
         lambda record: expected_cache_metadata(record, args.references, engine_version),
-        args.queue_limit, args.cache_mb * 1024 * 1024)
+        args.queue_limit, args.cache_mb * 1024 * 1024, engine_version)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), make_handler(jobs, args.allow_origin))
     server.daemon_threads = True
     print(f'Crownless voice worker: http://127.0.0.1:{args.port}', flush=True)
