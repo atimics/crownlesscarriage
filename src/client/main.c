@@ -11619,6 +11619,7 @@ int main(int argc, char **argv)
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     CcJournal *journal = NULL;
     char startup_message[256] = "";
+    char saved_world_load_error[256] = "";
     bool resuming_campaign = normal_play && CampaignSaveExists(save_path);
     if (normal_play && CcCoopClientActive()) {
         char error[256] = "Connect through the company road book to join this world.";
@@ -11652,6 +11653,9 @@ int main(int argc, char **argv)
             (void)snprintf(startup_message, sizeof(startup_message), "%s",
                            journal != NULL ? (repaired ?
                                "Campaign repaired and resumed." : "Campaign resumed.") : error);
+            if (journal == NULL)
+                (void)snprintf(saved_world_load_error,
+                               sizeof(saved_world_load_error), "%s", error);
         }
     }
 #if defined(PLATFORM_WEB)
@@ -11825,10 +11829,21 @@ int main(int argc, char **argv)
         .screen = CcCoopClientActive() ? journal != NULL ? FRONTEND_PLAYING : FRONTEND_TITLE :
                   normal_play ? FRONTEND_TITLE : FRONTEND_PLAYING,
         .has_world = resuming_campaign,
+        .world_load_failed = normal_play && resuming_campaign &&
+                             journal == NULL && !CcCoopClientActive(),
     };
+    if (frontend.world_load_failed) {
+        frontend.focus = 0;
+        (void)snprintf(frontend.world_load_error,
+                       sizeof(frontend.world_load_error), "%s",
+                       saved_world_load_error[0] != '\0' ? saved_world_load_error :
+                       "Saved world could not load. Delete it to begin again.");
+    }
     CcCaptureConfigureFrontend(&capture_request, &frontend);
     if ((resuming_campaign || CcCoopClientActive()) && journal == NULL) {
-        (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s", startup_message);
+        (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s",
+                       frontend.world_load_failed ? frontend.world_load_error :
+                       startup_message);
     }
     if (normal_play && !CcCoopClientActive()) {
         CompanyInvitation(frontend.invitation, sizeof(frontend.invitation));
