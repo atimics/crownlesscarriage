@@ -132,9 +132,67 @@ static void CheckProtectedCapacity(void)
     CC_CHECK(CcSimGossipCarrierCapacity(&sim) == CC_LEGACY_GOSSIP_CARRIERS + CC_LEGACY_CHARACTER_CAP);
 }
 
+static void CheckNewCompanyIntroductions(void)
+{
+    static CcSim sim, restored;
+    const char *path = "new-company-names.ccsave";
+    char error[256];
+    (void)remove(path);
+    CcSimInit(&sim, 42U);
+    CC_CHECK(sim.schema_version == 110U);
+    CcId company = sim.player.id;
+    CcId introduced_id = 0U;
+    for (int32_t i = 0; i < sim.character_count; ++i)
+        if (strcmp(sim.characters[i].name, "Mara Venn") == 0)
+            introduced_id = sim.characters[i].id;
+    CC_CHECK(introduced_id != 0U);
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL);
+    CcCommand talk = {.kind = CC_COMMAND_EXCHANGE_GOSSIP, .target_id = introduced_id};
+    CC_CHECK(CcJournalApply(journal, &sim, &talk, error, sizeof(error)));
+    CC_CHECK(CcSimCharacter(&sim, introduced_id)->introduced_day == 1);
+    CcCommand wipe = {.kind = CC_COMMAND_PARTY_WIPE,
+                      .target_id = (CcId)sim.current_day};
+    CC_CHECK(CcJournalApply(journal, &sim, &wipe, error, sizeof(error)));
+    CC_CHECK(sim.player.id == company);
+    const CcCharacter *survivor = CcSimCharacter(&sim, introduced_id);
+    CC_CHECK(survivor != NULL && survivor->introduced_day == 0);
+    for (int32_t i = 0; i < sim.character_count; ++i)
+        CC_CHECK(sim.characters[i].introduced_day == 0);
+    uint64_t wiped_hash = CcSimHash(&sim);
+    CcJournalAbandon(&journal);
+    journal = CcJournalResume(path, &restored, error, sizeof(error));
+    CC_CHECK(journal != NULL && CcSimHash(&restored) == wiped_hash);
+    CC_CHECK(CcSimCharacter(&restored, introduced_id)->introduced_day == 0);
+    CcId next_id = 0U;
+    for (int32_t i = 0; i < restored.character_count; ++i) {
+        const CcCharacter *person = &restored.characters[i];
+        if (person->current_settlement_id == restored.player.location_id &&
+            person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+            CcCharacterAgeYears(&restored, person) >= 16) {
+            next_id = person->id;
+            break;
+        }
+    }
+    CC_CHECK(next_id != 0U);
+    talk.target_id = next_id;
+    CC_CHECK(CcJournalApply(journal, &restored, &talk, error, sizeof(error)));
+    CC_CHECK(CcSimCharacter(&restored, next_id)->introduced_day == restored.current_day);
+    uint64_t learned_hash = CcSimHash(&restored);
+    CcJournalAbandon(&journal);
+    journal = CcJournalResume(path, &sim, error, sizeof(error));
+    CC_CHECK(journal != NULL && CcSimHash(&sim) == learned_hash);
+    CC_CHECK(CcSimCharacter(&sim, next_id)->introduced_day == sim.current_day);
+    CcJournalAbandon(&journal);
+    (void)remove(path);
+    (void)remove("new-company-names.ccsave-wal");
+    (void)remove("new-company-names.ccsave-shm");
+}
+
 int main(void)
 {
     CheckPersistentPeople();
     CheckProtectedCapacity();
+    CheckNewCompanyIntroductions();
     return 0;
 }
