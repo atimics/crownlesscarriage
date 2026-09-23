@@ -190,6 +190,8 @@ class SpeechGateway:
         # Queue for generation
         if self.engine_factory is None:
             return speech_key, render_key, 'queued', None
+        if self._closed.is_set() or not any(t.is_alive() for t in self._workers):
+            return speech_key, render_key, 'failed', 'generation worker is unavailable'
 
         with self._lock:
             if render_key not in self._jobs or \
@@ -228,6 +230,7 @@ class SpeechGateway:
         with self._lock:
             queued = sum(1 for j in self._jobs.values() if j['state'] == 'queued')
             running = sum(1 for j in self._jobs.values() if j['state'] == 'running')
+            failed = sum(1 for j in self._jobs.values() if j['state'] == 'failed')
         if self.generation_mode == 'proxy':
             worker_state = 'external_unverified'
         elif self.generation_mode == 'storage-only':
@@ -247,7 +250,8 @@ class SpeechGateway:
             'generation_mode': self.generation_mode,
             'worker_state': worker_state,
             'storage': self.storage.health(),
-            'queue': {'queued': queued, 'running': running, 'limit': self._queue.maxsize},
+            'queue': {'queued': queued, 'running': running, 'failed': failed,
+                      'limit': self._queue.maxsize},
             'auth_required': self.auth_token is not None,
         }
 
@@ -262,16 +266,17 @@ class SpeechGateway:
                 render_key = self._queue.get(timeout=0.25)
             except queue.Empty:
                 continue
-            if engine is None and self.engine_factory is not None:
-                engine = self.engine_factory()
-            with self._lock:
-                job = self._jobs.get(render_key)
-                if job is None:
-                    self._queue.task_done()
-                    continue
-                job['state'] = 'running'
-                record = job['record']
+            job = None
             try:
+                with self._lock:
+                    job = self._jobs.get(render_key)
+                    if job is not None:
+                        job['state'] = 'running'
+                        record = job['record']
+                if job is None:
+                    continue
+                if engine is None and self.engine_factory is not None:
+                    engine = self.engine_factory()
                 wav_path = Path(self.storage.root) / 'tmp' / f'{render_key}.wav'
                 wav_path.parent.mkdir(parents=True, exist_ok=True)
                 engine(record, wav_path)

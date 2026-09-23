@@ -171,8 +171,10 @@ storage, auth requirement, queue, generation mode, and worker state at
 state as unknown; gateway health covers its process and storage. When
 `--auth-token` is set, send the Bearer token for health checks and audio
 fetches as well as speech submission. Native and browser clients currently
-use the local worker's speech keys and anonymous requests. Gateway clients
-use renderer keys and send the token on both POST and GET requests.
+use the local worker's speech keys and anonymous requests. A stopped inline
+gateway returns HTTP 503 for new generation requests while keeping stored
+recordings available. Gateway clients use renderer keys and send the token on
+both POST and GET requests.
 
 Run the foundation checks with `ctest --test-dir <build> -R
 'speech_identity|authored_story' --output-on-failure`.
