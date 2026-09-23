@@ -1036,6 +1036,28 @@ Vector2 CcLocalMineHaulerPosition(const CcSim *sim,int32_t index)
                      (float)sim->mine.source_y+side};
 }
 
+CcLocalActorVisualFamily CcLocalAgentVisualFamily(const CcLocalAgent *agent)
+{
+    if (agent != NULL && agent->scene == CC_LOCAL_SCENE_MINE &&
+        agent->combat.team == CC_COMBAT_RAIDER &&
+        agent->appearance.role == CC_NPC_ROLE_RAIDER) {
+        return CC_LOCAL_ACTOR_VISUAL_GOBLIN;
+    }
+    return CC_LOCAL_ACTOR_VISUAL_HUMAN;
+}
+
+float CcLocalAgentVisualScale(const CcLocalAgent *agent)
+{
+    return CcLocalAgentVisualFamily(agent) == CC_LOCAL_ACTOR_VISUAL_GOBLIN ?
+        0.5f : 1.0f;
+}
+
+Vector3 CcLocalAgentVisualGroundContact(const CcLocalAgent *agent)
+{
+    if (agent == NULL) return (Vector3){0};
+    return (Vector3){agent->position.x, agent->position.y, agent->position.z};
+}
+
 static void InitMineHauler(CcLocalAgent *raider,const CcSim *sim,
                            Vector2 approach,int32_t index)
 {
@@ -3250,7 +3272,7 @@ CcLocalWorldTargetKind CcLocalAgentPickWorldTarget(
 
 static bool PickAgentTargetInternal(
     CcLocalAgent *agent, Vector2 screen_point, RenderTexture2D target,
-    Rectangle destination, bool market_interior,
+    Rectangle destination, bool market_interior, bool pathfind,
     Vector3 *requested_point_out, bool *picked_point_valid_out)
 {
     if (requested_point_out != NULL) *requested_point_out = (Vector3){0};
@@ -3390,6 +3412,10 @@ static bool PickAgentTargetInternal(
     if (!street_fixed_room && occluder < nearest) return false;
     if (requested_point_out != NULL) *requested_point_out = picked_point;
     if (picked_point_valid_out != NULL) *picked_point_valid_out = true;
+    /* Hover only needs the point under the cursor; the path is built on click. */
+    if (!pathfind) {
+        return CcLocalAgentSetExactTarget(agent, picked_point, market_interior);
+    }
     return SetNearestClickTarget(agent, picked_point, market_interior);
 }
 
@@ -3398,7 +3424,8 @@ bool CcLocalAgentPickTarget(CcLocalAgent *agent, Vector2 screen_point,
                             bool market_interior)
 {
     return PickAgentTargetInternal(
-        agent, screen_point, target, destination, market_interior, NULL, NULL);
+        agent, screen_point, target, destination, market_interior, true, NULL,
+        NULL);
 }
 
 static CcLocalAgent *MovementPreviewAgent(const CcLocalAgent *agent)
@@ -3466,7 +3493,7 @@ bool CcLocalAgentProbeTarget(
     bool picked_point_valid = false;
     (void)PickAgentTargetInternal(
         preview_agent, screen_point, target, destination, market_interior,
-        &requested_point, &picked_point_valid);
+        false, &requested_point, &picked_point_valid);
     MovementPreviewFromAgent(
         preview_agent, screen_point, requested_point, picked_point_valid,
         preview);

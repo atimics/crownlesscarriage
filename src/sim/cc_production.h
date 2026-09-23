@@ -128,6 +128,9 @@ typedef CcProductionAccounting CcRoadProductionAccounting;
    the completed treasure receives those committed materials after three acts. */
 CcProductionReceipt CcSimPlanTreasureWork(const CcSim *sim, const CcSettlement *settlement);
 
+/* Read-only next-act plan, not evidence that a batch has already baked. */
+CcProductionReceipt CcSimPlanBakery(const CcSim *sim, const CcSettlement *place);
+
 bool CcRoadSiteRecipe(const CcRoadSite *site, CcProductionRecipe *recipe);
 CcProductionReceipt CcSimPlanRoadSiteMaintenance(const CcSim *sim, CcId site_id);
 CcProductionReceipt CcSimPlanRoadSiteRepair(const CcSim *sim, CcId site_id);

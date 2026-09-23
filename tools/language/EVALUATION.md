@@ -85,9 +85,26 @@ misses. A full quote can coexist with another false assertion, so quote
 coverage is one component of a fidelity evaluation. Memory selection relevance
 also needs a separate score.
 
+## Model identity receipt
+
+`assets/language/model_identity_receipt.json` pins the exact shipped model,
+tokenizer, grammar source, native reference, runtime, compiler and evaluator
+hashes, together with the parsed model header (parameters, meanings, event
+kinds, config). Build it from the artifacts and check it:
+
+```sh
+python3 tools/language/model_identity.py --write
+python3 tools/language/model_identity.py --check
+```
+
+`--check` recomputes every hash and re-parses the `.ccv2` payload hash rather
+than trusting the header. A changed file, a stale README claim, or a substituted
+checkpoint fails the check. `tests/model_identity_tests.py` covers the pinned
+facts and drift detection.
+
 ## Next evaluation step
 
-This change establishes scoring regressions and frozen calibration. The
-24-family pilot, model/corpus/runtime identity receipt, authored/current-model
-comparison, device timings, and play checks remain in issue 809. Freeze those
-inputs and decision rules after the dialogue repairs in issue 804.
+This change establishes scoring regressions, frozen calibration and the model
+identity receipt. The 24-family pilot, authored/current-model comparison,
+device timings, and play checks remain in issue 809. Freeze those inputs and
+decision rules after the dialogue repairs in issue 804.

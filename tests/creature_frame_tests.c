@@ -22,28 +22,30 @@ static CcCreatureRigPose Run(int32_t rate, bool pause)
         float clock = (float)frame / (float)rate;
         ground.z = 5.0f + clock * 0.3f;
         clock += pause_time;
-        Require(CcLocalCreatureGaitPoseInternal(0, CC_CREATURE_RIG_HORSE,
+        Require(CcLocalCreatureGaitTargetInternal(0, CC_CREATURE_RIG_HORSE,
             CC_CREATURE_RIG_GAIT_WALK, clock, 0.0f, ground, 0.0f, scale,
-            CC_LOCAL_SCENE_ROAD, &pose), "animal pose request failed");
+            CC_LOCAL_SCENE_ROAD) &&
+            CcLocalCreatureGaitPoseInternal(0, ground, 0.0f, &pose),
+            "animal pose request failed");
         if (frame > 0) accumulator += 1.0 / (double)rate;
         while (accumulator + 0.000000001 >= 1.0 / 60.0) {
             CcLocalCreatureGaitsFixedStepInternal(1.0f / 60.0f);
             accumulator -= 1.0 / 60.0;
         }
-        Require(CcLocalCreatureGaitPoseInternal(0, CC_CREATURE_RIG_HORSE,
-            CC_CREATURE_RIG_GAIT_WALK, clock, 0.0f, ground, 0.0f, scale,
-            CC_LOCAL_SCENE_ROAD, &pose), "animal draw pose failed");
+        Require(CcLocalCreatureGaitPoseInternal(0, ground, 0.0f, &pose),
+            "animal draw pose failed");
         CcCreatureRigPose repeated;
-        Require(CcLocalCreatureGaitPoseInternal(0, CC_CREATURE_RIG_HORSE,
-            CC_CREATURE_RIG_GAIT_WALK, clock, 0.0f, ground, 0.0f, scale,
-            CC_LOCAL_SCENE_ROAD, &repeated), "repeated draw failed");
+        Require(CcLocalCreatureGaitPoseInternal(0, ground, 0.0f, &repeated),
+            "repeated draw failed");
         Require(pose.phase == repeated.phase && pose.planted_count == repeated.planted_count,
                 "drawing advanced the gait");
         if (pause && frame == rate * 2) {
             for (int32_t i = 1; i <= rate; ++i) {
-                Require(CcLocalCreatureGaitPoseInternal(0, CC_CREATURE_RIG_HORSE,
-                    CC_CREATURE_RIG_GAIT_WALK, clock + (float)i / (float)rate,
-                    0.0f, ground, 0.0f, scale, CC_LOCAL_SCENE_ROAD, &repeated),
+                Require(CcLocalCreatureGaitTargetInternal(0,
+                    CC_CREATURE_RIG_HORSE, CC_CREATURE_RIG_GAIT_WALK,
+                    clock + (float)i / (float)rate, 0.0f, ground, 0.0f, scale,
+                    CC_LOCAL_SCENE_ROAD) &&
+                    CcLocalCreatureGaitPoseInternal(0, ground, 0.0f, &repeated),
                     "paused pose failed");
                 Require(repeated.phase == pose.phase, "paused drawing advanced a footstep");
             }
@@ -84,9 +86,11 @@ static void TestTrotContacts(void)
     for (int32_t frame = 0; frame < 360; ++frame) {
         float clock = (float)frame / 60.0f;
         Vector3 ground = {7.0f, 0.0f, 5.0f + clock * 1.55f};
-        Require(CcLocalCreatureGaitPoseInternal(0, CC_CREATURE_RIG_HORSE,
+        Require(CcLocalCreatureGaitTargetInternal(0, CC_CREATURE_RIG_HORSE,
             CC_CREATURE_RIG_GAIT_TROT, clock, 0.0f, ground, 0.0f, 0.96f,
-            CC_LOCAL_SCENE_ROAD, &pose), "trotting pony has a physical pose");
+            CC_LOCAL_SCENE_ROAD) &&
+            CcLocalCreatureGaitPoseInternal(0, ground, 0.0f, &pose),
+            "trotting pony has a physical pose");
         CcLocalCreatureGaitsFixedStepInternal(1.0f / 60.0f);
         if (frame < 60) continue;
         int32_t mask = 0;

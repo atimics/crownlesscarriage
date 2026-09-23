@@ -20,11 +20,13 @@ static void TestPonyHarnessAttachment(void)
     pony->pose[1].translation = (Vector3){0, 3, 1};
     pony->pose[1].rotation = QuaternionFromAxisAngle((Vector3){0, 1, 0}, PI * 0.5f);
     Vector3 nose = RoadPonySkinPoint((Vector3){4, 5, 6}, PI * 0.5f,
-                                    (Vector3){0, 2, 2}, CC_QUADRUPED_HEAD);
+                                    (Vector3){0, 2, 2}, CC_QUADRUPED_HEAD,
+                                    0.96f);
     RequireRenderer(Vector3Distance(nose, (Vector3){4.96f, 7.88f, 5.04f}) < 0.001f,
                     "bridle must follow head lift, head turn, body turn, and pony scale");
     Vector3 chest = RoadPonySkinPoint((Vector3){4, 5, 6}, PI * 0.5f,
-                                     (Vector3){0, 1, 0}, CC_QUADRUPED_CHEST);
+                                     (Vector3){0, 1, 0}, CC_QUADRUPED_CHEST,
+                                     0.96f);
     RequireRenderer(Vector3Distance(chest, (Vector3){4, 5.96f, 6}) < 0.001f,
                     "collar must follow the chest while the head turns");
     *pony = saved;
@@ -169,7 +171,7 @@ static void CapturePonies(const char *path)
                 CC_CREATURE_HORSE, CC_CREATURE_POSE_IDLE, (Vector3){0},
                 turns[turn], 0.96f, PONY_COLORS[pony][0], 0.0f, false, NULL),
                 "pony review must draw the shipped skin");
-            if (turn == 2) DrawRoadHorseHarness((Vector3){0}, turns[turn]);
+            if (turn == 2) DrawRoadHorseHarness((Vector3){0}, turns[turn], 0.96f);
             EndWorldLighting();
             EndMode3D();
             EndTextureMode();

@@ -1,5 +1,7 @@
 #include "client/cc_local3d.h"
+#include "client/cc_local3d_internal.h"
 #include "client/cc_client_policy.h"
+#include "raymath.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -74,10 +76,33 @@ static void DriveJourney(int32_t frames, float seconds_per_frame,
 
 static void WheelsRollWithTheRoad(void)
 {
-    float front = CcLocalCarriageWheelRadiusInternal(0);
-    float rear = CcLocalCarriageWheelRadiusInternal(2);
-    Require(Near(front, 0.81f, 0.0001f) && Near(rear, 0.63f, 0.0001f),
-            "the wheels roll on the radii the model hangs their hubs at");
+    float front_model = CcLocalCarriageWheelRadiusInternal(0);
+    float rear_model = CcLocalCarriageWheelRadiusInternal(2);
+    Require(Near(front_model, 0.81f, 0.0001f) &&
+                Near(rear_model, 0.63f, 0.0001f),
+            "the model hangs the wheel hubs at the authored radii");
+
+    /* The carriage draws at CARRIAGE_ASSET_SCALE, so the wheel that touches the
+       road is smaller than its model radius. Rolling must use the world radius
+       or the wheel slips by that scale, and one displayed circumference no
+       longer turns it once. */
+    float front = CcLocalCarriageWheelWorldRadiusInternal(0);
+    float rear = CcLocalCarriageWheelWorldRadiusInternal(2);
+    Require(front < front_model && rear < rear_model,
+            "the drawn wheel is smaller than its model-space radius");
+    for (int32_t wheel = 0; wheel < 4; ++wheel) {
+        float world = CcLocalCarriageWheelWorldRadiusInternal(wheel);
+        float circumference = 2.0f * PI * world;
+        float rolled =
+            CcLocalCarriageWheelAngleInternal(circumference, world);
+        float back =
+            CcLocalCarriageWheelAngleInternal(-circumference, world);
+        Require(Near(rolled, 0.0f, 0.01f) ||
+                    Near(rolled, 2.0f * PI, 0.01f),
+                "one displayed circumference turns the wheel once");
+        Require(Near(back, 0.0f, 0.01f) || Near(back, 2.0f * PI, 0.01f),
+                "reverse travel turns the wheel back one revolution");
+    }
 
     /* Most of the road book, drawn twice: once at sixty frames a second on a
        rising clock, once at twenty on a clock that jumps backwards partway,
@@ -192,7 +217,9 @@ static void RealRouteLengthsDriveBothDirections(void)
                     "a real route has a finite physical length");
             float distance = CcLocalRoadCarriageTravelInternal(progress,
                                                                  length);
-            float wheel = CcLocalCarriageWheelAngleInternal(distance, 0.81f);
+            float wheel =
+                CcLocalCarriageWheelAngleInternal(
+                    distance, CcLocalCarriageWheelWorldRadiusInternal(0));
             float gait = CcLocalRoadTeamGaitPhaseInternal(distance);
             Require(isfinite(distance) && distance > 0.0f &&
                         isfinite(wheel) && isfinite(gait),
@@ -246,12 +273,66 @@ static void LegsStepAtTheSpeedTheTeamMoves(void)
 
 }
 
+static Vector3 RotateAbout(Vector3 v, Vector3 axis, float radians)
+{
+    return Vector3RotateByQuaternion(v,
+        QuaternionFromAxisAngle(axis, radians));
+}
+
+/* Traces start at the carriage chassis hitch, so the socket has to carry the
+   same pitch and sway the carriage model is drawn with -- and nothing else.
+   Level, still ground leaves it exactly on the plain local offset. */
+static void CarriageSocketsFollowTheChassis(void)
+{
+    Vector3 base = {5.0f, 1.0f, -3.0f};
+    float yaw = 0.7f;
+    float pitch = 0.19f;
+    float sway = -0.38f;
+    float lateral = 0.42f;
+    float height = 0.77f;
+    float forward = 3.05f;
+
+    Vector3 level = CcLocalRoadCarriageSocketInternal(
+        base, yaw, 0.0f, 0.0f, lateral, height, forward);
+    Vector3 plain = {
+        base.x + lateral * cosf(yaw) + forward * sinf(yaw),
+        base.y + height,
+        base.z - lateral * sinf(yaw) + forward * cosf(yaw)};
+    Require(Near(level.x, plain.x, 0.0001f) &&
+                Near(level.y, plain.y, 0.0001f) &&
+                Near(level.z, plain.z, 0.0001f),
+            "a level, still carriage leaves the socket on its local offset");
+
+    Vector3 lean = CcLocalRoadCarriageSocketInternal(
+        base, yaw, pitch, sway, lateral, height, forward);
+    Vector3 pitch_axis = {cosf(yaw), 0.0f, -sinf(yaw)};
+    Vector3 sway_axis = {sinf(yaw), 0.0f, cosf(yaw)};
+    Vector3 expected = Vector3Subtract(plain, base);
+    expected = RotateAbout(expected, pitch_axis, pitch);
+    expected = RotateAbout(expected, sway_axis, sway * DEG2RAD);
+    expected = Vector3Add(base, expected);
+    Require(Near(lean.x, expected.x, 0.0005f) &&
+                Near(lean.y, expected.y, 0.0005f) &&
+                Near(lean.z, expected.z, 0.0005f),
+            "the socket leans with the chassis, pitch then sway");
+
+    Require(Near(Vector3Distance(lean, base),
+                     Vector3Distance(plain, base), 0.0005f),
+            "the lean keeps the hitch at its distance from the base");
+    Vector3 hub = CcLocalRoadCarriageSocketInternal(
+        base, yaw, pitch, sway, 0.0f, 0.0f, 0.0f);
+    Require(Near(hub.x, base.x, 0.0005f) && Near(hub.y, base.y, 0.0005f) &&
+                Near(hub.z, base.z, 0.0005f),
+            "the lean turns about the carriage base");
+}
+
 int main(void)
 {
     WheelsRollWithTheRoad();
     PlaceAndSpinShareOneMeasure();
     RealRouteLengthsDriveBothDirections();
     LegsStepAtTheSpeedTheTeamMoves();
+    CarriageSocketsFollowTheChassis();
     puts("Distance-driven travel animation passed");
     return 0;
 }

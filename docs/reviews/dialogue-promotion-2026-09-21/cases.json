@@ -1,0 +1,1669 @@
+[
+  {
+    "id": "A001",
+    "rule": "bakery_production_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Rosespire made bread from wheat.",
+    "generated": "Rosespire made bread from wheat.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A002",
+    "rule": "bakery_production_0",
+    "confidence": 45,
+    "retold": true,
+    "authored": "Gloamgate made bread from wheat, so people say.",
+    "generated": "Gloamgate made bread from wheat, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A003",
+    "rule": "bakery_production_0",
+    "confidence": 38,
+    "retold": true,
+    "authored": "Rosespire made bread from wheat, if the story is right.",
+    "generated": "Rosespire made bread from wheat, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A004",
+    "rule": "bandit_pressure_1",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Forra Bellows joined The Tallow Knives after seeking food at Silverwick.",
+    "generated": "Forra Bellows joined The Tallow Knives after seeking food at Silverwick.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Forra Bellows",
+      "The Tallow Knives",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Forra Bellows",
+      "The Tallow Knives",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A005",
+    "rule": "bandit_pressure_1",
+    "confidence": 59,
+    "retold": true,
+    "authored": "Rodric Tallyman joined The Unpaid Company after seeking food at Silverwick, so people say.",
+    "generated": "Rodric Tallyman joined The Unpaid Company after seeking food at Silverwick, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rodric Tallyman",
+      "The Unpaid Company",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Rodric Tallyman",
+      "The Unpaid Company",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A006",
+    "rule": "bandit_pressure_0",
+    "confidence": 35,
+    "retold": true,
+    "authored": "Displaced merchants reinforced The Unpaid Company on the old road, if the story is right.",
+    "generated": "Displaced merchants reinforced The Unpaid Company on the old road, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Displaced merchants",
+      "The Unpaid Company"
+    ],
+    "fields_present": [
+      "Displaced merchants",
+      "The Unpaid Company"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A007",
+    "rule": "cow_calving_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Alderwatch raised calves and added older calves to the working herd.",
+    "generated": "Alderwatch raised calves and added older calves to the working herd.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A008",
+    "rule": "cow_calving_0",
+    "confidence": 62,
+    "retold": true,
+    "authored": "Silverwick raised calves and added older calves to the working herd, so people say.",
+    "generated": "Silverwick raised calves and added older calves to the working herd, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A009",
+    "rule": "cow_calving_0",
+    "confidence": 24,
+    "retold": true,
+    "authored": "Silverwick raised calves and added older calves to the working herd, if the story is right.",
+    "generated": "Silverwick raised calves and added older calves to the working herd, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A010",
+    "rule": "cow_slaughtered_0",
+    "confidence": 77,
+    "retold": false,
+    "authored": "Rosespire slaughtered cattle for beef when fodder ran short.",
+    "generated": "Rosespire slaughtered cattle for beef when fodder ran short.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A011",
+    "rule": "cow_slaughtered_0",
+    "confidence": 59,
+    "retold": true,
+    "authored": "Rosespire slaughtered cattle for beef when fodder ran short, so people say.",
+    "generated": "A fodder shortage led Rosespire to slaughter cattle for beef, according to the word going round.",
+    "stopped": true,
+    "exact": false,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A012",
+    "rule": "cow_slaughtered_0",
+    "confidence": 36,
+    "retold": true,
+    "authored": "Rosespire slaughtered cattle for beef when fodder ran short, if the story is right.",
+    "generated": "A fodder shortage led Rosespire to slaughter cattle for beef, if the rumour is true.",
+    "stopped": true,
+    "exact": false,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A013",
+    "rule": "goblin_cult_rallied_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "A goblin rose to Bearer in the dragon cult through service.",
+    "generated": "A goblin rose to Bearer in the dragon cult through service.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "A goblin",
+      "Bearer"
+    ],
+    "fields_present": [
+      "A goblin",
+      "Bearer"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A014",
+    "rule": "goblin_cult_rallied_0",
+    "confidence": 57,
+    "retold": true,
+    "authored": "A goblin rose to Keeper in the dragon cult through service, so people say.",
+    "generated": "A goblin rose to Keeper in the dragon cult through service, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "A goblin",
+      "Keeper"
+    ],
+    "fields_present": [
+      "A goblin",
+      "Keeper"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A015",
+    "rule": "goblin_cult_rallied_0",
+    "confidence": 39,
+    "retold": true,
+    "authored": "A goblin rose to Voice in the dragon cult through service, if the story is right.",
+    "generated": "A goblin rose to Voice in the dragon cult through service, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "A goblin",
+      "Voice"
+    ],
+    "fields_present": [
+      "A goblin",
+      "Voice"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A016",
+    "rule": "character_died_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Cinda Orehauler died after a life in Silverwick.",
+    "generated": "Cinda Orehauler died after a life in Silverwick.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Cinda Orehauler",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Cinda Orehauler",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A017",
+    "rule": "character_died_0",
+    "confidence": 57,
+    "retold": true,
+    "authored": "Cinda Orehauler died after a life in Silverwick, so people say.",
+    "generated": "Cinda Orehauler died after a life in Silverwick, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Cinda Orehauler",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Cinda Orehauler",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A018",
+    "rule": "character_died_0",
+    "confidence": 32,
+    "retold": true,
+    "authored": "Cinda Orehauler died after a life in Silverwick, if the story is right.",
+    "generated": "Cinda Orehauler died after a life in Silverwick, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Cinda Orehauler",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Cinda Orehauler",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A019",
+    "rule": "kingdom_action_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Star Oath put money into Hollowbarrow's market to buy grain shipments.",
+    "generated": "Star Oath put money into Hollowbarrow's market to buy grain shipments.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Star Oath",
+      "Hollowbarrow"
+    ],
+    "fields_present": [
+      "Star Oath",
+      "Hollowbarrow"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A020",
+    "rule": "kingdom_action_0",
+    "confidence": 55,
+    "retold": true,
+    "authored": "Star Oath put money into Hollowbarrow's market to buy grain shipments, so people say.",
+    "generated": "Star Oath put money into Hollowbarrow's market to buy grain shipments, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Star Oath",
+      "Hollowbarrow"
+    ],
+    "fields_present": [
+      "Star Oath",
+      "Hollowbarrow"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A021",
+    "rule": "kingdom_action_0",
+    "confidence": 27,
+    "retold": true,
+    "authored": "Star Oath put money into Hollowbarrow's market to buy grain shipments, if the story is right.",
+    "generated": "Star Oath put money into Hollowbarrow's market to buy grain shipments, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Star Oath",
+      "Hollowbarrow"
+    ],
+    "fields_present": [
+      "Star Oath",
+      "Hollowbarrow"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A022",
+    "rule": "sheep_slaughtered_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Rosespire slaughtered sheep for mutton after winter fodder runs short.",
+    "generated": "Rosespire slaughtered sheep for mutton after winter fodder runs short.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "after winter fodder runs short"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "after winter fodder runs short"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A023",
+    "rule": "sheep_slaughtered_0",
+    "confidence": 50,
+    "retold": true,
+    "authored": "Thornford slaughtered sheep for mutton in the autumn cull, so people say.",
+    "generated": "Thornford slaughtered sheep for mutton in the autumn cull, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford",
+      "in the autumn cull"
+    ],
+    "fields_present": [
+      "Thornford",
+      "in the autumn cull"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A024",
+    "rule": "sheep_slaughtered_0",
+    "confidence": 28,
+    "retold": true,
+    "authored": "Thornford slaughtered sheep for mutton in the autumn cull, if the story is right.",
+    "generated": "Thornford slaughtered sheep for mutton in the autumn cull, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford",
+      "in the autumn cull"
+    ],
+    "fields_present": [
+      "Thornford",
+      "in the autumn cull"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A026",
+    "rule": "goblin_raided_0",
+    "confidence": 52,
+    "retold": true,
+    "authored": "The Cinder Tithe raided Thornford, so people say.",
+    "generated": "The Cinder Tithe raided Thornford, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "The Cinder Tithe",
+      "Thornford"
+    ],
+    "fields_present": [
+      "The Cinder Tithe",
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A028",
+    "rule": "harvest_failed_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Thornford's drought harvest fell short of what the eastern settlements needed.",
+    "generated": "Thornford's drought harvest fell short of what the eastern settlements needed.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford",
+      "eastern settlements"
+    ],
+    "fields_present": [
+      "Thornford",
+      "eastern settlements"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A029",
+    "rule": "harvest_failed_0",
+    "confidence": 55,
+    "retold": true,
+    "authored": "Thornford's drought harvest fell short of what the southern settlements needed, so people say.",
+    "generated": "Thornford's drought harvest fell short of what the southern settlements needed, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford",
+      "southern settlements"
+    ],
+    "fields_present": [
+      "Thornford",
+      "southern settlements"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A030",
+    "rule": "harvest_failed_0",
+    "confidence": 31,
+    "retold": true,
+    "authored": "Thornford's drought harvest fell short of what the southern settlements needed, if the story is right.",
+    "generated": "Thornford's drought harvest fell short of what the southern settlements needed, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford",
+      "southern settlements"
+    ],
+    "fields_present": [
+      "Thornford",
+      "southern settlements"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A031",
+    "rule": "horse_bred_1",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Alderwatch raised pony foals and added ponies to the working herd.",
+    "generated": "Alderwatch raised pony foals and added ponies to the working herd.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A032",
+    "rule": "horse_bred_1",
+    "confidence": 57,
+    "retold": true,
+    "authored": "Alderwatch raised pony foals and added ponies to the working herd, so people say.",
+    "generated": "Alderwatch raised pony foals and added ponies to the working herd, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A033",
+    "rule": "horse_bred_1",
+    "confidence": 24,
+    "retold": true,
+    "authored": "Gloamgate raised pony foals and added ponies to the working herd, if the story is right.",
+    "generated": "Gloamgate raised pony foals and added ponies to the working herd, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A034",
+    "rule": "sheep_bred_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Thornford raised lambs and added yearlings to the adult flock.",
+    "generated": "Thornford raised lambs and added yearlings to the adult flock.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford"
+    ],
+    "fields_present": [
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A035",
+    "rule": "sheep_bred_0",
+    "confidence": 68,
+    "retold": true,
+    "authored": "Rosespire raised lambs and added yearlings to the adult flock, so people say.",
+    "generated": "Rosespire raised lambs and added yearlings to the adult flock, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A036",
+    "rule": "sheep_bred_0",
+    "confidence": 22,
+    "retold": true,
+    "authored": "Alderwatch raised lambs and added yearlings to the adult flock, if the story is right.",
+    "generated": "Alderwatch raised lambs and added yearlings to the adult flock, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A037",
+    "rule": "masonry_repair_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Silverwick repaired public buildings with stone.",
+    "generated": "Silverwick repaired public buildings with stone.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A038",
+    "rule": "masonry_repair_0",
+    "confidence": 66,
+    "retold": true,
+    "authored": "Thornford repaired public buildings with stone, so people say.",
+    "generated": "Thornford repaired public buildings with stone, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford"
+    ],
+    "fields_present": [
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A039",
+    "rule": "masonry_repair_0",
+    "confidence": 34,
+    "retold": true,
+    "authored": "Alderwatch repaired public buildings with stone, if the story is right.",
+    "generated": "Alderwatch repaired public buildings with stone, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A040",
+    "rule": "paper_milled_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Gloamgate made paper from Wood.",
+    "generated": "Gloamgate made paper from Wood.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate",
+      "Wood"
+    ],
+    "fields_present": [
+      "Gloamgate",
+      "Wood"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A041",
+    "rule": "paper_milled_0",
+    "confidence": 59,
+    "retold": true,
+    "authored": "Rosespire made paper from Wood, so people say.",
+    "generated": "Rosespire made paper from Wood, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "Wood"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "Wood"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A042",
+    "rule": "paper_milled_0",
+    "confidence": 36,
+    "retold": true,
+    "authored": "Rosespire made paper from Wood, if the story is right.",
+    "generated": "Rosespire made paper from Wood, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "Wood"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "Wood"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A043",
+    "rule": "quarry_output_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Silverwick quarried stone for roads and public works.",
+    "generated": "Silverwick quarried stone for roads and public works.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A044",
+    "rule": "quarry_output_0",
+    "confidence": 56,
+    "retold": true,
+    "authored": "Silverwick quarried stone for roads and public works, so people say.",
+    "generated": "Silverwick quarried stone for roads and public works, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A045",
+    "rule": "quarry_output_0",
+    "confidence": 25,
+    "retold": true,
+    "authored": "Silverwick quarried stone for roads and public works, if the story is right.",
+    "generated": "Silverwick quarried stone for roads and public works, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A046",
+    "rule": "route_closed_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Alderwatch closed the treaty bridge, delaying the relief convoy.",
+    "generated": "Alderwatch closed the treaty bridge, delaying the relief convoy.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A047",
+    "rule": "route_closed_0",
+    "confidence": 56,
+    "retold": true,
+    "authored": "Alderwatch closed the treaty bridge, delaying the relief convoy, so people say.",
+    "generated": "Alderwatch closed the treaty bridge, delaying the relief convoy, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A048",
+    "rule": "route_closed_0",
+    "confidence": 36,
+    "retold": true,
+    "authored": "Alderwatch closed the treaty bridge, delaying the relief convoy, if the story is right.",
+    "generated": "Alderwatch closed the treaty bridge, delaying the relief convoy, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A049",
+    "rule": "sheep_sheared_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Thornford sheared the spring flock and stored wool.",
+    "generated": "Thornford sheared the spring flock and stored wool.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford"
+    ],
+    "fields_present": [
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A050",
+    "rule": "sheep_sheared_0",
+    "confidence": 68,
+    "retold": true,
+    "authored": "Rosespire sheared the spring flock and stored wool, so people say.",
+    "generated": "Rosespire sheared the spring flock and stored wool, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A051",
+    "rule": "sheep_sheared_0",
+    "confidence": 22,
+    "retold": true,
+    "authored": "Alderwatch sheared the spring flock and stored wool, if the story is right.",
+    "generated": "Alderwatch sheared the spring flock and stored wool, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A052",
+    "rule": "shortage_1",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Gloamgate was short of its food reserve target.",
+    "generated": "Gloamgate was short of its food reserve target.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A053",
+    "rule": "shortage_1",
+    "confidence": 57,
+    "retold": true,
+    "authored": "Silverwick was short of its food reserve target, so people say.",
+    "generated": "Silverwick was short of its food reserve target, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A054",
+    "rule": "shortage_1",
+    "confidence": 36,
+    "retold": true,
+    "authored": "Gloamgate was short of its food reserve target, if the story is right.",
+    "generated": "Gloamgate was short of its food reserve target, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A055",
+    "rule": "treasure_crafted_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Rosespire Ash Crown was completed in Rosespire.",
+    "generated": "Rosespire Ash Crown was completed in Rosespire.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "Rosespire Ash Crown"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "Rosespire Ash Crown"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A056",
+    "rule": "treasure_crafted_0",
+    "confidence": 58,
+    "retold": true,
+    "authored": "Rosespire Ash Crown was completed in Rosespire, according to the word going round.",
+    "generated": "Rosespire Ash Crown was completed in Rosespire, according to the word going round.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "Rosespire Ash Crown"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "Rosespire Ash Crown"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A057",
+    "rule": "treasure_crafted_0",
+    "confidence": 34,
+    "retold": true,
+    "authored": "Rosespire Moon Cup was completed in Rosespire, if the rumour is true.",
+    "generated": "Rosespire Moon Cup was completed in Rosespire, if the rumour is true.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "Rosespire Moon Cup"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "Rosespire Moon Cup"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A058",
+    "rule": "woodlot_harvest_1",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Alderwatch cut wood by hand without working tools.",
+    "generated": "Alderwatch cut wood by hand without working tools.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A059",
+    "rule": "woodlot_harvest_0",
+    "confidence": 62,
+    "retold": true,
+    "authored": "Hollowbarrow cut wood and wore out tools, so people say.",
+    "generated": "Hollowbarrow cut wood and wore out tools, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Hollowbarrow"
+    ],
+    "fields_present": [
+      "Hollowbarrow"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A060",
+    "rule": "woodlot_harvest_0",
+    "confidence": 35,
+    "retold": true,
+    "authored": "Gloamgate cut wood and wore out tools, if the story is right.",
+    "generated": "Gloamgate cut wood and wore out tools, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A061",
+    "rule": "bakery_production_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Gloamgate made bread from wheat.",
+    "generated": "Gloamgate made bread from wheat.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A062",
+    "rule": "bakery_production_0",
+    "confidence": 66,
+    "retold": true,
+    "authored": "Rosespire made bread from wheat, so people say.",
+    "generated": "Rosespire made bread from wheat, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A063",
+    "rule": "bakery_production_0",
+    "confidence": 38,
+    "retold": true,
+    "authored": "Rosespire made bread from wheat, if the story is right.",
+    "generated": "Rosespire made bread from wheat, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A064",
+    "rule": "bandit_pressure_1",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Foryn Underwheel joined The Unpaid Company after seeking food at Gloamgate.",
+    "generated": "Foryn Underwheel joined The Unpaid Company after seeking food at Gloamgate.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Foryn Underwheel",
+      "The Unpaid Company",
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Foryn Underwheel",
+      "The Unpaid Company",
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A065",
+    "rule": "bandit_pressure_0",
+    "confidence": 46,
+    "retold": true,
+    "authored": "Displaced merchants reinforced The Tallow Knives on the old road, so people say.",
+    "generated": "Displaced merchants reinforced The Tallow Knives on the old road, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Displaced merchants",
+      "The Tallow Knives"
+    ],
+    "fields_present": [
+      "Displaced merchants",
+      "The Tallow Knives"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A066",
+    "rule": "bandit_pressure_1",
+    "confidence": 36,
+    "retold": true,
+    "authored": "Forra Bellows joined The Tallow Knives after seeking food at Silverwick, if the story is right.",
+    "generated": "Forra Bellows joined The Tallow Knives after seeking food at Silverwick, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Forra Bellows",
+      "The Tallow Knives",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Forra Bellows",
+      "The Tallow Knives",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A067",
+    "rule": "cow_calving_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Rosespire raised calves and added older calves to the working herd.",
+    "generated": "Rosespire raised calves and added older calves to the working herd.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A068",
+    "rule": "cow_calving_0",
+    "confidence": 58,
+    "retold": true,
+    "authored": "Rosespire raised calves and added older calves to the working herd, so people say.",
+    "generated": "Rosespire raised calves and added older calves to the working herd, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A069",
+    "rule": "cow_calving_0",
+    "confidence": 37,
+    "retold": true,
+    "authored": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+    "generated": "Rosespire raised calves and added older calves to the working herd, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A070",
+    "rule": "cow_slaughtered_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Rosespire slaughtered cattle for beef when fodder ran short.",
+    "generated": "Rosespire slaughtered cattle for beef when fodder ran short.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire"
+    ],
+    "fields_present": [
+      "Rosespire"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A071",
+    "rule": "goblin_cult_rallied_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "A goblin rose to Keeper in the dragon cult through service.",
+    "generated": "A goblin rose to Keeper in the dragon cult through service.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "A goblin",
+      "Keeper"
+    ],
+    "fields_present": [
+      "A goblin",
+      "Keeper"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A072",
+    "rule": "goblin_cult_rallied_0",
+    "confidence": 57,
+    "retold": true,
+    "authored": "A goblin rose to Bearer in the dragon cult through service, so people say.",
+    "generated": "A goblin rose to Bearer in the dragon cult through service, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "A goblin",
+      "Bearer"
+    ],
+    "fields_present": [
+      "A goblin",
+      "Bearer"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A073",
+    "rule": "goblin_cult_rallied_0",
+    "confidence": 38,
+    "retold": true,
+    "authored": "A goblin rose to Bearer in the dragon cult through service, if the story is right.",
+    "generated": "A goblin rose to Bearer in the dragon cult through service, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "A goblin",
+      "Bearer"
+    ],
+    "fields_present": [
+      "A goblin",
+      "Bearer"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A074",
+    "rule": "character_died_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Quillen Stonehewer died after a life in Silverwick.",
+    "generated": "Quillen Stonehewer died after a life in Silverwick.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Quillen Stonehewer",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Quillen Stonehewer",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A075",
+    "rule": "character_died_0",
+    "confidence": 55,
+    "retold": true,
+    "authored": "Quillen Stonehewer died after a life in Silverwick, so people say.",
+    "generated": "Quillen Stonehewer died after a life in Silverwick, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Quillen Stonehewer",
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Quillen Stonehewer",
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A076",
+    "rule": "sheep_slaughtered_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Thornford slaughtered sheep for mutton in the autumn cull.",
+    "generated": "Thornford slaughtered sheep for mutton in the autumn cull.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford",
+      "in the autumn cull"
+    ],
+    "fields_present": [
+      "Thornford",
+      "in the autumn cull"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A077",
+    "rule": "sheep_slaughtered_0",
+    "confidence": 64,
+    "retold": true,
+    "authored": "Rosespire slaughtered sheep for mutton after winter fodder runs short, so people say.",
+    "generated": "Rosespire slaughtered sheep for mutton after winter fodder runs short, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "after winter fodder runs short"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "after winter fodder runs short"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A078",
+    "rule": "goblin_raided_0",
+    "confidence": 93,
+    "retold": false,
+    "authored": "The Cinder Tithe raided Thornford.",
+    "generated": "The Cinder Tithe raided Thornford.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "The Cinder Tithe",
+      "Thornford"
+    ],
+    "fields_present": [
+      "The Cinder Tithe",
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A080",
+    "rule": "goblin_raided_0",
+    "confidence": 28,
+    "retold": true,
+    "authored": "The Cinder Tithe raided Thornford, if the story is right.",
+    "generated": "The Cinder Tithe raided Thornford, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "The Cinder Tithe",
+      "Thornford"
+    ],
+    "fields_present": [
+      "The Cinder Tithe",
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A081",
+    "rule": "horse_bred_1",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Gloamgate raised pony foals and added ponies to the working herd.",
+    "generated": "Gloamgate raised pony foals and added ponies to the working herd.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A082",
+    "rule": "horse_bred_1",
+    "confidence": 68,
+    "retold": true,
+    "authored": "Thornford raised pony foals and added ponies to the working herd, so people say.",
+    "generated": "Thornford raised pony foals and added ponies to the working herd, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford"
+    ],
+    "fields_present": [
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A083",
+    "rule": "horse_bred_1",
+    "confidence": 34,
+    "retold": true,
+    "authored": "Alderwatch raised pony foals and added ponies to the working herd, if the story is right.",
+    "generated": "Alderwatch raised pony foals and added ponies to the working herd, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A084",
+    "rule": "sheep_bred_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Alderwatch raised lambs and added yearlings to the adult flock.",
+    "generated": "Alderwatch raised lambs and added yearlings to the adult flock.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A085",
+    "rule": "sheep_bred_0",
+    "confidence": 62,
+    "retold": true,
+    "authored": "Silverwick raised lambs and added yearlings to the adult flock, so people say.",
+    "generated": "Silverwick raised lambs and added yearlings to the adult flock, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A086",
+    "rule": "sheep_bred_0",
+    "confidence": 17,
+    "retold": true,
+    "authored": "Thornford raised lambs and added yearlings to the adult flock, if the story is right.",
+    "generated": "Thornford raised lambs and added yearlings to the adult flock, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford"
+    ],
+    "fields_present": [
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A087",
+    "rule": "masonry_repair_1",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Gloamgate delayed public repairs for lack of stone.",
+    "generated": "Gloamgate delayed public repairs for lack of stone.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate"
+    ],
+    "fields_present": [
+      "Gloamgate"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A088",
+    "rule": "masonry_repair_0",
+    "confidence": 66,
+    "retold": true,
+    "authored": "Hollowbarrow repaired public buildings with stone, so people say.",
+    "generated": "Hollowbarrow repaired public buildings with stone, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Hollowbarrow"
+    ],
+    "fields_present": [
+      "Hollowbarrow"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A089",
+    "rule": "masonry_repair_0",
+    "confidence": 37,
+    "retold": true,
+    "authored": "Thornford repaired public buildings with stone, if the story is right.",
+    "generated": "Thornford repaired public buildings with stone, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford"
+    ],
+    "fields_present": [
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A090",
+    "rule": "paper_milled_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Rosespire made paper from Wood.",
+    "generated": "Rosespire made paper from Wood.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Rosespire",
+      "Wood"
+    ],
+    "fields_present": [
+      "Rosespire",
+      "Wood"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A091",
+    "rule": "paper_milled_0",
+    "confidence": 56,
+    "retold": true,
+    "authored": "Gloamgate made paper from Wood, so people say.",
+    "generated": "Gloamgate made paper from Wood, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Gloamgate",
+      "Wood"
+    ],
+    "fields_present": [
+      "Gloamgate",
+      "Wood"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A092",
+    "rule": "sheep_sheared_0",
+    "confidence": 100,
+    "retold": false,
+    "authored": "Silverwick sheared the spring flock and stored wool.",
+    "generated": "Silverwick sheared the spring flock and stored wool.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Silverwick"
+    ],
+    "fields_present": [
+      "Silverwick"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A093",
+    "rule": "sheep_sheared_0",
+    "confidence": 66,
+    "retold": true,
+    "authored": "Alderwatch sheared the spring flock and stored wool, so people say.",
+    "generated": "Alderwatch sheared the spring flock and stored wool, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Alderwatch"
+    ],
+    "fields_present": [
+      "Alderwatch"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A094",
+    "rule": "sheep_sheared_0",
+    "confidence": 37,
+    "retold": true,
+    "authored": "Thornford sheared the spring flock and stored wool, if the story is right.",
+    "generated": "Thornford sheared the spring flock and stored wool, if the story is right.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Thornford"
+    ],
+    "fields_present": [
+      "Thornford"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A095",
+    "rule": "shortage_1",
+    "confidence": 93,
+    "retold": false,
+    "authored": "Hollowbarrow was short of its food reserve target.",
+    "generated": "Hollowbarrow was short of its food reserve target.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Hollowbarrow"
+    ],
+    "fields_present": [
+      "Hollowbarrow"
+    ],
+    "invented": []
+  },
+  {
+    "id": "A096",
+    "rule": "shortage_1",
+    "confidence": 58,
+    "retold": true,
+    "authored": "Hollowbarrow was short of its food reserve target, so people say.",
+    "generated": "Hollowbarrow was short of its food reserve target, so people say.",
+    "stopped": true,
+    "exact": true,
+    "fields": [
+      "Hollowbarrow"
+    ],
+    "fields_present": [
+      "Hollowbarrow"
+    ],
+    "invented": []
+  }
+]

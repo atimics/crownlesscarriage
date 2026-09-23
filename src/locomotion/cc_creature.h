@@ -92,6 +92,15 @@ bool CcCreatureRigPoseResolve(CcCreatureRigProfile profile, float phase,
 bool CcCreatureRigControllerInit(CcCreatureRigController *controller,
                                  CcCreatureRigProfile profile,
                                  float phase, float scale);
+/* Update anatomical dimensions without resetting phase, swing progress or
+   planted world contacts. The next world step resolves the resized chains. */
+bool CcCreatureRigControllerSetScale(CcCreatureRigController *controller,
+                                    float scale);
+/* Move the coordinate frame without planting/resetting feet. Presentation-only
+   time compression uses this before a bounded physical stride. True teleports
+   must continue to use the normal world-step/reanchor path. */
+bool CcCreatureRigControllerTransport(CcCreatureRigController *controller,
+    CcLimbVec3 ground, float yaw);
 bool CcCreatureRigControllerSetGait(CcCreatureRigController *controller,
                                     CcCreatureRigGait gait);
 bool CcCreatureRigControllerStep(CcCreatureRigController *controller,

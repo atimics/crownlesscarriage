@@ -53,32 +53,18 @@ static int ProfileContract(void)
             CHECK(camera->target_x >= 0.0f && camera->target_x <= 96.0f);
             CHECK(camera->target_z >= 0.0f && camera->target_z <= 72.0f);
 
-            CHECK(camera->target_y >= 0.08f);
-            CHECK(camera->target_y <= 0.25f);
-            CHECK(camera->camera_offset_y >= 0.55f);
-            CHECK(camera->camera_offset_y <= 0.70f);
+            /* Ground-level adventure compositions: look at people/facades,
+               stand on the camera station's ground, not above the roofs. */
+            CHECK(camera->target_y >= 2.5f && camera->target_y <= 5.5f);
+            CHECK(camera->camera_offset_y >= 1.8f && camera->camera_offset_y <= 4.0f);
             float camera_distance_squared =
                 camera->camera_offset_x * camera->camera_offset_x +
                 camera->camera_offset_z * camera->camera_offset_z;
-            CHECK(camera_distance_squared >= 5.0f * 5.0f);
-            bool valley_view = (profile->function == CC_SETTLEMENT_FARMING ||
-                                profile->function == CC_SETTLEMENT_MARKET ||
-                                profile->function == CC_SETTLEMENT_MINING) &&
-                (camera->kind == CC_LOCAL_TOWN_SCENE_ARRIVAL ||
-                 camera->kind == CC_LOCAL_TOWN_SCENE_HEART ||
-                 camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK);
-            float maximum_span = valley_view ? 45.0f : 24.0f;
-            CHECK(camera_distance_squared <= maximum_span * maximum_span);
-            CHECK(camera->fovy >= 5.8f && camera->fovy <=
-                  (valley_view ? 38.0f : 10.0f));
-            if (camera->kind == CC_LOCAL_TOWN_SCENE_LANDMARK) {
-                CHECK(camera->fovy >= 9.0f);
-            } else if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST) {
-                bool pony_yard = (profile->function == CC_SETTLEMENT_MARKET ||
-                                 profile->function == CC_SETTLEMENT_FARMING) &&
-                    camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD;
-                CHECK(camera->fovy <= (pony_yard ? 9.0f : 6.6f));
-            }
+            CHECK(camera_distance_squared >= 9.0f * 9.0f);
+            CHECK(camera_distance_squared <= 30.0f * 30.0f);
+            CHECK(camera->fovy >= 8.0f && camera->fovy <= 22.0f);
+            if (camera->kind >= CC_LOCAL_TOWN_SCENE_CLOSE_FIRST)
+                CHECK(camera->fovy <= 12.0f);
             if (camera->kind == CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) {
                 CHECK(camera->trigger_x >= 42.0f && camera->trigger_x <= 43.0f);
                 CHECK(camera->trigger_z >= 54.5f && camera->trigger_z <= 56.0f);
@@ -604,10 +590,52 @@ static int TownPresence(void)
     return 0;
 }
 
+static int FourAuthoredSceneContracts(void)
+{
+    static const struct {
+        CcSettlementFunction function;
+        int32_t index[4];
+        const char *name[4];
+    } towns[] = {
+        {CC_SETTLEMENT_FARMING, {0, 1, 2, 5},
+         {"RIVER CROSSING", "THRESHING GREEN", "GRANARY RISE", "CARTWRIGHT YARD"}},
+        {CC_SETTLEMENT_MARKET, {1, 2, 3, 5},
+         {"MARKET CIRCLE", "ARCHIVE STEPS", "CLOTH YARD", "COACH COURT"}},
+        {CC_SETTLEMENT_MINING, {0, 1, 3, 5},
+         {"FOUNDRY TERRACE", "COMPANY STORE", "WORKERS' LANE", "ORE WAGON YARD"}},
+        {CC_SETTLEMENT_FORTRESS, {0, 1, 2, 5},
+         {"CONTESTED BRIDGE", "MUSTER SPINE", "ALDERWATCH KEEP", "LOWER BAILEY"}},
+    };
+    for (size_t town = 0; town < sizeof(towns) / sizeof(towns[0]); ++town) {
+        const CcLocalPlaceProfile *profile =
+            CcLocalPlaceProfileForFunction(towns[town].function);
+        for (int32_t scene = 0; scene < 4; ++scene) {
+            const CcLocalTownScene *view = &profile->scene[towns[town].index[scene]];
+            CHECK(strcmp(view->name, towns[town].name[scene]) == 0);
+        }
+        /* Service and parked-carriage anchors stay compatible with saved walks. */
+        const CcLocalPlaceBuilding *hall = &profile->building[profile->primary_building];
+        CHECK(hall->x + hall->width * 0.5f == 50.0f);
+        CHECK(profile->scene[CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD].trigger_x == 42.4f);
+        CHECK(profile->scene[CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD].trigger_z == 55.2f);
+    }
+    /* Market discovery is no longer another shot of the customs keep. */
+    const CcLocalTownScene *archive = CcLocalTownSceneAt(
+        CC_SETTLEMENT_MARKET, CC_LOCAL_TOWN_SCENE_LANDMARK);
+    CHECK(archive->trigger_x < 42.0f && archive->target_x < 38.0f);
+    /* A fortress establishes the crossing and keep before its close-up walks. */
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 0)->fovy >= 16.0f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_FORTRESS, 2)->fovy >= 16.0f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MARKET, 3)->fovy >= 9.5f);
+    CHECK(CcLocalTownSceneAt(CC_SETTLEMENT_MINING, 3)->fovy >= 9.5f);
+    return 0;
+}
+
 int main(void)
 {
     if (TownPresence() != 0) return 1;
     if (ProfileContract() != 0) return 1;
+    if (FourAuthoredSceneContracts() != 0) return 1;
     if (AuthoredLandmarkLayouts() != 0) return 1;
     if (AuthoredTownMaps() != 0) return 1;
     if (CarriageRoutePlans() != 0) return 1;

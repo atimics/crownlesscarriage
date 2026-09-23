@@ -1,0 +1,72 @@
+name: Four authored towns
+
+on:
+  pull_request:
+    paths:
+      - 'src/client/**'
+      - 'tests/local*'
+      - 'tests/test_four_town_capture.py'
+      - 'tests/creature_captures.inc'
+      - 'tools/capture_four_towns.py'
+      - 'docs/design/four-authored-towns.md'
+      - '.github/workflows/four-town-scenes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: four-town-scenes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scenes:
+    name: Town routes and rendered scenes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check capture paths and receipts
+        run: python3 -m unittest discover -s tests -p test_four_town_capture.py
+      - name: Install native client dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev
+          libsqlite3-dev libx11-dev libxcursor-dev libxext-dev
+          libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
+      - name: Configure strict native build
+        run: >-
+          cmake -S . -B build-towns -DCMAKE_BUILD_TYPE=Release
+          -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON
+      - name: Build
+        id: build
+        run: cmake --build build-towns --parallel 4
+      - name: Check town, route, interaction, terrain and save regressions
+        run: >-
+          xvfb-run -a ctest --test-dir build-towns --output-on-failure
+          -R 'town|local|carriage|interaction|save|renderer|terrain' --parallel 2
+      - name: Capture all sixteen scenes and town conditions
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: >-
+          xvfb-run -a python3 tools/capture_four_towns.py build-towns/crownless_carriage
+          --output build-towns/four-town-review --conditions
+      - name: Record exact tested revision and native client
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          git rev-parse HEAD > build-towns/four-town-review/revision.txt
+          ldd build-towns/crownless_carriage > build-towns/four-town-review/native-dependencies.txt
+          tar -czf build-towns/four-town-review/native-review-tools.tar.gz -C build-towns crownless_carriage local_movement_tests renderer_regression_tests
+      - name: Upload rendered review and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: four-town-scene-review
+          path: |
+            build-towns/four-town-review/
+            build-towns/Testing/Temporary/LastTest.log
+          retention-days: 14
+          if-no-files-found: error

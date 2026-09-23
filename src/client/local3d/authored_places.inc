@@ -696,6 +696,8 @@ static void DrawRoundTower(float center_x, float center_z, float radius,
 }
 
 
+#include "client/local3d/authored_town_architecture.inc"
+
 static void DrawSettlementBuilding(const WorldBuilding *building,
                                    Color wall, Color roof,
                                    const CcLocalPlaceProfile *profile,
@@ -711,158 +713,17 @@ static void DrawSettlementBuilding(const WorldBuilding *building,
 
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
-            if (building_index == 6) {
-                DrawBuilding(x, z, width, depth - 0.9f, height,
-                             wall, roof, building->door, 1);
-                break;
-            }
-            if (building->style == CC_LOCAL_BUILDING_WORKSHOP ||
-                building_index < 0) {
-
-                float aisle = width * 0.20f;
-                DrawBuilding(x + aisle, z, width - aisle * 2.0f, depth,
-                             height, wall, roof, building->door,
-                             building->style);
-                DrawOpenRoofBay(x, z + depth * 0.12f, aisle * 1.18f,
-                                depth * 0.78f, height * 0.48f,
-                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.88f));
-                DrawOpenRoofBay(x + width - aisle * 1.18f,
-                                z + depth * 0.12f, aisle * 1.18f,
-                                depth * 0.78f, height * 0.48f,
-                                WORLD_WOOD_SHADOW, ShadeColor(roof, 0.92f));
-            } else {
-                float main_width = width * 0.70f;
-                float main_x = mirror ? x + width - main_width : x;
-                float annex_width = width * 0.38f;
-                float annex_x = mirror ? x : x + width - annex_width;
-                DrawBuilding(main_x, z, main_width, depth, height,
-                             wall, roof, building->door, building->style);
-                DrawBuilding(annex_x, z + depth * 0.24f,
-                             annex_width, depth * 0.68f, height * 0.60f,
-                             ShadeColor(wall, 0.94f), ShadeColor(roof, 0.90f),
-                             false, building->style);
-            }
+            DrawThornfordArchitecture(building, wall, roof, building_index, burnt);
             break;
-        case CC_SETTLEMENT_MINING: {
-            if (building_index == profile->primary_building) {
-                /* The stopped clock belongs to the company store facade. */
-                DrawBuilding(x, z, width, depth, height * 0.60f,
-                             wall, roof, building->door, 1);
-                float tower_width = width * 0.25f;
-                float tower_x = x + (width - tower_width) * 0.5f;
-                float face_z = z + depth + 0.06f;
-                DrawBox((Vector3){x + width * 0.5f, height * 0.70f,
-                                  z + depth - 1.4f},
-                        (Vector3){tower_width, height * 0.60f, 2.8f}, wall);
-                DrawPitchedRoof(tower_x, z + depth - 2.8f, tower_width,
-                                2.8f, height, wall, roof);
-                Vector3 dial = {x + width * 0.5f, height * 0.83f, face_z};
-                Color face = burnt ? WORLD_STONE_SHADOW :
-                             CC_VISUAL_PALETTE.parchment.light;
-                DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0, 0, 0.10f}),
-                               1.02f, 1.02f, 16, WORLD_METAL_SHADOW);
-                dial.z += 0.12f;
-                DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0, 0, 0.04f}),
-                               0.87f, 0.87f, 16, face);
-                /* Eight o'clock: the minute hand points up, the hour left-down. */
-                DrawBox(Vector3Add(dial, (Vector3){0, 0.34f, 0.08f}),
-                        (Vector3){0.09f, 0.68f, 0.07f}, WORLD_INK);
-                DrawTiltedBox(Vector3Add(dial, (Vector3){-0.22f, -0.13f, 0.08f}),
-                              (Vector3){0.55f, 0.11f, 0.07f},
-                              (Vector3){0, 0, 1}, 30.0f, WORLD_INK);
-            } else if (building->style == CC_LOCAL_BUILDING_WORKER_ROW) {
-                /* Narrow adjoining homes make the working rows legible. */
-                int32_t homes = width >= 9.0f ? 3 : 2;
-                float bay = width / (float)homes;
-                for (int32_t home = 0; home < homes; ++home) {
-                    float home_x = x + (float)home * bay;
-                    float home_height = height * (home % 2 == 0 ? 0.86f : 0.94f);
-                    DrawBuilding(home_x, z, bay, depth, home_height,
-                                 ShadeColor(wall, home % 2 == 0 ? 1.0f : 1.12f),
-                                 roof, building->door, 1);
-                    DrawBox((Vector3){home_x + bay * 0.76f, home_height + 0.6f,
-                                      z + depth * 0.35f},
-                            (Vector3){0.48f, 2.2f, 0.62f}, WORLD_STONE_SHADOW);
-                    DrawBox((Vector3){home_x + bay * 0.76f, home_height + 1.73f,
-                                      z + depth * 0.35f},
-                            (Vector3){0.64f, 0.16f, 0.76f}, WORLD_METAL_SHADOW);
-                }
-            } else {
-                float apron = building_index == 6 ? 0.66f : 0.78f;
-                DrawBuilding(x, z, width, depth * apron, height,
-                             wall, roof, building->door, 1);
-                if (building_index != 6) {
-                    for (int32_t post = 0; post < 2; ++post) {
-                        DrawBox((Vector3){x + 0.3f + (width - 0.6f) * (float)post,
-                                          height * 0.33f, z + depth - 0.25f},
-                                (Vector3){0.22f, height * 0.66f, 0.22f}, WORLD_WOOD);
-                    }
-                    DrawBox((Vector3){x + width * 0.5f, height * 0.67f,
-                                      z + depth * 0.86f},
-                            (Vector3){width, 0.20f, depth * 0.26f}, roof);
-                }
-            }
+        case CC_SETTLEMENT_MINING:
+            DrawSilverwickArchitecture(building, wall, roof, building_index, burnt);
             break;
-        }
-        case CC_SETTLEMENT_MARKET: {
-            if (building_index < 0) {
-                DrawBuilding(x, z, width, depth, height, wall, roof,
-                             building->door, building->style);
-                break;
-            }
-            if (building_index == profile->primary_building) {
-                /* A round guild chamber crowns the broad trading hall. */
-                float plinth = height * 0.48f;
-                float radius = fminf(width * 0.30f, depth * 0.34f);
-                DrawBuilding(x, z, width, depth * 0.72f, plinth,
-                             wall, roof, building->door, building->style);
-                rlPushMatrix();
-                rlTranslatef(0.0f, plinth, 0.0f);
-                DrawRoundTower(x + width * 0.5f, z + depth * 0.36f,
-                               radius, height - plinth,
-                               ShadeColor(wall, 1.08f), roof, false);
-                rlPopMatrix();
-                for (int32_t bay = 0; bay < 5; ++bay) {
-                    float t = ((float)bay - 2.0f) / 2.0f;
-                    float apron_depth = depth * (0.28f - 0.09f * t * t);
-                    DrawOpenRoofBay(x + (float)bay * width / 5.0f + 0.06f,
-                                    z + depth * 0.72f, width / 5.0f - 0.12f,
-                                    apron_depth, 2.55f, WORLD_WOOD_SHADOW,
-                                    burnt ? roof : BlendColor(WORLD_TEAL, wall, 0.16f));
-                }
-                break;
-            }
-            /* Narrow shop fronts share a covered trading apron. */
-            int32_t bays = width >= 9.0f ? 3 : 2;
-            float bay_width = width / (float)bays;
-            for (int32_t bay = 0; bay < bays; ++bay) {
-                float front_x = x + (float)bay * bay_width;
-                float shop_height = height * (bay % 2 == 0 ? 0.90f : 1.0f);
-                DrawBuilding(front_x, z, bay_width, depth * 0.72f,
-                             shop_height, ShadeColor(wall, 0.94f + (float)bay * 0.04f),
-                             roof, building->door && bay == bays / 2,
-                             building->style);
-                Color cloth = burnt ? roof :
-                    BlendColor(WORLD_TEAL, wall, bay % 2 == 0 ? 0.12f : 0.30f);
-                DrawOpenRoofBay(front_x + 0.12f, z + depth * 0.72f,
-                                bay_width - 0.24f, depth * 0.28f,
-                                2.55f, WORLD_WOOD_SHADOW, cloth);
-            }
+        case CC_SETTLEMENT_MARKET:
+            DrawGloamgateArchitecture(building, wall, roof, building_index, burnt);
             break;
-        }
-        case CC_SETTLEMENT_FORTRESS: {
-            float tower_radius = fminf(width * 0.15f, depth * 0.24f);
-            float tower_x = mirror ? x + tower_radius :
-                                     x + width - tower_radius;
-            float block_x = mirror ? x + width * 0.18f : x;
-            DrawBuilding(block_x, z, width * 0.82f, depth,
-                         height * 0.70f, wall, roof, building->door,
-                         building->style);
-            DrawRoundTower(tower_x, z + depth * 0.54f, tower_radius,
-                           height * 1.06f, ShadeColor(wall, 0.88f),
-                           roof, false);
+        case CC_SETTLEMENT_FORTRESS:
+            DrawAlderwatchArchitecture(building, wall, roof, building_index, burnt);
             break;
-        }
         case CC_SETTLEMENT_CAPITAL:
 
             DrawBuilding(x, z + depth * 0.10f, width * 0.31f,
@@ -3372,8 +3233,36 @@ static void DrawFarmTerrainStage(const CcSettlement *place,
 
 }
 
-static void DrawMiningTerrainStage(Vector3 focus)
+static void DrawMiningTerrainStage(const CcSettlement *place, Vector3 focus)
 {
+    /* A wall alcove beside the store, not a new collision obstacle in the lane.
+       Loaves represent existing stocks. No flame implies a fabricated batch. */
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    CcLocalLanePoint oven = CcLocalOvenCourtAnchor(profile);
+    if (place != NULL && SceneryPointVisible(oven.x, oven.z, focus)) {
+        float y = CcLocalTerrainHeightAt(oven.x, oven.z);
+        Color stone = place->fire_damage > 0 ? WORLD_STONE_SHADOW : WORLD_STONE;
+        DrawBox((Vector3){oven.x, y + 1.12f, oven.z}, (Vector3){2.2f, 2.24f, 0.30f}, stone);
+        DrawBox((Vector3){oven.x - 0.40f, y + 0.9f, oven.z + 0.17f},
+            (Vector3){0.82f, 1.15f, 0.04f}, WORLD_INK);
+        DrawBox((Vector3){oven.x + 0.60f, y + 1.52f, oven.z + 0.19f},
+            (Vector3){0.58f, 0.88f, 0.05f}, WORLD_WOOD_SHADOW);
+        for (int32_t row = 0; row < 3; ++row)
+            DrawBox((Vector3){oven.x + 0.60f, y + 1.76f - (float)row * 0.22f, oven.z + 0.23f},
+                (Vector3){0.39f, 0.035f, 0.02f}, CC_VISUAL_PALETTE.parchment.light);
+        DrawBox((Vector3){oven.x, y + 0.36f, oven.z + 0.2f},
+            (Vector3){1.92f, 0.10f, 0.38f}, WORLD_WOOD_SHADOW);
+        int32_t loaves = place->stock[CC_GOOD_BREAD] > 0 ? 1 + (place->stock[CC_GOOD_BREAD] - 1) / 8 : 0;
+        if (loaves > 4) loaves = 4;
+        if (CcSettlementIsAbandoned(place)) loaves = 0;
+        for (int32_t i = 0; i < loaves; ++i)
+            DrawBox((Vector3){oven.x - 0.65f + (float)i * 0.42f, y + 0.48f, oven.z + 0.23f},
+                (Vector3){0.30f, 0.14f, 0.25f}, CC_VISUAL_PALETTE.parchment.base);
+        if (!CcSettlementHasService(place, CC_SERVICE_BAKERY))
+            DrawTiltedBox((Vector3){oven.x - 0.40f, y + 0.92f, oven.z + 0.22f},
+                (Vector3){1.08f, 0.12f, 0.06f}, (Vector3){0, 0, 1}, 35.0f, WORLD_WOOD_SHADOW);
+    }
+
     TerrainDetailBegin();
     for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
         const TerrainLanePath *path = &terrain_lanes[lane];
@@ -3569,210 +3458,6 @@ static void DrawBackdropMass(float x, float base_y, float z,
     rlPopMatrix();
 }
 
-static void DrawBackdropPeak(float x, float base_y, float z,
-                             float radius_x, float radius_z,
-                             float height, int32_t sides,
-                             Color body, Color face)
-{
-    DrawBackdropMass(x, base_y, z, radius_x, radius_z, 0.24f,
-                     height, sides, body);
-    DrawBackdropMass(x - radius_x * 0.10f,
-                     base_y + height * 0.47f,
-                     z + radius_z * 0.02f,
-                     radius_x * 0.54f, radius_z * 0.58f, 0.05f,
-                     height * 0.56f, sides > 5 ? sides - 1 : sides,
-                     face);
-}
-
-static void DrawBackdropTower(float x, float base_y, float z,
-                              float width, float height,
-                              Color stone, Color roof)
-{
-    DrawCubeV((Vector3){x, base_y + height * 0.5f, z},
-              (Vector3){width, height, width}, stone);
-    DrawCylinder((Vector3){x, base_y + height, z},
-                 0.04f, width * 0.82f, width * 0.72f, 6, roof);
-}
-
-static void DrawBackdropWall(float start_x, float finish_x, float base_y,
-                             float z, float height, int32_t tower_count,
-                             Color stone, Color roof)
-{
-    float width = finish_x - start_x;
-    DrawCubeV((Vector3){start_x + width * 0.5f,
-                        base_y + height * 0.42f, z},
-              (Vector3){width, height * 0.84f, 0.72f}, stone);
-    for (int32_t tower = 0; tower < tower_count; ++tower) {
-        float amount = tower_count > 1 ?
-            (float)tower / (float)(tower_count - 1) : 0.5f;
-        DrawBackdropTower(start_x + width * amount, base_y, z,
-                          1.35f, height * 1.46f, stone, roof);
-    }
-}
-
-static void DrawFarmingBackdrop(void)
-{
-    Color far = BlendColor(WORLD_GRASS_SHADOW, WORLD_INK, 0.62f);
-    Color far_face = BlendColor(far, WORLD_STONE_SHADOW, 0.20f);
-    Color middle = BlendColor(WORLD_GRASS, WORLD_STONE_SHADOW, 0.58f);
-    for (int32_t peak = 0; peak < 7; ++peak) {
-        float height = 31.0f + (float)((peak * 7) % 13);
-        DrawBackdropPeak(-72.0f + (float)peak * 46.0f,
-                         -48.0f - height,
-                         -132.0f + (float)(peak % 2) * 9.0f,
-                         45.0f, 31.0f, height, 11,
-                         far, far_face);
-    }
-    for (int32_t shoulder = 0; shoulder < 7; ++shoulder) {
-        float height = 17.0f + (float)(shoulder % 3) * 3.0f;
-        DrawBackdropMass(-48.0f + (float)shoulder * 37.0f,
-                         -25.0f - height,
-                         -68.0f + (float)(shoulder % 2) * 4.0f,
-                         31.0f, 18.0f, 0.56f, height,
-                         12, middle);
-    }
-}
-
-static void DrawMiningBackdrop(void)
-{
-    Color far = BlendColor(WORLD_METAL_SHADOW, WORLD_INK, 0.52f);
-    Color far_face = BlendColor(WORLD_STONE, WORLD_INK, 0.56f);
-    Color middle = BlendColor(WORLD_STONE_SHADOW,
-                              WORLD_METAL_SHADOW, 0.48f);
-    for (int32_t peak = 0; peak < 8; ++peak) {
-        float height = 61.0f + (float)((peak * 13) % 31);
-        DrawBackdropPeak(-70.0f + (float)peak * 39.0f,
-                         -49.0f - height,
-                         -138.0f + (float)(peak % 3) * 8.0f,
-                         35.0f, 25.0f, height, 6,
-                         far, far_face);
-    }
-    for (int32_t shelf = 0; shelf < 6; ++shelf) {
-        float height = 27.0f + (float)(shelf % 3) * 4.0f;
-        DrawBackdropMass(-45.0f + (float)shelf * 45.0f,
-                         -26.0f - height,
-                         -76.0f + (float)(shelf % 2) * 5.0f,
-                         40.0f, 19.0f, 0.64f, height,
-                         7, middle);
-    }
-}
-
-static void DrawMarketBackdrop(void)
-{
-    Color far = BlendColor(WORLD_VIOLET, WORLD_INK, 0.76f);
-    Color far_face = BlendColor(far, WORLD_STONE_SHADOW, 0.24f);
-    Color middle = BlendColor(WORLD_STONE, WORLD_INK, 0.54f);
-    for (int32_t peak = 0; peak < 7; ++peak) {
-        float height = 38.0f + (float)((peak * 5) % 16);
-        DrawBackdropPeak(-68.0f + (float)peak * 46.0f,
-                         -48.0f - height,
-                         -136.0f + (float)(peak % 2) * 7.0f,
-                         43.0f, 27.0f,
-                         height, 9,
-                         far, far_face);
-    }
-    for (int32_t basin = 0; basin < 6; ++basin) {
-        float height = 22.0f + (float)(basin % 3) * 3.0f;
-        DrawBackdropMass(-42.0f + (float)basin * 44.0f,
-                         -25.0f - height,
-                         -72.0f + (float)(basin % 2) * 4.0f,
-                         38.0f, 20.0f, 0.62f, height,
-                         10, middle);
-    }
-}
-
-static void DrawFortressBackdrop(void)
-{
-    Color far = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.42f);
-    Color far_face = BlendColor(WORLD_STONE, WORLD_INK, 0.45f);
-    Color middle = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.24f);
-    Color wall = BlendColor(WORLD_STONE, WORLD_METAL_SHADOW, 0.30f);
-    for (int32_t peak = 0; peak < 8; ++peak) {
-        float height = 69.0f + (float)((peak * 17) % 35);
-        DrawBackdropPeak(-72.0f + (float)peak * 40.0f,
-                         -52.0f - height,
-                         -142.0f + (float)(peak % 2) * 7.0f,
-                         35.0f, 25.0f, height, 5,
-                         far, far_face);
-    }
-    for (int32_t spur = 0; spur < 7; ++spur) {
-        float height = 37.0f + (float)((spur * 7) % 15);
-        DrawBackdropPeak(-55.0f + (float)spur * 38.0f,
-                         -27.0f - height,
-                         -78.0f + (float)(spur % 2) * 5.0f,
-                         29.0f, 18.0f, height, 6,
-                         middle, ShadeColor(middle, 1.10f));
-    }
-    Color roof = ShadeColor(WORLD_DANGER, 0.56f);
-    float pass_z = -10.0f;
-    float pass_ground = TerrainVisualHeightAt(62.0f, pass_z) + 0.12f;
-    DrawBackdropWall(-1.0f, 130.0f, pass_ground, pass_z, 2.0f, 8,
-                     wall, roof);
-    DrawBackdropTower(64.0f, pass_ground, pass_z, 1.25f, 4.8f,
-                      ShadeColor(wall, 1.06f), roof);
-}
-
-static void DrawCapitalBackdrop(void)
-{
-    Color far = BlendColor(WORLD_VIOLET, WORLD_STONE_SHADOW, 0.70f);
-    Color far_face = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.40f);
-    Color plateau = BlendColor(WORLD_STONE, WORLD_INK, 0.47f);
-    for (int32_t peak = 0; peak < 7; ++peak) {
-        float height = 46.0f + (float)((peak * 11) % 20);
-        DrawBackdropPeak(-75.0f + (float)peak * 48.0f,
-                         -48.0f - height,
-                         -144.0f + (float)(peak % 2) * 8.0f,
-                         46.0f, 30.0f, height, 9,
-                         far, far_face);
-    }
-    for (int32_t shelf = 0; shelf < 6; ++shelf) {
-        float height = 25.0f + (float)(shelf % 3) * 2.8f;
-        DrawBackdropMass(-43.0f + (float)shelf * 45.0f,
-                         -25.0f - height,
-                         -76.0f + (float)(shelf % 2) * 4.0f,
-                         41.0f, 20.0f, 0.72f, height,
-                         10, plateau);
-    }
-}
-
-static void DrawDungeonBackdrop(void)
-{
-    Color far = BlendColor(WORLD_VIOLET, WORLD_INK, 0.84f);
-    Color far_face = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.68f);
-    Color middle = BlendColor(WORLD_STONE_SHADOW, WORLD_INK, 0.50f);
-    for (int32_t peak = 0; peak < 9; ++peak) {
-        float height = 67.0f + (float)((peak * 19) % 41);
-        DrawBackdropPeak(-70.0f + (float)peak * 36.0f,
-                         -53.0f - height,
-                         -142.0f + (float)(peak % 3) * 6.0f,
-                         31.0f, 23.0f, height, 5,
-                         far, far_face);
-    }
-    for (int32_t tooth = 0; tooth < 8; ++tooth) {
-        float height = 38.0f + (float)((tooth * 11) % 23);
-        DrawBackdropPeak(-50.0f + (float)tooth * 35.0f,
-                         -28.0f - height,
-                         -77.0f + (float)(tooth % 2) * 4.0f,
-                         25.0f, 17.0f, height, 5,
-                         middle, ShadeColor(middle, 1.08f));
-    }
-}
-
-static void DrawTownBackdrop(const CcSettlement *place)
-{
-    if (place == NULL) return;
-
-
-    switch (place->function) {
-        case CC_SETTLEMENT_FARMING: DrawFarmingBackdrop(); break;
-        case CC_SETTLEMENT_MINING: DrawMiningBackdrop(); break;
-        case CC_SETTLEMENT_MARKET: DrawMarketBackdrop(); break;
-        case CC_SETTLEMENT_FORTRESS: DrawFortressBackdrop(); break;
-        case CC_SETTLEMENT_CAPITAL: DrawCapitalBackdrop(); break;
-        case CC_SETTLEMENT_DUNGEON_TOWN: DrawDungeonBackdrop(); break;
-    }
-}
-
 static void DrawTownTerrainStage(const CcSettlement *place, uint32_t conditions,
                                   Vector3 focus, float clock)
 {
@@ -3781,7 +3466,7 @@ static void DrawTownTerrainStage(const CcSettlement *place, uint32_t conditions,
     switch (place->function) {
         case CC_SETTLEMENT_FARMING:
             DrawFarmTerrainStage(place, focus, clock); break;
-        case CC_SETTLEMENT_MINING: DrawMiningTerrainStage(focus); break;
+        case CC_SETTLEMENT_MINING: DrawMiningTerrainStage(place, focus); break;
         case CC_SETTLEMENT_MARKET: DrawMarketTerrainStage(focus); break;
         case CC_SETTLEMENT_FORTRESS: DrawFortressTerrainStage(focus); break;
         case CC_SETTLEMENT_CAPITAL: DrawCapitalTerrainStage(focus); break;
@@ -3794,7 +3479,6 @@ static void DrawTownTerrainStage(const CcSettlement *place, uint32_t conditions,
 static void DrawExteriorTerrain(const CcSettlement *place, uint32_t conditions,
                                  Vector3 focus, float clock)
 {
-    DrawTownBackdrop(place);
     SetWorldTerrainSurface(true);
     DrawCachedTerrain(place);
     DrawTerrainSurfaceDetails(place, focus);
@@ -4466,6 +4150,11 @@ static void DrawConstructedCompoundStructure(
     bool keep = structure->kind == CC_LOCAL_COMPOUND_HALL;
     bool tower = structure->kind == CC_LOCAL_COMPOUND_TOWER;
     Color base = ShadeColor(stone, 0.70f);
+
+    if (tower && profile != NULL && profile->function == CC_SETTLEMENT_MINING) {
+        DrawSilverwickStack(structure, stone);
+        return;
+    }
 
     if (structure->kind == CC_LOCAL_COMPOUND_HALL ||
         structure->kind == CC_LOCAL_COMPOUND_STOREHOUSE) {

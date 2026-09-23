@@ -12,6 +12,35 @@ static Vector3 LocalPoint(Vector3 base, float x, float y, float z, float yaw)
                      base.z - x * sine + z * cosine};
 }
 
+/* A socket bolted to the carriage chassis. The carriage leans over the ground
+   and rocks as it rolls, so a socket, trace, or seated passenger has to carry
+   the same pitch and sway the model is drawn with. The lean is a rotation
+   about the carriage base, so level ground and a still carriage leave the
+   socket exactly where the plain local offset puts it. */
+static Vector3 CarriageSocketPoint(Vector3 base, float yaw, float pitch,
+                                   float sway, float lateral, float height,
+                                   float forward)
+{
+    Vector3 point = LocalPoint(base, lateral, height, forward, yaw);
+    if (pitch == 0.0f && sway == 0.0f) return point;
+    Vector3 pitch_axis = {cosf(yaw), 0.0f, -sinf(yaw)};
+    Vector3 sway_axis = {sinf(yaw), 0.0f, cosf(yaw)};
+    Vector3 rel = Vector3Subtract(point, base);
+    rel = Vector3Transform(rel, MatrixRotate(pitch_axis, pitch));
+    rel = Vector3Transform(rel, MatrixRotate(sway_axis, sway * DEG2RAD));
+    return Vector3Add(base, rel);
+}
+
+/* Public name used by the renderer tests. */
+Vector3 CcLocalRoadCarriageSocketInternal(Vector3 base, float yaw,
+                                          float pitch, float sway,
+                                          float lateral, float height,
+                                          float forward)
+{
+    return CarriageSocketPoint(base, yaw, pitch, sway, lateral, height,
+                               forward);
+}
+
 static void DrawOrientedBox(Vector3 base, Vector3 local_center, Vector3 size,
                             float yaw, Color color)
 {
@@ -2325,32 +2354,38 @@ CcGood CcLocalCargoBoxGoodInternal(const CcPlayerCompany *player, int32_t slot)
 }
 
 static void DrawCarriedCargoBoxes(const CcPlayerCompany *player,
-                                  Vector3 base, float yaw)
+                                  Vector3 base, float yaw, float vehicle_scale)
 {
     int32_t limit = CcLocalCargoBoxCountInternal(player);
     if (limit <= 0) return;
-    const Vector3 rack_center = {-0.30f, 2.21f, 0.0f};
+    const Vector3 rack_center = {-0.30f * vehicle_scale,
+                                 2.21f * vehicle_scale, 0.0f};
     DrawOrientedBox(base, rack_center,
-                    (Vector3){2.92f, 0.10f, 1.42f}, yaw,
-                    WORLD_WOOD_LIGHT);
-    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, -0.73f},
-                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
-                    WORLD_WOOD_SHADOW);
-    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f, 0.73f},
-                    (Vector3){2.98f, 0.42f, 0.07f}, yaw,
-                    WORLD_WOOD_SHADOW);
-    DrawOrientedBox(base, (Vector3){-1.78f, 2.42f, 0.0f},
-                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
-                    WORLD_WOOD_SHADOW);
-    DrawOrientedBox(base, (Vector3){1.18f, 2.42f, 0.0f},
-                    (Vector3){0.07f, 0.42f, 1.52f}, yaw,
-                    WORLD_WOOD_SHADOW);
+                    (Vector3){2.92f * vehicle_scale, 0.10f * vehicle_scale,
+                              1.42f * vehicle_scale}, yaw, WORLD_WOOD_LIGHT);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f * vehicle_scale,
+                                    -0.73f * vehicle_scale},
+                    (Vector3){2.98f * vehicle_scale, 0.42f * vehicle_scale,
+                              0.07f * vehicle_scale}, yaw, WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){rack_center.x, 2.42f * vehicle_scale,
+                                    0.73f * vehicle_scale},
+                    (Vector3){2.98f * vehicle_scale, 0.42f * vehicle_scale,
+                              0.07f * vehicle_scale}, yaw, WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){-1.78f * vehicle_scale,
+                                    2.42f * vehicle_scale, 0.0f},
+                    (Vector3){0.07f * vehicle_scale, 0.42f * vehicle_scale,
+                              1.52f * vehicle_scale}, yaw, WORLD_WOOD_SHADOW);
+    DrawOrientedBox(base, (Vector3){1.18f * vehicle_scale,
+                                    2.42f * vehicle_scale, 0.0f},
+                    (Vector3){0.07f * vehicle_scale, 0.42f * vehicle_scale,
+                              1.52f * vehicle_scale}, yaw, WORLD_WOOD_SHADOW);
     for (int32_t slot = 0; slot < limit; ++slot) {
-        Vector3 floor = {-1.26f + (float)(slot % 4) * 0.64f,
-            2.27f + (float)(slot / 8) * 0.49f,
-            -0.34f + (float)((slot % 8) / 4) * 0.68f};
+        Vector3 floor = {(-1.26f + (float)(slot % 4) * 0.64f) * vehicle_scale,
+            (2.27f + (float)(slot / 8) * 0.49f) * vehicle_scale,
+            (-0.34f + (float)((slot % 8) / 4) * 0.68f) * vehicle_scale};
         DrawEconomicCargoUnit(CcLocalCargoBoxGoodInternal(player, slot), base,
-            floor, (Vector3){0.58f, 0.44f, 0.59f}, yaw);
+            floor, (Vector3){0.58f * vehicle_scale, 0.44f * vehicle_scale,
+                             0.59f * vehicle_scale}, yaw);
     }
 }
 
@@ -2374,7 +2409,7 @@ static void DrawCarriage3D(const CcPlayerCompany *player, bool targeted,
                               CARRIAGE_ASSET_SCALE,
                               CARRIAGE_ASSET_SCALE}, tint);
         DrawCarriedCargoBoxes(
-            player, origin, CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD);
+            player, origin, CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD, 1.0f);
         rlPopMatrix();
         return;
     }
@@ -2409,7 +2444,7 @@ static void DrawCarriage3D(const CcPlayerCompany *player, bool targeted,
     }
     DrawCarriedCargoBoxes(
         player, (Vector3){x, 0.0f, z},
-        CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD);
+        CARRIAGE_ASSET_STREET_YAW_DEGREES * DEG2RAD, 1.0f);
     rlPopMatrix();
 }
 
@@ -5020,8 +5055,18 @@ static void DrawCourseRaider(const CcLocalAgent *raider)
 {
     if (raider == NULL) return;
     DrawCombatFootprint(raider, WORLD_DANGER);
-    DrawRobotShell(raider);
-    DrawCombatSword(raider);
+    if (CcLocalAgentVisualFamily(raider) == CC_LOCAL_ACTOR_VISUAL_GOBLIN) {
+        bool moving = raider->traversal != CC_TRAVERSAL_IDLE;
+        CcCreaturePose pose = CcCreatureSteppedPose(
+            CC_CREATURE_GOBLIN_RAIDER, (float)GetTime() * 3.2f, moving);
+        (void)DrawCreature3D(CC_CREATURE_GOBLIN_RAIDER, pose,
+                             CcLocalAgentVisualGroundContact(raider),
+                             raider->facing_yaw, CcLocalAgentVisualScale(raider),
+                             raider->appearance.skin);
+    } else {
+        DrawRobotShell(raider);
+        DrawCombatSword(raider);
+    }
     DrawCombatSkillTell(raider);
     DrawCombatImpact(raider);
     DrawPaintedOverheadDiamond(

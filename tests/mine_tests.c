@@ -511,15 +511,15 @@ static void TestMineSurveyMigrationAndReturns(void)
     Check(CcSaveRead(fixture,&restored,error,sizeof(error)));
     Check(CcSimValidate(&restored,error,sizeof(error)));
     uint64_t migrated_hash=CcSimHash(&restored);
-    /* Schema 108 includes food agreements and relief loading in the hash. */
-    CC_CHECK(migrated_hash==UINT64_C(11197658590341376864));
+    /* Schema 109 includes the Underroad network and relief loading. */
+    CC_CHECK(migrated_hash==UINT64_C(17759649421993544614));
     Check(CcSaveRead(fixture,&reloaded,error,sizeof(error)));
     CC_CHECK(CcSimHash(&reloaded)==migrated_hash);
     const CcCustodyEntry *depleted_gold=NULL;
     for(int32_t i=0;i<CcCustodyEffectiveCapacity(&restored.custody);++i)
         if(restored.custody.entries[i].id==restored.mine.gold_source_entry_id)
             depleted_gold=&restored.custody.entries[i];
-    CC_CHECK(restored.schema_version==108U&&restored.generator_version==25U&&
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION&&restored.generator_version==25U&&
         restored.mine.return_revision==1&&restored.mine.surveyed&&
         restored.mine.survey_event_id==0U&&
         restored.mine.survey_read_day==0&&restored.mine.survey_observed_day==0&&

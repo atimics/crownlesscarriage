@@ -1,0 +1,310 @@
+{
+  "scope": "Real grammar rows and natural questions for the typed fact-selection demo.",
+  "accounts": [
+    {
+      "id": "test:0:0",
+      "rule": "notice_posted_0",
+      "opening": "In Yororormere, Yorororholt Kelumeth put up a notice about Yorilashfell Cup, according to the word going round.",
+      "confidence": 80,
+      "fields": [
+        {
+          "field": 0,
+          "role": 1,
+          "text": "Yorororholt Kelumeth",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 3,
+          "text": "Yororormere",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 2,
+          "role": 4,
+          "text": "Yorilashfell Cup",
+          "knowledge": 0,
+          "spoken": true
+        }
+      ],
+      "questions": [
+        "Who posted that?",
+        "Where was the notice posted?",
+        "What was the notice about?"
+      ]
+    },
+    {
+      "id": "test:4:0",
+      "rule": "character_died_0",
+      "opening": "Someone died after a life in Yoraamere, if the story is right.",
+      "confidence": 20,
+      "fields": [
+        {
+          "field": 0,
+          "role": 1,
+          "text": "someone",
+          "knowledge": 3,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 8,
+          "text": "124",
+          "knowledge": 2,
+          "spoken": false
+        },
+        {
+          "field": 2,
+          "role": 3,
+          "text": "Yoraamere",
+          "knowledge": 2,
+          "spoken": true
+        }
+      ],
+      "questions": [
+        "Who died?",
+        "Where did they live?"
+      ]
+    },
+    {
+      "id": "test:39:0",
+      "rule": "treasure_crafted_0",
+      "opening": "Kelumenford Book was completed in Kelowaholt, according to the word going round.",
+      "confidence": 80,
+      "fields": [
+        {
+          "field": 0,
+          "role": 3,
+          "text": "Kelowaholt",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 4,
+          "text": "Kelumenford Book",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 2,
+          "role": 8,
+          "text": "190",
+          "knowledge": 0,
+          "spoken": false
+        },
+        {
+          "field": 3,
+          "role": 8,
+          "text": "6",
+          "knowledge": 0,
+          "spoken": false
+        },
+        {
+          "field": 4,
+          "role": 8,
+          "text": "108",
+          "knowledge": 0,
+          "spoken": false
+        }
+      ],
+      "questions": [
+        "What was made?",
+        "Where was it made?"
+      ]
+    },
+    {
+      "id": "test:1:0",
+      "rule": "war_declared_0",
+      "opening": "Kelenumden Kelowowmo and Yorenenford Yoraorme went to war.",
+      "confidence": 80,
+      "fields": [
+        {
+          "field": 0,
+          "role": 1,
+          "text": "Kelenumden Kelowowmo",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 2,
+          "text": "Yorenenford Yoraorme",
+          "knowledge": 0,
+          "spoken": true
+        }
+      ],
+      "questions": [
+        "Who made war?",
+        "Who did they declare war on?"
+      ]
+    },
+    {
+      "id": "test:7:0",
+      "rule": "paper_milled_0",
+      "opening": "Kelilashmere made paper from Rags.",
+      "confidence": 80,
+      "fields": [
+        {
+          "field": 0,
+          "role": 3,
+          "text": "Kelilashmere",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 8,
+          "text": "25",
+          "knowledge": 0,
+          "spoken": false
+        },
+        {
+          "field": 2,
+          "role": 6,
+          "text": "Rags",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 3,
+          "role": 8,
+          "text": "64",
+          "knowledge": 0,
+          "spoken": false
+        }
+      ],
+      "questions": [
+        "What was the paper made from?",
+        "Where is the mill?"
+      ]
+    },
+    {
+      "id": "test:48:0",
+      "rule": "harvest_failed_0",
+      "opening": "The drought harvest in Kelilowden fell short of supplies for the Yorashormere, if the rumour is true.",
+      "confidence": 20,
+      "fields": [
+        {
+          "field": 0,
+          "role": 3,
+          "text": "Kelilowden",
+          "knowledge": 2,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 3,
+          "text": "Yorashormere",
+          "knowledge": 2,
+          "spoken": true
+        }
+      ],
+      "questions": [
+        "Where did the harvest fail?",
+        "Who needed the supplies?"
+      ]
+    },
+    {
+      "id": "test:23:0",
+      "rule": "dragon_patron_named_0",
+      "opening": "The dragon host gained funding from Yoraawick Yorethashf, who named Yorililfell Kelaenwi its champion.",
+      "confidence": 80,
+      "fields": [
+        {
+          "field": 0,
+          "role": 1,
+          "text": "Yoraawick Yorethashf",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 2,
+          "text": "Yorililfell Kelaenwi",
+          "knowledge": 0,
+          "spoken": true
+        }
+      ],
+      "questions": [
+        "Who funded the dragon host?",
+        "Who was chosen as champion?"
+      ]
+    },
+    {
+      "id": "test:37:0",
+      "rule": "horse_bred_0",
+      "opening": "The stable in Kelowowmoor bred Yorenethholt Kelethi with Kelilashden Kelashow and expected a foal, if the story is right.",
+      "confidence": 20,
+      "fields": [
+        {
+          "field": 0,
+          "role": 3,
+          "text": "Kelowowmoor",
+          "knowledge": 2,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 1,
+          "text": "Yorenethholt Kelethi",
+          "knowledge": 2,
+          "spoken": true
+        },
+        {
+          "field": 2,
+          "role": 2,
+          "text": "Kelilashden Kelashow",
+          "knowledge": 2,
+          "spoken": true
+        }
+      ],
+      "questions": [
+        "Which horses were bred?",
+        "Where was the stable?"
+      ]
+    },
+    {
+      "id": "test:42:0",
+      "rule": "bandit_pressure_1",
+      "opening": "Kelumilwick Yorethas joined Kelashorgate Kelenas after seeking food at Yorashenfell.",
+      "confidence": 80,
+      "fields": [
+        {
+          "field": 0,
+          "role": 1,
+          "text": "Kelumilwick Yorethas",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 1,
+          "role": 2,
+          "text": "Kelashorgate Kelenas",
+          "knowledge": 0,
+          "spoken": true
+        },
+        {
+          "field": 2,
+          "role": 8,
+          "text": "115",
+          "knowledge": 0,
+          "spoken": false
+        },
+        {
+          "field": 3,
+          "role": 3,
+          "text": "Yorashenfell",
+          "knowledge": 0,
+          "spoken": true
+        }
+      ],
+      "questions": [
+        "Which band did they join?",
+        "Where did they look for food?"
+      ]
+    }
+  ]
+}

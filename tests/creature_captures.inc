@@ -246,7 +246,7 @@ static void CapturePonyGait(const char *directory)
         composition.focal_point = focus;
         BeginWorldLighting(camera, &composition);
         DrawRoadHorseTeam(&sim, base, clock, 0.72f, distance, 0.0f,
-                          false, CC_LOCAL_SCENE_ROAD);
+                          0.0f, 0.0f, false, CC_LOCAL_SCENE_ROAD, 1.0f);
         EndWorldLighting();
         EndMode3D();
         DrawText("Trot", 18, 18, 20, RAYWHITE);

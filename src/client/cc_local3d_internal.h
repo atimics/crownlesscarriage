@@ -31,10 +31,14 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
 Vector3 CcLocalStablePonyPositionInternal(int32_t horse);
 void CcLocalCreatureGaitsFixedStepInternal(float delta_time);
-bool CcLocalCreatureGaitPoseInternal(int32_t slot, CcCreatureRigProfile profile,
-    CcCreatureRigGait gait, float clock, float initial_phase,
-    Vector3 ground_position, float yaw, float scale, CcLocalSceneKind scene,
-    CcCreatureRigPose *pose);
+bool CcLocalCreatureGaitTargetInternal(int32_t slot,
+    CcCreatureRigProfile profile, CcCreatureRigGait gait, float clock,
+    float initial_phase, Vector3 ground_position, float yaw, float scale,
+    CcLocalSceneKind scene);
+bool CcLocalCreatureGaitPoseInternal(int32_t slot, Vector3 ground_position,
+    float yaw, CcCreatureRigPose *pose);
+Vector3 CcLocalRoadCarriageSocketInternal(Vector3 base, float yaw,
+    float pitch, float sway, float lateral, float height, float forward);
 void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time);
@@ -52,6 +56,8 @@ float CcLocalRoomArtRayDistanceInternal(Ray ray, Vector3 focus);
 bool CcLocalAgentPointSpaceBlockedInternal(const CcLocalAgent *agent,
                                             Vector3 proposed);
 
+/* Current authored screen ID, for input/capture diagnostics; -1 before a view. */
+int32_t CcLocalStreetCameraSceneInternal(void);
 Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
                                      bool advance, int32_t art_height);
 Camera3D CcLocalCombatCameraInternal(Camera3D base,

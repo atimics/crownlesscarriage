@@ -1,4 +1,9 @@
 if(CC_BUILD_CLIENT)
+    add_executable(carriage_presentation_tests tests/carriage_presentation_tests.c)
+    target_link_libraries(carriage_presentation_tests PRIVATE crownless_local_renderer raylib)
+    cc_strict_warnings(carriage_presentation_tests)
+    add_test(NAME carriage_presentation_timeline COMMAND carriage_presentation_tests)
+    add_test(NAME carriage_client_update_order COMMAND crownless_carriage --test-carriage-client)
     target_compile_definitions(crownless_carriage PRIVATE
         CC_CLIENT_SELF_TESTS=1
     )
@@ -27,6 +32,8 @@ if(CC_BUILD_CLIENT)
              COMMAND crownless_carriage --test-world-cards)
     add_test(NAME silverwick_mine_input
              COMMAND crownless_carriage --test-mine-input)
+    add_test(NAME mine_hauler_visual_identity
+             COMMAND crownless_carriage --test-mine-hauler-visual)
     add_test(NAME road_journey_save
              COMMAND crownless_carriage --test-road-journey-save)
     add_test(NAME abandoned_town_presence COMMAND crownless_carriage --test-abandoned-town)
@@ -56,6 +63,7 @@ if(CC_BUILD_CLIENT)
     target_compile_definitions(renderer_regression_tests PRIVATE
         CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     cc_strict_warnings(renderer_regression_tests)
+    add_test(NAME town_sky_data COMMAND renderer_regression_tests --sky-data)
     add_test(NAME renderer_skin_rotation COMMAND renderer_regression_tests)
     add_test(NAME physical_goods_displays COMMAND renderer_regression_tests --physical-goods)
     add_custom_target(run_renderer_graphics_tests
@@ -160,4 +168,12 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(terrain_tests)
     add_test(NAME seeded_hilly_terrain COMMAND terrain_tests)
 
+endif()
+
+if(TARGET renderer_regression_tests)
+  add_test(NAME continuous_road_gait COMMAND renderer_regression_tests --road-gait)
+endif()
+
+if(TARGET crownless_carriage)
+  add_test(NAME continuous_road_input COMMAND crownless_carriage --test-continuous-road)
 endif()

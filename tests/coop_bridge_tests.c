@@ -381,19 +381,26 @@ static void CheckTravelHoldClock(void)
     normal->journey.encounter_triggered = true;
     for (int scenario = 0; scenario < 3; ++scenario) {
         int target = scenario == 0 ? 0 : scenario == 1 ? 250 : 910;
+        int attempts = 0;
         while (normal->journey.active &&
-               normal->carriage.progress_milli < target) {
+               normal->carriage.progress_milli < target && ++attempts < 10000) {
             if (normal->journey.road_waiting_choice) {
                 CC_CHECK(ChooseSharedRoadOnward(
                     normal, error, sizeof(error)));
+            } else if (CcSimJourneyRequiresRoadChoice(normal)) {
+                const CcRoadSite *site = CcSimJourneyRoadSiteStop(normal);
+                CC_CHECK(site != NULL);
+                CC_CHECK(CcCoopApply(normal, "pass_road_site", site->id, 0, 0,
+                    error, sizeof(error)));
             } else {
                 CC_CHECK(CcCoopAdvance(normal, 1, error, sizeof(error)));
             }
         }
-        CC_CHECK(normal->journey.active);
+        if (attempts >= 10000) fprintf(stderr,"travel clock stalled phase%d progress%d target%d waiting%d pony%d\n",normal->journey.phase,normal->carriage.progress_milli,target,normal->journey.road_waiting_choice,normal->pony_company.encounter);
+        CC_CHECK(attempts < 10000 && normal->journey.active);
         *fast = *normal;
         CC_CHECK(CcCoopAdvanceTravel(fast, 1, 8, error, sizeof(error)));
-        CC_CHECK(CcCoopAdvance(normal, scenario == 1 ? 8 : 1, error, sizeof(error)));
+        CC_CHECK(CcCoopAdvance(normal, 8, error, sizeof(error)));
         CC_CHECK(CcSimHash(normal) == CcSimHash(fast));
     }
     CC_CHECK(!CcCoopAdvanceTravel(fast, 1, 9, error, sizeof(error)));

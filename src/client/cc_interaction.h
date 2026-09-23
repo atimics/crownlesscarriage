@@ -17,7 +17,8 @@ typedef enum CcInteractionKind {
     CC_INTERACTION_SITE,
     CC_INTERACTION_PORTAL,
     CC_INTERACTION_ACTION,
-    CC_INTERACTION_STOCK
+    CC_INTERACTION_STOCK,
+    CC_INTERACTION_OVEN_COURT
 } CcInteractionKind;
 
 typedef struct CcInteractionKey {

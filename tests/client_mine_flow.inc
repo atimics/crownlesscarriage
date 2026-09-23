@@ -344,8 +344,31 @@ static int RunMineInputRegression(void)
         if (actions.items[i].kind == CONTEXT_ACTION_PASS_ROAD_SITE) pass = i;
         if (actions.items[i].kind == CONTEXT_ACTION_CLEAR_ROAD_SITE) clear = i;
     }
+    MINE_CHECK(visit >= 0 && pass >= 0 && clear < 0,
+        "Mine branch shows entry and Travel on; secondary work is collapsed.");
+    int32_t options = -1;
+    for (int32_t i = 0; i < actions.count; ++i) {
+        MINE_CHECK(actions.items[i].kind != CONTEXT_ACTION_HOLD_TRAVEL,
+            "A turn-off must not also offer an overlapping Travel toggle.");
+        if (actions.items[i].kind == CONTEXT_ACTION_ROAD_OPTIONS) options = i;
+    }
+    MINE_CHECK(options >= 0, "Mine branch retains its site work behind options.");
+    Rectangle options_button = ContextActionBounds(options, actions.count, false);
+    client_test_pointer_active = true;
+    client_test_pointer = (Vector2){options_button.x + options_button.width/2,
+        options_button.y + options_button.height/2};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true; MINE_INPUT();
+    client_test_pointer_active = false;
+    MINE_CHECK(local.road_actions_expanded, "Site options open through ordinary input.");
+    actions = BuildContextActions(&sim, &local, view, 0, 0);
+    visit = pass = clear = -1;
+    for (int32_t i = 0; i < actions.count; ++i) {
+        if (actions.items[i].kind == CONTEXT_ACTION_VISIT_MINE) visit = i;
+        if (actions.items[i].kind == CONTEXT_ACTION_PASS_ROAD_SITE) pass = i;
+        if (actions.items[i].kind == CONTEXT_ACTION_CLEAR_ROAD_SITE) clear = i;
+    }
     MINE_CHECK(visit >= 0 && pass >= 0 && clear >= 0,
-        "Mine branch needs entry, continue and clearing cards.");
+        "Expanded site work keeps the original clear, entry and onward actions.");
     /* A roadside place is a turn-off, not a bed. Camping there used to spend
        the stop and take the mine's branch with it, so the card is gone and
        every site keeps a way to drive on instead. Checked at an ordinary site,
@@ -387,16 +410,17 @@ static int RunMineInputRegression(void)
         travel_state.journey.phase=CC_JOURNEY_PHASE_TRAVELLING;
         travel_local.journey_travel_active=true;
         travel_local.travel_hold_armed=false;
-        MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
-            "Hold to travel faster")==0,
-            "An active road must describe the current moving state.");
+        travel_state.journey.road_site_stop_mask = UINT32_MAX;
+        MINE_CHECK(strstr(TravelActionDetail(&travel_state,&travel_local),
+            "STOP") != NULL,
+            "An active road describes automatic motion, not holding a button.");
         travel_state.journey.phase=CC_JOURNEY_PHASE_BLOCKED;
         MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
-            "Choice ahead")==0,
+            "CHOOSE HOW TO PROCEED")==0,
             "A blocked road must describe its pending choice.");
         travel_state.journey.phase=CC_JOURNEY_PHASE_RESTING;
         MINE_CHECK(strcmp(TravelActionDetail(&travel_state,&travel_local),
-            "Resting until morning")==0,
+            "ROUTINE REST / SPACE TO STOP")==0,
             "A resting road must describe its saved phase.");
     }
     {
@@ -416,7 +440,9 @@ static int RunMineInputRegression(void)
             strstr(summary,"Carriage condition ")!=NULL,
             "The semantic carriage manifest must include quantities, free space, team, and condition.");
     }
-    Rectangle button=ContextActionBounds(visit,actions.count,false);
+    local.card_page = visit / ContextActionPageSize(&actions);
+    int32_t first_card = ContextCardFirst(&local, &actions);
+    Rectangle button=ContextActionBounds(visit-first_card,ContextCardCount(&actions,first_card),false);
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD,"Clicking the branch must open the yard.");

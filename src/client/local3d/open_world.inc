@@ -1,4 +1,11 @@
 
+/* Presentation-only carriage position: interpolated between journey ticks
+   while travelling, exact otherwise. Logic keeps using `position`. */
+static Vector3 CarriageRenderAnchor(const CcLocalWorldCarriageState *carriage)
+{
+    return CcLocalCarriageRenderPosition(carriage);
+}
+
 /* One local landscape, rebuilt on a world-aligned grid as the caravan moves. */
 static Model storybook_ground = {0};
 static uint32_t storybook_seed = 0;
@@ -960,10 +967,11 @@ Camera3D CcLocalStorybookCameraInternal(const CcWorldManifest *manifest,
        held on -right so the direction of travel reads left to right. Leading
        the focus forward puts the company left of centre with the road ahead
        open, and lifts it into the lower third of the frame. */
-    Vector3 focus = Vector3Add(carriage->position,
+    Vector3 anchor = CcLocalCarriageRenderPosition(carriage);
+    Vector3 focus = Vector3Add(anchor,
         Vector3Add(Vector3Scale(forward, 7.5f + wide * 9.0f),
                    (Vector3){0.0f, 3.0f + wide * 1.4f, 0.0f}));
-    Vector3 position = Vector3Add(carriage->position,
+    Vector3 position = Vector3Add(anchor,
         Vector3Add(Vector3Scale(right, -(31.0f + wide * 34.0f)),
                    (Vector3){0.0f, 3.6f + wide * 22.0f, 0.0f}));
     position.y = fmaxf(position.y,
@@ -1051,8 +1059,8 @@ static void DrawStorybookRoads(const CcSim *sim,
                                           start.z + (end.z - start.z) * a};
                     CcWorldPoint second = {start.x + (end.x - start.x) * b,
                                            start.z + (end.z - start.z) * b};
-                    if (hypotf(first.x - carriage->position.x,
-                               first.z - carriage->position.z) > 135.0f) continue;
+                    if (hypotf(first.x - CarriageRenderAnchor(carriage).x,
+                               first.z - CarriageRenderAnchor(carriage).z) > 135.0f) continue;
                     float amount_span = spans[span].to_amount - spans[span].from_amount;
                     Vector2 first_side = StorybookRoadSide(route,
                         spans[span].from_amount + amount_span * a, tangent_span);
@@ -1195,6 +1203,10 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
     }
     TreeRegionalStyle style = TreeStyleForKingdom(WORLD_GRASS);
     style.proportions = (Vector3){1.5f, 1.6f, 1.5f};
+    /* Build at most one new cell mesh per frame. A mesh build allocates and
+       uploads geometry, and doing every newly visible cell in one frame
+       hitch during travel; cells fill in over the next few frames instead. */
+    int32_t forest_builds = 0;
     for (int32_t row = -4; row <= 4; ++row) {
         for (int32_t col = -4; col <= 4; ++col) {
             int32_t x = origin_x + col;
@@ -1215,6 +1227,7 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
             if (cell == NULL) cell = free_cell;
             if (cell == NULL) continue;
             if (!cell->occupied) {
+                if (forest_builds >= 1) continue;
                 StorybookTree trees[16];
                 int count = StorybookCellTrees(manifest, x, z, trees,
                     cell->rocks, &cell->rock_count);
@@ -1222,6 +1235,7 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
                     EmitStorybookTrees(trees, count, style);
                     continue;
                 }
+                forest_builds++;
                 cell->occupied = true;
                 cell->x = x;
                 cell->z = z;
@@ -1235,6 +1249,75 @@ static void DrawStorybookScenery(const CcWorldManifest *manifest, Camera3D camer
             DrawModel(cell->batch.foliage, (Vector3){0}, 1.0f, WHITE);
             CcLocalRendererRecordStaticBatch(2, cell->batch.source_draw_count,
                                             cell->batch.vertex_count);
+        }
+    }
+}
+
+float CcLocalOpenWorldCarriageScaleInternal(const CcSim *sim,
+    const CcLocalWorldCarriageState *carriage)
+{
+    if (sim == NULL || carriage == NULL || !carriage->town_arrival ||
+        active_world_stream == NULL) return 1.0f;
+    const CcWorldSettlementPlacement *place = CcWorldSettlementPlacementForId(
+        &active_world_stream->manifest, sim->journey.destination_id);
+    if (place == NULL) return 1.0f;
+    float weight = SmoothStep01(fmaxf(0.0f, fminf(1.0f, carriage->camera_weight)));
+    return fmaxf(0.1f, place->profile_scale + (1.0f - place->profile_scale) * weight);
+}
+
+static Vector3 OpenWorldCarriageBase(const CcLocalWorldCarriageState *carriage,
+                                     float clock, bool presented)
+{
+    Vector3 base = presented ? CarriageRenderAnchor(carriage) : carriage->position;
+    if (carriage->storybook_travel) base.y += 0.13f;
+    if (carriage->pace > 0.02f) base.y += 0.025f + sinf(clock * 5.0f) * 0.018f;
+    return base;
+}
+
+void CcLocalOpenWorldCarriageTargetsInternal(const CcSim *sim,
+    const CcLocalWorldCarriageState *carriage, float clock, float delta_time)
+{
+    if (sim == NULL || carriage == NULL || !carriage->visible ||
+        active_world_stream == NULL) return;
+    Vector3 base = OpenWorldCarriageBase(carriage, clock, false);
+    float scale = CcLocalOpenWorldCarriageScaleInternal(sim, carriage);
+    float yaw = carriage->heading_yaw;
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, base, yaw, false,
+        CC_LOCAL_SCENE_ROAD, scale, placements);
+    /* Controller time is local animation time, not accelerated campaign time.
+       Fast-forward and the campaign-clock wrap must not reset planted feet. */
+    float dt = isfinite(delta_time) ? fmaxf(0.0f, fminf(0.1f, delta_time)) : 0.0f;
+    for (int32_t i = 0; i < count; ++i) {
+        CreatureGaitCache *cache = &creature_gaits[placements[i].slot];
+        float gait_clock = cache->ready ? cache->last_clock + dt : 0.0f;
+        if (carriage->storybook_travel && !carriage->town_arrival) {
+            (void)CreatureTravelTarget(placements[i].slot,
+                RoadHorseRigGait(carriage->pace), placements[i].initial_phase,
+                placements[i].base, yaw, placements[i].rig_scale,
+                carriage->route_id, carriage->pace, dt);
+        } else {
+            cache->travel_route = 0;
+            (void)CcLocalCreatureGaitTargetInternal(placements[i].slot,
+                CC_CREATURE_RIG_HORSE, RoadHorseRigGait(carriage->pace), gait_clock,
+                placements[i].initial_phase, placements[i].base, yaw,
+                placements[i].rig_scale, CC_LOCAL_SCENE_ROAD);
+        }
+    }
+    if (CcPonyOnRoad(sim) >= 0) {
+        Vector3 pony = LocalPoint(base, 2.7f * scale, 0.0f, 3.3f * scale, yaw);
+        pony.y = CcLocalTerrainHeightAt(pony.x, pony.z);
+        CreatureGaitCache *cache = &creature_gaits[CREATURE_GAIT_ROAD_PONY];
+        float gait_clock = cache->ready ? cache->last_clock + dt : 0.0f;
+        if (carriage->storybook_travel && !carriage->town_arrival) {
+            (void)CreatureTravelTarget(CREATURE_GAIT_ROAD_PONY,
+                RoadHorseRigGait(carriage->pace), .25f, pony, yaw, .96f * scale,
+                carriage->route_id, carriage->pace, dt);
+        } else {
+            cache->travel_route = 0;
+            (void)CcLocalCreatureGaitTargetInternal(CREATURE_GAIT_ROAD_PONY,
+                CC_CREATURE_RIG_HORSE, RoadHorseRigGait(carriage->pace), gait_clock,
+                0.25f, pony, yaw, 0.96f * scale, CC_LOCAL_SCENE_ROAD);
         }
     }
 }
@@ -1289,15 +1372,15 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
             &stream->manifest, sim->journey.destination_id) : NULL;
     if (arrival_place != NULL) {
         float scale = fmaxf(0.1f, arrival_place->profile_scale);
-        float heading = carriage->heading_yaw;
+        float heading = CcLocalCarriageRenderHeading(carriage);
         Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
         Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
         close_focus = Vector3Add(
-            carriage->position,
+            CarriageRenderAnchor(carriage),
             Vector3Add(Vector3Scale(forward, 5.2f * scale),
                        (Vector3){0.0f, 1.55f * scale, 0.0f}));
         close_position = Vector3Add(
-            carriage->position,
+            CarriageRenderAnchor(carriage),
             Vector3Add(Vector3Scale(forward, -10.5f * scale),
                        Vector3Add(Vector3Scale(right, 3.8f * scale),
                                   (Vector3){0.0f, 5.2f * scale, 0.0f})));
@@ -1339,7 +1422,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         camera = SnapCameraToArtPixels(camera, target.texture.height);
     }
     if (carriage != NULL && carriage->visible) {
-        camera = PonyConversationCamera(camera, carriage->position, carriage->heading_yaw, sim);
+        camera = PonyConversationCamera(camera, CarriageRenderAnchor(carriage), CcLocalCarriageRenderHeading(carriage), sim);
         focus = camera.target;
     }
     RememberPresentedCamera(CC_LOCAL_SCENE_STREET, camera, agent,
@@ -1369,7 +1452,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     BeginMode3D(camera);
     BeginWorldLighting(camera, &art);
     if (storybook) {
-        DrawStorybookGround(&stream->manifest, carriage->position);
+        DrawStorybookGround(&stream->manifest, CarriageRenderAnchor(carriage));
         DrawStorybookRoads(sim, &stream->manifest, carriage);
         /* Finish world-space ribbons before tree models change the transform. */
         rlDrawRenderBatchActive();
@@ -1402,26 +1485,29 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         (course->alarm_active || course->road_encounter)) {
         DrawCourseRunners(course, focus);
     }
+    Vector3 crew_carriage = carriage != NULL ?
+        CarriageRenderAnchor(carriage) : (Vector3){0};
+    float crew_heading = carriage != NULL ? CcLocalCarriageRenderHeading(carriage) : 0.0f;
+    float crew_pitch = 0.0f;
+    float crew_sway = 0.0f;
+    float crew_scale = 1.0f;
     if (carriage != NULL && carriage->visible) {
-        Vector3 carriage_base = carriage->position;
-        if (storybook) carriage_base.y += 0.13f;
-        if (carriage->pace > 0.02f) {
-            carriage_base.y += 0.025f + sinf(clock * 5.0f) * 0.018f;
-        }
-        float carriage_scale = 1.0f;
-        if (arrival_place != NULL) {
-            carriage_scale = arrival_place->profile_scale +
-                (1.0f - arrival_place->profile_scale) * camera_weight;
-        }
-        rlPushMatrix();
-        rlTranslatef(carriage_base.x, carriage_base.y, carriage_base.z);
-        rlScalef(carriage_scale, carriage_scale, carriage_scale);
-        rlTranslatef(-carriage_base.x, -carriage_base.y, -carriage_base.z);
+        Vector3 carriage_base = OpenWorldCarriageBase(carriage, clock, true);
+        float carriage_scale = CcLocalOpenWorldCarriageScaleInternal(sim, carriage);
+        CarriageChassisTilt(carriage_base, CcLocalCarriageRenderHeading(carriage),
+                            carriage->pace, clock, CC_LOCAL_SCENE_ROAD, false,
+                            carriage_scale, &crew_pitch, &crew_sway);
+        crew_carriage = carriage_base;
+        crew_heading = CcLocalCarriageRenderHeading(carriage);
+        crew_scale = carriage_scale;
+        /* Fold the arrival scale into the carriage instead of a graphics-only
+           matrix, so the team is supported where it is drawn. */
         DrawRoadCarriage(carriage_base, sim, clock,
-                         carriage->pace, carriage->travelled,
-                         carriage->heading_yaw,
-                         true, false, CC_LOCAL_SCENE_ROAD);
-        rlPopMatrix();
+                         carriage->pace, CcLocalCarriageRenderDistance(carriage),
+                         CcLocalCarriageRenderHeading(carriage),
+                         true, false, CC_LOCAL_SCENE_ROAD, carriage_scale,
+                         carriage->rolling_valid ? (float)carriage->rolling_distance :
+                             CcLocalCarriageRenderDistance(carriage) / carriage_scale);
         if (kingdom_view) {
             float marker_radius = fmaxf(2.8f, kingdom_span * 0.0055f);
             DrawCylinder((Vector3){carriage_base.x,
@@ -1443,7 +1529,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     }
     CcLocalAgent passenger;
     if (hero_embarked && crew_exchange != NULL) {
-        PrepareCrewPassenger(agent, carriage->position, carriage->heading_yaw, &passenger);
+        PrepareCrewPassenger(agent, crew_carriage, crew_heading, crew_pitch,
+                             crew_sway, crew_scale, &passenger);
         DrawRobotShell(&passenger);
     }
     DrawCrew(hero_embarked && crew_exchange != NULL ? &passenger : agent, 6);
@@ -1459,8 +1546,8 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     int32_t label_count = 0;
     if (hero_embarked && carriage != NULL && !kingdom_view && !storybook) {
         labels[label_count++] = (WorldLabel){
-            {carriage->position.x, carriage->position.y + 3.20f,
-             carriage->position.z}, "YOUR CARRIAGE", WORLD_TEAL};
+            {CarriageRenderAnchor(carriage).x, CarriageRenderAnchor(carriage).y + 3.20f,
+             CarriageRenderAnchor(carriage).z}, "YOUR CARRIAGE", WORLD_TEAL};
     } else if (!hero_embarked) {
         labels[label_count++] = (WorldLabel){
             {agent->position.x, agent->position.y + 2.50f,

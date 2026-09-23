@@ -134,13 +134,13 @@ typedef struct CcLocalTownScene {
     float trigger_x;
     float trigger_z;
     float target_x;
-    float target_y;
+    float target_y; /* Look-at height above target terrain. */
     float target_z;
     float camera_offset_x;
 
-    float camera_offset_y;
+    float camera_offset_y; /* Eye height above terrain at the camera station. */
     float camera_offset_z;
-    float fovy;
+    float fovy; /* Vertical framing span at target, not degrees or an ortho lens. */
 } CcLocalTownScene;
 
 typedef struct CcLocalPlaceProfile {
@@ -175,6 +175,17 @@ typedef struct CcLocalPlaceProfile {
     CcLocalCarriageLane carriage_lane[CC_LOCAL_CARRIAGE_LANE_CAPACITY];
     float building_yaw_degrees[CC_LOCAL_PLACE_BUILDING_CAPACITY];
 } CcLocalPlaceProfile;
+
+/* Same wall-front convention as the existing service door. Silverwick's
+ * primary hall faces the lane; rendering and pointing share this anchor. */
+static inline CcLocalLanePoint CcLocalOvenCourtAnchor(const CcLocalPlaceProfile *profile)
+{
+    if (profile == NULL || profile->primary_building < 0 ||
+        profile->primary_building >= profile->building_count) return (CcLocalLanePoint){0};
+    const CcLocalPlaceBuilding *hall = &profile->building[profile->primary_building];
+    return (CcLocalLanePoint){hall->x + hall->width - 2.2f,
+                             hall->z + hall->depth + 0.15f};
+}
 
 CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress);
 

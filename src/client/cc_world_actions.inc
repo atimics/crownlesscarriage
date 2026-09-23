@@ -171,10 +171,11 @@ static bool HandleRoadCarriageInteraction(
         }
         local->world_carriage.hero_embarked = true;
         local->world_carriage.camera_target = 0.0f;
-        local->carriage_stopped = false;
+        local->carriage_stopped = true;
+        local->road_actions_expanded = false;
         CcLocalAgentStop(&local->agent);
         (void)snprintf(message, capacity,
-                       "The company boards and the road goes on.");
+                       "Aboard. Choose Travel when ready.");
         return true;
     }
     if (local->interaction.repath_seconds <= 0.0f &&

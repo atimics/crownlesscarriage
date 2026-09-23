@@ -133,7 +133,26 @@ typedef struct CcLocalConvoyState {
 
 typedef struct CcLocalWorldCarriageState {
     Vector3 position;
+    /* Presentation-only position, interpolated between the last two journey
+       ticks so the carriage and camera do not step at the sim rate. Logic
+       keeps using `position`. */
+    Vector3 render_position;
+    Vector3 previous_tick_position;
     float heading_yaw;
+    /* Presentation-only heading and distance, interpolated with
+       render_position so wheels and attachments share one sample. */
+    float render_heading_yaw;
+    float previous_heading_yaw;
+    float render_travelled;
+    float previous_travelled;
+    bool presentation_valid;
+    /* Rolling history is presentation-only, never campaign/save state. */
+    double rolling_distance;
+    float rolling_last_travelled;
+    float rolling_last_scale;
+    float rolling_last_heading;
+    CcId rolling_route_id;
+    bool rolling_valid;
     float route_amount;
     float pace;
     float camera_weight;
@@ -149,6 +168,21 @@ typedef struct CcLocalWorldCarriageState {
     bool town_arrival;
     bool storybook_travel;
 } CcLocalWorldCarriageState;
+
+void CcLocalCarriagePublishPose(CcLocalWorldCarriageState *carriage,
+    Vector3 position, float heading, float travelled, bool advance_sample,
+    float alpha);
+void CcLocalCarriageInterpolate(CcLocalWorldCarriageState *carriage, float alpha);
+void CcLocalCarriageRoll(CcLocalWorldCarriageState *carriage, float scale);
+Vector3 CcLocalCarriageRenderPosition(const CcLocalWorldCarriageState *carriage);
+float CcLocalCarriageRenderHeading(const CcLocalWorldCarriageState *carriage);
+float CcLocalCarriageRenderDistance(const CcLocalWorldCarriageState *carriage);
+float CcLocalOpenWorldCarriageScaleInternal(const CcSim *sim,
+    const CcLocalWorldCarriageState *carriage);
+void CcLocalOpenWorldCarriageTargetsInternal(const CcSim *sim,
+    const CcLocalWorldCarriageState *carriage, float clock, float delta_time);
+void CcLocalCarriageGaitInterpolateInternal(float alpha);
+void CcLocalCarriageResetGaitsInternal(void);
 
 typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,
@@ -354,6 +388,11 @@ typedef struct CcLocalAgent {
     CcCombatState combat;
 } CcLocalAgent;
 
+typedef enum CcLocalActorVisualFamily {
+    CC_LOCAL_ACTOR_VISUAL_HUMAN,
+    CC_LOCAL_ACTOR_VISUAL_GOBLIN
+} CcLocalActorVisualFamily;
+
 typedef enum CcGuardDuty {
     CC_GUARD_TRAINING,
     CC_GUARD_RESPONDING,
@@ -539,6 +578,20 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
 int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
                            const CcSim *sim, float delta_time,
                            bool market_interior, bool advance_course);
+/* Same world step, but the caller owns the creature gait step. */
+int32_t CcLocalWorldUpdateNoGaits(CcLocalCourse *course, CcLocalAgent *player,
+                                  const CcSim *sim, float delta_time,
+                                  bool market_interior, bool advance_course);
+/* Advance every ready creature gait by that many fixed steps. */
+void CcLocalCreatureGaitsAdvanceInternal(int32_t steps);
+/* Publish the travelling road team's gait targets from the current carriage
+   pose, so the following gait step walks the rigs toward where the wagon is
+   now rather than where it was last frame. */
+void CcLocalRoadTravelHorseTargetsInternal(const CcSim *sim,
+    const CcLocalConvoyState *convoy, float clock);
+/* Fraction of a fixed step remaining in the local accumulator: the subframe
+   alpha for presentation interpolation. */
+float CcLocalCourseAlpha(const CcLocalCourse *course);
 void CcLocalCourseRaiseAlarm(CcLocalCourse *course);
 void CcLocalCourseRaiseAlarmNear(CcLocalCourse *course,
                                  const CcLocalAgent *player);
@@ -548,6 +601,9 @@ void CcLocalCourseStageRoadEncounter(CcLocalCourse *course,
 void CcLocalCourseStageMineEncounter(CcLocalCourse *course,
                                      CcLocalAgent *player,
                                      const CcSim *sim);
+CcLocalActorVisualFamily CcLocalAgentVisualFamily(const CcLocalAgent *agent);
+float CcLocalAgentVisualScale(const CcLocalAgent *agent);
+Vector3 CcLocalAgentVisualGroundContact(const CcLocalAgent *agent);
 void CcLocalCourseBindRaiderCompany(CcLocalCourse *course,
                                     const CcSim *sim);
 const char *CcLocalRaiderRoleName(CcLocalRaiderRole role);
@@ -633,6 +689,7 @@ float CcLocalRoadCarriageRouteLengthInternal(const CcSim *sim);
 float CcLocalRoadCarriageTravelInternal(int32_t progress_milli,
                                         float route_length);
 float CcLocalCarriageWheelRadiusInternal(int32_t wheel);
+float CcLocalCarriageWheelWorldRadiusInternal(int32_t wheel);
 float CcLocalCarriageWheelAngleInternal(float travelled, float radius);
 float CcLocalRoadTeamStrideInternal(void);
 float CcLocalRoadTeamGaitPhaseInternal(float travelled);

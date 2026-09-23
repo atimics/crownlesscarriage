@@ -57,9 +57,10 @@ void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
         course->world_simulation_accumulator / fixed_step));
 }
 
-int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
-                           const CcSim *sim, float delta_time,
-                           bool market_interior, bool advance_course)
+static int32_t CcLocalWorldUpdateInternal(
+    CcLocalCourse *course, CcLocalAgent *player, const CcSim *sim,
+    float delta_time, bool market_interior, bool advance_course,
+    bool step_gaits)
 {
     RefreshStreetMarketCrates(sim);
     if (course == NULL) {
@@ -81,7 +82,9 @@ int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
                                            (float)fixed_step);
             CcLocalCourseResolveContactsInternal(course, player);
         }
-        CcLocalCreatureGaitsFixedStepInternal((float)fixed_step);
+        if (step_gaits) {
+            CcLocalCreatureGaitsFixedStepInternal((float)fixed_step);
+        }
         course->world_simulation_accumulator -= fixed_step;
     }
     if (course->world_simulation_accumulator < 0.0) {
@@ -91,6 +94,43 @@ int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
     if (player != NULL) CcLocalAgentInterpolateInternal(player, amount);
     if (advance_course) CcLocalCourseInterpolateInternal(course, amount);
     return steps;
+}
+
+int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,
+                           const CcSim *sim, float delta_time,
+                           bool market_interior, bool advance_course)
+{
+    return CcLocalWorldUpdateInternal(course, player, sim, delta_time,
+                                      market_interior, advance_course, true);
+}
+
+/* Step the agent and course but leave the creature gaits to the caller, so a
+   travel frame can publish the current carriage target first and then walk the
+   rigs toward it. */
+int32_t CcLocalWorldUpdateNoGaits(CcLocalCourse *course, CcLocalAgent *player,
+                                  const CcSim *sim, float delta_time,
+                                  bool market_interior, bool advance_course)
+{
+    return CcLocalWorldUpdateInternal(course, player, sim, delta_time,
+                                      market_interior, advance_course, false);
+}
+
+void CcLocalCreatureGaitsAdvanceInternal(int32_t steps)
+{
+    const float fixed_step = 1.0f / 60.0f;
+    for (int32_t step = 0; step < steps; ++step) {
+        CcLocalCreatureGaitsFixedStepInternal(fixed_step);
+    }
+}
+
+float CcLocalCourseAlpha(const CcLocalCourse *course)
+{
+    if (course == NULL) return 0.0f;
+    const double fixed_step = 1.0 / 60.0;
+    double amount = course->world_simulation_accumulator / fixed_step;
+    if (amount < 0.0) amount = 0.0;
+    if (amount > 1.0) amount = 1.0;
+    return (float)amount;
 }
 
 void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time,
@@ -115,4 +155,83 @@ void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time,
     }
     CcLocalAgentInterpolateInternal(
         agent, agent->simulation_accumulator / fixed_step);
+}
+
+/* A sample belongs to a LOCAL fixed step, including a step on which no
+   journey tick elapsed. Direct/frame-driven producers publish at full blend. */
+void CcLocalCarriagePublishPose(CcLocalWorldCarriageState *c,
+    Vector3 position, float heading, float travelled, bool advance_sample,
+    float alpha)
+{
+    if (c == NULL || !isfinite(position.x) || !isfinite(position.y) ||
+        !isfinite(position.z) || !isfinite(heading) || !isfinite(travelled)) return;
+    if (advance_sample && c->presentation_valid) {
+        c->previous_tick_position = c->position;
+        c->previous_heading_yaw = c->heading_yaw;
+        c->previous_travelled = c->travelled;
+    } else {
+        c->previous_tick_position = position;
+        c->previous_heading_yaw = heading;
+        c->previous_travelled = travelled;
+    }
+    c->position = position;
+    c->heading_yaw = heading;
+    c->travelled = travelled;
+    c->presentation_valid = true;
+    CcLocalCarriageInterpolate(c, alpha);
+}
+
+void CcLocalCarriageInterpolate(CcLocalWorldCarriageState *c, float alpha)
+{
+    if (c == NULL || !c->presentation_valid) return;
+    float a = isfinite(alpha) ? fmaxf(0.0f, fminf(1.0f, alpha)) : 1.0f;
+    c->render_position = (Vector3){
+        c->previous_tick_position.x + (c->position.x - c->previous_tick_position.x) * a,
+        c->previous_tick_position.y + (c->position.y - c->previous_tick_position.y) * a,
+        c->previous_tick_position.z + (c->position.z - c->previous_tick_position.z) * a};
+    c->render_heading_yaw = c->previous_heading_yaw +
+        remainderf(c->heading_yaw - c->previous_heading_yaw, 2.0f * PI) * a;
+    c->render_travelled = c->previous_travelled +
+        (c->travelled - c->previous_travelled) * a;
+}
+
+Vector3 CcLocalCarriageRenderPosition(const CcLocalWorldCarriageState *c)
+{
+    return c->storybook_travel && c->presentation_valid ?
+        c->render_position : c->position;
+}
+
+float CcLocalCarriageRenderHeading(const CcLocalWorldCarriageState *c)
+{
+    return c->storybook_travel && c->presentation_valid ?
+        c->render_heading_yaw : c->heading_yaw;
+}
+
+float CcLocalCarriageRenderDistance(const CcLocalWorldCarriageState *c)
+{
+    return c->storybook_travel && c->presentation_valid ?
+        c->render_travelled : c->travelled;
+}
+
+/* Integrate ds/scale, not total_distance/current_scale: resizing a stopped
+   carriage must not spin its wheels. Trapezoidal integration handles smoothly
+   changing scale; an explicit route/reversal rebase retains angular phase. */
+void CcLocalCarriageRoll(CcLocalWorldCarriageState *c, float scale)
+{
+    if (c == NULL || !isfinite(scale) || scale <= 0.0f) return;
+    float distance = CcLocalCarriageRenderDistance(c);
+    float heading = CcLocalCarriageRenderHeading(c);
+    if (!isfinite(distance) || !isfinite(heading)) return;
+    bool rebase = !c->rolling_valid || c->rolling_route_id != c->route_id ||
+        fabsf(remainderf(heading - c->rolling_last_heading, 2.0f * PI)) > PI * 0.5f;
+    if (!c->rolling_valid) c->rolling_distance = (double)distance / scale;
+    else if (!rebase) {
+        c->rolling_distance += (double)(distance - c->rolling_last_travelled) *
+            0.5 * (1.0 / c->rolling_last_scale + 1.0 / scale);
+    }
+    c->rolling_last_travelled = distance;
+    c->rolling_last_scale = scale;
+    c->rolling_last_heading = heading;
+    c->rolling_route_id = c->route_id;
+    c->rolling_valid = true;
 }

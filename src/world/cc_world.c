@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define CC_WORLD_MAP_SCALE 0.75f
 #define CC_WORLD_MARGIN 64.0f
@@ -801,10 +802,14 @@ bool CcWorldStreamInit(CcWorldStream *stream, const CcSim *sim)
     return true;
 }
 
-void CcWorldStreamUpdate(CcWorldStream *stream, float focus_x, float focus_z,
-                         int32_t generation_budget)
+static double StreamNowSeconds(void)
 {
-    if (stream == NULL || !isfinite(focus_x) || !isfinite(focus_z)) return;
+    return (double)clock() / (double)CLOCKS_PER_SEC;
+}
+
+static void StreamRefreshDesired(CcWorldStream *stream, float focus_x,
+                                 float focus_z)
+{
     stream->tick += 1U;
     stream->focus_chunk_x = ChunkCoordinate(focus_x);
     stream->focus_chunk_z = ChunkCoordinate(focus_z);
@@ -822,8 +827,17 @@ void CcWorldStreamUpdate(CcWorldStream *stream, float focus_x, float focus_z,
             if (chunk != NULL) chunk->last_touched = stream->tick;
         }
     }
+}
+
+/* Generate pending desired chunks, nearest first, until the count budget or
+   the CPU-time deadline is reached. A deadline of zero means no time limit,
+   which keeps the untimed entry points fully deterministic. */
+static void StreamGenerate(CcWorldStream *stream, int32_t generation_budget,
+                           double deadline)
+{
     if (generation_budget < 0) generation_budget = 0;
     for (int32_t generated = 0; generated < generation_budget; ++generated) {
+        if (deadline > 0.0 && StreamNowSeconds() >= deadline) break;
         CcWorldChunk *nearest = NULL;
         int32_t nearest_distance = INT32_MAX;
         for (int32_t i = 0; i < CC_WORLD_STREAM_CAPACITY; ++i) {
@@ -841,16 +855,41 @@ void CcWorldStreamUpdate(CcWorldStream *stream, float focus_x, float focus_z,
     }
 }
 
-void CcWorldStreamFollowRoute(CcWorldStream *stream,
-                              const CcWorldRoutePlacement *route,
-                              CcId origin_id, float amount,
-                              int32_t generation_budget)
+static void StreamUpdateInternal(CcWorldStream *stream, float focus_x,
+                                 float focus_z, int32_t generation_budget,
+                                 double deadline)
+{
+    if (stream == NULL || !isfinite(focus_x) || !isfinite(focus_z)) return;
+    StreamRefreshDesired(stream, focus_x, focus_z);
+    StreamGenerate(stream, generation_budget, deadline);
+}
+
+void CcWorldStreamUpdate(CcWorldStream *stream, float focus_x, float focus_z,
+                         int32_t generation_budget)
+{
+    StreamUpdateInternal(stream, focus_x, focus_z, generation_budget, 0.0);
+}
+
+void CcWorldStreamUpdateTimed(CcWorldStream *stream, float focus_x,
+                              float focus_z, int32_t generation_budget,
+                              double maximum_seconds)
+{
+    double deadline = maximum_seconds > 0.0 ?
+        StreamNowSeconds() + maximum_seconds : 0.0;
+    StreamUpdateInternal(stream, focus_x, focus_z, generation_budget, deadline);
+}
+
+static void StreamFollowRouteInternal(CcWorldStream *stream,
+                                      const CcWorldRoutePlacement *route,
+                                      CcId origin_id, float amount,
+                                      int32_t generation_budget,
+                                      double deadline)
 {
     CcWorldPoint point;
     float heading;
-    if (stream == NULL || !isfinite(amount) || !CcWorldRoutePose(route, origin_id, amount,
-                                           &point, &heading)) return;
-    CcWorldStreamUpdate(stream, point.x, point.z, 0);
+    if (stream == NULL || !isfinite(amount) ||
+        !CcWorldRoutePose(route, origin_id, amount, &point, &heading)) return;
+    StreamUpdateInternal(stream, point.x, point.z, 0, 0.0);
     float length = CcWorldRouteLength(route);
     float ahead_amount = fminf(1.0f, amount +
         (length > 0.001f ? CC_WORLD_CHUNK_SIZE / length : 0.0f));
@@ -858,6 +897,7 @@ void CcWorldStreamFollowRoute(CcWorldStream *stream,
     (void)CcWorldRoutePose(route, origin_id, ahead_amount, &ahead, &heading);
     CcWorldPoint priority[] = {point, ahead};
     for (int32_t i = 0; i < 2 && generation_budget > 0; ++i) {
+        if (deadline > 0.0 && StreamNowSeconds() >= deadline) break;
         CcWorldChunk *chunk = FindChunk(
             stream, ChunkCoordinate(priority[i].x), ChunkCoordinate(priority[i].z));
         if (chunk != NULL && chunk->state == CC_WORLD_CHUNK_PENDING &&
@@ -867,8 +907,30 @@ void CcWorldStreamFollowRoute(CcWorldStream *stream,
         }
     }
     if (generation_budget > 0) {
-        CcWorldStreamUpdate(stream, point.x, point.z, generation_budget);
+        StreamUpdateInternal(stream, point.x, point.z, generation_budget,
+                             deadline);
     }
+}
+
+void CcWorldStreamFollowRoute(CcWorldStream *stream,
+                              const CcWorldRoutePlacement *route,
+                              CcId origin_id, float amount,
+                              int32_t generation_budget)
+{
+    StreamFollowRouteInternal(stream, route, origin_id, amount,
+                              generation_budget, 0.0);
+}
+
+void CcWorldStreamFollowRouteTimed(CcWorldStream *stream,
+                                   const CcWorldRoutePlacement *route,
+                                   CcId origin_id, float amount,
+                                   int32_t generation_budget,
+                                   double maximum_seconds)
+{
+    double deadline = maximum_seconds > 0.0 ?
+        StreamNowSeconds() + maximum_seconds : 0.0;
+    StreamFollowRouteInternal(stream, route, origin_id, amount,
+                              generation_budget, deadline);
 }
 
 static float ChunkHeightAt(const CcWorldChunk *chunk, float x, float z)

@@ -3,6 +3,7 @@
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_oven_court.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
 #include "sim/cc_identity_internal.h"
@@ -682,6 +683,12 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
                 PinEvent(set, sim->gossip[i].heard_event_id);
             }
         }
+    }
+    /* The Book retains the two latest explicitly acquired court notes, even
+       when the short engine event tape compacts. No remote refresh. */
+    for (int32_t i = 0; i < 2; ++i) {
+        const CcEvent *note = CcOvenCourtNote(sim, i);
+        if (note != NULL) PinEvent(set, note->id);
     }
     PinEvent(set, incoming_parent);
     PinEvent(set, sim->journey.parent_event_id);
@@ -1815,6 +1822,264 @@ void CcSimInitializeUnderroad(CcSim *sim)
         sim->dungeon_expedition.current_room = -1;
         sim->dungeon_expedition.encounter_room = -1;
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* generated Underroad network                                        */
+/* ------------------------------------------------------------------ */
+
+/* A separate deterministic stream, seeded from the world seed. Drawing from
+   sim->rng here would shift every later initializer and every runtime roll. */
+static uint32_t UnderroadMix(uint32_t value)
+{
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16U;
+    return value;
+}
+
+static uint32_t UnderroadNext(uint32_t *state)
+{
+    uint32_t value = *state;
+    value ^= value << 13U;
+    value ^= value >> 17U;
+    value ^= value << 5U;
+    *state = value == 0U ? UINT32_C(0x6d2b79f5) : value;
+    return *state;
+}
+
+static int32_t UnderroadRange(uint32_t *state, int32_t span)
+{
+    if (span <= 1) return 0;
+    return (int32_t)(UnderroadNext(state) % (uint32_t)span);
+}
+
+static int32_t UnderroadDistance(int32_t ax, int32_t ay, int32_t bx, int32_t by)
+{
+    int64_t dx = (int64_t)ax - (int64_t)bx;
+    int64_t dy = (int64_t)ay - (int64_t)by;
+    int64_t squared = dx * dx + dy * dy;
+    int64_t root = 0;
+    while ((root + 1) * (root + 1) <= squared) root++;
+    return (int32_t)root;
+}
+
+static int32_t UnderroadSettlementIndex(const CcSim *sim, CcId id)
+{
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        if (sim->settlements[i].id == id) return i;
+    }
+    return -1;
+}
+
+static void UnderroadAddNode(CcSim *sim, CcUnderroadNodeKind kind,
+                             int32_t settlement_id, int32_t faction_id,
+                             const char *name, int32_t map_x, int32_t map_y,
+                             uint32_t *state)
+{
+    CcUnderroadNetwork *network = &sim->underroad;
+    if (network->node_count >= CC_MAX_UNDERROAD_NODES) return;
+    CcUnderroadNode *node = &network->nodes[network->node_count];
+    *node = (CcUnderroadNode){0};
+    node->kind = kind;
+    node->settlement_id = settlement_id;
+    node->faction_id = faction_id;
+    node->map_x = map_x;
+    node->map_y = map_y;
+    node->depth = UnderroadRange(state, CC_UNDERROAD_LAYERS);
+    node->discovered = kind == CC_UNDERROAD_NODE_ENTRANCE ? 1 : 0;
+    (void)snprintf(node->name, sizeof(node->name), "%s", name);
+    node->seed = UnderroadMix((uint32_t)network->node_count *
+                                  UINT32_C(0x9e3779b9) ^ *state);
+    network->node_count++;
+}
+
+static bool UnderroadRoadExists(const CcUnderroadNetwork *network, int32_t a,
+                                int32_t b)
+{
+    for (int32_t i = 0; i < network->road_count; ++i) {
+        const CcUnderroadRoad *road = &network->roads[i];
+        if ((road->from_node == a && road->to_node == b) ||
+            (road->from_node == b && road->to_node == a)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int32_t UnderroadNearestLairFaction(const CcUnderroadNetwork *network,
+                                           int32_t node)
+{
+    int32_t best = -1;
+    int32_t best_distance = 0;
+    for (int32_t i = 0; i < network->node_count; ++i) {
+        if (network->nodes[i].kind != CC_UNDERROAD_NODE_LAIR) continue;
+        int32_t distance = UnderroadDistance(
+            network->nodes[node].map_x, network->nodes[node].map_y,
+            network->nodes[i].map_x, network->nodes[i].map_y);
+        if (best < 0 || distance < best_distance) {
+            best = i;
+            best_distance = distance;
+        }
+    }
+    return best < 0 ? -1 : network->nodes[best].faction_id;
+}
+
+static bool UnderroadAddRoad(CcSim *sim, int32_t a, int32_t b)
+{
+    CcUnderroadNetwork *network = &sim->underroad;
+    if (network->road_count >= CC_MAX_UNDERROAD_ROADS || a == b) return false;
+    if (UnderroadRoadExists(network, a, b)) return false;
+    uint32_t state = UnderroadMix((uint32_t)a * UINT32_C(0x85ebca6b) ^
+                                  (uint32_t)b * UINT32_C(0xc2b2ae35) ^
+                                  network->layout_seed);
+    CcUnderroadRoad *road = &network->roads[network->road_count];
+    *road = (CcUnderroadRoad){0};
+    road->from_node = a;
+    road->to_node = b;
+    road->kind = UnderroadRange(&state, 100) < 12 ? CC_UNDERROAD_ROAD_SMUGGLER
+                                                  : CC_UNDERROAD_ROAD_HAUL;
+    road->depth = UnderroadRange(&state, CC_UNDERROAD_LAYERS);
+    int32_t distance = UnderroadDistance(
+        network->nodes[a].map_x, network->nodes[a].map_y,
+        network->nodes[b].map_x, network->nodes[b].map_y);
+    road->length_cells = distance / 8;
+    if (road->length_cells < 1) road->length_cells = 1;
+    road->clearance = 1 + UnderroadRange(&state, 3);
+    road->condition = 300 + UnderroadRange(&state, 700);
+    road->security = UnderroadRange(&state, 11);
+    road->faction_id = UnderroadNearestLairFaction(network, a);
+    road->toll_milli = road->kind == CC_UNDERROAD_ROAD_HAUL
+                           ? 40 + UnderroadRange(&state, 120)
+                           : 0;
+    road->dig_progress_milli = UnderroadRange(&state, 1000);
+    road->seed = UnderroadMix((uint32_t)a ^ ((uint32_t)b << 8U) ^ state);
+    network->road_count++;
+    return true;
+}
+
+static void GenerateUnderroadNetwork(CcSim *sim)
+{
+    CcUnderroadNetwork *network = &sim->underroad;
+    *network = (CcUnderroadNetwork){0};
+    network->layout_seed = UnderroadMix(sim->world_seed ^ UINT32_C(0x4d4f554e));
+    network->revision = 1U;
+    uint32_t state = network->layout_seed;
+
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *settlement = &sim->settlements[i];
+        /* Consume x, then y, then depth in UnderroadAddNode. C does not
+           specify argument evaluation order; inline RNG calls gave GCC and
+           Clang different networks when loading the same old campaign. */
+        int32_t map_x = settlement->map_x + UnderroadRange(&state, 41) - 20;
+        int32_t map_y = settlement->map_y + UnderroadRange(&state, 41) - 20;
+        UnderroadAddNode(sim, CC_UNDERROAD_NODE_ENTRANCE, i, -1,
+                         settlement->name, map_x, map_y, &state);
+    }
+
+    int32_t lair_settlement =
+        UnderroadSettlementIndex(sim, sim->goblins.lair_settlement_id);
+    static const char *const lair_names[3] = {"Red Lair", "Purple Lair",
+                                              "Blue Lair"};
+    for (int32_t clan = 0; clan < 3; ++clan) {
+        int32_t anchor_x = lair_settlement >= 0
+                               ? sim->settlements[lair_settlement].map_x
+                               : 0;
+        int32_t anchor_y = lair_settlement >= 0
+                               ? sim->settlements[lair_settlement].map_y
+                               : 0;
+        int32_t map_x = anchor_x + UnderroadRange(&state, 81) - 40;
+        int32_t map_y = anchor_y + UnderroadRange(&state, 81) - 40;
+        UnderroadAddNode(sim, CC_UNDERROAD_NODE_LAIR, lair_settlement, clan,
+                         lair_names[clan], map_x, map_y, &state);
+    }
+
+    int32_t dragon_settlement =
+        UnderroadSettlementIndex(sim, sim->dragon.lair_settlement_id);
+    int32_t dragon_x = dragon_settlement >= 0
+                           ? sim->settlements[dragon_settlement].map_x
+                           : 0;
+    int32_t dragon_y = dragon_settlement >= 0
+                           ? sim->settlements[dragon_settlement].map_y
+                           : 0;
+    UnderroadAddNode(sim, CC_UNDERROAD_NODE_HOARD, dragon_settlement, -1,
+                     "Hoard Threshold", dragon_x, dragon_y, &state);
+
+    /* Candidate edges, nearest first, then a minimum spanning tree for
+       connectivity and the shortest remaining edges for loops. */
+    typedef struct UnderroadCandidate {
+        int32_t a;
+        int32_t b;
+        int32_t distance;
+    } UnderroadCandidate;
+    UnderroadCandidate candidates[CC_MAX_UNDERROAD_NODES *
+                                  CC_MAX_UNDERROAD_NODES];
+    int32_t candidate_count = 0;
+    for (int32_t a = 0; a < network->node_count; ++a) {
+        for (int32_t b = a + 1; b < network->node_count; ++b) {
+            candidates[candidate_count].a = a;
+            candidates[candidate_count].b = b;
+            candidates[candidate_count].distance = UnderroadDistance(
+                network->nodes[a].map_x, network->nodes[a].map_y,
+                network->nodes[b].map_x, network->nodes[b].map_y);
+            candidate_count++;
+        }
+    }
+    for (int32_t i = 1; i < candidate_count; ++i) {
+        UnderroadCandidate key = candidates[i];
+        int32_t j = i - 1;
+        while (j >= 0 && (candidates[j].distance > key.distance ||
+                          (candidates[j].distance == key.distance &&
+                           (candidates[j].a > key.a ||
+                            (candidates[j].a == key.a &&
+                             candidates[j].b > key.b))))) {
+            candidates[j + 1] = candidates[j];
+            j--;
+        }
+        candidates[j + 1] = key;
+    }
+
+    int32_t parent[CC_MAX_UNDERROAD_NODES];
+    for (int32_t i = 0; i < network->node_count; ++i) parent[i] = i;
+    for (int32_t i = 0; i < candidate_count; ++i) {
+        int32_t root_a = candidates[i].a;
+        int32_t root_b = candidates[i].b;
+        while (parent[root_a] != root_a) root_a = parent[root_a];
+        while (parent[root_b] != root_b) root_b = parent[root_b];
+        if (root_a == root_b) continue;
+        parent[root_a] = root_b;
+        (void)UnderroadAddRoad(sim, candidates[i].a, candidates[i].b);
+    }
+    int32_t degree[CC_MAX_UNDERROAD_NODES] = {0};
+    for (int32_t i = 0; i < network->road_count; ++i) {
+        degree[network->roads[i].from_node]++;
+        degree[network->roads[i].to_node]++;
+    }
+    for (int32_t i = 0;
+         i < candidate_count && network->road_count < CC_MAX_UNDERROAD_ROADS;
+         ++i) {
+        int32_t a = candidates[i].a;
+        int32_t b = candidates[i].b;
+        if (degree[a] >= 4 || degree[b] >= 4) continue;
+        if (UnderroadAddRoad(sim, a, b)) {
+            degree[a]++;
+            degree[b]++;
+        }
+    }
+    network->generated = true;
+}
+
+void CcSimInitializeUnderroadNetwork(CcSim *sim)
+{
+    if (sim == NULL || sim->underroad.generated) return;
+    GenerateUnderroadNetwork(sim);
+}
+
+const CcUnderroadNetwork *CcSimUnderroadNetwork(const CcSim *sim)
+{
+    return sim == NULL ? NULL : &sim->underroad;
 }
 
 const CcDungeon *CcSimDungeon(const CcSim *sim, CcId id)
@@ -4755,6 +5020,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcPoniesInit(sim);
     CcMineInitializeLoad(sim);
     CcSimInitializeOccupations(sim);
+    CcSimInitializeUnderroadNetwork(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -19569,7 +19835,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_MINE_LEARN_LEAD ||
         command->kind == CC_COMMAND_MINE_REPORT_RETURN ||
         command->kind == CC_COMMAND_PICKUP_RELIEF_CRATE ||
-        command->kind == CC_COMMAND_STOW_RELIEF_CRATE;
+        command->kind == CC_COMMAND_STOW_RELIEF_CRATE ||
+        command->kind == CC_COMMAND_OBSERVE_OVEN_COURT;
     if (sim->journey.active && settlement_action) {
         SetError(error, error_capacity,
                  "Settlement business must wait until the carriage arrives.");
@@ -19599,6 +19866,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_FOOD_RELIEF_EXECUTE:
             /* Handled before the player encounter gates. */
             return ApplyFoodReliefCommand(sim, command, error, error_capacity);
+        case CC_COMMAND_OBSERVE_OVEN_COURT:
+            return CcOvenCourtRecord(sim, command, error, error_capacity);
         case CC_COMMAND_MINE_LEARN_LEAD:
             return ApplyMineLearnLead(sim,command,error,error_capacity);
         case CC_COMMAND_MINE_REPORT_RETURN:
@@ -21049,6 +21318,53 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity,
                      "Dungeon expedition state is invalid.");
             return false;
+        }
+    }
+    if (sim->schema_version == CC_SIM_SCHEMA_VERSION) {
+        const CcUnderroadNetwork *network = &sim->underroad;
+        if (network->node_count < 0 ||
+            network->node_count > CC_MAX_UNDERROAD_NODES ||
+            network->road_count < 0 ||
+            network->road_count > CC_MAX_UNDERROAD_ROADS) {
+            SetError(error, error_capacity,
+                     "Underroad network counts are invalid.");
+            return false;
+        }
+        if (network->generated &&
+            (network->layout_seed == 0U || network->revision == 0U)) {
+            SetError(error, error_capacity,
+                     "Underroad network seed is invalid.");
+            return false;
+        }
+        for (int32_t i = 0; i < network->node_count; ++i) {
+            const CcUnderroadNode *node = &network->nodes[i];
+            if (node->kind < CC_UNDERROAD_NODE_ENTRANCE ||
+                node->kind > CC_UNDERROAD_NODE_JUNCTION ||
+                !ValidBoundedText(node->name, sizeof(node->name)) ||
+                node->depth < 0 || node->depth >= CC_UNDERROAD_LAYERS ||
+                node->discovered < 0 || node->discovered > 1 ||
+                node->settlement_id >= sim->settlement_count) {
+                SetError(error, error_capacity, "Underroad node is invalid.");
+                return false;
+            }
+        }
+        for (int32_t i = 0; i < network->road_count; ++i) {
+            const CcUnderroadRoad *road = &network->roads[i];
+            if (road->from_node < 0 || road->from_node >= network->node_count ||
+                road->to_node < 0 || road->to_node >= network->node_count ||
+                road->from_node == road->to_node ||
+                road->kind < CC_UNDERROAD_ROAD_HAUL ||
+                road->kind > CC_UNDERROAD_ROAD_NATURAL ||
+                road->depth < 0 || road->depth >= CC_UNDERROAD_LAYERS ||
+                road->length_cells < 1 || road->clearance < 1 ||
+                road->condition < 0 || road->condition > 1000 ||
+                road->security < 0 || road->security > 100 ||
+                road->toll_milli < 0 || road->toll_milli > 1000 ||
+                road->dig_progress_milli < 0 ||
+                road->dig_progress_milli > 1000) {
+                SetError(error, error_capacity, "Underroad road is invalid.");
+                return false;
+            }
         }
     }
     for (int32_t i = 0; i < sim->monster_count; ++i) {

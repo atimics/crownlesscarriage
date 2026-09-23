@@ -537,6 +537,42 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(expedition->encounter_reaction);
         HASH_VALUE(expedition->encounter_room);
     }
+    if (sim->schema_version >= 108U) {
+        const CcUnderroadNetwork *network = &sim->underroad;
+        HASH_VALUE(network->generated);
+        HASH_VALUE(network->layout_seed);
+        HASH_VALUE(network->revision);
+        HASH_VALUE(network->node_count);
+        HASH_VALUE(network->road_count);
+        for (int32_t i = 0; i < network->node_count; ++i) {
+            const CcUnderroadNode *node = &network->nodes[i];
+            HASH_VALUE(node->kind);
+            HASH_VALUE(node->settlement_id);
+            HASH_VALUE(node->faction_id);
+            HASH_VALUE(node->map_x);
+            HASH_VALUE(node->map_y);
+            HASH_VALUE(node->depth);
+            HASH_VALUE(node->discovered);
+            hash = HashString(hash, node->name);
+            HASH_VALUE(node->seed);
+        }
+        for (int32_t i = 0; i < network->road_count; ++i) {
+            const CcUnderroadRoad *road = &network->roads[i];
+            HASH_VALUE(road->from_node);
+            HASH_VALUE(road->to_node);
+            HASH_VALUE(road->kind);
+            HASH_VALUE(road->depth);
+            HASH_VALUE(road->length_cells);
+            HASH_VALUE(road->clearance);
+            HASH_VALUE(road->condition);
+            HASH_VALUE(road->security);
+            HASH_VALUE(road->toll_milli);
+            HASH_VALUE(road->dig_progress_milli);
+            HASH_VALUE(road->faction_id);
+            HASH_VALUE(road->traversed);
+            HASH_VALUE(road->seed);
+        }
+    }
     for (int32_t i = 0; i < sim->situation_count; ++i) {
         const CcSituation *item = &sim->situations[i];
         HASH_VALUE(item->id); HASH_VALUE(item->kind); HASH_VALUE(item->status);
@@ -544,7 +580,7 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(item->cause_event_id); HASH_VALUE(item->good);
         HASH_VALUE(item->quantity); HASH_VALUE(item->progress); HASH_VALUE(item->reward);
         HASH_VALUE(item->created_day); HASH_VALUE(item->deadline_day);
-        if (sim->schema_version >= 108U) {
+        if (sim->schema_version >= 109U) {
             HASH_VALUE(item->loading_progress);
             HASH_VALUE(item->loading_crate_carried);
         }

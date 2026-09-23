@@ -1,0 +1,7 @@
+add_executable(oven_court_tests tests/oven_court_tests.c)
+target_link_libraries(oven_court_tests PRIVATE crownless_persistence crownless_coop)
+cc_strict_warnings(oven_court_tests)
+add_test(NAME oven_court_economy_and_memory COMMAND oven_court_tests)
+if(CC_BUILD_CLIENT AND NOT EMSCRIPTEN)
+    add_test(NAME oven_court_input_flow COMMAND crownless_carriage --test-oven-court)
+endif()

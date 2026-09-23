@@ -169,7 +169,7 @@ static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
 
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
-    if (request->capture_ux && request->capture_ux_view >= 21) {
+    if (request->capture_ux && request->capture_ux_view >= 21 && request->capture_ux_view <= 24) {
         char path[1024], error[256];
         if (!ResolveClientAssetPath(CC_DEEP_WYRM_ASSET, path, sizeof(path))) return false;
         if (!CcStartingCampaignDeepWyrm(sim, path, error, sizeof(error))) {
@@ -714,7 +714,7 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
         (*scene->view) = VIEW_CARRIAGE;
         return true;
     }
-    if (request->capture_ux && request->capture_ux_view >= 21) {
+    if (request->capture_ux && request->capture_ux_view >= 21 && request->capture_ux_view <= 24) {
         scene->local->adventure_ui = true;
         if (request->capture_ux_view == 23) {
             *scene->view = VIEW_LEDGER;
@@ -741,6 +741,51 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             scene->local->book_offset=2;
         }
         return InitializeOpenWorld(scene->sim, scene->local, false);
+    }
+    if (request->capture_ux && request->capture_ux_view >= 25) {
+        /* Explicitly staged economic cases, not a claimed ordinary playthrough. */
+        CcSim *sim = scene->sim;
+        LocalState *local = scene->local;
+        CcSettlement *town = CcSimSettlementMutable(sim, CcOvenCourtPlace(sim)->id);
+        if (town == NULL) return false;
+        sim->player.location_id = town->id;
+        sim->carriage.location_id = town->id;
+        sim->player.accepted_situation_id = 0U;
+        town->service_mask |= UINT32_C(1) << CC_SERVICE_BAKERY;
+        town->production[CC_GOOD_BREAD] = 12;
+        town->stock[CC_GOOD_BREAD] = 0;
+        town->stock[CC_GOOD_WHEAT] = 0;
+        if (request->capture_ux_view == 27 || request->capture_ux_view == 30) {
+            town->service_mask &= ~(UINT32_C(1) << CC_SERVICE_BAKERY);
+            town->stock[CC_GOOD_WHEAT] = 24;
+        }
+        if (request->capture_ux_view == 28) {
+            town->stock[CC_GOOD_BREAD] = 8;
+            town->stock[CC_GOOD_WHEAT] = 24;
+        }
+        CcLocalBindPlace(sim);
+        local->adventure_ui = true;
+        local->opening_step = CC_LOCAL_OPENING_COMPLETE;
+        local->course.automatic_alarm = false;
+        CcLocalLanePoint oven = CcLocalOvenCourtAnchor(CcLocalPlaceProfileForSettlement(town));
+        RepositionHero(local, (Vector2){oven.x, oven.z + 1.1f}, false);
+        (void)CcLocalWorldUpdate(&local->course, &local->agent, sim, 0.2f, false, true);
+        *scene->view = VIEW_LOCAL;
+        if (request->capture_ux_view > 25) {
+            char error[192];
+            CcCommand inspect = {.kind = CC_COMMAND_OBSERVE_OVEN_COURT, .target_id = town->id};
+            if (!CcSimApply(sim, &inspect, error, sizeof(error)) || !CcOvenCourtRead(sim, &local->oven_observation)) return false;
+            local->oven_note_event = CcOvenCourtNote(sim, 0)->id;
+            local->oven_page = request->capture_ux_view == 30 ? 1 : 0;
+            *scene->view = VIEW_OVEN_COURT;
+        }
+        if (request->capture_ux_view == 29) {
+            /* A later supply change does not edit the acquired note. */
+            town->stock[CC_GOOD_WHEAT] = 24;
+            *scene->view = VIEW_LEDGER;
+            local->book_page = 3; local->book_offset = 0;
+        }
+        return true;
     }
     if (request->capture_ux) {
         scene->local->adventure_ui = true;
@@ -837,7 +882,7 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             scene->local->trade_mode = 5;
             scene->local->trade_good = (CcGood)1;
         }
-        if (request->capture_ux_view == 4) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 3; }
+        if (request->capture_ux_view == 4) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 0; }
         if (request->capture_ux_view == 11 || request->capture_ux_view == 12) {
             (*scene->view) = VIEW_CARRIAGE;
             scene->local->carriage_tab = CARRIAGE_PONIES;

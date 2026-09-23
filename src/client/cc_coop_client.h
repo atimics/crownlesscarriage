@@ -19,6 +19,8 @@ void CcCoopClientReturnToTitle(void);
 void CcCoopClientOpenCompany(void);
 bool CcCoopClientSetAppearance(uint32_t choices, char *error, size_t capacity);
 bool CcCoopClientPaused(void);
+bool CcCoopClientTravelStopped(void);
+bool CcCoopClientSetTravelStopped(CcSim *sim, bool stopped, char *error, size_t capacity);
 bool CcCoopClientTogglePause(char *error, size_t capacity);
 uint32_t CcCoopClientAppearance(void);
 bool CcCoopClientHasSession(void);

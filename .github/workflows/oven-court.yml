@@ -1,0 +1,69 @@
+name: Oven Court
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/oven-court.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/dialogue/**'
+      - 'tools/capture_oven_court.py'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: oven-court-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    name: Oven Court input, economy and rendered evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check dialogue evidence provenance
+        run: |
+          python3 tests/dialogue_fact_question_tests.py
+          python3 tests/dialogue_fact_policy_tests.py
+          python3 tools/language/model_identity.py --check
+          git diff --check
+      - name: Install native dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev
+          libsqlite3-dev libx11-dev libxcursor-dev libxext-dev
+          libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
+      - name: Configure
+        run: cmake -S . -B build-oven -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON
+      - name: Build
+        id: build
+        run: cmake --build build-oven --parallel 4
+      - name: Check ordinary input and economic contracts
+        run: |
+          ulimit -s 65536
+          xvfb-run -a ctest --test-dir build-oven --output-on-failure --parallel 2 -R 'oven_court|town_production|bakery_support|food_relief|nutrition|custody|adventure_input|adventure_trade|adventure_town|capture.*(request|contract)|town_arrival|town_departure|shared_carriage_bridge|simulation_resume|persistence_field_contract|production_contract'
+      - name: Capture staged court states and large text
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: >-
+          xvfb-run -a python3 tools/capture_oven_court.py build-oven/crownless_carriage
+          --out build-oven/oven-review --revision "$(git rev-parse HEAD)"
+      - name: Retain exact native binary and test revision
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          mkdir -p build-oven/oven-review
+          git rev-parse HEAD > build-oven/oven-review/revision.txt
+          cp build-oven/crownless_carriage build-oven/oven-review/crownless_carriage
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: oven-court-review
+          path: |
+            build-oven/oven-review/
+            build-oven/Testing/Temporary/LastTest.log
+          if-no-files-found: error
+          retention-days: 14

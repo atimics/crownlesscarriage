@@ -1,0 +1,15 @@
+{
+  "count": 381,
+  "valid": 381,
+  "exact": 375,
+  "different": {
+    "count": 307,
+    "valid": 307,
+    "exact": 305
+  },
+  "defer": {
+    "count": 170,
+    "valid": 170,
+    "exact": 170
+  }
+}

@@ -45,6 +45,11 @@ with tempfile.TemporaryDirectory() as folder:
         assert (world, view['member']) in worlds.visits
         time.sleep(1.1)
         subprocess.run(args + ['resume'], env=env, check=True, timeout=30)
+        subprocess.run(args + ['travel'], env=env, check=True, timeout=30)
+        assert worlds.view(world, guest, campaign=True)['travel_stopped']
+        before = worlds.view(world, owner, campaign=True)['campaign']
+        worlds.tick(time.monotonic() + 3)
+        assert worlds.view(world, owner, campaign=True)['campaign'] == before
     finally:
         server.shutdown()
         server.server_close()

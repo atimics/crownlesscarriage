@@ -83,12 +83,20 @@ static const Vector3 carriage_wheel_centers[4] = {
 
 /* The shipped tyres measure 0.808 and 0.628 across their radius and sit with
    their bottoms on the ground, so the front pair is the tall one and each hub
-   hangs at the height its wheel rolls on. One number both picks a wheel's
-   meshes out of the model and turns them: a wheel measured at one size and
-   rolled at another slips. */
+   hangs at the height its wheel rolls on. This is the model-space radius: it
+   picks a wheel's meshes out of the model and measures it in the frame the
+   asset was authored in. Roll it against model-space distance only. */
 float CcLocalCarriageWheelRadiusInternal(int32_t wheel)
 {
     return wheel < 2 ? 0.81f : 0.63f;
+}
+
+/* Distance along the road is world-space, so a wheel that rolls on it needs
+   its radius in world space too: the model radius times the scale the carriage
+   is drawn at. One displayed circumference then turns the wheel once. */
+float CcLocalCarriageWheelWorldRadiusInternal(int32_t wheel)
+{
+    return CcLocalCarriageWheelRadiusInternal(wheel) * CARRIAGE_ASSET_SCALE;
 }
 
 static void ClassifyCarriageWheels(const Model *model)
@@ -316,6 +324,11 @@ typedef struct CreatureGaitCache {
     CcCreatureRigController controller;
     CcCreatureRigWorldCommand command;
     CcCreatureRigPose pose;
+    CcCreatureRigPose previous_pose;
+    Vector3 previous_ground;
+    float previous_yaw;
+    float render_alpha;
+    bool previous_valid;
     CcCreatureRigProfile profile;
     CcLocalSceneKind scene;
     float scale;
@@ -323,6 +336,10 @@ typedef struct CreatureGaitCache {
     float pending_seconds;
     CcCreatureRigGait requested_gait;
     bool ready;
+    CcId travel_route;
+    Vector3 pre_transport_ground;
+    float pre_transport_yaw;
+    bool travel_transported;
 } CreatureGaitCache;
 
 static CreatureGaitCache creature_gaits[CREATURE_GAIT_SLOT_COUNT] = {0};
@@ -1843,6 +1860,13 @@ void CcLocalCreatureGaitsFixedStepInternal(float delta_time)
     for (int32_t i = 0; i < CREATURE_GAIT_SLOT_COUNT; ++i) {
         CreatureGaitCache *cache = &creature_gaits[i];
         if (!cache->ready) continue;
+        cache->previous_pose = cache->pose;
+        cache->previous_ground = cache->travel_transported ? cache->pre_transport_ground :
+            FromLimbVector(cache->controller.ground_position);
+        cache->previous_yaw = cache->travel_transported ? cache->pre_transport_yaw :
+            cache->controller.body_yaw;
+        cache->travel_transported = false;
+        cache->previous_valid = cache->pose.valid;
         CcCreatureRigWorldCommand command = cache->command;
         CcLimbVec3 previous = cache->controller.ground_position;
         float fraction = cache->pending_seconds > delta_time ?
@@ -1904,13 +1928,13 @@ static CcLimbVec3 CreaturePoseDirectionForDraw(CcLimbVec3 v, float yaw)
    this is a jump no step could cover. */
 #define CC_CREATURE_GAIT_REANCHOR_RANGE 3.0f
 
-bool CcLocalCreatureGaitPoseInternal(
+bool CcLocalCreatureGaitTargetInternal(
     int32_t slot, CcCreatureRigProfile profile,
     CcCreatureRigGait gait, float clock, float initial_phase,
     Vector3 ground_position,
-    float yaw, float scale, CcLocalSceneKind scene, CcCreatureRigPose *pose)
+    float yaw, float scale, CcLocalSceneKind scene)
 {
-    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT ||
         !isfinite(clock) || !isfinite(scale) || scale <= 0.0f) return false;
     CreatureGaitCache *cache = &creature_gaits[slot];
     /* The controller walks toward where it is told to be, and the drawn pose
@@ -1924,7 +1948,7 @@ bool CcLocalCreatureGaitPoseInternal(
                         FromLimbVector(cache->controller.ground_position)) >
             CC_CREATURE_GAIT_REANCHOR_RANGE * scale;
     bool reset = !cache->ready || cache->profile != profile ||
-        cache->scene != scene || cache->scale != scale || clock < cache->last_clock ||
+        cache->scene != scene || clock < cache->last_clock ||
         clock - cache->last_clock > 0.35f || jumped;
     if (reset) {
         *cache = (CreatureGaitCache){0};
@@ -1934,7 +1958,12 @@ bool CcLocalCreatureGaitPoseInternal(
         cache->scene = scene;
         cache->scale = scale;
         cache->ready = true;
+        cache->render_alpha = 1.0f;
         cache->controller.world_bound = false;
+    }
+    if (cache->scale != scale) {
+        if (!CcCreatureRigControllerSetScale(&cache->controller, scale)) return false;
+        cache->scale = scale;
     }
     bool changed = Vector3DistanceSqr(ground_position,
         FromLimbVector(cache->command.ground_position)) > 0.00000001f ||
@@ -1953,12 +1982,97 @@ bool CcLocalCreatureGaitPoseInternal(
             &cache->command, 0.0f, ProbeLocalSurface, ProbeLocalCollision,
             &context, &cache->pose)) return false;
     }
+    return true;
+}
+
+/* A road journey compresses kilometres into seconds. Do not force that map
+   displacement through a metre-scale leg solver: it would replant every frame.
+   Translate its coordinate frame, then let one real-time stride finish. The
+   cache remains at the actual rendered pony anchor and still probes terrain.
+   Route changes, scene resets and explicit placements retain the reset path. */
+static bool CreatureTravelTarget(int32_t slot, CcCreatureRigGait gait,
+    float phase, Vector3 ground, float yaw, float scale,
+    CcId route, float pace, float dt)
+{
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || !isfinite(dt) ||
+        !isfinite(pace) || dt < 0.0f || !isfinite(scale) || scale <= 0.0f)
+        return false;
+    CreatureGaitCache *cache = &creature_gaits[slot];
+    dt = fminf(dt, 0.1f);
+    float clock = cache->ready ? cache->last_clock + dt : 0.0f;
+    bool continuous = cache->ready && cache->travel_route == route &&
+        cache->profile == CC_CREATURE_RIG_HORSE && cache->scene == CC_LOCAL_SCENE_ROAD;
+    if (continuous && dt > 0.0f) {
+        float stride = fmaxf(0.0f, fminf(1.0f, pace)) * 2.2f * scale * dt;
+        CcLimbVec3 start = {ground.x - sinf(yaw) * stride,
+            ground.y, ground.z - cosf(yaw) * stride};
+        cache->pre_transport_ground = FromLimbVector(cache->controller.ground_position);
+        cache->pre_transport_yaw = cache->controller.body_yaw;
+        cache->travel_transported = CcCreatureRigControllerTransport(&cache->controller, start, yaw);
+        /* No catch-up queue: only this fixed step's physical stride remains. */
+        cache->pending_seconds = 0.0f;
+    } else if (cache->travel_route != route) {
+        cache->ready = false;
+    }
+    bool ok = CcLocalCreatureGaitTargetInternal(slot, CC_CREATURE_RIG_HORSE,
+        gait, clock, phase, ground, yaw, scale, CC_LOCAL_SCENE_ROAD);
+    cache->travel_route = route;
+    return ok;
+}
+
+void CcLocalCarriageResetGaitsInternal(void)
+{
+    creature_gaits[CREATURE_GAIT_ROAD_HORSE_LEFT] = (CreatureGaitCache){0};
+    creature_gaits[CREATURE_GAIT_ROAD_HORSE_RIGHT] = (CreatureGaitCache){0};
+    creature_gaits[CREATURE_GAIT_ROAD_PONY] = (CreatureGaitCache){0};
+}
+
+void CcLocalCarriageGaitInterpolateInternal(float alpha)
+{
+    float value = isfinite(alpha) ? fmaxf(0.0f, fminf(1.0f, alpha)) : 1.0f;
+    creature_gaits[CREATURE_GAIT_ROAD_HORSE_LEFT].render_alpha = value;
+    creature_gaits[CREATURE_GAIT_ROAD_HORSE_RIGHT].render_alpha = value;
+    creature_gaits[CREATURE_GAIT_ROAD_PONY].render_alpha = value;
+}
+
+/* Interpolate in WORLD space. A planted hoof whose world point is unchanged
+   stays exactly there even while its two pose-local origins move underneath.
+   Scene/teleport resets discard the previous sample, never sweep across it. */
+static CcLimbVec3 CreatureInterpolatedPointForDraw(CcLimbVec3 current,
+    CcLimbVec3 previous, const CreatureGaitCache *cache, Vector3 origin, float yaw)
+{
+    if (!cache->previous_valid || cache->render_alpha >= 1.0f) {
+        return CreaturePosePointForDraw(current, cache, origin, yaw);
+    }
+    Vector3 a = LocalPoint(cache->previous_ground, previous.x, previous.y,
+                           previous.z, cache->previous_yaw);
+    Vector3 b = LocalPoint(FromLimbVector(cache->controller.ground_position),
+                           current.x, current.y, current.z, cache->controller.body_yaw);
+    Vector3 world = Vector3Lerp(a, b, cache->render_alpha);
+    Vector3 d = Vector3Subtract(world, origin);
+    return (CcLimbVec3){(d.x * cosf(yaw) - d.z * sinf(yaw)) / cache->scale,
+        d.y / cache->scale, (d.x * sinf(yaw) + d.z * cosf(yaw)) / cache->scale};
+}
+
+bool CcLocalCreatureGaitPoseInternal(
+    int32_t slot, Vector3 ground_position,
+    float yaw, CcCreatureRigPose *pose)
+{
+    if (slot < 0 || slot >= CREATURE_GAIT_SLOT_COUNT || pose == NULL ||
+        !isfinite(yaw)) return false;
+    const CreatureGaitCache *cache = &creature_gaits[slot];
+    if (!cache->ready || Vector3Distance(ground_position,
+        FromLimbVector(cache->controller.ground_position)) >
+            CC_CREATURE_GAIT_REANCHOR_RANGE * cache->scale) return false;
     *pose = cache->pose;
-    pose->body = CreaturePosePointForDraw(pose->body, cache, ground_position, yaw);
+    pose->body = CreatureInterpolatedPointForDraw(pose->body,
+        cache->previous_pose.body, cache, ground_position, yaw);
     for (int32_t limb = 0; limb < pose->limb_count; ++limb) {
         for (int32_t joint = 0; joint <= pose->limbs[limb].segment_count; ++joint) {
-            pose->limbs[limb].joints[joint] = CreaturePosePointForDraw(
-                pose->limbs[limb].joints[joint], cache, ground_position, yaw);
+            pose->limbs[limb].joints[joint] = CreatureInterpolatedPointForDraw(
+                pose->limbs[limb].joints[joint],
+                cache->previous_pose.limbs[limb].joints[joint], cache,
+                ground_position, yaw);
         }
     }
     float turn = cache->controller.body_yaw - yaw;
@@ -1966,9 +2080,34 @@ bool CcLocalCreatureGaitPoseInternal(
     pose->forward = CreaturePoseDirectionForDraw(pose->forward, turn);
     pose->right = CreaturePoseDirectionForDraw(pose->right, turn);
     pose->support_normal = CreaturePoseDirectionForDraw(pose->support_normal, turn);
-    pose->body_width /= scale;
-    pose->body_depth /= scale;
-    pose->body_length /= scale;
+    if (cache->previous_valid && cache->render_alpha < 1.0f) {
+        float a = cache->render_alpha;
+        const CcCreatureRigPose *previous = &cache->previous_pose;
+        float previous_turn = cache->previous_yaw - yaw;
+        CcLimbVec3 old_vectors[4] = {previous->up, previous->forward,
+                                    previous->right, previous->support_normal};
+        CcLimbVec3 *vectors[4] = {&pose->up, &pose->forward,
+                                 &pose->right, &pose->support_normal};
+        for (int32_t i = 0; i < 4; ++i) {
+            CcLimbVec3 old = CreaturePoseDirectionForDraw(old_vectors[i], previous_turn);
+            Vector3 blended = Vector3Lerp(FromLimbVector(old), FromLimbVector(*vectors[i]), a);
+            if (Vector3LengthSqr(blended) > 0.000001f) {
+                *vectors[i] = ToLimbVector(Vector3Normalize(blended));
+            }
+        }
+        pose->body_width = previous->body_width + (pose->body_width - previous->body_width) * a;
+        pose->body_depth = previous->body_depth + (pose->body_depth - previous->body_depth) * a;
+        pose->body_length = previous->body_length + (pose->body_length - previous->body_length) * a;
+        pose->phase = previous->phase + remainderf(pose->phase - previous->phase, 1.0f) * a;
+        pose->planted_count = previous->planted_count;
+        pose->swinging_count = previous->swinging_count;
+        for (int32_t limb = 0; limb < pose->limb_count; ++limb) {
+            pose->limbs[limb].state = previous->limbs[limb].state;
+        }
+    }
+    pose->body_width /= cache->scale;
+    pose->body_depth /= cache->scale;
+    pose->body_length /= cache->scale;
     return pose->valid;
 }
 
