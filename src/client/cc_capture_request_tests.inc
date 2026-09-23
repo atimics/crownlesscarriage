@@ -37,7 +37,14 @@ static int RunCaptureRequestRegression(void)
         if (!CcCaptureRequestParse(6, ux, &request) || request.capture_ux_view != scene)
             return ClientRegressionFailure("Oven Court captures must retain the economic case.");
     }
-    ux[2] = "31";
+    for (int32_t scene = 31; scene <= 33; ++scene) {
+        char number[8];
+        (void)snprintf(number, sizeof(number), "%d", scene);
+        ux[2] = number;
+        if (!CcCaptureRequestParse(6, ux, &request) || request.capture_ux_view != scene)
+            return ClientRegressionFailure("Carriage captures retain top, end and empty states.");
+    }
+    ux[2] = "34";
     if (CcCaptureRequestParse(6, ux, &request))
         return ClientRegressionFailure("UX capture must enforce its view range.");
     char *storybook[] = {"crownless", "--capture-storybook", "0.25", "0.75", "story.png"};

@@ -1,0 +1,68 @@
+name: Carriage overview reading
+on:
+  pull_request:
+    paths:
+      - 'src/client/main.c'
+      - 'src/client/cc_carriage_overview.inc'
+      - 'src/client/cc_capture_request.inc'
+      - 'src/client/cc_capture_request_tests.inc'
+      - 'src/client/cc_capture_scenes.inc'
+      - 'src/client/cc_overlay.c'
+      - 'tests/carriage_overview_tests.inc'
+      - 'cmake/tests/80-client.cmake'
+      - '.github/workflows/carriage-overview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: carriage-overview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-reading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libcurl4-openssl-dev libsqlite3-dev libx11-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxinerama-dev libxrandr-dev xvfb
+      - name: Build the client and test reading layout
+        run: |
+          cmake -S . -B build-reading -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON
+          cmake --build build-reading --parallel 4 --target crownless_carriage
+          xvfb-run -a ctest --test-dir build-reading --output-on-failure -R '^(carriage_overview_layout|capture_request_contract|capture_scene_contract)$'
+      - name: Capture window widths and reading states
+        run: |
+          mkdir -p out/carriage-overview
+          for width in 1040 1200 1280; do
+            xvfb-run -a ./build-reading/crownless_carriage --capture-ux 31 "out/carriage-overview/manifest-$width.png" "$width" 0
+          done
+          xvfb-run -a ./build-reading/crownless_carriage --capture-ux 31 out/carriage-overview/manifest-large.png 1040 2
+          xvfb-run -a ./build-reading/crownless_carriage --capture-ux 32 out/carriage-overview/manifest-end-large.png 1040 2
+          xvfb-run -a ./build-reading/crownless_carriage --capture-ux 33 out/carriage-overview/manifest-empty.png 1040 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, struct, subprocess
+          root = Path('out/carriage-overview')
+          files = sorted(root.glob('*.png'))
+          assert len(files) == 6
+          captures = []
+          for path in files:
+              data = path.read_bytes()
+              assert data[:8] == b'\x89PNG\r\n\x1a\n'
+              captures.append({'file': path.name, 'dimensions': list(struct.unpack('>II', data[16:24])), 'sha256': hashlib.sha256(data).hexdigest()})
+          receipt = {'revision': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'scope': 'staged reading fixtures, not an ordinary-control journey', 'captures': captures}
+          (root / 'manifest.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: carriage-overview-reading
+          path: |
+            out/carriage-overview/
+            build-reading/Testing/Temporary/LastTest.log
+          retention-days: 14
+          if-no-files-found: error
