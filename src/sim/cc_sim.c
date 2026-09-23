@@ -17744,6 +17744,16 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
     return true;
 }
 
+static bool ReliefCrateFitsCargo(const CcSim *sim, const CcSituation *situation)
+{
+    int32_t old_slots = CcGoodsPlayerCargoBoxes(
+        situation->good, sim->player.cargo[situation->good]);
+    int32_t new_slots = CcGoodsPlayerCargoBoxes(
+        situation->good, sim->player.cargo[situation->good] + 1);
+    return CcPlayerCargoUsed(&sim->player) - old_slots + new_slots <=
+        sim->player.cargo_capacity;
+}
+
 static bool ApplyReliefCrate(CcSim *sim, const CcCommand *command,
                              char *error, size_t error_capacity)
 {
@@ -17774,6 +17784,10 @@ static bool ApplyReliefCrate(CcSim *sim, const CcCommand *command,
             SetError(error,error_capacity,"The granary stack has no promised crate ready.");
             return false;
         }
+        if (!ReliefCrateFitsCargo(sim, situation)) {
+            SetError(error,error_capacity,"Make one cargo slot for the crate in the carriage.");
+            return false;
+        }
         origin->stock[situation->good]-=1;
         situation->loading_crate_carried=true;
         CcEconomyRefreshSettlementGoodPrice(sim,origin,situation->good);
@@ -17784,12 +17798,7 @@ static bool ApplyReliefCrate(CcSim *sim, const CcCommand *command,
             SetError(error,error_capacity,"Lift a relief crate from the granary stack first.");
             return false;
         }
-        int32_t old_slots=CcGoodsPlayerCargoBoxes(
-            situation->good,sim->player.cargo[situation->good]);
-        int32_t new_slots=CcGoodsPlayerCargoBoxes(
-            situation->good,sim->player.cargo[situation->good]+1);
-        if (CcPlayerCargoUsed(&sim->player)-old_slots+new_slots >
-            sim->player.cargo_capacity) {
+        if (!ReliefCrateFitsCargo(sim, situation)) {
             SetError(error,error_capacity,"Make one cargo slot for the crate in the carriage.");
             return false;
         }
@@ -22048,7 +22057,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             situation->quantity > CC_SIM_MAX_UNITS ||
             situation->progress < 0 ||
             situation->progress > situation->quantity ||
-            (sim->schema_version >= 108U &&
+            (sim->schema_version >= 109U &&
              (situation->loading_progress < 0 ||
               situation->loading_progress > situation->quantity ||
               (situation->kind != CC_SITUATION_RELIEF_DELIVERY &&

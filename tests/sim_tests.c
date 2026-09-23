@@ -1145,20 +1145,25 @@ int main(void)
         .kind = CC_COMMAND_PICKUP_RELIEF_CRATE,
         .target_id = blocked_relief->id
     };
-    CC_CHECK(CcSimApply(&blocked_loading, &blocked_pickup,
-                        error, sizeof(error)));
-    CC_CHECK(blocked_relief->loading_crate_carried);
-    CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] ==
-             blocked_origin_food - 1);
+    CC_CHECK(!CcSimApply(&blocked_loading, &blocked_pickup,
+                         error, sizeof(error)));
+    CC_CHECK(strstr(error, "cargo slot") != NULL);
+    CC_CHECK(!blocked_relief->loading_crate_carried);
+    CC_CHECK(blocked_relief->loading_progress == 0);
+    CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] == blocked_origin_food);
     CcCommand blocked_stow = {
         .kind = CC_COMMAND_STOW_RELIEF_CRATE,
         .target_id = blocked_relief->id
     };
     CC_CHECK(!CcSimApply(&blocked_loading, &blocked_stow,
                          error, sizeof(error)));
-    CC_CHECK(strstr(error, "cargo slot") != NULL);
-    CC_CHECK(blocked_relief->loading_crate_carried);
+    CC_CHECK(strstr(error, "Lift a relief crate") != NULL);
     blocked_loading.player.cargo[CC_GOOD_TOOLS] -= 1;
+    CC_CHECK(CcSimApply(&blocked_loading, &blocked_pickup,
+                        error, sizeof(error)));
+    CC_CHECK(blocked_relief->loading_crate_carried);
+    CC_CHECK(blocked_origin->stock[CC_GOOD_FOOD] ==
+             blocked_origin_food - 1);
     CC_CHECK(CcSimApply(&blocked_loading, &blocked_stow,
                         error, sizeof(error)));
     CC_CHECK(!blocked_relief->loading_crate_carried);
