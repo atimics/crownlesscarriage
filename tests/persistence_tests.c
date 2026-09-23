@@ -3031,7 +3031,7 @@ static void CheckSchema41Upgrade(void)
 static void CheckSchema108ReliefJournalUpgrade(char *error,
                                                 size_t error_capacity)
 {
-    /* Produced by the schema-108 client at 026ce96e with seed 0x6a6a.
+    /* Produced by the schema-108 simulation build at 026ce96e with seed 0x6a6a.
        The accepted relief command remains in the journal after the snapshot. */
     const char *fixture = CC_TEST_SOURCE_DIR
         "/tests/fixtures/shipped/schema-108-generator-25-relief-accept-journal.ccsave";
