@@ -319,6 +319,7 @@ typedef struct LocalState {
     bool travel_pointer_down;
     bool travel_hold_armed;
     CarriageTab carriage_tab;
+    float carriage_overview_scroll;
     bool travel_attention;
     CcLocalMovementPreview movement_preview;
     CcLocalSiteKind site_kind;
@@ -6394,13 +6395,14 @@ static void CarriageReadingSummary(const CcSim *sim, char *summary,
     }
 }
 
+#include "cc_carriage_overview.inc"
+
 static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
                                Texture2D economic_goods)
 {
     if (sim == NULL || local == NULL) return;
     const CcSettlement *place = CcSimSettlement(
         sim, sim->player.location_id);
-    const CcSituation *quest = CcSimAcceptedSituation(sim);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   Fade(BACKGROUND, 0.78f));
     ClientTouchBegin();
@@ -6447,161 +6449,7 @@ static void DrawCarriageScreen(const CcSim *sim, const LocalState *local,
         return;
     }
 
-    DrawPanel((Rectangle){52.0f, 174.0f, 350.0f, 454.0f},
-              Fade(BACKGROUND, 0.76f));
-    CcOverlayDrawText("CARGO MANIFEST", 72, 194, 15, CC_GOLD);
-    int32_t cargo_used = CcPlayerCargoUsed(&sim->player);
-    DrawBar(72, 224, 110, "LOAD", cargo_used * 100 /
-            (sim->player.cargo_capacity > 0 ?
-                 sim->player.cargo_capacity : 1), TEAL);
-    CcOverlayDrawText(
-        TextFormat("%d / %d SLOTS", cargo_used,
-                   sim->player.cargo_capacity),
-        276, 226, 9, INK);
-    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        int32_t column = good % 2;
-        int32_t row = good / 2;
-        int32_t x = 72 + column * 157;
-        int32_t y = 260 + row * 54;
-        Rectangle slot = {(float)x, (float)y, 149.0f, 43.0f};
-        DrawRectangleRounded(slot, 0.14f, 4, Fade(PANEL_HOVER, 0.54f));
-        DrawRectangleRoundedLinesEx(
-            slot, 0.14f, 4, 1.0f,
-            sim->player.cargo[good] > 0 ? Fade(TEAL, 0.72f) :
-                                          Fade(MUTED, 0.24f));
-        DrawRectangleRounded((Rectangle){(float)x + 7.0f, (float)y + 5.0f,
-                                          33.0f, 33.0f},
-                             0.16f, 4, Fade(BACKGROUND, 0.66f));
-        if (!DrawEconomicGoodIcon(
-                economic_goods, (CcGood)good,
-                (Rectangle){(float)x + 8.0f, (float)y + 6.0f, 32.0f, 32.0f},
-                sim->player.cargo[good] > 0 ? WHITE : Fade(WHITE, 0.38f))) {
-            CcOverlayDrawText(TextFormat("%d", good + 1),
-                              x + 20, y + 17, 7, MUTED);
-        }
-        CcOverlayDrawText(CcGoodName((CcGood)good),
-                          x + 45, y + 12, 9, INK);
-        const char *quantity = TextFormat("x%d", sim->player.cargo[good]);
-        int32_t quantity_width = CcOverlayMeasureText(quantity, 9);
-        CcOverlayDrawText(quantity, x + 140 - quantity_width,
-                          y + 12, 9,
-                          sim->player.cargo[good] > 0 ? CC_GOLD : MUTED);
-    }
-
-    DrawPanel((Rectangle){422.0f, 174.0f, 424.0f, 454.0f},
-              Fade(BACKGROUND, 0.76f));
-    CcOverlayDrawText("QUEST PAPERS", 444, 194, 15, TEAL);
-    if (quest != NULL) {
-        char target[96];
-        char next[192];
-        SituationTargetLabel(sim, quest, target, sizeof(target));
-        SituationNextAction(sim, quest, next, sizeof(next));
-        CcOverlayDrawText("ACTIVE PROMISE", 444, 230, 8, MUTED);
-        CcOverlayDrawText(SituationTitle(quest->kind),
-                          444, 254, 18, SituationColor(quest->kind));
-        CcOverlayDrawText(TextFormat("%s / %.28s", target,
-                                     quest->affected_name),
-                          444, 285, 10, INK);
-        CcOverlayDrawText("NEXT STEP", 444, 326, 8, MUTED);
-        DrawTwoLineText(next, 444, 349, 54U, 11, CC_GOLD);
-        CcOverlayDrawText(
-            TextFormat("DUE DAY %d", quest->deadline_day),
-            444, 414, 9, MUTED);
-        CcOverlayDrawText(
-            TextFormat("REWARD +%" PRId64 " CROWNS", quest->reward),
-            630, 414, 9, TEAL);
-        if (quest->kind == CC_SITUATION_RELIEF_DELIVERY ||
-            quest->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
-            int32_t remaining = quest->quantity - quest->progress;
-            if (remaining < 0) remaining = 0;
-            int32_t aboard = sim->player.cargo[quest->good] < remaining ?
-                sim->player.cargo[quest->good] : remaining;
-            CcOverlayDrawText("COMMITTED LOAD", 444, 462, 8, MUTED);
-            CcOverlayDrawText(
-                quest->good == CC_GOOD_FOOD ?
-                    TextFormat("%d / %d Bread boxes aboard",
-                               aboard, remaining) :
-                    TextFormat("%d / %d %s aboard", aboard, remaining,
-                               CcGoodName(quest->good)),
-                444, 485, 11,
-                sim->player.cargo[quest->good] >= remaining ? TEAL : DANGER);
-        }
-    } else {
-        CcOverlayDrawText("NO ACTIVE PROMISE", 444, 244, 17, MUTED);
-        DrawTwoLineText(
-            "The quest papers are empty. Review the town notices before committing the carriage.",
-            444, 282, 55U, 11, INK);
-    }
-    CcFoodEconomy food = {0};
-    if (local->carriage_inspection_road) {
-        CcOverlayDrawText("ROAD STATUS", 444, 526, 8, MUTED);
-        CcOverlayDrawText(
-            TextFormat("%d%% travelled  /  %s",
-                       sim->carriage.progress_milli / 10,
-                       RoadCarriageStatus(sim)),
-            444, 549, 10,
-            sim->carriage.mode == CC_CARRIAGE_MOVING ? TEAL : CC_GOLD);
-    } else if (place != NULL && CcSimFoodEconomyAtSettlement(
-            sim, place->id, &food)) {
-        const char *food_state = food.stock < food.weekly_consumption * 2 ?
-            "SHORTAGE" : food.stock < food.reserve_target ? "TIGHT" :
-            "SURPLUS";
-        CcOverlayDrawText("LOCAL NOURISHMENT", 444, 526, 8, MUTED);
-        CcOverlayDrawText(
-            TextFormat("%s  %d rations  +%d/-%d weekly  Bread %dc",
-                       food_state, food.stock, food.weekly_production,
-                       food.weekly_consumption, food.unit_price),
-            444, 549, 9,
-            strcmp(food_state, "SHORTAGE") == 0 ? DANGER : TEAL);
-    }
-    CcOverlayDrawText("Q  REVIEW ALL AVAILABLE QUESTS",
-                      444, 584, 8, MUTED);
-
-    DrawPanel((Rectangle){866.0f, 174.0f, 362.0f, 454.0f},
-              Fade(BACKGROUND, 0.76f));
-    CcOverlayDrawText("TEAM & DEPARTURE", 888, 194, 15, CC_VIOLET);
-    for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
-        int32_t y = 232 + horse * 70;
-        CcOverlayDrawText(CcPonyName(CcSimTeamPony(sim, horse)), 888, y, 13, INK);
-        CcOverlayDrawText(
-            TextFormat("HEALTH %d / FATIGUE %d",
-                       sim->horse_team[horse].health,
-                       sim->horse_team[horse].fatigue),
-            888, y + 25, 8, MUTED);
-    }
-    DrawBar(888, 382, 104, "TEAM",
-            CcSimHorseTeamReadiness(sim), TEAL);
-    DrawBar(888, 424, 104, "WAGON",
-            sim->carriage.condition, CC_GOLD);
-    CcOverlayDrawText(
-        TextFormat("PASSENGER BERTHS  %d / %d",
-                   CarriagePassengerCount(sim),
-                   sim->player.passenger_capacity),
-        888, 478, 9, INK);
-    CcOverlayDrawText(
-        TextFormat("MAP CASE  %d / %d",
-                   CcPlayerMapCount(sim), sim->player.map_capacity),
-        888, 506, 9, INK);
-    CcOverlayDrawText(
-        local->carriage_inspection_road ?
-            TextFormat("ROUTE %d%%  /  CARGO %d/%d",
-                       sim->carriage.progress_milli / 10,
-                       cargo_used, sim->player.cargo_capacity) :
-        local->site_kind == CC_LOCAL_SITE_NONE ?
-            TextFormat("%d ROADS LEAVE THIS TOWN",
-                       OutgoingRouteCount(sim)) :
-            "RETURN ROAD IS READY",
-        888, 552, 10, CC_GOLD);
-    CcOverlayDrawText(
-        local->carriage_inspection_road ?
-            TextFormat("CARRIAGE %s ON THIS ROAD",
-                       RoadCarriageStatus(sim)) :
-        CcSimHorseTeamReadiness(sim) < 30 ?
-            "TEAM MUST REST BEFORE DEPARTURE" :
-            "DEPARTURE CHECKS READY",
-        888, 584, 8,
-        !local->carriage_inspection_road &&
-            CcSimHorseTeamReadiness(sim) < 30 ? DANGER : TEAL);
+    DrawCarriageOverview(sim, local, economic_goods);
 }
 
 static void ClientSpeechPath(const CcSpeech *speech, char *path, size_t capacity)
@@ -7768,6 +7616,8 @@ static bool CarriagePublishedMatchesPhysical(const CcLocalWorldCarriageState *c)
         fabsf(remainderf(c->heading_yaw - c->render_heading_yaw, 2 * PI)) < 0.0001f &&
         fabsf(c->travelled - c->render_travelled) < 0.0001f;
 }
+
+#include "../../tests/carriage_overview_tests.inc"
 
 static int RunCarriageClientRegression(void)
 {
@@ -9414,6 +9264,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (HandleCarriageTabs(local, *view)) return;
+    if (HandleCarriageOverviewScroll(sim, local, *view)) return;
     if (HandlePonyInput(*journal, sim, local, *view, pressed_action, message, message_capacity)) return;
     if (context_action == CONTEXT_ACTION_STOP_APPROACH) {
         CcInteractionCancel(&local->interaction, "");
@@ -11409,6 +11260,7 @@ int main(int argc, char **argv)
         return RunFrontendRegression();
     }
     if (argc == 2 && strcmp(argv[1], "--test-carriage-client") == 0) return RunCarriageClientRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-carriage-overview") == 0) return RunCarriageOverviewRegression();
     if (argc == 2 && strcmp(argv[1], "--test-travel-hold") == 0) return RunTravelHoldRegression();
     if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
         return RunStorybookTravelRegression();

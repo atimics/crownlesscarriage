@@ -742,7 +742,7 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
         }
         return InitializeOpenWorld(scene->sim, scene->local, false);
     }
-    if (request->capture_ux && request->capture_ux_view >= 25) {
+    if (request->capture_ux && request->capture_ux_view >= 25 && request->capture_ux_view <= 30) {
         /* Explicitly staged economic cases, not a claimed ordinary playthrough. */
         CcSim *sim = scene->sim;
         LocalState *local = scene->local;
@@ -792,6 +792,18 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
         scene->local->course.automatic_alarm = false;
         RepositionHero(scene->local, (Vector2){44.25f, 28.85f}, false);
         (void)CcLocalWorldUpdate(&scene->local->course, &scene->local->agent, scene->sim, 0.2f, false, true);
+        if (request->capture_ux_view >= 31 && request->capture_ux_view <= 33) {
+            /* Deliberately staged reading fixtures, not evidence of a journey. */
+            *scene->view = VIEW_CARRIAGE;
+            scene->local->carriage_tab = CARRIAGE_OVERVIEW;
+            scene->local->opening_step = CC_LOCAL_OPENING_COMPLETE;
+            scene->local->carriage_overview_scroll =
+                request->capture_ux_view == 32 ? 100000.0f : 0.0f;
+            for (int good = 0; good < CC_GOOD_COUNT; ++good)
+                scene->sim->player.cargo[good] = request->capture_ux_view == 33 ? 0 : 1;
+            scene->sim->player.cargo_capacity = CC_GOOD_COUNT + 10;
+            if (request->capture_ux_view == 33) scene->sim->player.accepted_situation_id = 0U;
+        }
         if (request->capture_ux_view == 1 || request->capture_ux_view == 3) {
             scene->local->market_interior = true;
             RepositionHero(scene->local, (Vector2){4.5f, 4.2f}, true);
