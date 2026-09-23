@@ -2738,8 +2738,8 @@ static void CheckSchema104RoadMigration(char *error,
              topology.main_length_units);
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
-    /* Schema 109 includes the Underroad network and relief loading. */
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(14146795584524193123));
+    /* Schema 110 includes the Underroad network, relief loading, and company memory. */
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(1929923815532300758));
 
     char stop_file[512];
     (void)snprintf(
@@ -2788,7 +2788,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
     CC_CHECK(CcRoadSavedPositionValid(&stopped));
     CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
-    CC_CHECK(CcSimHash(&stopped) == UINT64_C(10319494334460381272));
+    CC_CHECK(CcSimHash(&stopped) == UINT64_C(11485163251610530645));
     CcCommand pass_pending = {
         .kind = CC_COMMAND_PASS_ROAD_SITE,
         .target_id = pending->id
@@ -2834,7 +2834,7 @@ static void CheckSchema104RoadMigration(char *error,
              topology.checkpoint_distance_units);
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
-    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(2744101947371416524));
+    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(13983857644455183497));
 
     CcSim blocked = checkpoint;
     ClearSavedRoadPosition(&blocked.journey);
@@ -2926,7 +2926,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mill_choice);
     CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
     CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
-    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(11342158728752490583));
+    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(14957158054912345142));
 
     char mine_file[512];
     (void)snprintf(
@@ -2960,7 +2960,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
     CC_CHECK(mine.mine.player_injury == 0);
     CC_CHECK(CcSimValidate(&mine, error, error_capacity));
-    CC_CHECK(CcSimHash(&mine) == UINT64_C(13400895851922989107));
+    CC_CHECK(CcSimHash(&mine) == UINT64_C(5201846885352537418));
 }
 
 static void CheckDragonHairPersistence(void)
@@ -3053,6 +3053,44 @@ static void CheckSchema108ReliefJournalUpgrade(char *error,
         restored.player.cargo[CC_GOOD_FOOD] == 8);
     uint64_t migrated_hash = CcSimHash(&restored);
     const char *copy = "schema108-relief-upgraded.ccsave";
+    RemoveDatabase(copy);
+    CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
+    CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
+    CC_CHECK(CcSimHash(&reloaded) == migrated_hash);
+    RemoveDatabase(copy);
+}
+
+static void CheckSchema109IntroductionJournalUpgrade(char *error,
+                                                      size_t error_capacity)
+{
+    /* Produced by the schema-109 client with seed 42. Mara Venn was
+       introduced, then survived a party wipe in the same pending journal.
+       Older schemas keep that marker during replay. Checkpointed to DELETE
+       mode for portable read-only use. Package SHA-256:
+       9c932655ffd46eee0592ca6421eb46ddfdff688ab217ebb29738bbf566f7c15e */
+    const char *fixture = CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/"
+        "schema-109-generator-25-introduction-party-wipe-journal.ccsave";
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT schema_version=109 AND generator_version=25 AND "
+        "journal_generation=1 AND journal_cursor=0 AND "
+        "state_hash='5d50d1a257e2004c' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT COUNT(*) FROM action_journal WHERE "
+        "(ordinal=1 AND command_kind=48 AND sim_schema_version=109 AND "
+        "post_state_hash='14993eed4be2ef70') OR "
+        "(ordinal=2 AND command_kind=47 AND sim_schema_version=109 AND "
+        "post_state_hash='26e89291b46ee3c5');") == 2);
+    static CcSim restored, reloaded;
+    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    const CcCharacter *mara = CcSimCharacter(
+        &restored, UINT64_C(1369094286720630837));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.current_day == 7301);
+    CC_CHECK(mara != NULL && strcmp(mara->name, "Mara Venn") == 0 &&
+        mara->introduced_day == 1);
+    uint64_t migrated_hash = CcSimHash(&restored);
+    const char *copy = "schema109-introduction-upgraded.ccsave";
     RemoveDatabase(copy);
     CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
     CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
@@ -3779,6 +3817,7 @@ int main(void)
     CheckSchema90RecruitmentLifetimeJournal();
     CheckSchema104RoadMigration(error, sizeof(error));
     CheckSchema108ReliefJournalUpgrade(error, sizeof(error));
+    CheckSchema109IntroductionJournalUpgrade(error, sizeof(error));
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();
