@@ -1322,9 +1322,8 @@ static void CheckPreJourneySchema3Compatibility(char *error,
     CC_CHECK(CcSimApply(&legacy_journey, &accept,
                         error, error_capacity));
     if (situation->kind == CC_SITUATION_RELIEF_DELIVERY) {
-        CC_CHECK(CcTestLoadReliefCrates(
-            &legacy_journey, (CcSituation *)situation,
-            error, error_capacity));
+        CC_CHECK(legacy_journey.player.cargo[CC_GOOD_FOOD] ==
+                 situation->quantity);
     }
     legacy_journey.routes[0].closed = true;
     CcCommand travel = {
@@ -3029,6 +3028,38 @@ static void CheckSchema41Upgrade(void)
     RemoveDatabase(path);
 }
 
+static void CheckSchema108ReliefJournalUpgrade(char *error,
+                                                size_t error_capacity)
+{
+    /* Produced by the schema-108 client at 026ce96e with seed 0x6a6a.
+       The accepted relief command remains in the journal after the snapshot. */
+    const char *fixture = CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/schema-108-generator-25-relief-accept-journal.ccsave";
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT schema_version=108 AND generator_version=25 AND "
+        "journal_generation=1 AND journal_cursor=0 AND "
+        "state_hash='01ebeccd6306fcd9' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT COUNT(*) FROM action_journal WHERE ordinal=1 AND "
+        "command_kind=7 AND sim_schema_version=108 AND "
+        "post_state_hash='8e20a66f02d57985';") == 1);
+    static CcSim restored, reloaded;
+    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    const CcSituation *relief = CcSimAcceptedSituation(&restored);
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION &&
+        relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+        relief->quantity == 8 && relief->loading_progress == 8 &&
+        !relief->loading_crate_carried &&
+        restored.player.cargo[CC_GOOD_FOOD] == 8);
+    uint64_t migrated_hash = CcSimHash(&restored);
+    const char *copy = "schema108-relief-upgraded.ccsave";
+    RemoveDatabase(copy);
+    CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
+    CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
+    CC_CHECK(CcSimHash(&reloaded) == migrated_hash);
+    RemoveDatabase(copy);
+}
+
 /* The set of (schema, generator) pairs a save may carry is a compatibility
    promise, and it now lives as a table in cc_sim.c rather than as a chain of
    equality tests. Restate the promise independently here and sweep it, so a
@@ -3747,6 +3778,7 @@ int main(void)
     CheckSchema89HistoricalCast();
     CheckSchema90RecruitmentLifetimeJournal();
     CheckSchema104RoadMigration(error, sizeof(error));
+    CheckSchema108ReliefJournalUpgrade(error, sizeof(error));
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();

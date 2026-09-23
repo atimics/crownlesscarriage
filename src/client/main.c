@@ -4385,6 +4385,26 @@ static ContextActionSet BuildContextActions(
         }
     }
     if (view == VIEW_LOCAL && AdventureScene(local) && !LocalCombatActive(local)) {
+        const CcSituation *relief = CcSimAcceptedSituation(sim);
+        if (relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+            sim->player.location_id == CcSimSituationOfferSettlementId(sim, relief)) {
+            Vector2 position = LocalPosition(local);
+            if (!relief->loading_crate_carried &&
+                CcSimReliefCratesToLoad(relief) > 0 &&
+                GridDistance(position, LOCAL_RELIEF_CRATES) < 2.1f) {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
+                    "Lift one relief crate", "F",
+                    TextFormat("%d STILL AT GRANARY", CcSimReliefCratesToLoad(relief)),
+                    true, false);
+            } else if (relief->loading_crate_carried &&
+                (GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
+                 GridDistance(position, LOCAL_CARRIAGE) < 1.85f)) {
+                AddDetailedContextAction(&set, CONTEXT_ACTION_STOW_RELIEF_CRATE,
+                    "Place crate in carriage", "F",
+                    TextFormat("%d OF %d ABOARD", relief->loading_progress,
+                        relief->quantity), true, false);
+            }
+        }
         for (int32_t i = 0; i < local->interactions.count; ++i) {
             const CcInteractionTarget *target = &local->interactions.targets[i];
             if (target->key.kind == CC_INTERACTION_ACTION) continue;

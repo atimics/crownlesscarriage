@@ -953,8 +953,98 @@ static int RunMovingPresentedPersonRegression(void)
     return 0;
 }
 
+static int RunReliefCrateInputRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char error[192] = "", message[256] = "", feedback[128] = "";
+    float feedback_age = 0.0f;
+    int32_t selected = 0, selected_situation = 0;
+    ClientView view = VIEW_LOCAL, return_view = VIEW_LOCAL;
+    const char *path = "relief-crate-input.ccsave";
+    (void)remove(path);
+    CcSimInit(&sim, 42U);
+    CcSituation *relief = NULL;
+    for (int32_t i = 0; i < sim.situation_count; ++i) {
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY) {
+            relief = &sim.situations[i];
+            break;
+        }
+    }
+    if (relief == NULL) return ClientRegressionFailure("The relief input fixture needs Mara's charter.");
+    CcCommand accept = {.kind = CC_COMMAND_ACCEPT_SITUATION, .target_id = relief->id};
+    if (!CcSimApply(&sim, &accept, error, sizeof(error)))
+        return ClientRegressionFailure(error);
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.opening_step = CC_LOCAL_OPENING_COMPLETE;
+    CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    if (journal == NULL) return ClientRegressionFailure(error);
+#define CRATE_INPUT_CHECK(condition, text) do { if (!(condition)) { \
+    CcJournalAbandon(&journal); (void)remove(path); \
+    return ClientRegressionFailure(text); } } while (0)
+    CcSettlement *origin = CcSimSettlementMutable(
+        &sim, CcSimSituationOfferSettlementId(&sim, relief));
+    CRATE_INPUT_CHECK(origin != NULL, "The relief crate needs its granary.");
+    int32_t stock = origin->stock[CC_GOOD_FOOD];
+    int32_t cargo = sim.player.cargo[CC_GOOD_FOOD];
+    RepositionHero(&local, LOCAL_RELIEF_CRATES, false);
+    ContextActionSet actions = BuildContextActions(
+        &sim, &local, view, selected, selected_situation);
+    bool lift_visible = false;
+    for (int32_t i = 0; i < actions.count; ++i)
+        lift_visible |= actions.items[i].kind == CONTEXT_ACTION_PICKUP_RELIEF_CRATE &&
+            actions.items[i].enabled;
+    CRATE_INPUT_CHECK(lift_visible, "The granary must offer a lift action.");
+    queued_key_press[KEY_F] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view,
+        &return_view, &local, (RenderTexture2D){0}, (Rectangle){0},
+        1.0f / 60.0f, path, "", message, sizeof(message), feedback,
+        sizeof(feedback), &feedback_age);
+    ClientInputClearPressed();
+    CRATE_INPUT_CHECK(relief->loading_crate_carried &&
+        relief->loading_progress == 0 &&
+        origin->stock[CC_GOOD_FOOD] == stock - 1 &&
+        sim.player.cargo[CC_GOOD_FOOD] == cargo,
+        "The granary interaction must put one crate in the player's hands.");
+    RepositionHero(&local, LOCAL_CARRIAGE_BAY, false);
+    actions = BuildContextActions(&sim, &local, view, selected,
+        selected_situation);
+    int32_t stow_index = -1;
+    for (int32_t i = 0; i < actions.count; ++i)
+        if (actions.items[i].kind == CONTEXT_ACTION_STOW_RELIEF_CRATE &&
+            actions.items[i].enabled) stow_index = i;
+    CRATE_INPUT_CHECK(stow_index >= 0, "The parked carriage must offer a stow action.");
+    local.card_page = stow_index / ContextActionPageSize(&actions);
+    int32_t first = ContextCardFirst(&local, &actions);
+    Rectangle bounds = ContextActionBounds(stow_index - first,
+        ContextCardCount(&actions, first), actions.combat);
+    client_test_pointer_active = true;
+    client_test_pointer = (Vector2){bounds.x + bounds.width * 0.5f,
+        bounds.y + bounds.height * 0.5f};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    HandleInput(&journal, &sim, &selected, &selected_situation, &view,
+        &return_view, &local, (RenderTexture2D){0}, (Rectangle){0},
+        1.0f / 60.0f, path, "", message, sizeof(message), feedback,
+        sizeof(feedback), &feedback_age);
+    client_test_pointer_active = false;
+    ClientInputClearPressed();
+    CRATE_INPUT_CHECK(!relief->loading_crate_carried &&
+        relief->loading_progress == 1 &&
+        origin->stock[CC_GOOD_FOOD] == stock - 1 &&
+        sim.player.cargo[CC_GOOD_FOOD] == cargo + 1,
+        "The carriage card must stow the carried crate.");
+    CcJournalAbandon(&journal);
+    (void)remove(path);
+#undef CRATE_INPUT_CHECK
+    return 0;
+}
+
 static int RunAdventureInputRegression(void)
 {
+    int relief_result = RunReliefCrateInputRegression();
+    if (relief_result != 0) return relief_result;
     int moving_person_result = RunMovingPresentedPersonRegression();
     if (moving_person_result != 0) return moving_person_result;
     int mine_road_result = RunAdventureMineRoadRegression();

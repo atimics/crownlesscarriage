@@ -108,7 +108,7 @@ int32_t CcMinePackGood(const CcSim *sim, CcGood good)
 }
 int32_t CcMineCarriedCrates(const CcSim *sim)
 {
-    if (sim == NULL) return 0;
+    if (sim == NULL || sim->schema_version < 109U) return 0;
     int64_t total=0;
     for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         const CcCustodyEntry *entry=&sim->custody.entries[i];
@@ -599,7 +599,9 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
             if (command->amount > CcMineSourceGood(sim,command->good))
                 return Fail(error,capacity,"The haulers have not released that quantity.");
             if (CcMinePackUsed(sim)+command->amount > CC_MINE_PACK_CAPACITY)
-                return Fail(error,capacity,"Make room in the carried crate before taking more.");
+                return Fail(error,capacity,sim->schema_version >= 109U ?
+                    "Make room in the carried crate before taking more." :
+                    "Make room in the eight-slot pack before taking more.");
             if (!MineTransfer(sim,(CcCustodyHolder){CC_CUSTODY_SITE,m->source_id},
                 (CcCustodyHolder){CC_CUSTODY_MINE_PACK,sim->player.id},command->good,
                 command->amount,error,capacity)) return false;

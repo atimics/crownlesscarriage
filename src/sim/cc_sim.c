@@ -17704,6 +17704,19 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
                      "Mara's granary cannot cover the promised food load.");
             return false;
         }
+        if (sim->schema_version < 109U) {
+            int32_t old_slots = CcGoodsPlayerCargoBoxes(
+                CC_GOOD_FOOD, sim->player.cargo[CC_GOOD_FOOD]);
+            int32_t new_slots = CcGoodsPlayerCargoBoxes(
+                CC_GOOD_FOOD,
+                sim->player.cargo[CC_GOOD_FOOD] + relief_load);
+            if (CcPlayerCargoUsed(&sim->player) - old_slots + new_slots >
+                sim->player.cargo_capacity) {
+                SetError(error, error_capacity,
+                         "Clear cargo space so Mara can load the food boxes.");
+                return false;
+            }
+        }
     }
     if (situation->kind == CC_SITUATION_COURIER_DELIVERY) {
         CcCourier *courier = CourierMutable(sim, situation->target_id);
@@ -17730,9 +17743,16 @@ static bool AcceptSituation(CcSim *sim, const CcSituation *situation,
         situation->target_id, situation->cause_event_id,
         situation->deadline_day - sim->current_day, text);
     if (relief_load > 0 && relief_origin != NULL) {
+        if (sim->schema_version < 109U) {
+            relief_origin->stock[CC_GOOD_FOOD] -= relief_load;
+            sim->player.cargo[CC_GOOD_FOOD] += relief_load;
+            CcEconomyRefreshSettlementGoodPrice(sim, relief_origin, CC_GOOD_FOOD);
+        }
         (void)snprintf(
             text, sizeof(text),
-            "%s sets %d food boxes beside %s's granary for the Crownless company to carry.",
+            sim->schema_version < 109U ?
+                "%s loads %d food boxes from %s's granary into the Crownless carriage." :
+                "%s sets %d food boxes beside %s's granary for the Crownless company to carry.",
             situation->sponsor_name, relief_load, relief_origin->name);
         (void)PushEvent(
             sim, CC_EVENT_PLAYER_TRADE, sim->player.id,
@@ -17757,6 +17777,10 @@ static bool ReliefCrateFitsCargo(const CcSim *sim, const CcSituation *situation)
 static bool ApplyReliefCrate(CcSim *sim, const CcCommand *command,
                              char *error, size_t error_capacity)
 {
+    if (sim->schema_version < 109U) {
+        SetError(error, error_capacity, "Relief crate carrying needs an upgraded campaign.");
+        return false;
+    }
     CcSituation *situation=(CcSituation *)CcSimAcceptedSituation(sim);
     if (situation == NULL || situation->id != command->target_id ||
         situation->kind != CC_SITUATION_RELIEF_DELIVERY) {
@@ -19777,7 +19801,7 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         return false;
     }
     const CcSituation *carried_relief=CcSimAcceptedSituation(sim);
-    if (carried_relief != NULL &&
+    if (sim->schema_version >= 109U && carried_relief != NULL &&
         carried_relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
         carried_relief->loading_crate_carried &&
         command->kind != CC_COMMAND_STOW_RELIEF_CRATE &&

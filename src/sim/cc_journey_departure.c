@@ -69,7 +69,7 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     bool full_contract_load = delivery &&
         sim->player.cargo[accepted->good] >=
             accepted->quantity - accepted->progress;
-    if (accepted != NULL &&
+    if (sim->schema_version >= 109U && accepted != NULL &&
         accepted->kind == CC_SITUATION_RELIEF_DELIVERY &&
         sim->player.location_id == CcSimSituationOfferSettlementId(sim,accepted) &&
         !CcSimReliefLoadingComplete(accepted)) {

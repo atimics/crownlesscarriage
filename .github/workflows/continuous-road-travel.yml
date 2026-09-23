@@ -61,6 +61,7 @@ jobs:
           name: continuous-road-travel-review
           path: |
             out/travel/
+            build-road/roadbook-review/
             build-road/Testing/Temporary/LastTest.log
           retention-days: 14
           if-no-files-found: error
