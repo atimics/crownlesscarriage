@@ -77,12 +77,15 @@ typedef struct FrontendState {
     FrontendScreen screen;
     bool online;
     bool has_world;
+    bool world_load_failed;
     bool needs_initial_save;
     bool quit;
     int focus;
     FrontendScreen avatar_return;
+    FrontendScreen delete_return;
     uint32_t avatar;
     char feedback[256];
+    char world_load_error[256];
     CcCompany company;
     char player_name[32];
     char world_name[65];
@@ -278,7 +281,9 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         items[1] = (FrontendItem){FRONTEND_ACTION_ONLINE,
             {x + 189.0f, y + 20.0f, 179.0f, 44.0f}, "Online", true};
         items[2] = (FrontendItem){FRONTEND_ACTION_PLAY,
-            {x, y + 138.0f, 368.0f, 52.0f}, "Play", true};
+            {x, y + 138.0f, 368.0f, 52.0f},
+            state->world_load_failed && !state->online ? "Saved world could not load" : "Play",
+            !state->world_load_failed || state->online};
         items[3] = (FrontendItem){FRONTEND_ACTION_AVATAR,
             {x, y + 234.0f, 368.0f, 40.0f}, "Your traveller", true};
         items[4] = (FrontendItem){FRONTEND_ACTION_QUIT,
@@ -290,6 +295,9 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         if (!state->has_world && !state->online)
             items[count++] = (FrontendItem){FRONTEND_ACTION_DEEP_WYRM,
                 {panel.x + 496, y + 138, 388, 52}, CC_DEEP_WYRM_TITLE, true};
+        else if (state->has_world && !state->online)
+            items[count++] = (FrontendItem){FRONTEND_ACTION_DELETE,
+                {panel.x + 496, y + 138, 388, 52}, "Delete offline world", true};
         return count;
     }
     if (state->screen == FRONTEND_AVATAR) {
@@ -354,8 +362,11 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
 static void FrontendOpen(FrontendState *state, FrontendScreen screen)
 {
     state->screen = screen;
-    state->focus = screen == FRONTEND_TITLE ? 2 : 0;
-    state->feedback[0] = '\0';
+    state->focus = screen == FRONTEND_TITLE && !state->world_load_failed ? 2 : 0;
+    if (screen == FRONTEND_TITLE && state->world_load_failed && !state->online)
+        (void)snprintf(state->feedback, sizeof(state->feedback), "%s",
+                       state->world_load_error);
+    else state->feedback[0] = '\0';
     state->text_field = FRONTEND_ACTION_NONE;
 }
 
@@ -605,7 +616,10 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         }
         state->online = action == FRONTEND_ACTION_ONLINE;
         state->focus = state->online ? 1 : 2;
-        state->feedback[0] = '\0';
+        if (state->world_load_failed && !state->online)
+            (void)snprintf(state->feedback, sizeof(state->feedback), "%s",
+                           state->world_load_error);
+        else state->feedback[0] = '\0';
     } else if (action == FRONTEND_ACTION_PLAY && state->online) {
         (void)FrontendCompanyAction(state, FRONTEND_ACTION_WORLD_LIST);
     } else if (action == FRONTEND_ACTION_PLAY) {
@@ -638,9 +652,12 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
             }
         }
         if (*journal == NULL) {
-            if (state->feedback[0] == '\0') {
+            if (state->world_load_failed) {
+                (void)snprintf(state->feedback, sizeof(state->feedback), "%s",
+                               state->world_load_error);
+            } else if (state->feedback[0] == '\0') {
                 (void)snprintf(state->feedback, sizeof(state->feedback),
-                               "Check the saved world, then restart the game.");
+                               "The world could not open. Check save folder access.");
             }
             return;
         }
@@ -653,9 +670,11 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
     } else if (action == FRONTEND_ACTION_RESUME) {
         FrontendOpen(state, FRONTEND_PLAYING);
     } else if (action == FRONTEND_ACTION_DELETE) {
+        state->delete_return = state->screen;
         FrontendOpen(state, FRONTEND_DELETE);
     } else if (action == FRONTEND_ACTION_CANCEL) {
-        FrontendOpen(state, FRONTEND_PAUSED);
+        FrontendOpen(state, state->screen == FRONTEND_DELETE ?
+            state->delete_return : FRONTEND_PAUSED);
     } else if (action == FRONTEND_ACTION_CONFIRM_DELETE) {
         if (CcCoopClientActive()) {
             if (CcCoopClientDelete(state->feedback, sizeof(state->feedback))) {
@@ -666,8 +685,10 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
         if (DeleteClientWorld(journal, sim, save_path, session_path,
                                state->feedback, sizeof(state->feedback))) {
             state->has_world = false;
+            state->world_load_failed = false;
             state->needs_initial_save = false;
             state->campaign_title[0] = '\0';
+            state->world_load_error[0] = '\0';
             state->screen = FRONTEND_TITLE;
             state->focus = 2;
             CcSimInit(sim, sim->world_seed + UINT32_C(0x9e3779b9));
@@ -741,6 +762,7 @@ static void DrawFrontend(const FrontendState *state,
         FrontendCenteredText(state->online ? "Share a carriage with your company." :
             "Your world is saved on this device.", top + 232, 14, MUTED);
         FrontendCenteredText(state->online ? "Create a world or join your company." :
+            state->world_load_failed ? "Choose Delete offline world to begin again." :
             state->has_world ? "Continue your saved journey." : "Begin a new world.",
             top + 354, 14, MUTED);
     } else if (state->screen == FRONTEND_CAMPAIGN) {
@@ -961,6 +983,34 @@ static int RunFrontendRegression(void)
     FRONTEND_CHECK(avatar_preferences.avatar == restored_avatar.avatar);
     FRONTEND_ACT(FRONTEND_ACTION_CANCEL_AVATAR);
     adventure_preferences = NULL;
+    FILE *broken_world = fopen(save_path, "wb");
+    FRONTEND_CHECK(broken_world != NULL);
+    FRONTEND_CHECK(fputs("broken saved world", broken_world) >= 0);
+    FRONTEND_CHECK(fclose(broken_world) == 0);
+    char corrupt_error[256];
+    FRONTEND_CHECK(CcJournalResume(save_path, &sim, corrupt_error,
+                                   sizeof(corrupt_error)) == NULL);
+    state.has_world = true;
+    state.world_load_failed = true;
+    (void)snprintf(state.world_load_error, sizeof(state.world_load_error),
+                   "%s", corrupt_error);
+    state.online = false;
+    FrontendOpen(&state, FRONTEND_TITLE);
+    int title_count = FrontendItems(&state, items);
+    FRONTEND_CHECK(items[title_count - 1].action == FRONTEND_ACTION_DELETE);
+    FRONTEND_CHECK(!items[2].enabled);
+    FRONTEND_ACT(FRONTEND_ACTION_OFFLINE);
+    FRONTEND_CHECK(strcmp(state.feedback, corrupt_error) == 0);
+    FRONTEND_ACT(FRONTEND_ACTION_DELETE);
+    FRONTEND_CHECK(state.screen == FRONTEND_DELETE);
+    FRONTEND_ACT(FRONTEND_ACTION_CANCEL);
+    FRONTEND_CHECK(state.screen == FRONTEND_TITLE && CampaignSaveExists(save_path));
+    FRONTEND_ACT(FRONTEND_ACTION_DELETE);
+    FRONTEND_ACT(FRONTEND_ACTION_CONFIRM_DELETE);
+    FRONTEND_CHECK(state.screen == FRONTEND_TITLE && !state.has_world &&
+                   !state.world_load_failed && journal == NULL);
+    FRONTEND_CHECK(!CampaignSaveExists(save_path) &&
+                   CampaignSaveExists(preferences_path));
     FRONTEND_ACT(FRONTEND_ACTION_OFFLINE);
     FRONTEND_ACT(FRONTEND_ACTION_PLAY);
     FRONTEND_CHECK(state.screen == FRONTEND_PLAYING && state.has_world && journal != NULL);
@@ -1018,6 +1068,8 @@ static int RunFrontendRegression(void)
     local.site_travel_progress = 0.5f;
     FRONTEND_ACT(FRONTEND_ACTION_TITLE);
     FRONTEND_CHECK(state.screen == FRONTEND_TITLE && CampaignSaveExists(session_path));
+    title_count = FrontendItems(&state, items);
+    FRONTEND_CHECK(items[title_count - 1].action == FRONTEND_ACTION_DELETE);
     CcClientSession travel_session;
     FRONTEND_CHECK(CcClientSessionRead(session_path, &travel_session,
         state.feedback, sizeof(state.feedback)));
