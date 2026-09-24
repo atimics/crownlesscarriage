@@ -7720,6 +7720,11 @@ static void UpdateBanditCamp(const CcSim *sim, CcBanditGroup *bandits)
         for (int32_t i = (int32_t)(sizeof(order) / sizeof(order[0])) - 1;
              i >= 0 && ServiceMaskCount(bandits->service_mask) > capacity; --i)
             bandits->service_mask &= ~ServiceBit(order[i]);
+        /* Older saves may carry any valid service mix. Close remaining
+           excess services in a stable order as the camp shrinks. */
+        for (int32_t service = CC_SERVICE_COUNT - 1;
+             service >= 0 && ServiceMaskCount(bandits->service_mask) > capacity; --service)
+            bandits->service_mask &= ~ServiceBit((CcServiceKind)service);
     }
     for (size_t i = 0; i < sizeof(order) / sizeof(order[0]) &&
                        ServiceMaskCount(bandits->service_mask) < capacity; ++i) {

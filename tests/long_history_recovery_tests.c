@@ -160,6 +160,15 @@ static void CheckCampDecline(void)
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(band->camp_size == CC_BANDIT_OUTLAW_TOWN);
     RoundTrip();
+    /* These are valid saved services outside the usual bandit build order. */
+    band->members = 4;
+    band->service_mask = (UINT32_C(1) << CC_SERVICE_INN) |
+        (UINT32_C(1) << CC_SERVICE_FARM) | (UINT32_C(1) << CC_SERVICE_CARTOGRAPHER);
+    RoundTrip();
+    sim.current_day = 20;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(band->camp_size == CC_BANDIT_HIDEOUT);
+    RoundTrip();
 }
 
 static void CheckBanditScouts(void)
