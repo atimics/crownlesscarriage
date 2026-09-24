@@ -5,7 +5,7 @@
 
 /* Review the newest saved schema when advancing the current schema. Both
    version admission and the runtime upgrade use this explicit boundary. */
-#define CC_SIM_NEWEST_LEGACY_SCHEMA 113U
+#define CC_SIM_NEWEST_LEGACY_SCHEMA 114U
 _Static_assert(CC_SIM_NEWEST_LEGACY_SCHEMA + 1U == CC_SIM_SCHEMA_VERSION,
     "Review the legacy schema boundary when advancing CC_SIM_SCHEMA_VERSION");
 
