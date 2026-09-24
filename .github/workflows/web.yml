@@ -113,6 +113,7 @@ jobs:
           node tests/layout_scale_browser_tests.cjs out/build/web/site browser-results/layout-scale
           node tests/settings_storage_recovery_browser_tests.cjs out/build/web/site browser-results/settings-storage-recovery
           node tests/landscape_touch_tests.cjs out/build/web/site browser-results/landscape-touch
+          node tests/settings_browser_tests.cjs out/build/web/site browser-results
       - name: Build the shared carriage host
         if: matrix.suite == 'shared-world'
         run: |

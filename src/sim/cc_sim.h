@@ -679,7 +679,8 @@ typedef enum CcCommandKind {
     CC_COMMAND_PICKUP_RELIEF_CRATE = 79,
     CC_COMMAND_STOW_RELIEF_CRATE = 80,
     CC_COMMAND_CARE_HORSES = 81,
-    CC_COMMAND_SCRIVEN = 82
+    CC_COMMAND_SCRIVEN = 82,
+    CC_COMMAND_COUNT
 } CcCommandKind;
 
 typedef enum CcHorseSex {

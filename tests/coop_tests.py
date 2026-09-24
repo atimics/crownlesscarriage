@@ -3,6 +3,7 @@ import ctypes as c
 import hashlib
 import json
 from pathlib import Path
+import re
 import sqlite3
 import subprocess
 import sys
@@ -14,12 +15,23 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools' / 'coop'))
 from engine import Engine
-from server import ApiError, Application, Worlds, away_days, AWAY_GRACE, AWAY_RAMP, issue_world_pass
+from server import ACTIONS, ApiError, Application, Worlds, away_days, AWAY_GRACE, AWAY_RAMP, issue_world_pass
 
 LIBRARY = sys.argv.pop(1)
 
 
 class CoopTests(unittest.TestCase):
+    def test_server_accepts_every_shared_command_name(self):
+        header = (Path(__file__).resolve().parents[1] /
+                  'src/multiplayer/cc_coop_commands.h').read_text()
+        table = re.search(r'const names\[\] = \{(.*?)\};', header, re.S)
+        self.assertIsNotNone(table)
+        names = set(re.findall(r'"([a-z_]+)"', table.group(1)))
+        local_only = {'party_wipe', 'mine_contest', 'mine_resolve_contest',
+                      'food_relief_propose', 'food_relief_accept', 'food_relief_execute'}
+        server_only = {'stop_travel', 'resume_travel', 'skip_watch'}
+        self.assertEqual(ACTIONS, (names - local_only) | server_only)
+
     @classmethod
     def setUpClass(cls):
         cls.engine = Engine(LIBRARY)

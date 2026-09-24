@@ -20,7 +20,8 @@ async function main() {
       response.end(await fs.readFile(file));
     } catch { response.writeHead(404).end(); }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(
+    Number(process.env.CC_BROWSER_CAPTURE_PORT || 0), '127.0.0.1', resolve));
   const browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
   const context = await browser.newContext({viewport: {width: 1280, height: 900}});
   const page = await context.newPage();
@@ -135,7 +136,8 @@ async function main() {
   });
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 && document.querySelector('#loading').hidden && window.shaderLinks.some(link => link.skinned), undefined, {timeout: 120000});
+    await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 &&
+      document.querySelector('#loading').hidden, undefined, {timeout: 120000});
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
     assert.equal(await page.evaluate(() => Module._CrownlessRoadGeometrySelfTest()), 1,
       'WebAssembly road geometry must match the native known fixtures');
@@ -195,6 +197,8 @@ async function main() {
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing' && Module.crownlessSaveRevision > 0);
+    let campaignIdentity = await page.evaluate(() => Module.crownlessCampaignId);
+    assert.match(campaignIdentity, /^[0-9a-f]{32}$/);
     await page.screenshot({path: path.join(output, 'opening.png')});
     await page.waitForFunction(() => [...document.querySelectorAll('[data-crownless-music]')]
       .some(media => !media.paused && media.readyState >= 3), {timeout: 60000});
@@ -219,9 +223,11 @@ async function main() {
     const frameMs = Object.fromEntries([['median', 0.5], ['p95', 0.95], ['p99', 0.99]]
       .map(([name, fraction]) => [name, frameTimes[Math.min(frameTimes.length - 1,
         Math.floor(frameTimes.length * fraction))]]));
-    const p95LimitMs = process.env.CI ? 400 : 100;
+    const diagnosticLimit = Number(process.env.CC_BROWSER_DIAGNOSTIC_P95_MS || 0);
+    const p95LimitMs = diagnosticLimit > 0 ? diagnosticLimit : process.env.CI ? 400 : 100;
     await fs.writeFile(path.join(output, 'frame-budget.json'),
-      JSON.stringify({environment: process.env.CI ? 'ci-software' : 'local-software',
+      JSON.stringify({environment: diagnosticLimit > 0 ? 'local-diagnostic-software' :
+        process.env.CI ? 'ci-software' : 'local-software',
         p95LimitMs, frames: drawn, perFrame, frameMs}, null, 2));
     assert(frameTimes.length >= 20, `Frame timing needs a useful sample, not ${frameTimes.length} frames`);
     assert(frameMs.p95 <= p95LimitMs,
@@ -256,6 +262,8 @@ async function main() {
       return {zeroLength, omittedLength};
     });
     assert.deepEqual(uploadOverloads, {zeroLength: 6, omittedLength: 6});
+    await page.waitForFunction(() => window.shaderLinks.some(link => link.skinned),
+      undefined, {timeout:30000});
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
@@ -339,14 +347,106 @@ async function main() {
     const beforeSave = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.keyboard.press('Control+s');
     await page.waitForFunction(previous => Module.crownlessSaveRevision > previous, beforeSave);
-    const revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    let revision = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.reload();
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignRestored && document.querySelector('#loading').hidden);
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing');
+    const secondTab = await context.newPage();
+    await secondTab.goto(`http://127.0.0.1:${server.address().port}/`);
+    await secondTab.waitForFunction(() => window.Module &&
+      Module.crownlessCampaignAccess === 1 && Module.crownlessCampaignRestored,
+      undefined, {timeout:120000});
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessSaveRevision), revision);
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Control+s');
+    await page.waitForFunction(previous => Module.crownlessSaveRevision > previous, revision);
+    revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    const staleWrite = await secondTab.evaluate(async () => {
+      try {
+        await Module.persistCrownlessSave('/crownless-save/crownless_campaign.ccsave',
+          '/crownless-save/crownless_campaign.ccsave.session');
+        return null;
+      } catch (error) { return error.message; }
+    });
+    assert.match(staleWrite, /read-only|another tab|reload/i);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessSaveRevision), revision - 1);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignId),
+      campaignIdentity);
+    await secondTab.reload();
+    await secondTab.waitForFunction(expected => window.Module &&
+      Module.crownlessSaveRevision === expected && Module.crownlessCampaignRestored,
+      revision, {timeout:120000});
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignAccess), 1);
+    await secondTab.screenshot({path: path.join(output, 'same-campaign-two-tabs.png')});
+    await secondTab.close();
+    await page.evaluate(async () => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crownless-carriage');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction('campaign-files', 'readwrite');
+        transaction.objectStore('campaign-files').delete(
+          '/crownless-save/crownless_campaign.ccsave.identity');
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title' &&
+      Module.crownlessCampaignRestored, undefined, {timeout:120000});
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), null);
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    const legacyFailedWrite = await page.evaluate(async () => {
+      const original = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function(names, mode, ...rest) {
+        if (mode === 'readwrite')
+          throw new DOMException('Injected storage failure', 'QuotaExceededError');
+        return original.call(this, names, mode, ...rest);
+      };
+      try {
+        await Module.persistCrownlessSave('/crownless-save/crownless_campaign.ccsave',
+          '/crownless-save/crownless_campaign.ccsave.session');
+        return null;
+      } catch (error) { return error.message; }
+      finally { IDBDatabase.prototype.transaction = original; }
+    });
+    assert.match(legacyFailedWrite, /Injected storage failure/);
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), null);
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    const legacyRevision = revision;
+    await page.evaluate(() => Module.persistCrownlessSave(
+      '/crownless-save/crownless_campaign.ccsave',
+      '/crownless-save/crownless_campaign.ccsave.session'));
+    revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    assert.equal(revision, legacyRevision + 1);
+    const migratedIdentity = await page.evaluate(() => Module.crownlessCampaignId);
+    assert.match(migratedIdentity, /^[0-9a-f]{32}$/);
+    assert.notEqual(migratedIdentity, campaignIdentity);
+    campaignIdentity = migratedIdentity;
+    await page.evaluate(() => Module.persistCrownlessSave(
+      '/crownless-save/crownless_campaign.ccsave',
+      '/crownless-save/crownless_campaign.ccsave.session'));
+    revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    assert.equal(revision, legacyRevision + 2);
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title' &&
+      Module.crownlessCampaignRestored, undefined, {timeout:120000});
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing',
+      undefined, {timeout:120000});
     rejectedWrite = true;
     await page.evaluate(() => {
       const transaction = IDBDatabase.prototype.transaction;
@@ -402,6 +502,16 @@ async function main() {
             `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    const newCampaignIdentity = await page.evaluate(() => Module.crownlessCampaignId);
+    assert.match(newCampaignIdentity, /^[0-9a-f]{32}$/);
+    assert.notEqual(newCampaignIdentity, campaignIdentity);
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessCampaignRestored &&
+      Module.crownlessScreen === 'title', undefined, {timeout:120000});
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), newCampaignIdentity);
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing');
     await assertSaveStatusLane(page, 1280, 720);
     await page.screenshot({path: path.join(output, 'save-lane-desktop.png')});
     const recovery = await page.evaluate(() => {
@@ -445,10 +555,41 @@ async function main() {
     const phone = await browser.newContext({viewport: {width: 390, height: 844},
       hasTouch: true, isMobile: true, deviceScaleFactor: 3});
     const mobile = await phone.newPage();
+    const lazyMapResponses = [];
+    const optionalVoiceMisses = new Set();
+    mobile.on('response', response => {
+      if (response.url().includes('/assets/maps/')) {
+        lazyMapResponses.push({url:response.url(), status:response.status()});
+      }
+      if (response.status() === 404) {
+        if (/\/speech\/[0-9a-f]{16}\.wav$/.test(response.url()))
+          optionalVoiceMisses.add(response.url());
+        else errors.push(`HTTP 404: ${response.url()}`);
+      }
+    });
     mobile.on('pageerror', error => errors.push(error.message));
+    mobile.on('console', message => {
+      if (message.type() === 'error' &&
+          !message.text().includes('Ignored attempt to cancel a touchcancel event')) {
+        const source = message.location().url;
+        if (!optionalVoiceMisses.has(source) ||
+            !message.text().includes('Failed to load resource'))
+          errors.push(`${message.text()} (${source})`);
+      }
+    });
     try {
       await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
-      await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' && Module.crownlessTouchFrame?.buttons.length);
+      try {
+        await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' &&
+          Module.crownlessTouchFrame?.buttons.length, undefined, {timeout:120000});
+      } catch (error) {
+        console.error('mobile startup', JSON.stringify(await mobile.evaluate(() => ({
+          ready:document.readyState, screen:window.Module?.crownlessScreen,
+          cards:window.Module?.crownlessTouchFrame?.buttons.length,
+          loading:document.querySelector('#loading')?.textContent?.slice(0, 200)
+        }))));
+        throw error;
+      }
       await mobile.evaluate(() => Module.setCrownlessSaveStatus(
         'could not save. Your journal and scene remain in this tab. Reload after checking browser storage.', 'failed'));
       await assertSaveStatusLane(mobile, 390, 844);
@@ -468,6 +609,7 @@ async function main() {
             {label: 'Unload 1', enabled: false, active: false}
           ]
         };
+        const savedFrame = Module.crownlessTouchFrame;
         const activate = Module._CrownlessTouchActivate;
         window.semanticActivations = [];
         Module._CrownlessTouchActivate = (index, revision) =>
@@ -520,7 +662,7 @@ async function main() {
         loading.focus();
         const recovery = panel.hidden && document.activeElement === loading;
         loading.hidden = true;
-        Module.renderCrownlessTouch(Module.crownlessTouchFrame);
+        Module.renderCrownlessTouch(savedFrame);
         Module._CrownlessTouchActivate = activate;
         return {...content,
           activation: window.semanticActivations,
@@ -623,16 +765,172 @@ async function main() {
       const bookReading = await controls.reading();
       assert(bookReading.length > 30);
       assert.match(bookReading, /Next: Load 8 food boxes from the granary stack/i);
+      if (optionalVoiceMisses.size)
+        assert.match(bookReading, /Load 8 food boxes/,
+          'The charter stays readable when its optional voice pack is absent');
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
 
-      const backButton = mobile.locator('#touch-actions button').filter({hasText: /^Back/});
-      await backButton.focus();
-      await mobile.keyboard.press('Enter');
+      await controls.button('Back').tap();
+      await controls.button('Book').waitFor();
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame.title !== 'Company Book');
+      await mobile.waitForTimeout(300);
+      if (await controls.button(/^1 Not now\./).read())
+        await controls.button(/^1 Not now\./).tap();
+      const openingCampaignId = await mobile.evaluate(() => Module.crownlessCampaignId);
+      async function tapRelief(name) {
+        await mobile.locator('#touch-actions .touch-buttons button')
+          .filter({hasText:new RegExp(`^${name}$`)}).tap();
+        await mobile.waitForTimeout(150);
+      }
+      const reliefWalks = [];
+      async function walkRelief(crate, action, arrival) {
+        const samples = [];
+        const started = Date.now();
+        const destination = action === 'Walk to carriage' ? [42.4, 55.2] : [44.4, 26.8];
+        let taps = 0, stillIntervals = 0, previous = null;
+        const finish = () => reliefWalks.push({crate, action, seconds:(Date.now()-started)/1000,
+          taps, reissues:Math.max(0, taps-1), samples});
+        for (let attempt = 0; attempt < 12; ++attempt) {
+          if (await controls.button(arrival).read()) {
+            finish();
+            return;
+          }
+          if (await controls.button(/^1 Not now\./).read()) {
+            await controls.button(/^1 Not now\./).tap();
+            await mobile.waitForTimeout(300);
+          }
+          if (await controls.button(arrival).read()) {
+            finish();
+            return;
+          }
+          assert(await controls.button(action).read(),
+            `Crate ${crate} needs ${action}: ${JSON.stringify(await controls.buttons())}`);
+          const navigation = await mobile.evaluate(() => ({
+            ...Module.crownlessLocalNavigation,
+            frame_revision:Module.crownlessTouchFrame?.revision,
+            cards:Module.crownlessTouchFrame?.buttons.slice(0, 4).map(button => button.label),
+            status:Module.crownlessTouchFrame?.reading.split('\n').slice(6, 11),
+            touch:Module.crownlessTouchLastActivation,
+            approach_started:Module.crownlessLastReliefApproach,
+            context_action:Module.crownlessLastContextAction}));
+          samples.push(navigation);
+          assert.equal(navigation.life_state, 0,
+            `Crate ${crate} actor must remain able to walk ${action}: ` +
+            JSON.stringify(samples));
+          if (taps > 0 && navigation.navigation_active) {
+            assert(Math.hypot(navigation.command_x-destination[0],
+              navigation.command_z-destination[1]) <
+              (action === 'Walk to carriage' ? 2.2 : 3.2),
+              `Crate ${crate} navigation changed target: ${JSON.stringify(navigation)}`);
+          }
+          if (previous && Math.hypot(navigation.x-previous.x,
+              navigation.z-previous.z) < 0.25) stillIntervals++;
+          else stillIntervals = 0;
+          if (taps === 0) {
+            const firstCard = (await controls.buttons())[0];
+            assert.equal(firstCard.label, action,
+              `Crate ${crate} relief action must stay first as nearby town cards change: ` +
+              JSON.stringify(await controls.buttons()));
+            await tapRelief(action);
+            taps++;
+            stillIntervals = 0;
+          } else {
+            assert(stillIntervals < 3,
+              `Crate ${crate} stopped approaching ${action}: ${JSON.stringify(samples)}`);
+          }
+          previous = navigation;
+          await mobile.waitForTimeout(6000);
+        }
+        if (await controls.button(arrival).read()) {
+          finish();
+          return;
+        }
+        samples.push(await mobile.evaluate(() => ({
+          ...Module.crownlessLocalNavigation,
+          touch:Module.crownlessTouchLastActivation,
+          context_action:Module.crownlessLastContextAction})));
+        await mobile.screenshot({path:path.join(output, 'mobile-relief-walk-stall.png')});
+        await fs.writeFile(path.join(output, 'relief-walks.json'),
+          JSON.stringify([...reliefWalks, {crate, action, seconds:(Date.now()-started)/1000,
+            taps, reissues:Math.max(0,taps-1), samples}], null, 2));
+        assert.fail(`Crate ${crate} ${action} stalled: ${JSON.stringify(samples)}`);
+      }
+      for (let crate = 1; crate <= 8; ++crate) {
+        console.log('loading relief crate', crate);
+        await walkRelief(crate, 'Walk to granary stack', 'Lift one relief crate');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} granary approach must stop when Lift appears`);
+        assert.equal(reliefWalks.at(-1).reissues, 0,
+          `Crate ${crate} should reach the granary with one Walk tap`);
+        await mobile.waitForTimeout(350);
+        await tapRelief('Lift one relief crate');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} Lift must hold the player at the granary`);
+        await mobile.waitForFunction(() => Module.crownlessTouchFrame?.buttons.some(
+          button => button.label === 'Walk to carriage'), undefined, {timeout:8000});
+        if (crate === 1)
+          await mobile.screenshot({path:path.join(output, 'mobile-carrying-relief-crate.png')});
+        await walkRelief(crate, 'Walk to carriage', 'Place crate in carriage');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} carriage approach must stop when Stow appears`);
+        await fs.writeFile(path.join(output, 'relief-walks.json'),
+          JSON.stringify(reliefWalks, null, 2));
+        assert.equal(reliefWalks.at(-1).reissues, 0,
+          `Crate ${crate} should finish the platform descent with one Walk tap: ` +
+          JSON.stringify(reliefWalks.at(-1)));
+        await mobile.waitForTimeout(350);
+        await tapRelief('Place crate in carriage');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} Stow must hold the player at the carriage`);
+        try {
+          await mobile.waitForFunction(crate =>
+            Module.crownlessTouchFrame?.reading.includes(`Cargo ${crate}/12`),
+          crate, {timeout:8000});
+        } catch (error) {
+          await mobile.screenshot({path:path.join(output, 'mobile-relief-stow-mismatch.png')});
+          const frame = await mobile.evaluate(() => Module.crownlessTouchFrame);
+          assert.fail(`Crate ${crate} stow result: ${JSON.stringify(frame)}; ${error.message}`);
+        }
+        assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId), openingCampaignId);
+        await fs.writeFile(path.join(output, 'relief-walks.json'),
+          JSON.stringify(reliefWalks, null, 2));
+        if (process.env.CC_BROWSER_CAPTURE_STORAGE) {
+          const saved = await mobile.evaluate(() => Module.crownlessSaveRevision);
+          await controls.button('Save').tap();
+          await mobile.waitForFunction(before => Module.crownlessSaveRevision > before,
+            saved);
+          await phone.storageState({path:process.env.CC_BROWSER_CAPTURE_STORAGE + `.crate${crate}`,
+            indexedDB:true});
+        }
+        if (crate < 8) await controls.button('Walk to granary stack').waitFor();
+      }
+      await fs.writeFile(path.join(output, 'relief-walks.json'),
+        JSON.stringify(reliefWalks, null, 2));
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-loaded.png')});
+      await controls.button('Board Crownless carriage').tap();
+      await controls.button('Open map case').tap();
+      await controls.button('Close map case').waitFor();
+      assert(lazyMapResponses.some(item => item.status === 200 &&
+        /\/assets\/maps\/(?:gloamgate_to_alderwatch|collectible_map_atlas)\.png$/.test(item.url)),
+        JSON.stringify(lazyMapResponses));
+      await mobile.screenshot({path: path.join(output, 'mobile-road-map.png')});
+      await controls.button('Close map case').tap();
+      console.log('loaded carriage', JSON.stringify({
+        buttons:await controls.buttons(), reading:await controls.reading()}));
+      await controls.button('Step away').tap();
+      await controls.button('Menu').waitFor();
       await controls.button('Menu').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
       const revision = await mobile.evaluate(() => Module.crownlessSaveRevision);
       await controls.button('Save world').tap();
       await mobile.waitForFunction(before => Module.crownlessSaveRevision > before, revision);
+      if (process.env.CC_BROWSER_CAPTURE_STORAGE)
+        await phone.storageState({path:process.env.CC_BROWSER_CAPTURE_STORAGE,
+          indexedDB:true});
       const timings = await mobile.evaluate(() =>
         JSON.parse(Module.exportCrownlessDiagnostics()));
       assert(timings.entries.length <= timings.capacity);
@@ -677,6 +975,151 @@ async function main() {
         await controls.button('Full screen').tap();
         await mobile.waitForFunction(() => !document.querySelector('#stage').classList.contains('expanded'));
       }
+      await mobile.setViewportSize({width:390, height:844});
+      await controls.button('Resume').tap();
+      await controls.button('Board Crownless carriage').waitFor();
+      await controls.button('Board Crownless carriage').tap();
+      await controls.button('Travel').tap();
+      const roadJourney = {driveChoices:0, roadsideStops:0, bridgePaid:false,
+        destinations:[]};
+      for (const destination of ['Gloamgate', 'Alderwatch', 'Silverwick']) {
+        let arrived = false;
+        const deadline = Date.now() + 240000;
+        let lastState = '';
+        while (Date.now() < deadline) {
+          const frame = await mobile.evaluate(() => Module.crownlessTouchFrame);
+          const names = (await controls.buttons()).map(button => button.label);
+          const state = `${frame.title}|${frame.scene}|${names.join('|')}`;
+          if (state !== lastState) {
+            console.log('relief road', destination, JSON.stringify({title:frame.title,
+              scene:frame.scene, cards:names}));
+            lastState = state;
+          }
+          assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId),
+            openingCampaignId);
+          assert.match(frame.reading, frame.scene === 'carriage' ?
+            /Manifest: Bread 8\. Load 8 of 12/ : /Cargo 8\/12/,
+          `Bread stays aboard until delivery: ${frame.reading.slice(0, 280)}`);
+          if (frame.title === destination && frame.scene === 'town') {
+            arrived = true;
+            break;
+          }
+          if (names.includes(destination)) {
+            await controls.button(destination).tap();
+            await mobile.waitForFunction(label =>
+              !Module.crownlessTouchFrame?.buttons.some(button => button.label === label),
+            destination, {timeout:20000});
+          } else {
+            const drive = names.filter(name => name.startsWith('Drive to '));
+            if (drive.length) {
+              const choice = drive.includes(`Drive to ${destination}`) ?
+                `Drive to ${destination}` : drive.at(-1);
+              if (roadJourney.driveChoices === 0)
+                await mobile.screenshot({path:path.join(output, 'mobile-road-choice.png')});
+              roadJourney.driveChoices++;
+              await controls.button(choice).tap();
+              await mobile.waitForFunction(label =>
+                !Module.crownlessTouchFrame?.buttons.some(button => button.label === label),
+              choice, {timeout:20000});
+            } else if (names.includes('Approach captain')) {
+              await mobile.screenshot({path:path.join(output, 'mobile-road-parley.png')});
+              await controls.button('Approach captain').tap();
+              await mobile.waitForFunction(() => Module.crownlessTouchFrame?.buttons.some(
+                button => /^Pay \d+ crowns$/.test(button.label)), undefined,
+              {timeout:60000});
+            } else if (names.some(name => /^Pay \d+ crowns$/.test(name))) {
+              const payment = names.find(name => /^Pay \d+ crowns$/.test(name));
+              await controls.button(payment).tap();
+              roadJourney.bridgePaid = true;
+              await mobile.waitForFunction(label =>
+                !Module.crownlessTouchFrame?.buttons.some(button => button.label === label),
+              payment, {timeout:20000});
+            } else if (names.includes('Travel on')) {
+              roadJourney.roadsideStops++;
+              await controls.button('Travel on').tap();
+              await mobile.waitForTimeout(1000);
+            } else if (names.includes('Park carriage')) {
+              await controls.button('Park carriage').tap();
+              await mobile.waitForTimeout(1000);
+            } else if (names.includes('Travel')) {
+              await controls.button('Travel').tap();
+              await mobile.waitForTimeout(300);
+            } else if (names.includes('1 Not now.')) {
+              await controls.button('1 Not now.').tap();
+            } else {
+              await mobile.waitForTimeout(1000);
+            }
+          }
+        }
+        assert(arrived, `Relief journey must reach ${destination}: ` +
+          JSON.stringify({journey:roadJourney, frame:await mobile.evaluate(() =>
+            Module.crownlessTouchFrame)}));
+        roadJourney.destinations.push(destination);
+        await mobile.screenshot({path:path.join(output,
+          `mobile-relief-${destination.toLowerCase()}.png`)});
+        if (destination !== 'Silverwick') {
+          await controls.button('Board Crownless carriage').tap();
+          await controls.button('Travel').tap();
+        }
+      }
+      assert(roadJourney.driveChoices > 0, JSON.stringify(roadJourney));
+      assert(roadJourney.roadsideStops > 0, JSON.stringify(roadJourney));
+      assert(roadJourney.bridgePaid, JSON.stringify(roadJourney));
+      await controls.button('Deliver promise Company store').tap();
+      const storeApproach = [];
+      for (let step = 0; step < 18; ++step) {
+        if (await controls.button('Deliver promise Oren — Company clerk').read())
+          break;
+        const position = await mobile.evaluate(() => ({
+          ...Module.crownlessLocalNavigation,
+          cards:Module.crownlessTouchFrame?.buttons.slice(0, 4).map(button =>
+            button.label)}));
+        storeApproach.push(position);
+        assert.equal(position.life_state, 0,
+          `Company store walk keeps the actor upright: ${JSON.stringify(storeApproach)}`);
+        if (storeApproach.length > 2) {
+          const earlier = storeApproach.at(-3);
+          assert(Math.hypot(position.x-earlier.x, position.z-earlier.z) > 0.25,
+          `Company store walk must keep progressing: ${JSON.stringify(storeApproach)}`);
+        }
+        await mobile.waitForTimeout(5000);
+      }
+      assert(await controls.button('Deliver promise Oren — Company clerk').read(),
+        `Company store walk must reach the clerk: ${JSON.stringify(storeApproach)}`);
+      await controls.button('Deliver promise Oren — Company clerk').tap();
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame?.scene === 'trade',
+        undefined, {timeout:30000});
+      assert.match(await controls.reading(), /Deliver promise: 8 Bread/);
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-delivery-before.png')});
+      await mobile.locator('#touch-actions button')
+        .filter({hasText:/^Deliver promise\s+Enter$/}).tap();
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame?.reading.includes(
+        'Delivery complete. Sold 8 Bread.'), undefined, {timeout:10000});
+      assert.match(await controls.reading(), /Cargo 0\/12/);
+      assert.match(await controls.reading(), /Promise settled/);
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-delivered.png')});
+      await controls.button('Back').tap();
+      await controls.button('Save').waitFor();
+      const deliveredRevision = await mobile.evaluate(() => Module.crownlessSaveRevision);
+      await controls.button('Save').tap();
+      await mobile.waitForFunction(before => Module.crownlessSaveRevision > before,
+        deliveredRevision);
+      await mobile.reload();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'title' &&
+        Module.crownlessCampaignRestored, undefined, {timeout:120000});
+      assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId),
+        openingCampaignId);
+      await controls.button('Play').tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'playing',
+        undefined, {timeout:120000});
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame?.reading.includes(
+        'Cargo 0/12'), undefined, {timeout:10000});
+      assert.match(await controls.reading(), /Silverwick/);
+      assert.match(await controls.reading(), /91 crowns/);
+      console.log('relief delivery and reload', JSON.stringify({
+        campaignId:openingCampaignId, journey:roadJourney,
+        reading:(await controls.reading()).slice(0, 260)}));
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-delivery-reloaded.png')});
     } finally { await phone.close(); }
     assert.deepEqual(errors, []);
     console.log('Browser desktop and mobile layout, touch input, menus, saves, shaders, fullscreen, and reload checks passed');

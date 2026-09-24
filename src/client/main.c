@@ -47,6 +47,35 @@ EMSCRIPTEN_KEEPALIVE int CrownlessRoadGeometrySelfTest(void)
 {
     return CcRoadGeometryKnownFixtures() ? 1 : 0;
 }
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextra-semi"
+#endif
+EM_JS(void, ClientBrowserLocalNavigation,
+    (float x, float y, float z, float terrain_y,
+     float command_x, float command_z, int target_valid,
+     int navigation_active, int path_index, int path_count,
+     float stall_seconds, int interaction_approaching,
+     int interaction_navigation, int descent_pending, int life_state,
+     float health, int traversal, int grounded), {
+    Module.crownlessLocalNavigation = {x, y, z, terrain_y,
+        command_x, command_z,
+        target_valid: !!target_valid, navigation_active: !!navigation_active,
+        path_index, path_count, stall_seconds,
+        interaction_approaching: !!interaction_approaching,
+        interaction_navigation: !!interaction_navigation,
+        descent_pending: !!descent_pending, life_state, health, traversal,
+        grounded: !!grounded};
+});
+EM_JS(void, ClientBrowserContextAction, (int kind), {
+    Module.crownlessLastContextAction = kind;
+});
+EM_JS(void, ClientBrowserReliefApproach, (int walking), {
+    Module.crownlessLastReliefApproach = !!walking;
+});
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #endif
 
 #define BACKGROUND CC_STYLE_BACKGROUND
@@ -214,6 +243,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_MINE_REPORT,
     CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
     CONTEXT_ACTION_STOW_RELIEF_CRATE,
+    CONTEXT_ACTION_APPROACH_RELIEF_CRATES,
+    CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE,
     CONTEXT_ACTION_OVEN_QUESTION
 } ContextActionKind;
 
@@ -251,6 +282,8 @@ typedef struct LocalState {
     Vector2 presented_card_origin;
     ClientView interaction_view;
     bool carriage_stopped;
+    bool relief_carriage_descent_pending;
+    ContextActionKind relief_approach;
     bool road_actions_expanded;
     CcClientTravelSample shared_travel_sample;
     CcId shared_travel_route, shared_travel_origin, shared_travel_segment;
@@ -4568,17 +4601,25 @@ static ContextActionSet BuildContextActions(
             sim->player.location_id == CcSimSituationOfferSettlementId(sim, relief)) {
             Vector2 position = LocalPosition(local);
             if (!relief->loading_crate_carried &&
-                CcSimReliefCratesToLoad(relief) > 0 &&
-                GridDistance(position, LOCAL_RELIEF_CRATES) < 2.1f) {
-                AddDetailedContextAction(&set, CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
-                    "Lift one relief crate", "F",
+                CcSimReliefCratesToLoad(relief) > 0) {
+                bool near = GridDistance(position, LOCAL_RELIEF_CRATES) < 2.1f;
+                AddDetailedContextAction(&set, near ?
+                    CONTEXT_ACTION_PICKUP_RELIEF_CRATE :
+                    CONTEXT_ACTION_APPROACH_RELIEF_CRATES,
+                    near ? "Lift one relief crate" : "Walk to granary stack",
+                    near ? TextFormat("%c", adventure_preferences != NULL ?
+                        adventure_preferences->key_interact : KEY_F) : "",
                     TextFormat("%d STILL AT GRANARY", CcSimReliefCratesToLoad(relief)),
                     true, false);
-            } else if (relief->loading_crate_carried &&
-                (GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
-                 GridDistance(position, LOCAL_CARRIAGE) < 1.85f)) {
-                AddDetailedContextAction(&set, CONTEXT_ACTION_STOW_RELIEF_CRATE,
-                    "Place crate in carriage", "F",
+            } else if (relief->loading_crate_carried) {
+                bool near = GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
+                    GridDistance(position, LOCAL_CARRIAGE) < 1.85f;
+                AddDetailedContextAction(&set, near ?
+                    CONTEXT_ACTION_STOW_RELIEF_CRATE :
+                    CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE,
+                    near ? "Place crate in carriage" : "Walk to carriage",
+                    near ? TextFormat("%c", adventure_preferences != NULL ?
+                        adventure_preferences->key_interact : KEY_F) : "",
                     TextFormat("%d OF %d ABOARD", relief->loading_progress,
                         relief->quantity), true, false);
             }
@@ -4620,7 +4661,7 @@ static ContextActionSet BuildContextActions(
             for (int i = 0; i < set.count; ++i)
                 if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES)
                     care_present = true;
-            /* Delivery and named witnesses lead. Keep one place for care after shown cards. */
+            /* Keep the current relief step visible while nearby town cards change. */
             for (int pass = 0; pass < 4; ++pass) {
                 int count = pass == 1 ? local->presented_target_count : set.count;
                 int limit = pass < 2 && care_present ? 3 : 4;
@@ -4640,7 +4681,9 @@ static ContextActionSet BuildContextActions(
                     if (candidate < 0) continue;
                     const ContextAction *action = &set.items[candidate];
                     if (pass == 0 &&
+                        action->kind != CONTEXT_ACTION_APPROACH_RELIEF_CRATES &&
                         action->kind != CONTEXT_ACTION_PICKUP_RELIEF_CRATE &&
+                        action->kind != CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE &&
                         action->kind != CONTEXT_ACTION_STOW_RELIEF_CRATE &&
                         AdventurePriorityRank(sim, local,
                             CcInteractionFind(&local->interactions,
@@ -5399,18 +5442,24 @@ static ContextActionSet BuildContextActions(
     if (relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
         sim->player.location_id == CcSimSituationOfferSettlementId(sim,relief)) {
         if (!relief->loading_crate_carried &&
-            CcSimReliefCratesToLoad(relief)>0 &&
-            GridDistance(position,LOCAL_RELIEF_CRATES)<2.1f) {
-            AddDetailedContextAction(&set,CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
-                "Lift one relief crate","F",
+            CcSimReliefCratesToLoad(relief)>0) {
+            bool near=GridDistance(position,LOCAL_RELIEF_CRATES)<2.1f;
+            AddDetailedContextAction(&set,near ? CONTEXT_ACTION_PICKUP_RELIEF_CRATE :
+                CONTEXT_ACTION_APPROACH_RELIEF_CRATES,
+                near ? "Lift one relief crate" : "Walk to granary stack",
+                near ? TextFormat("%c", adventure_preferences != NULL ?
+                    adventure_preferences->key_interact : KEY_F) : "",
                 TextFormat("%d STILL AT GRANARY",CcSimReliefCratesToLoad(relief)),
                 true,false);
         }
-        if (relief->loading_crate_carried &&
-            (GridDistance(position,LOCAL_CARRIAGE_BAY)<1.85f ||
-             GridDistance(position,LOCAL_CARRIAGE)<1.85f)) {
-            AddDetailedContextAction(&set,CONTEXT_ACTION_STOW_RELIEF_CRATE,
-                "Place crate in carriage","F",
+        if (relief->loading_crate_carried) {
+            bool near=GridDistance(position,LOCAL_CARRIAGE_BAY)<1.85f ||
+                GridDistance(position,LOCAL_CARRIAGE)<1.85f;
+            AddDetailedContextAction(&set,near ? CONTEXT_ACTION_STOW_RELIEF_CRATE :
+                CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE,
+                near ? "Place crate in carriage" : "Walk to carriage",
+                near ? TextFormat("%c", adventure_preferences != NULL ?
+                    adventure_preferences->key_interact : KEY_F) : "",
                 TextFormat("%d OF %d ABOARD",relief->loading_progress,
                     relief->quantity),true,false);
         }
@@ -9445,6 +9494,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
+#if defined(PLATFORM_WEB)
+    if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        ClientBrowserContextAction((int)context_action);
+#endif
     bool care_key = (IsKeyDown(KEY_LEFT_SHIFT) ||
                      IsKeyDown(KEY_RIGHT_SHIFT)) &&
         ClientKeyPressed(adventure_preferences != NULL ?
@@ -10613,6 +10666,37 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)CcLocalWorldUpdate(
             &local->course, &local->agent, sim, delta_time,
             local->market_interior, advance_course);
+        /* A relief walk can first step down from the raised granary platform.
+           Continue toward the original stop once that descent has settled. */
+        if (local->relief_carriage_descent_pending &&
+            local->agent.interaction_navigation &&
+            !local->agent.exact_target_valid &&
+            !local->agent.navigation_active) {
+            const CcSituation *relief = CcSimAcceptedSituation(sim);
+            local->relief_carriage_descent_pending = false;
+            if (relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+                relief->loading_crate_carried &&
+                sim->player.location_id == CcSimSituationOfferSettlementId(sim, relief) &&
+                GridDistance(LocalPosition(local), LOCAL_CARRIAGE_BAY) > 1.6f)
+                    (void)CcLocalAgentApproachInteraction(&local->agent,
+                        LOCAL_CARRIAGE_BAY, 1.6f, false);
+        }
+        if (local->relief_approach == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ||
+            local->relief_approach == CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE) {
+            bool carrying = local->relief_approach ==
+                CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE;
+            Vector2 stop = carrying ? LOCAL_CARRIAGE_BAY : LOCAL_RELIEF_CRATES;
+            /* Match the Lift and Stow card radii, so a visible action is safe. */
+            float reach = carrying ? 1.85f : 2.10f;
+            if (GridDistance(LocalPosition(local), stop) <= reach) {
+                CcLocalAgentStop(&local->agent);
+                local->relief_carriage_descent_pending = false;
+                local->relief_approach = CONTEXT_ACTION_NONE;
+            } else if (!local->agent.interaction_navigation &&
+                       !local->relief_carriage_descent_pending) {
+                local->relief_approach = CONTEXT_ACTION_NONE;
+            }
+        }
         if (local->movement_reticle_valid) {
             local->movement_reticle_age += delta_time;
             float reticle_lifetime = local->movement_reticle_accepted ?
@@ -10733,12 +10817,39 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ||
             context_action == CONTEXT_ACTION_STOW_RELIEF_CRATE) {
+            CcLocalAgentStop(&local->agent);
+            local->relief_carriage_descent_pending = false;
+            local->relief_approach = CONTEXT_ACTION_NONE;
             const CcSituation *relief=CcSimAcceptedSituation(sim);
             CcCommand carry={
                 .kind=context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ?
                     CC_COMMAND_PICKUP_RELIEF_CRATE : CC_COMMAND_STOW_RELIEF_CRATE,
                 .target_id=relief != NULL ? relief->id : 0U};
             (void)ApplyCommand(*journal,sim,carry,message,message_capacity);
+            return;
+        }
+        if (context_action == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ||
+            context_action == CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE) {
+            CcInteractionCancel(&local->interaction, "");
+            Vector2 destination=context_action == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ?
+                LOCAL_RELIEF_CRATES : LOCAL_CARRIAGE_BAY;
+            float radius=context_action == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ?
+                1.8f : 1.6f;
+            bool walking=CcLocalAgentApproachInteraction(&local->agent,
+                destination,radius,false);
+            local->relief_approach = walking ? context_action : CONTEXT_ACTION_NONE;
+#if defined(PLATFORM_WEB)
+            ClientBrowserReliefApproach(walking);
+#endif
+            local->relief_carriage_descent_pending = walking &&
+                context_action == CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE &&
+                !local->agent.navigation_active &&
+                local->agent.command_point_valid &&
+                GridDistance((Vector2){local->agent.command_point.x,
+                    local->agent.command_point.z}, destination) > radius;
+            (void)snprintf(message,message_capacity,"%s",walking ?
+                "Walking to the next relief stop." :
+                "Choose a clear path toward the relief stop.");
             return;
         }
         if (interact || context_action != CONTEXT_ACTION_NONE) {
@@ -12654,6 +12765,21 @@ int main(int argc, char **argv)
             view == VIEW_CHARACTER ? "conversation" :
             view == VIEW_TRADE ? "trade" :
             sim.journey.active || local.journey_travel_active ? "road" : "town");
+#if defined(PLATFORM_WEB)
+        ClientBrowserLocalNavigation(local.agent.position.x,
+            local.agent.position.y, local.agent.position.z,
+            CcLocalTerrainHeightAt(local.agent.position.x,
+                local.agent.position.z), local.agent.command_point.x,
+            local.agent.command_point.z, local.agent.target_valid,
+            local.agent.navigation_active, local.agent.navigation_point_index,
+            local.agent.navigation_point_count,
+            local.agent.movement_stall_seconds,
+            local.interaction.approaching,
+            local.agent.interaction_navigation,
+            local.relief_carriage_descent_pending,
+            (int)local.agent.combat.life_state, local.agent.combat.health,
+            (int)local.agent.traversal, local.agent.grounded);
+#endif
         ClientTouchEnd();
         EndDrawing();
 #if defined(PLATFORM_WEB)

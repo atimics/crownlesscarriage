@@ -3,6 +3,7 @@
   const enabled = /^[a-f0-9]{32}$/.test(worldId || '');
   let avatar = CcAvatar.normalize(), avatarRevision = -1;
   let state = null, pending = null, lastPoll = 0, inFlight = false, applying = false;
+  let lastAcceptedCommand = null;
   const token = enabled ? localStorage.getItem('cc-coop-token') : '';
   const key = `cc-coop-pending-${worldId}`;
   let deleted = false;
@@ -94,6 +95,8 @@
         const result = await request('command', { ...body, campaign: true });
         localStorage.removeItem(key);
         accept(result.world, true);
+        lastAcceptedCommand = {action:body.action, sequence:body.sequence,
+          revision:result.world.revision, duplicate:Boolean(result.duplicate)};
         if (recoveringOtherAction) throw new Error('Earlier company action recovered. Choose your next action again.');
         return result;
       } catch (error) {
@@ -197,6 +200,9 @@
     location.assign(`/#world=${worldId}`);
   }
   Module.ccCoop = { enabled, connect, apply, poll, deleteWorld, openLobby, openCompany, saveAppearance, togglePause,
+    syncStatus() { return {revision:state?.revision, hash:state?.state?.hash,
+      action_revision:state?.action_revision, inFlight, applying,
+      pendingCampaign:Boolean(pending), lastAcceptedCommand}; },
     exchange, exchangeMemory, drawnMemory, leave, seat:() => Math.max(0, state?.crew.findIndex(member => member.id === state.member) || 0),
     life(dead) { travellerDead = travellerDead || Boolean(dead); },
     dead:() => travellerDead,

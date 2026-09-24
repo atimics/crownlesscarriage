@@ -47,12 +47,14 @@ EMSCRIPTEN_KEEPALIVE void CrownlessTouchTap(float x, float y)
     queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
 }
 
-EMSCRIPTEN_KEEPALIVE void CrownlessTouchActivate(int index, int revision)
+EMSCRIPTEN_KEEPALIVE int CrownlessTouchActivate(int index, int revision)
 {
-    if (revision != touch_revision || index < 0 || index >= touch_previous_count ||
-        !touch_previous[index].enabled) return;
+    if (revision != touch_revision) return 0;
+    if (index < 0 || index >= touch_previous_count ||
+        !touch_previous[index].enabled) return -1;
     Rectangle bounds = touch_previous[index].bounds;
     CrownlessTouchTap(bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f);
+    return 1;
 }
 
 EMSCRIPTEN_KEEPALIVE void CrownlessTouchKey(int key)
