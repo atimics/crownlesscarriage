@@ -906,8 +906,126 @@ async function main() {
       await controls.button('Board Crownless carriage').waitFor();
       await controls.button('Board Crownless carriage').tap();
       await controls.button('Travel').tap();
-      console.log('departure road', JSON.stringify({
-        buttons:await controls.buttons(), reading:await controls.reading()}));
+      const roadJourney = {driveChoices:0, roadsideStops:0, bridgePaid:false,
+        destinations:[]};
+      for (const destination of ['Gloamgate', 'Alderwatch', 'Silverwick']) {
+        let arrived = false;
+        const deadline = Date.now() + 240000;
+        let lastState = '';
+        while (Date.now() < deadline) {
+          const frame = await mobile.evaluate(() => Module.crownlessTouchFrame);
+          const names = (await controls.buttons()).map(button => button.label);
+          const state = `${frame.title}|${frame.scene}|${names.join('|')}`;
+          if (state !== lastState) {
+            console.log('relief road', destination, JSON.stringify({title:frame.title,
+              scene:frame.scene, cards:names}));
+            lastState = state;
+          }
+          assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId),
+            openingCampaignId);
+          assert.match(frame.reading, /Cargo 8\/12/,
+            `Bread stays aboard until delivery: ${frame.reading.slice(0, 280)}`);
+          if (frame.title === destination && frame.scene === 'town') {
+            arrived = true;
+            break;
+          }
+          if (names.includes(destination)) {
+            await controls.button(destination).tap();
+            await mobile.waitForFunction(label =>
+              !Module.crownlessTouchFrame?.buttons.some(button => button.label === label),
+            destination, {timeout:20000});
+          } else {
+            const drive = names.filter(name => name.startsWith('Drive to '));
+            if (drive.length) {
+              const choice = drive.includes(`Drive to ${destination}`) ?
+                `Drive to ${destination}` : drive.at(-1);
+              if (roadJourney.driveChoices === 0)
+                await mobile.screenshot({path:path.join(output, 'mobile-road-choice.png')});
+              roadJourney.driveChoices++;
+              await controls.button(choice).tap();
+              await mobile.waitForFunction(label =>
+                !Module.crownlessTouchFrame?.buttons.some(button => button.label === label),
+              choice, {timeout:20000});
+            } else if (names.includes('Approach captain')) {
+              await mobile.screenshot({path:path.join(output, 'mobile-road-parley.png')});
+              await controls.button('Approach captain').tap();
+              await mobile.waitForFunction(() => Module.crownlessTouchFrame?.buttons.some(
+                button => /^Pay \d+ crowns$/.test(button.label)), undefined,
+              {timeout:60000});
+            } else if (names.some(name => /^Pay \d+ crowns$/.test(name))) {
+              const payment = names.find(name => /^Pay \d+ crowns$/.test(name));
+              await controls.button(payment).tap();
+              roadJourney.bridgePaid = true;
+              await mobile.waitForFunction(label =>
+                !Module.crownlessTouchFrame?.buttons.some(button => button.label === label),
+              payment, {timeout:20000});
+            } else if (names.includes('Travel on')) {
+              roadJourney.roadsideStops++;
+              await controls.button('Travel on').tap();
+              await mobile.waitForTimeout(1000);
+            } else if (names.includes('Park carriage')) {
+              await controls.button('Park carriage').tap();
+              await mobile.waitForTimeout(1000);
+            } else if (names.includes('Travel')) {
+              await controls.button('Travel').tap();
+              await mobile.waitForTimeout(300);
+            } else if (names.includes('1 Not now.')) {
+              await controls.button('1 Not now.').tap();
+            } else {
+              await mobile.waitForTimeout(1000);
+            }
+          }
+        }
+        assert(arrived, `Relief journey must reach ${destination}: ` +
+          JSON.stringify({journey:roadJourney, frame:await mobile.evaluate(() =>
+            Module.crownlessTouchFrame)}));
+        roadJourney.destinations.push(destination);
+        await mobile.screenshot({path:path.join(output,
+          `mobile-relief-${destination.toLowerCase()}.png`)});
+        if (destination !== 'Silverwick') {
+          await controls.button('Board Crownless carriage').tap();
+          await controls.button('Travel').tap();
+        }
+      }
+      assert(roadJourney.driveChoices > 0, JSON.stringify(roadJourney));
+      assert(roadJourney.roadsideStops > 0, JSON.stringify(roadJourney));
+      assert(roadJourney.bridgePaid, JSON.stringify(roadJourney));
+      await controls.button('Deliver promise Company store').tap();
+      await controls.button('Deliver promise Oren — Company clerk').waitFor();
+      await controls.button('Deliver promise Oren — Company clerk').tap();
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame?.scene === 'trade',
+        undefined, {timeout:30000});
+      assert.match(await controls.reading(), /Deliver promise: 8 Bread/);
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-delivery-before.png')});
+      await mobile.locator('#touch-actions button')
+        .filter({hasText:/^Deliver promise\s+Enter$/}).tap();
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame?.reading.includes(
+        'Delivery complete. Sold 8 Bread.'), undefined, {timeout:10000});
+      assert.match(await controls.reading(), /Cargo 0\/12/);
+      assert.match(await controls.reading(), /Promise settled/);
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-delivered.png')});
+      await controls.button('Back').tap();
+      await controls.button('Save').waitFor();
+      const deliveredRevision = await mobile.evaluate(() => Module.crownlessSaveRevision);
+      await controls.button('Save').tap();
+      await mobile.waitForFunction(before => Module.crownlessSaveRevision > before,
+        deliveredRevision);
+      await mobile.reload();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'title' &&
+        Module.crownlessCampaignRestored, undefined, {timeout:120000});
+      assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId),
+        openingCampaignId);
+      await controls.button('Play').tap();
+      await mobile.waitForFunction(() => Module.crownlessScreen === 'playing',
+        undefined, {timeout:120000});
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame?.reading.includes(
+        'Cargo 0/12'), undefined, {timeout:10000});
+      assert.match(await controls.reading(), /Silverwick/);
+      assert.match(await controls.reading(), /91 crowns/);
+      console.log('relief delivery and reload', JSON.stringify({
+        campaignId:openingCampaignId, journey:roadJourney,
+        reading:(await controls.reading()).slice(0, 260)}));
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-delivery-reloaded.png')});
     } finally { await phone.close(); }
     assert.deepEqual(errors, []);
     console.log('Browser desktop and mobile layout, touch input, menus, saves, shaders, fullscreen, and reload checks passed');
