@@ -316,6 +316,18 @@ static bool CrownAges(void)
     sim.scriven.delegates[1].phase=CC_SCRIVEN_RETURNING;
     CcScrivenAdvance(&sim);
     CHECK(sim.crown_calendar.local[2].proposed_day==40);
+    /* Reusing a destroyed tome's object slot clears its carried edition. */
+    CcId old_id=a->id;
+    int slot=(int)(ba-sim.scriven.books);
+    CHECK(sim.crown_calendar.book_editions[slot]>0);
+    sim.scriven.delegates[0].phase=CC_SCRIVEN_FINISHED; a->destroyed=true;
+    sim.dragon.life_stage=CC_DRAGON_STAGE_CROWNED; sim.dragon.age_days=1200*365;
+    sim.dragon.crown_continuity_days=800*365; sim.dragon.territory_stability=100;
+    sim.dragon.memory_integrity=100; sim.dragon_cult.devotion=100;
+    sim.dragon.hoard=5000; sim.dragon.hoard_goods[CC_GOOD_GOLD]=10; sim.dragon.hoard_goods[CC_GOOD_GEMS]=10;
+    CcSimAdvanceDays(&sim,1);
+    CHECK(sim.dragon.life_stage==CC_DRAGON_STAGE_DEEP_WYRM);
+    CHECK(CcScrivenBookById(&sim,old_id)==NULL && sim.crown_calendar.book_editions[slot]==0);
     return true;
 }
 static bool CrownCodecAndLegacy(void)

@@ -5149,6 +5149,7 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
             CcTreasure *treasure = &sim->treasures[i];
             *treasure = (CcTreasure){0};
             if (sim->schema_version >= 113U) sim->scriven.books[i] = (CcScrivenBook){0};
+            if (sim->schema_version >= 115U) sim->crown_calendar.book_editions[i] = 0;
             treasure->id = NextId(sim, CC_ENTITY_TREASURE);
             return treasure;
         }
