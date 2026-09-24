@@ -649,7 +649,7 @@ async function main() {
           detailsOpen: panel.querySelector('details').open,
           actionCount: actions.querySelectorAll('button').length,
           actionsNested: [...actions.querySelectorAll('button')].every(button => button.parentElement === actions),
-          disabled: actions.querySelectorAll('button')[1].disabled
+          disabled: actions.querySelectorAll('button')[1].getAttribute('aria-disabled') === 'true'
         };
         stage.classList.add('expanded');
         const expanded = changed.getBoundingClientRect();

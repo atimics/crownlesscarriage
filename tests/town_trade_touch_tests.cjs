@@ -22,20 +22,6 @@ async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
 
-  async function tapRaw(page, pattern) {
-    const item = await page.evaluate(source =>
-      Module.crownlessTouchFrame.buttons.find(button => new RegExp(source).test(button.label)),
-      pattern.source);
-    assert(item, `Raw touch action ${pattern} must be visible`);
-    assert(item.enabled, `Raw touch action ${pattern} must be enabled`);
-    const canvas = page.locator('#canvas');
-    const bounds = await canvas.boundingBox();
-    const size = await canvas.evaluate(node => [node.width, node.height]);
-    await page.touchscreen.tap(
-      bounds.x + (item.x + item.width / 2) * bounds.width / size[0],
-      bounds.y + (item.y + item.height / 2) * bounds.height / size[1]);
-  }
-
   async function startGame(page) {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => window.Module && document.querySelector('#loading').hidden,
@@ -98,9 +84,32 @@ async function main() {
     assert.match(quote, /Buy: 2 Bread/);
     assert.match(quote, /Purse 42\s*\|\s*Cargo 0\/12/);
     const quotedCost = Number(quote.match(/Total cost (\d+) crowns/)[1]);
+    const buyName = `Buy 2 Bread. Total cost: ${quotedCost} crowns.`;
+    const buyControl = page.getByRole('button', {name: buyName, exact: true});
+    await buyControl.focus();
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), buyName,
+      `${name}: keyboard focus speaks the complete Buy offer`);
+    assert.equal(await buyControl.getAttribute('aria-disabled'), 'false');
+    await controls.button('Sell').tap();
+    const blockedSell = page.getByRole('button',
+      {name: /^Sell 2 Bread\. Sale value: \d+ crowns\. Bring the full quantity to the counter\.$/});
+    await blockedSell.focus();
+    assert.match(await page.evaluate(() => document.activeElement?.textContent),
+      /^Sell 2 Bread\. Sale value: \d+ crowns\. Bring the full quantity to the counter\.$/,
+      `${name}: keyboard focus includes the precise disabled Sell reason`);
+    assert.equal(await blockedSell.getAttribute('aria-disabled'), 'true');
+    await page.screenshot({path: path.join(output, name, 'trade-blocked-sell.png')});
+    const blockedState = await page.evaluate(() => ({revision: Module.crownlessTouchFrame.revision,
+      detail: Module.crownlessTouchFrame.detail}));
+    await blockedSell.press('Enter');
+    assert.deepEqual(await page.evaluate(() => ({revision: Module.crownlessTouchFrame.revision,
+      detail: Module.crownlessTouchFrame.detail})), blockedState,
+      `${name}: the disabled Sell action keeps the same offer and game state`);
+    await controls.button('Buy').tap();
+    await buyControl.focus();
     await page.screenshot({path: path.join(output, name, 'trade-before.png')});
     const revision = await page.evaluate(() => Module.crownlessSaveRevision);
-    await tapRaw(page, /^Buy\s+Enter$/);
+    await buyControl.press('Enter');
     await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Bought 2 Bread'),
       undefined, {timeout: 20000});
     await page.keyboard.press('F5');
@@ -112,9 +121,12 @@ async function main() {
     assert.match(after, /Purse 34\s*\|\s*Cargo 2\/12/);
     assert.match(after, /Carriage 2/);
     const completedBuyEnabled = await page.evaluate(() =>
-      Module.crownlessTouchFrame.buttons.find(button => /^Buy\s+Enter$/.test(button.label))?.enabled);
+      Module.crownlessTouchFrame.buttons.find(button => /^Buy 2 Bread\. Total cost:/.test(button.label))?.enabled);
     assert.equal(completedBuyEnabled, false,
       `${name}: the completed purchase stays disabled until the player changes the offer`);
+    assert.match(await page.getByRole('button', {name: /^Buy 2 Bread\. Total cost:/}).textContent(),
+      /Trade complete\. Choose another good or quantity for your next trade\.$/,
+      `${name}: completed Buy explains why it is disabled`);
     const receipt = after.match(/Bought 2 Bread\. -(\d+) crowns\. Purse: (\d+)\./);
     assert(receipt, `${name}: receipt reports exact price and balance: ${after}`);
     const charged = Number(receipt[1]);
@@ -140,6 +152,16 @@ async function main() {
       `${name}: reload retained two Bread in carriage: ${restored}`);
     const restoredBalance = Number(restored.match(/Purse (\d+)\s*\|\s*Cargo/)[1]);
     assert.equal(restoredBalance, receiptBalance, `${name}: reload retained charged balance`);
+    await gameControls(page, true).button('Sell').tap();
+    const sellQuote = await page.evaluate(() => Module.crownlessTouchFrame.detail);
+    const sellValue = Number(sellQuote.match(/Sale value: (\d+) crowns/)[1]);
+    const sellName = `Sell 1 Bread. Sale value: ${sellValue} crowns.`;
+    const sellControl = page.getByRole('button', {name: sellName, exact: true});
+    await sellControl.focus();
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), sellName,
+      `${name}: a saved cargo load has a complete, focusable Sell offer`);
+    assert.equal(await sellControl.getAttribute('aria-disabled'), 'false');
+    await gameControls(page, true).button('Buy').tap();
     await page.screenshot({path: path.join(output, name, 'trade-after-reload.png')});
 
     await gameControls(page, true).button('+').tap();
@@ -148,9 +170,13 @@ async function main() {
     undefined, {timeout: 10000});
     const nextOffer = await gameControls(page, true).reading();
     assert.match(nextOffer, /Purse 34\s*\|\s*Cargo 2\/12/);
+    assert.equal(await page.getByRole('button',
+      {name: 'Buy 2 Bread. Total cost: 10 crowns.', exact: true}).count(), 1,
+    `${name}: the reloaded Buy control uses the changed saved price`);
     await page.screenshot({path: path.join(output, name, 'trade-next-quote.png')});
     const secondRevision = await page.evaluate(() => Module.crownlessSaveRevision);
-    await tapRaw(page, /^Buy\s+Enter$/);
+    await page.getByRole('button',
+      {name: 'Buy 2 Bread. Total cost: 10 crowns.', exact: true}).press('Enter');
     await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Bought 2 Bread'),
       undefined, {timeout: 20000});
     const secondReceiptText = await gameControls(page, true).reading();

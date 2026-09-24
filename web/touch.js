@@ -57,9 +57,11 @@
       const key = `${button.label}:${index}`;
       action.dataset.touchKey = key;
       action.textContent = button.label;
-      action.disabled = !button.enabled;
+      action.disabled = false;
+      action.setAttribute('aria-disabled', button.enabled ? 'false' : 'true');
       action.setAttribute('aria-pressed', button.active ? 'true' : 'false');
       action.onclick = () => {
+        if (!button.enabled) return;
         const timing = Module.crownlessDiagnostics?.beginAction(index, frame);
         const activate = attempt => {
           const current = Module.crownlessTouchFrame;

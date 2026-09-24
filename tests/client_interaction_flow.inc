@@ -1573,9 +1573,31 @@ static int RunAdventureTradeTermsRegression(void)
     local.trade_quantity = 1;
 #define TERMS_CHECK(condition, text) do { if (!(condition)) return ClientRegressionFailure(text); } while (0)
     CcSettlement *place = CcSimSettlementMutable(&sim, sim.player.location_id);
+    char touch_label[384];
+    AdventureQuote quote = AdventureTradeQuote(&sim, &local);
+    AdventureTradeConfirmTouchLabel(&quote, 0, touch_label, sizeof(touch_label));
+    TERMS_CHECK(quote.available && strstr(touch_label, "Buy 1 Bread. Total cost:") == touch_label &&
+        strstr(touch_label, " crowns.") != NULL,
+        "The focused Buy action must state its quantity and full cost.");
+    local.trade_mode = 1;
+    quote = AdventureTradeQuote(&sim, &local);
+    AdventureTradeConfirmTouchLabel(&quote, 1, touch_label, sizeof(touch_label));
+    TERMS_CHECK(!quote.available && strstr(touch_label, "Sell 1 Bread. Sale value:") == touch_label &&
+        strstr(touch_label, quote.reason) != NULL,
+        "The focused Sell action must state its value and disabled reason.");
+    sim.player.cargo[CC_GOOD_FOOD] = 1;
+    quote = AdventureTradeQuote(&sim, &local);
+    AdventureTradeConfirmTouchLabel(&quote, 1, touch_label, sizeof(touch_label));
+    TERMS_CHECK(quote.available && strstr(touch_label, "Sell 1 Bread. Sale value:") == touch_label,
+        "The enabled Sell action must state the full sale value.");
+    sim.player.cargo[CC_GOOD_FOOD] = 0;
+    local.trade_mode = 0;
     CcMoney coins = sim.player.coins;
     sim.player.coins = 0;
-    AdventureQuote quote = AdventureTradeQuote(&sim, &local);
+    quote = AdventureTradeQuote(&sim, &local);
+    AdventureTradeConfirmTouchLabel(&quote, 0, touch_label, sizeof(touch_label));
+    TERMS_CHECK(strstr(touch_label, quote.reason) != NULL,
+        "The focused Buy action must explain its purse limit.");
     TERMS_CHECK(!quote.available && strstr(quote.reason, "purse") != NULL, "The quote must explain its purse limit.");
     sim.player.coins = coins;
     int32_t stock = place->stock[CC_GOOD_FOOD];
@@ -1618,6 +1640,11 @@ static int RunAdventureTradeTermsRegression(void)
     quote = AdventureTradeQuote(&sim, &local);
     TERMS_CHECK(quote.available && quote.command.amount == -(promise->quantity - promise->progress),
         "Deliver must quote the full remaining load.");
+    AdventureTradeConfirmTouchLabel(&quote, 2, touch_label, sizeof(touch_label));
+    TERMS_CHECK(strstr(touch_label, "Deliver ") == touch_label &&
+        strstr(touch_label, "Sale value:") != NULL &&
+        strstr(touch_label, "Promise reward:") != NULL,
+        "The focused delivery action must state both the sale and reward.");
     local.trade_quote_presented = true;
     local.trade_presented_command = quote.command;
     local.trade_presented_total = quote.total;
