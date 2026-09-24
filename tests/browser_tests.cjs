@@ -924,8 +924,9 @@ async function main() {
           }
           assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId),
             openingCampaignId);
-          assert.match(frame.reading, /Cargo 8\/12/,
-            `Bread stays aboard until delivery: ${frame.reading.slice(0, 280)}`);
+          assert.match(frame.reading, frame.scene === 'carriage' ?
+            /Manifest: Bread 8\. Load 8 of 12/ : /Cargo 8\/12/,
+          `Bread stays aboard until delivery: ${frame.reading.slice(0, 280)}`);
           if (frame.title === destination && frame.scene === 'town') {
             arrived = true;
             break;
