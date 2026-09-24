@@ -39,6 +39,7 @@
   let semanticSceneTitle = null;
   document.querySelector('#stage').append(semantic);
   Module.renderCrownlessTouch = frame => {
+    Module.crownlessTouchFrame = frame;
     semantic.hidden = !document.querySelector('#loading').hidden;
     canvas.setAttribute('aria-label', frame.title || 'Crownless Carriage game');
     const focused = document.activeElement?.dataset?.touchKey;
@@ -60,9 +61,21 @@
       action.setAttribute('aria-pressed', button.active ? 'true' : 'false');
       action.onclick = () => {
         const timing = Module.crownlessDiagnostics?.beginAction(index, frame);
-        Module._CrownlessTouchActivate(index, frame.revision);
-        requestAnimationFrame(() => Module.crownlessDiagnostics?.finish(
-          timing, {frame: Module.crownlessTouchFrame}));
+        const activate = attempt => {
+          const current = Module.crownlessTouchFrame;
+          const item = current?.buttons?.[index];
+          if (!item || item.label !== button.label || !item.enabled) return;
+          const result = Module._CrownlessTouchActivate(index, current.revision);
+          Module.crownlessTouchLastActivation = {
+            label:item.label, index, revision:current.revision, result, attempt};
+          if (result === 0 && attempt < 2) {
+            requestAnimationFrame(() => activate(attempt + 1));
+          } else {
+            requestAnimationFrame(() => Module.crownlessDiagnostics?.finish(
+              timing, {frame: Module.crownlessTouchFrame}));
+          }
+        };
+        activate(0);
       };
       if (focused === key) action.focus();
     });

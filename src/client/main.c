@@ -63,6 +63,9 @@ EM_JS(void, ClientBrowserLocalNavigation,
         interaction_navigation: !!interaction_navigation,
         descent_pending: !!descent_pending};
 });
+EM_JS(void, ClientBrowserContextAction, (int kind), {
+    Module.crownlessLastContextAction = kind;
+});
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
@@ -9481,6 +9484,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
+#if defined(PLATFORM_WEB)
+    if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        ClientBrowserContextAction((int)context_action);
+#endif
     bool care_key = (IsKeyDown(KEY_LEFT_SHIFT) ||
                      IsKeyDown(KEY_RIGHT_SHIFT)) &&
         ClientKeyPressed(adventure_preferences != NULL ?

@@ -731,7 +731,10 @@ async function main() {
           }
           assert(await controls.button(action).read(),
             `Crate ${crate} needs ${action}: ${JSON.stringify(await controls.buttons())}`);
-          const navigation = await mobile.evaluate(() => Module.crownlessLocalNavigation);
+          const navigation = await mobile.evaluate(() => ({
+            ...Module.crownlessLocalNavigation,
+            touch:Module.crownlessTouchLastActivation,
+            context_action:Module.crownlessLastContextAction}));
           samples.push(navigation);
           if (taps > 0 && navigation.navigation_active) {
             assert(Math.hypot(navigation.command_x-destination[0],
@@ -757,7 +760,10 @@ async function main() {
           finish();
           return;
         }
-        samples.push(await mobile.evaluate(() => Module.crownlessLocalNavigation));
+        samples.push(await mobile.evaluate(() => ({
+          ...Module.crownlessLocalNavigation,
+          touch:Module.crownlessTouchLastActivation,
+          context_action:Module.crownlessLastContextAction})));
         await mobile.screenshot({path:path.join(output, 'mobile-relief-walk-stall.png')});
         await fs.writeFile(path.join(output, 'relief-walks.json'),
           JSON.stringify([...reliefWalks, {crate, action, seconds:(Date.now()-started)/1000,
