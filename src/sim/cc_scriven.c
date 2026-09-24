@@ -515,6 +515,7 @@ static bool DeepHearing(CcSim *sim)
         CcScrivenDelegate *d = &s->delegates[i];
         CcScrivenBook *b = Book(sim, d->book_id);
         if (d->phase == CC_SCRIVEN_ATTENDING && b != NULL && host_town != NULL &&
+            (sim->schema_version < 115U || CrownAttends(sim, d)) &&
             b->almanac_id != (uint64_t)s->editions && host_town->stock[CC_GOOD_PAPER] > 0) {
             --host_town->stock[CC_GOOD_PAPER];
             b->almanac_id = (uint64_t)s->editions;
@@ -637,6 +638,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
                 CcScrivenBook *held = &s->books[i];
                 const CcTreasure *owned = CcSimTreasure(sim, held->id);
                 if (owned != NULL && !owned->destroyed && (owned->owner_id == sim->player.id || held->borrower_id == sim->player.id) &&
+                    (sim->schema_version < 115U || CcScrivenBookAccessible(sim, held->id, here)) &&
                     held->almanac_id != (uint64_t)s->editions && host_town->stock[CC_GOOD_PAPER] > 0) {
                     --host_town->stock[CC_GOOD_PAPER]; held->almanac_id = (uint64_t)s->editions;
                     s->company = s->finding; break;
@@ -672,6 +674,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
             const CcTreasure *owned = CcSimTreasure(sim, held->id);
             if (owned != NULL && !owned->destroyed && held->almanac_id > 0 &&
                 (owned->owner_id == sim->player.id || held->borrower_id == sim->player.id) &&
+                (sim->schema_version < 115U || CcScrivenBookAccessible(sim, held->id, here)) &&
                 s->almanacs[held->almanac_id - 1].agreed_day == s->company.agreed_day) carrying = true;
         }
         bool crown_delivered = CrownDeliver(sim, town);

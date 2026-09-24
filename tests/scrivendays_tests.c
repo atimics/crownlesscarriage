@@ -310,6 +310,14 @@ static bool CrownAges(void)
     char description[1024]; CcScrivenDescribe(&sim,description,sizeof(description));
     CHECK(strstr(description,"Crown Age year 1") && strstr(description,"Deep Wyrm Epoch year 1"));
     CHECK(RoundTrip());
+    sim.player.location_id=sim.settlements[1].id;
+    uint64_t before=CcSimHash(&sim);
+    CHECK(!Apply(CC_SCRIVEN_DELIVER,0) && CcSimHash(&sim)==before);
+    held->location_id=sim.player.location_id;
+    CHECK(Apply(CC_SCRIVEN_DELIVER,0));
+    CHECK(sim.crown_calendar.local[1].proposed_day==40);
+    CHECK(sim.scriven.local[1].proposed_day==sim.scriven.company.proposed_day);
+    held->location_id=sim.scriven.host_id; sim.player.location_id=sim.scriven.host_id;
     sim.current_day=203;
     sim.scriven.delegates[1].place_id=sim.settlements[2].id;
     sim.characters[1].current_settlement_id=sim.settlements[2].id;
