@@ -87,6 +87,8 @@ async function main() {
     assert(bread && bread.enabled, `${name}: stocked Bread must be selectable`);
     await controls.button(/^Bread: \d+$/).tap();
     await controls.button('+').tap();
+    await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Buy: 2 Bread'),
+      undefined, {timeout: 10000});
     const quote = await controls.reading();
     assert.match(quote, /Buy: 2 Bread/);
     assert.match(quote, /Purse 42\s*\|\s*Cargo 0\/12/);
