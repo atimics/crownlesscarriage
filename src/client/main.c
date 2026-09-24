@@ -355,7 +355,13 @@ static void DrawAdventureConversation(const CcSim *sim, const LocalState *local)
 static int AdventureTextSize(int base);
 static int AdventureWrap(const char *text, int x, int y, int width, int size, Color color);
 static int AdventureText(const char *text, int x, int y, int width, int size, Color color, bool draw);
-static void DrawAdventureHeader(const CcSim *sim, const LocalState *local);
+static int HeaderFitText(const char *text, int width, int initial_size,
+                         int minimum_size, char *output, size_t capacity);
+static int HeaderFitCaptionText(const char *text, int width, int initial_size,
+                                int minimum_size, char *output, size_t capacity);
+static void DrawAdventureHeader(const CcSim *sim, const LocalState *local,
+                                ClientView view);
+static Rectangle SpeechControlBounds(ClientView view, bool skip);
 static Rectangle AdventureNavBounds(int index);
 static void DrawAdventurePromises(const CcSim *sim, int32_t selected);
 static void DrawAdventureFeedback(const char *message);
@@ -3066,10 +3072,69 @@ static const CcDungeon *DungeonAtSettlement(const CcSim *sim, CcId settlement_id
 static const char *TravelForecastLine(const CcSim *sim);
 static const char *TravelActionDetail(const CcSim *sim, const LocalState *local);
 
-static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
-                            bool conversation)
+static int HeaderMeasureText(const char *text, int font_size, bool caption)
 {
-    if (local->adventure_ui) { DrawAdventureHeader(sim, local); return; }
+    return caption ? CcOverlayMeasureCaptionText(text, font_size) :
+                     CcOverlayMeasureText(text, font_size);
+}
+
+static int HeaderFitTextMeasured(const char *text, int width, int initial_size,
+                                 int minimum_size, char *output,
+                                 size_t capacity, bool caption)
+{
+    if (output == NULL || capacity == 0U) return minimum_size;
+    output[0] = '\0';
+    if (text == NULL || width <= 0) return minimum_size;
+
+    int font_size = initial_size;
+    while (font_size > minimum_size &&
+           HeaderMeasureText(text, font_size, caption) > width) {
+        --font_size;
+    }
+    (void)snprintf(output, capacity, "%s", text);
+    if (HeaderMeasureText(output, font_size, caption) <= width) return font_size;
+
+    size_t length = strlen(output);
+    while (length > 0U) {
+        while (length > 0U &&
+               (((unsigned char)output[length - 1U] & 0xc0U) == 0x80U)) {
+            --length;
+        }
+        if (length > 0U) --length;
+        while (length + 4U > capacity && length > 0U) --length;
+        if (length + 4U > capacity) {
+            output[0] = '\0';
+            return font_size;
+        }
+        memcpy(output + length, "...", 4U);
+        if (HeaderMeasureText(output, font_size, caption) <= width) return font_size;
+        /* Restore the source prefix before removing another whole codepoint. */
+        size_t source_length = strlen(text);
+        if (source_length < length) length = source_length;
+        (void)snprintf(output, capacity, "%.*s", (int)length, text);
+    }
+    (void)snprintf(output, capacity, "...");
+    return font_size;
+}
+
+static int HeaderFitText(const char *text, int width, int initial_size,
+                         int minimum_size, char *output, size_t capacity)
+{
+    return HeaderFitTextMeasured(text, width, initial_size, minimum_size,
+                                 output, capacity, false);
+}
+
+static int HeaderFitCaptionText(const char *text, int width, int initial_size,
+                                int minimum_size, char *output, size_t capacity)
+{
+    return HeaderFitTextMeasured(text, width, initial_size, minimum_size,
+                                 output, capacity, true);
+}
+
+static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
+                            ClientView view, bool conversation)
+{
+    if (local->adventure_ui) { DrawAdventureHeader(sim, local, view); return; }
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(place);
@@ -3102,7 +3167,7 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
                           23, 8, MUTED);
         return;
     }
-    CcOverlayDrawText(site ?
+    const char *title = site ?
              local->site_travel_active ?
                  TextFormat("%s  ->  %s",
                             origin != NULL ? origin->name : "Town",
@@ -3121,15 +3186,18 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
                             profile->primary_hall) :
              place != NULL ?
                  TextFormat("%s  /  %s", place->name, profile->identity) :
-                 "Crownless",
-             22, 18, 18, INK);
+                 "Crownless";
     const char *summary = TextFormat(
         "DAY %d     %" PRId64 " cr     CARGO %d/%d",
         sim->current_day, sim->player.coins,
         CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
     int summary_width = CcOverlayMeasureText(summary, 10);
-    CcOverlayDrawText(summary, GetScreenWidth() - summary_width - 22,
-                      22, 10, road ? TEAL : CC_GOLD);
+    int summary_x = GetScreenWidth() - summary_width - 22;
+    char fitted_title[256];
+    int title_size = HeaderFitText(title, summary_x - 44, 18, 12,
+                                   fitted_title, sizeof(fitted_title));
+    CcOverlayDrawText(fitted_title, 22, 18, title_size, INK);
+    CcOverlayDrawText(summary, summary_x, 22, 10, road ? TEAL : CC_GOLD);
     if (!road && !site && place != NULL && !local->market_interior) {
         char condition_text[96];
         CcLocalTownConditionText(CcSimTownConditions(sim, place->id),
@@ -12131,13 +12199,13 @@ int main(int argc, char **argv)
         }
         bool speech_clicked = normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL &&
             ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-            (CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){18, 92, 110, 32}) ||
-             CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){136, 92, 110, 32}));
+            (CheckCollisionPointRec(ClientPointerPosition(), SpeechControlBounds(view, false)) ||
+             CheckCollisionPointRec(ClientPointerPosition(), SpeechControlBounds(view, true)));
         if (normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL) {
             if (ClientKeyPressed(KEY_F7) || (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){18, 92, 110, 32}))) CcAudioReplaySpeech();
+                CheckCollisionPointRec(ClientPointerPosition(), SpeechControlBounds(view, false)))) CcAudioReplaySpeech();
             if (ClientKeyPressed(KEY_F8) || (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                CheckCollisionPointRec(ClientPointerPosition(), (Rectangle){136, 92, 110, 32}))) CcAudioSkipSpeech();
+                CheckCollisionPointRec(ClientPointerPosition(), SpeechControlBounds(view, true)))) CcAudioSkipSpeech();
         }
         bool change_audio = normal_play && (ClientKeyPressed(KEY_F6) || audio_clicked ||
             menu_action == FRONTEND_ACTION_SOUND);
@@ -12350,7 +12418,7 @@ int main(int argc, char **argv)
                     &sim, &local.agent, selected, local.fork_turn_progress, clock,
                     local_target, local_bounds);
             }
-            DrawLocalHeader(&sim, &local, false);
+            DrawLocalHeader(&sim, &local, view, false);
         } else if (map_visible) {
             DrawMapHeader(&sim);
             DrawMap(&sim, selected, clock, map_textures.illustrated,
@@ -12400,7 +12468,7 @@ int main(int argc, char **argv)
                 if (view == VIEW_LOCAL && sim.pony_company.encounter < 0) {
                     DrawLocalMovementReticle(&local, local_bounds);
                 }
-                DrawLocalHeader(&sim, &local, view == VIEW_CHARACTER);
+                DrawLocalHeader(&sim, &local, view, view == VIEW_CHARACTER);
                 DrawLocalPanel(&sim, &local);
             }
         }
@@ -12513,12 +12581,25 @@ int main(int argc, char **argv)
             }
         }
         if (normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL) {
-            AdventureButton((Rectangle){18, 92, 110, 32}, "Replay F7", true, false);
-            AdventureButton((Rectangle){136, 92, 110, 32}, "Skip F8", true, false);
+            const CcSpeech *spoken = CcAudioCurrentSpeech();
+            AdventureButton(SpeechControlBounds(view, false), "Replay F7", true, false);
+            AdventureButton(SpeechControlBounds(view, true), "Skip F8", true, false);
             if (view != VIEW_CHARACTER) {
-                const CcSpeech *spoken = CcAudioCurrentSpeech();
-                (void)AdventureWrap(spoken->text, 22, 134, GetScreenWidth() - 44,
-                    AdventureTextSize(14), INK);
+                bool modal_caption = view != VIEW_LOCAL;
+                if (modal_caption) {
+                    DrawRectangle(0, GetScreenHeight() - 50, GetScreenWidth(), 50, PANEL_DEEP);
+                    /* The footer lane sits outside modal panels; size the full
+                       caption to fit there rather than over the panel choices. */
+                    char caption[512];
+                    int caption_size = HeaderFitCaptionText(spoken->text,
+                        GetScreenWidth() - 44, 32, 18, caption,
+                        sizeof(caption));
+                    CcOverlayDrawCaption(caption, 22,
+                        GetScreenHeight() - 42, caption_size, INK);
+                } else {
+                    (void)AdventureWrap(spoken->text, 22, 134,
+                        GetScreenWidth() - 44, AdventureTextSize(14), INK);
+                }
             }
         }
         CcOverlayEnd();

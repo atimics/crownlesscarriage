@@ -1512,8 +1512,22 @@ static Rectangle AdventurePaceBounds(int32_t pace)
     return (Rectangle){(float)GetScreenWidth() - 420.0f + (float)pace * 136.0f, 58, 130, 28};
 }
 
-static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
+static Rectangle SpeechControlBounds(ClientView view, bool skip)
 {
+    bool modal = view != VIEW_LOCAL && view != VIEW_CHARACTER;
+    if (modal) {
+        return (Rectangle){(float)GetScreenWidth() - (skip ? 124.0f : 242.0f),
+            12.0f, 110.0f, 32.0f};
+    }
+    return (Rectangle){skip ? 136.0f : 18.0f, 92.0f, 110.0f, 32.0f};
+}
+
+static void DrawAdventureHeader(const CcSim *sim, const LocalState *local,
+                                ClientView view)
+{
+    /* Modal panels provide their own title and details. A second location HUD
+       at the same top edge obscures those headings on short desktop windows. */
+    if (view != VIEW_LOCAL && view != VIEW_ROADS && view != VIEW_CHARACTER) return;
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(place);
     const CcSettlement *destination = CcSimSettlement(sim, sim->journey.destination_id);
@@ -1521,10 +1535,11 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         local->journey_travel_active && destination != NULL ?
             TextFormat("%s to %s", place != NULL ? place->name : "Road", destination->name) :
         place != NULL ? place->name : "Crownless";
-    int title_size = AdventureTextSize(22);
-    int toolbar_width = 450;
-    while (title_size > 12 && CcOverlayMeasureText(title, title_size) > GetScreenWidth() - toolbar_width) --title_size;
-    CcOverlayDrawText(title, 24, 14, title_size, INK);
+    char fitted_title[256];
+    int header_text_width = GetScreenWidth() - 458;
+    int title_size = HeaderFitText(title, header_text_width,
+        AdventureTextSize(22), 12, fitted_title, sizeof(fitted_title));
+    CcOverlayDrawText(fitted_title, 24, 14, title_size, INK);
     CcOverlayDrawText(TextFormat("Day %d  /  %" PRId64 " crowns  /  Cargo %d/%d", sim->current_day,
         sim->player.coins, CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity),
         24, 43, AdventureTextSize(13), CC_GOLD);
@@ -1571,7 +1586,10 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         detail = town_status;
     }
     ClientTouchHeading(title, detail);
-    CcOverlayDrawText(detail, 24, 67, AdventureTextSize(12), MUTED);
+    char fitted_detail[256];
+    int detail_size = HeaderFitText(detail, header_text_width,
+        AdventureTextSize(12), 12, fitted_detail, sizeof(fitted_detail));
+    CcOverlayDrawText(fitted_detail, 24, 67, detail_size, MUTED);
 }
 
 static void DrawAdventurePromises(const CcSim *sim, int32_t selected)
