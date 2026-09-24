@@ -85,11 +85,11 @@ int main(int argc, char **argv)
     if (file == NULL || fwrite(bytes, 1, length, file) != length) {
         (void)snprintf(error, sizeof(error), "The fixture could not be written.");
         if (file != NULL) fclose(file);
-        free(bytes);
+        CcSaveFreeBuffer(bytes);
         goto fail;
     }
     fclose(file);
-    free(bytes);
+    CcSaveFreeBuffer(bytes);
     free(sim);
     return 0;
 fail:
