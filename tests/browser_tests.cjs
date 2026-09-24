@@ -197,7 +197,7 @@ async function main() {
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing' && Module.crownlessSaveRevision > 0);
-    const campaignIdentity = await page.evaluate(() => Module.crownlessCampaignId);
+    let campaignIdentity = await page.evaluate(() => Module.crownlessCampaignId);
     assert.match(campaignIdentity, /^[0-9a-f]{32}$/);
     await page.screenshot({path: path.join(output, 'opening.png')});
     await page.waitForFunction(() => [...document.querySelectorAll('[data-crownless-music]')]
@@ -376,6 +376,8 @@ async function main() {
     });
     assert.match(staleWrite, /read-only|another tab|reload/i);
     assert.equal(await secondTab.evaluate(() => Module.crownlessSaveRevision), revision - 1);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignId),
+      campaignIdentity);
     await secondTab.reload();
     await secondTab.waitForFunction(expected => window.Module &&
       Module.crownlessSaveRevision === expected && Module.crownlessCampaignRestored,
@@ -384,6 +386,67 @@ async function main() {
     assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignAccess), 1);
     await secondTab.screenshot({path: path.join(output, 'same-campaign-two-tabs.png')});
     await secondTab.close();
+    await page.evaluate(async () => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crownless-carriage');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction('campaign-files', 'readwrite');
+        transaction.objectStore('campaign-files').delete(
+          '/crownless-save/crownless_campaign.ccsave.identity');
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title' &&
+      Module.crownlessCampaignRestored, undefined, {timeout:120000});
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), null);
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    const legacyFailedWrite = await page.evaluate(async () => {
+      const original = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function(names, mode, ...rest) {
+        if (mode === 'readwrite')
+          throw new DOMException('Injected storage failure', 'QuotaExceededError');
+        return original.call(this, names, mode, ...rest);
+      };
+      try {
+        await Module.persistCrownlessSave('/crownless-save/crownless_campaign.ccsave',
+          '/crownless-save/crownless_campaign.ccsave.session');
+        return null;
+      } catch (error) { return error.message; }
+      finally { IDBDatabase.prototype.transaction = original; }
+    });
+    assert.match(legacyFailedWrite, /Injected storage failure/);
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), null);
+    assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    const legacyRevision = revision;
+    await page.evaluate(() => Module.persistCrownlessSave(
+      '/crownless-save/crownless_campaign.ccsave',
+      '/crownless-save/crownless_campaign.ccsave.session'));
+    revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    assert.equal(revision, legacyRevision + 1);
+    const migratedIdentity = await page.evaluate(() => Module.crownlessCampaignId);
+    assert.match(migratedIdentity, /^[0-9a-f]{32}$/);
+    assert.notEqual(migratedIdentity, campaignIdentity);
+    campaignIdentity = migratedIdentity;
+    await page.evaluate(() => Module.persistCrownlessSave(
+      '/crownless-save/crownless_campaign.ccsave',
+      '/crownless-save/crownless_campaign.ccsave.session'));
+    revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    assert.equal(revision, legacyRevision + 2);
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title' &&
+      Module.crownlessCampaignRestored, undefined, {timeout:120000});
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing',
+      undefined, {timeout:120000});
     rejectedWrite = true;
     await page.evaluate(() => {
       const transaction = IDBDatabase.prototype.transaction;
