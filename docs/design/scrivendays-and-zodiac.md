@@ -4,15 +4,16 @@ Status: proposed feature plan. Reviewed against main
 `1b5a707cee9ea771c0b139c6f68690d5757b6175`, save schema 111, generator 25.
 The numbers below are initial design choices for playtesting.
 
-Scrivendays are annual gatherings where named scribes compare accounts,
-commission expeditions, and publish their reckoning of history. Zodiac signs
-give everyone a repeating sky calendar. A dragon's first change into a Deep
+Scrivendays are annual gatherings where named scribes bring their tomes, compare
+passages together, commission expeditions, and publish their reckoning of history.
+Zodiac signs give everyone a repeating sky calendar. A dragon's first change into a Deep
 Wyrm begins an age; people learn of that change through observation and research.
 Scribes may establish its date years later.
 
 The first playable journey is: hear competing dates, carry a scribe's question
-to a goblin site, bring evidence to Scrivendays, and deliver the resulting
-almanac to another town. The town can then use that reckoning in its own records.
+to a goblin site, bring evidence to Scrivendays, compare the arrived tomes,
+and deliver the resulting almanac to another town. Borrowed tomes return to
+their owners. The town can then use that reckoning in its own records.
 
 ## 1. What the code already provides
 
@@ -140,16 +141,59 @@ refers to the whole gathering; each day has a different purpose.
 
 | Day | Work and player opportunities |
 | --- | --- |
-| 1 | Arrivals, lodging, registration, public questions, and delivery contracts. |
-| 2 | Read submitted records and hear witnesses. |
-| 3 | Compare dates, translations, copying history, and sky observations. |
+| 1 | Arrivals, lodging, register carried tomes and their owners, public questions, and delivery contracts. |
+| 2 | Lay the arrived tomes together, read cited passages, and hear witnesses. |
+| 3 | Compare dates, annotations, translations, copying history, and sky observations. |
 | 4 | Debate disputed claims and question their authors. |
 | 5 | Propose a reckoning or a narrower range; fund further expeditions. |
 | 6 | Sign findings, record dissent, and select the next host. |
-| 7 | Finish the proceedings and almanac copies; book their delivery. |
+| 7 | Finish proceedings and copies; arrange almanac delivery and each borrowed tome's return. |
 
 Ongoing local research continues between gatherings. Scrivendays bring together
 people and holdings that are usually separated by travel.
+
+### Bringing the tomes
+
+Each scribe chooses particular volumes from holdings they can access. Their
+choice follows the gathering's questions, the usefulness of each book, its
+condition, and the available carrying space. Taking a rare original can make
+comparison more useful and its journey more consequential. A scribe can spend
+paper and work preparing a travelling copy or a clearly marked extract.
+
+Before departure, record a manifest with each physical book's ID, edition,
+owner, condition, carrier, and return destination. The lending agreement states
+who may read or copy it, any payment, and the return date. Books occupy real
+carriage or personal load space alongside food and other cargo.
+
+Use the existing book reservation and custody rules. A visiting-book journey
+has its own purpose and return leg; archive relocation continues to use its
+existing destination and seat-change rules. Held book reservations protect
+travelling volumes from routine rebinding and storage reuse.
+
+At the host, the arrival register lists the actual volumes presented. An owner
+can retain a tome while showing it at the reading table, or lend it to the
+meeting's keeper. Ownership and temporary custody remain distinct. Each
+comparison session names the present readers, the copies they can inspect,
+the permission to use them, and the time spent.
+
+The comparison view puts selected passages side by side. Scribes examine date
+labels, wording, omissions, marginal notes, copying statements, damaged leaves,
+and visible seals. Findings cite the exact edition and passage from each tome.
+A shared wording or copying statement can reveal that two accounts descend
+from one source. A seal contributes an observed mark and any available evidence
+about its maker. Its meaning is part of the inquiry.
+
+Reading or copying creates a dated record of what that reader learned. A paid
+copy or extract contains the passages actually transcribed, its author's notes,
+and its cited edition. Later additions receive their own attribution and date.
+The scribe can take these new works home and retain what they learned after
+the borrowed original leaves the table.
+
+Close the loan when the book reaches its agreed holder and its return is
+recorded. Delays, damage, interception, a changed host, or a carrier's death
+leave a concrete book and an outstanding obligation to resolve. The company
+can earn work by escorting a scribe, carrying a chest of tomes, recovering a
+missing volume, making a copy, or completing a return journey.
 
 ### Hosting and rotation
 
@@ -286,15 +330,16 @@ Add a Calendar page to the Company Book with four useful views:
 - **Today:** sign date, year sign, locally learned age reckoning, and days left
   on accepted promises.
 - **Next Scrivendays:** known host, opening date, invitation source, expected
-  travel time, and available work.
+  travel time, available work, and the tomes the company has agreed to carry.
 - **The disputed age:** each learned proposal, its author, supporting sources,
   and the question the next expedition could answer.
 - **Sky chart:** recognisable signs, the Wanderer's position, and observations
   the company has actually recorded.
 
 At the host town, use existing approach, conversation, and service interactions.
-The company can offer transport, present a carried record, bring a witness,
-fund paper, commission a copy, listen to a hearing, and accept almanac delivery.
+The company can offer transport, present a carried tome, bring a witness,
+compare passages at a reading table, fund paper, commission a copy, listen to
+a hearing, and accept almanac delivery or a book's return journey.
 Each action shows its cost and time before commitment.
 
 Offer explicit actions such as "Spend a watch comparing records" and "Lodge
@@ -303,11 +348,13 @@ the Calendar and reading an already learned finding are passive views. This
 lets the player take part in a seven-day meeting with the current town clock.
 
 A concrete first journey uses two schools debating adjacent candidate years.
-One points to a goblin court record. The other holds a sky diary. The company
-visits an accessible goblin room or road contact, secures a dated testimony or
-tally through an ordinary bargain, and returns to the gathering. Their evidence
-narrows the interval or changes a signatory's view. A paid almanac delivery then
-changes the recipient town's displayed reckoning after arrival and reading.
+One scribe brings a goblin court history. The other brings a sky diary. The
+company visits an accessible goblin room or road contact, secures a dated
+testimony or tally through an ordinary bargain, and carries it to the gathering.
+The comparison session opens the two arrived tomes and the company's new
+record. Its findings narrow the interval or change a signatory's view. The
+company then returns a borrowed tome and delivers the almanac. The recipient
+town's displayed reckoning changes after arrival and reading.
 
 The world continues when the player leaves. On return, the Calendar shows the
 latest learned proceedings and the age changes reported in them. Shared-world
@@ -335,13 +382,22 @@ Use small modules alongside the existing simulation:
 
 A historical work stores its author name/ID, composition place/day, literal text,
 typed claims, cited source editions, and original date labels. A copy references
-that work and its actual custody. A reading records who learned which edition
+that work and its actual custody. Link an existing physical tome's treasure ID
+to its document contents and stable passage IDs. Preserve copy-specific damage,
+visible marks, and dated annotations. The treasure and custody views share one
+owner and location. A reading records who learned which edition and passages,
 and when. A catalog can hold a title and location while contents require access.
 
+A book loan stores owner, borrower/carrier, permitted uses, departure condition,
+return holder/place/day, and current status. A comparison stores the reader IDs,
+inspected copy and passage IDs, observed differences, and resulting findings.
+Claims retain the copied or recorded text that supports them after the original
+travels onward. Shared manifests reserve actual books and carrying capacity.
+
 A gathering stores its stable ID, scheduled year/day, host, alternate, notices,
-phase, delegates, actual arrivals, duties, reserved supplies, questions, and
-publication IDs. A reckoning stores dragon ID, proposed date/range, evidence,
-authors, version, and local adoption records.
+phase, delegates, actual arrivals, duties, reserved supplies, arrived book IDs,
+comparison sessions, questions, and publication IDs. A reckoning stores dragon
+ID, proposed date/range, evidence, authors, version, and local adoption records.
 
 Begin with one active gathering, up to six delegates, three schools, four
 research orders, and a proposed pool of 64 document works. Final claim/citation
@@ -364,9 +420,9 @@ require it. Refresh the current base and schema before implementation.
 | Order | Delivery | Playable or reviewable result |
 | --- | --- | --- |
 | 1 | Calendar helpers, 13 signs, date display, and an almanac card. | One consistent solar date across town, road, mine, text, and shared play; existing absolute timing preserved. |
-| 2 | Saved local works, claims, copies, reading, and one goblin evidence source. | Present a record to a named local scribe and obtain a sourced date range. Reuse #208/#435/#437. |
+| 2 | Saved tome contents, claims, copies, loans, reading, and one goblin evidence source. | Carry a specific book to a named local scribe and obtain a sourced date range. Reuse #208/#435/#437. |
 | 3 | First-deepening anchor, observer reports, research, and reckoning editions. | Two readers can hold different dates; a delivered source can revise one reader's view. Update gossip and the campaign introduction together. |
-| 4 | First prepared Scrivendays, delegate duties, hearing, and paid almanac delivery. | Complete the first journey through ordinary controls, with return and saved consequences. |
+| 4 | First prepared Scrivendays, tome manifests, delegate travel, comparison table, hearing, and paid almanac delivery. | Compare the arrived tomes, publish the finding, deliver an almanac, and return a borrowed book through ordinary controls. |
 | 5 | Annual scheduling, delivered host bids, rotation, reserves, and disruption. | Run several gatherings across different towns while keeping attendance and material costs valid. |
 | 6 | Constellation art, Wanderer motion, night observation, and calendar customs. | Recognise a sign in the sky, record an observation, and use it in a historical question. |
 
@@ -391,6 +447,14 @@ Travel checks cover blocked roads, host failure, stale notices, late arrival,
 delegate death, concurrent recruitment, home archive cover, return travel,
 insufficient supplies, and receipt exactly once. Reconcile money, food, paper,
 tool wear, cargo, and work reservations through existing accounting.
+
+Tome checks cover a delegate arriving before their book, a book arriving with
+another carrier, inspection while its owner holds it, authorised copying,
+different annotations in copies of the same work, unreadable leaves, interrupted
+comparison, loss in transit, and return to the correct owner. A scribe's learned
+extract remains readable after the original departs. Compare the exact surviving
+passages and dates across save/reload; repeat delivery and return commands to
+check that each receipt and payment occurs once.
 
 Persistence checks cover every added field independently, source text after town
 state changes, evidence after recent-event rollover, full storage, legacy saves,
@@ -420,7 +484,8 @@ storage turnover. Tune cadence and meeting length from those results and play.
 
 Use the following defaults for the first fixture: 13 signs, a 13-year Wanderer
 cycle, annual seven-day Scrivendays in the Quill, delivered bids with host
-rotation, two schools, one disputed deepening, and a physically delivered
-almanac. Sign names, meeting duration, delegate budgets, and vote thresholds
-remain tuning choices. Keep the user's central rule throughout: scribes discover
+rotation, two schools with physically carried tomes, one disputed deepening,
+and a delivered almanac followed by the borrowed books' return. Sign names,
+meeting duration, delegate budgets, and vote thresholds remain tuning choices.
+Keep the user's central rule throughout: scribes discover
 and debate the date through expeditions and evidence.
