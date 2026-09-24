@@ -20,7 +20,7 @@ static CcScrivenBook *Book(CcSim *sim, CcId id)
 }
 const CcScrivenBook *CcScrivenBookById(const CcSim *sim, CcId id)
 {
-    if (sim == NULL || sim->schema_version < 112U) return NULL;
+    if (sim == NULL || sim->schema_version < 113U) return NULL;
     for (int i = 0; i < CC_SCRIVEN_BOOKS; ++i)
         if (id != 0 && sim->scriven.books[i].id == id) return &sim->scriven.books[i];
     return NULL;
@@ -37,7 +37,7 @@ static bool Alive(const CcSim *sim, const CcCharacter *person)
 }
 bool CcScrivenTravelling(const CcSim *sim, CcId person_id)
 {
-    if (sim == NULL || sim->schema_version < 112U || person_id == 0) return false;
+    if (sim == NULL || sim->schema_version < 113U || person_id == 0) return false;
     for (int i = 0; i < CC_SCRIVEN_DELEGATES; ++i) {
         const CcScrivenDelegate *d = &sim->scriven.delegates[i];
         if (d->person_id == person_id && d->phase >= CC_SCRIVEN_EXPEDITION &&
@@ -86,7 +86,7 @@ bool CcScrivenBookAccessible(const CcSim *sim, CcId id, CcId place_id)
 }
 void CcScrivenFreeze(CcSim *sim, CcId id)
 {
-    if (sim == NULL || sim->schema_version < 112U || Book(sim, id) != NULL) return;
+    if (sim == NULL || sim->schema_version < 113U || Book(sim, id) != NULL) return;
     for (int i = 0; i < sim->treasure_count; ++i) {
         const CcTreasure *t = &sim->treasures[i];
         if (t->id != id || !CcArchiveVolumeIsLive(t)) continue;
@@ -103,7 +103,7 @@ void CcScrivenFreeze(CcSim *sim, CcId id)
 }
 void CcScrivenRebind(CcSim *sim, const int32_t slots[4], CcId new_id)
 {
-    if (sim->schema_version < 112U) return;
+    if (sim->schema_version < 113U) return;
     CcScrivenBook combined = sim->scriven.books[slots[0]];
     combined.id = new_id; combined.edition_day = sim->current_day;
     combined.borrower_id = 0; combined.return_place_id = 0; combined.loan_due_day = 0;
@@ -243,7 +243,7 @@ static void Observe(CcSim *sim, CcScrivenBook *b, CcId author, CcId place)
 }
 void CcScrivenAnchor(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 112U) return;
+    if (sim == NULL || sim->schema_version < 113U) return;
     for (int i = 0; i < sim->scriven.age_count; ++i)
         if (sim->scriven.ages[i].dragon_id == sim->dragon.id) return;
     if (sim->scriven.age_count == CC_SCRIVEN_AGES) return;
@@ -430,21 +430,31 @@ static bool Hearing(CcSim *sim)
         return false;
     }
     f.latest_day = INT_MAX;
-    CcId roots[2] = {0};
+    int latest_crowned = 0, first_deep = INT_MAX;
+    int best_span = INT_MAX;
     for (int b = 0; b < CC_SCRIVEN_BOOKS; ++b) {
         const CcScrivenBook *book = &s->books[b];
         if (!CcScrivenBookAccessible(sim, book->id, s->host_id)) continue;
         for (int n = 0; n < CC_SCRIVEN_NOTES; ++n) {
             const CcScrivenNote *note = &book->notes[n];
             if (note->dragon_id != f.dragon_id) continue;
-            int side = note->kind == CC_SCRIVEN_NOTE_CROWNED ? 0 : note->kind == CC_SCRIVEN_NOTE_DEEP ? 1 : -1;
-            if (side < 0) continue;
-            bool closer = side == 0 ? note->day + 1 > f.earliest_day : note->day < f.latest_day;
-            if (closer) {
-                if (side == 0) f.earliest_day = note->day + 1; else f.latest_day = note->day;
-                f.book_ids[side] = book->id; f.school_ids[side] = book->school_id;
-                roots[side] = note->source_book_id;
-                (void)snprintf(f.citations[side], CC_SCRIVEN_TEXT, "%s", note->text);
+            if (note->kind == CC_SCRIVEN_NOTE_DEEP && note->day < first_deep) first_deep = note->day;
+            if (note->kind != CC_SCRIVEN_NOTE_CROWNED) continue;
+            if (note->day > latest_crowned) latest_crowned = note->day;
+            for (int other = 0; other < CC_SCRIVEN_BOOKS; ++other) {
+                const CcScrivenBook *after = &s->books[other];
+                const CcScrivenNote *deep = &after->notes[CC_SCRIVEN_NOTE_DEEP - 1];
+                if (!CcScrivenBookAccessible(sim, after->id, s->host_id) ||
+                    deep->kind != CC_SCRIVEN_NOTE_DEEP || deep->dragon_id != f.dragon_id ||
+                    deep->source_book_id == note->source_book_id || deep->day <= note->day) continue;
+                int span = deep->day - note->day - 1;
+                if (span >= best_span) continue;
+                best_span = span;
+                f.earliest_day = note->day + 1; f.latest_day = deep->day;
+                f.book_ids[0] = book->id; f.school_ids[0] = book->school_id;
+                f.book_ids[1] = after->id; f.school_ids[1] = after->school_id;
+                (void)snprintf(f.citations[0], CC_SCRIVEN_TEXT, "%s", note->text);
+                (void)snprintf(f.citations[1], CC_SCRIVEN_TEXT, "%s", deep->text);
             }
         }
     }
@@ -460,7 +470,7 @@ static bool Hearing(CcSim *sim)
         if (!duplicate) school_ids[f.schools++] = b->school_id;
         f.signers[i] = d->person_id;
     }
-    if (f.book_ids[0] == 0 || f.book_ids[1] == 0 || roots[0] == roots[1] ||
+    if (f.book_ids[0] == 0 || f.book_ids[1] == 0 || latest_crowned >= first_deep ||
         f.earliest_day > f.latest_day || f.schools < 2) {
         (void)snprintf(s->report, sizeof(s->report), "The date remains disputed. Bring independent dated sightings from before and after the change, with scribes from two schools.");
         return false;
@@ -497,7 +507,7 @@ static bool Hearing(CcSim *sim)
 }
 void CcScrivenAdvance(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 112U) return;
+    if (sim == NULL || sim->schema_version < 113U) return;
     CcScrivenState *s = &sim->scriven;
     CcCalendarDate date = CcCalendar(sim->current_day);
     int phase = date.day_of_year - 1;
@@ -534,13 +544,16 @@ static bool Fail(char *error, size_t capacity, const char *message)
 }
 bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t capacity)
 {
-    if (sim->schema_version < 112U || sim->journey.active || sim->dungeon_expedition.active || sim->mine.phase != CC_MINE_NONE)
+    if (sim->schema_version < 113U || sim->journey.active || sim->dungeon_expedition.active || sim->mine.phase != CC_MINE_NONE)
         return Fail(error, capacity, "Visit a settlement to consult the scribes.");
     CcScrivenState *s = &sim->scriven;
     CcId here = sim->player.location_id;
     CcTreasure *t = (CcTreasure *)CcSimTreasure(sim, command->target_id);
     CcScrivenBook *b = Book(sim, command->target_id);
     bool accessible = b != NULL && CcScrivenBookAccessible(sim, b->id, here);
+    if ((command->amount == CC_SCRIVEN_COMMISSION || command->amount == CC_SCRIVEN_COPY ||
+         command->amount == CC_SCRIVEN_OBSERVE) && sim->current_day == CC_SIM_MAX_DAY)
+        return Fail(error, capacity, "This work needs one more day on the calendar.");
     switch ((CcScrivenAction)command->amount) {
     case CC_SCRIVEN_READ:
         if (!accessible) return Fail(error, capacity, "Bring the tome here to read its saved passages.");
@@ -566,13 +579,17 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         (void)snprintf(s->report, sizeof(s->report), "The owner receives the same tome and closes the loan.");
         break;
     case CC_SCRIVEN_OBSERVE:
-        if (!accessible || here != sim->dragon.lair_settlement_id || sim->dragon.slain)
-            return Fail(error, capacity, "Bring a tome to the dragon's lair to record a sighting and the goblin porters.");
-        if (b->notes[0].kind != 0 && b->notes[1].kind != 0)
-            return Fail(error, capacity, "These margins are full. Bring another tome for a fresh account.");
+        if (!accessible || t == NULL || (t->owner_id != sim->player.id && b->borrower_id != sim->player.id) ||
+            here != sim->dragon.lair_settlement_id || sim->dragon.slain)
+            return Fail(error, capacity, "Bring your own or a borrowed tome to the dragon's lair to record a sighting and the goblin porters.");
+        if ((sim->dragon.life_stage == CC_DRAGON_STAGE_CROWNED && b->notes[0].kind != 0) ||
+            (sim->dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM && b->notes[1].kind != 0) ||
+            (b->notes[2].kind != 0 && sim->dragon.life_stage != CC_DRAGON_STAGE_CROWNED &&
+             sim->dragon.life_stage != CC_DRAGON_STAGE_DEEP_WYRM))
+            return Fail(error, capacity, "This tome already holds that kind of sighting. Bring a fresh field tome.");
         Observe(sim, b, sim->player.id, here); s->player_observed_day = sim->current_day;
-        (void)snprintf(s->report, sizeof(s->report), "The company writes what it saw today in the tome's margins.");
         CcSimAdvanceDays(sim, 1);
+        (void)snprintf(s->report, sizeof(s->report), "The company writes what it saw today in the tome's margins.");
         break;
     case CC_SCRIVEN_HEARING:
         if (s->status != 2 || here != s->host_id || sim->current_day < s->opens_day || sim->current_day > s->closes_day)
@@ -606,8 +623,8 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         copy_book->borrower_id = 0; copy_book->return_place_id = 0; copy_book->loan_due_day = 0; copy_book->condition = 100;
         copy->owner_id = sim->player.id; ++sim->player.treasure_cargo_slots;
         sim->player.coins -= 2; town->market_coins += 2;
-        (void)snprintf(s->report, sizeof(s->report), "The copy keeps the source passages and their origin. The loan still names the original tome.");
         CcSimAdvanceDays(sim, 1);
+        (void)snprintf(s->report, sizeof(s->report), "The copy keeps the source passages and their origin. The loan still names the original tome.");
         break;
     }
     case CC_SCRIVEN_DELIVER: {
@@ -632,6 +649,18 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         int sign = (int)(CcCalendarWanderer(sim->current_day, (sim->clock.minute_subticks / CC_WORLD_MINUTE_SUBTICKS)) * 13.0) % 13;
         s->player_observed_day = sim->current_day;
         (void)snprintf(s->report, sizeof(s->report), "The Wanderer stands in the %s. The daily sign is the %s.", CcZodiacName(sign), CcZodiacName(CcCalendar(sim->current_day).sign));
+        for (int i = 0; i < CC_SCRIVEN_BOOKS; ++i) {
+            CcScrivenBook *held = &s->books[i];
+            const CcTreasure *owned = CcSimTreasure(sim, held->id);
+            if (owned == NULL || owned->destroyed || held->notes[3].kind != 0 ||
+                (owned->owner_id != sim->player.id && held->borrower_id != sim->player.id)) continue;
+            held->notes[3] = (CcScrivenNote){.author_id = sim->player.id, .place_id = here,
+                .source_book_id = held->id, .day = sim->current_day, .kind = CC_SCRIVEN_NOTE_SKY, .value = sign};
+            (void)snprintf(held->notes[3].text, CC_SCRIVEN_TEXT,
+                "Day %d: the Wanderer stood in the %s; the day's sign was the %s.",
+                sim->current_day, CcZodiacName(sign), CcZodiacName(CcCalendar(sim->current_day).sign));
+            break;
+        }
         break;
     }
     case CC_SCRIVEN_COMMISSION: {
@@ -699,7 +728,7 @@ static bool FindingValid(const CcSim *sim, const CcScrivenFinding *f)
 bool CcScrivenValidate(const CcSim *sim)
 {
     if (sim == NULL) return false;
-    if (sim->schema_version < 112U) return true;
+    if (sim->schema_version < 113U) return true;
     if (sim->settlement_count < 0 || sim->settlement_count > CC_MAX_SETTLEMENTS ||
         sim->treasure_count < 0 || sim->treasure_count > CC_MAX_TREASURES ||
         sim->character_count < 0 || sim->character_count > CC_MAX_CHARACTER_RECORDS ||

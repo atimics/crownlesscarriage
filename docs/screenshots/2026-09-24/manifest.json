@@ -1,0 +1,81 @@
+{
+  "source_revision": "08fe90581aa40eb1320662df2284e88fd22fa9e8",
+  "binary_sha256": "0820290945da57c9c0da913bef3e9bd5155aa48272089be23681af8383bf0bc4",
+  "captured_on": "2026-09-24",
+  "mode": "Staged scenes rendered by the native game capture commands",
+  "captures": [
+    {
+      "file": "thornford.png",
+      "arguments": [
+        "--capture-ux",
+        "0",
+        "docs/screenshots/2026-09-24/thornford.png",
+        "1280",
+        "0"
+      ],
+      "width": 1280,
+      "height": 720,
+      "sha256": "224156ad1d8a97fb08d2bcabe5117597b7836402cc15c35f0b387195819f698b"
+    },
+    {
+      "file": "gloamgate.png",
+      "arguments": [
+        "--capture-town",
+        "1",
+        "44",
+        "29",
+        "docs/screenshots/2026-09-24/gloamgate.png"
+      ],
+      "width": 1280,
+      "height": 760,
+      "sha256": "2fff3ac0ae8d540f5b2d485e155e71e21a91a85ecf67fda5d06eb56e4de31162"
+    },
+    {
+      "file": "alderwatch.png",
+      "arguments": [
+        "--capture-town",
+        "2",
+        "78.5",
+        "27",
+        "docs/screenshots/2026-09-24/alderwatch.png"
+      ],
+      "width": 1280,
+      "height": 760,
+      "sha256": "fbefad4e150af1e86b9ce99dfbff3a1c03313983751f42030a378ab761207f42"
+    },
+    {
+      "file": "silverwick.png",
+      "arguments": [
+        "--capture-town",
+        "3",
+        "82",
+        "34",
+        "docs/screenshots/2026-09-24/silverwick.png"
+      ],
+      "width": 1280,
+      "height": 760,
+      "sha256": "6f14cb2962fbeb874a97f5701e7808e3e9a28fd515d256e518941e165b6837d8"
+    },
+    {
+      "file": "road.png",
+      "arguments": [
+        "--capture-mine-road-forward",
+        "docs/screenshots/2026-09-24/road.png"
+      ],
+      "width": 1280,
+      "height": 760,
+      "sha256": "3bc58ac9e0fc3bfbc2127197a309dac0882980dec76f9386fdf92b5624d9b106"
+    },
+    {
+      "file": "mine-haulers.png",
+      "arguments": [
+        "--capture-mine-offer",
+        "docs/screenshots/2026-09-24/mine-haulers.png"
+      ],
+      "width": 1280,
+      "height": 760,
+      "sha256": "aa4c364c2c12934a894a6e9f00f0167d699329ccf51e06f20269bc0efad8a352"
+    }
+  ],
+  "capture_platform": "macOS, native OpenGL client"
+}

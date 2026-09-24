@@ -2,7 +2,7 @@
 static bool SaveScriven(sqlite3 *database, const CcSim *sim, char *error, size_t capacity)
 {
     if (!Execute(database, "DELETE FROM scriven_state;", error, capacity)) return false;
-    if (sim->schema_version < 112U) return true;
+    if (sim->schema_version < 113U) return true;
     uint8_t bytes[CC_SCRIVEN_WIRE_CAPACITY];
     size_t length = CcScrivenEncode(&sim->scriven, bytes, sizeof(bytes));
     sqlite3_stmt *statement = NULL;
@@ -15,7 +15,7 @@ static bool SaveScriven(sqlite3 *database, const CcSim *sim, char *error, size_t
 }
 static bool ReadScriven(sqlite3 *database, CcSim *sim, char *error, size_t capacity)
 {
-    if (sim->schema_version < 112U) return true;
+    if (sim->schema_version < 113U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database, "SELECT id,payload FROM scriven_state ORDER BY id;", &statement, error, capacity)) return false;
     bool ok = sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_int64(statement, 0) == 1 &&

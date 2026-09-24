@@ -139,6 +139,15 @@ int CcOverlayMeasureText(const char *text, int font_size)
     return (int)lroundf(measured.x);
 }
 
+int CcOverlayMeasureCaptionText(const char *text, int font_size)
+{
+    if (text == NULL) return 0;
+    float scaled_size = fmaxf(9.0f, (float)font_size * overlay_caption_scale);
+    Vector2 measured = MeasureTextEx(GetFontDefault(), text, scaled_size,
+                                     scaled_size / 10.0f);
+    return (int)lroundf(measured.x);
+}
+
 void CcOverlayDrawText(const char *text, int x, int y, int font_size, Color color)
 {
     QueueOverlayText(text, x, y, font_size, color, false, false);

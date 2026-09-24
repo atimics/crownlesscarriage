@@ -97,9 +97,14 @@ async function main() {
     const blockReading = await page.evaluate(() => Module.crownlessTouchFrame.reading);
     const blockDetail = await page.evaluate(() => Module.crownlessTouchFrame.detail);
     assert(blockDetail.includes('Demand: 2 Bread or 8 crowns'));
+    assert(blockDetail.includes('Withdraw to Thornford: 4h48m, 0 crowns'));
     assert(blockReading.includes('The Ditch Parliament'));
     assert(blockReading.includes('DEMAND'));
-    assert(blockReading.includes('CURRENT TIME'));
+    assert(blockReading.includes('RETURN'));
+    assert(blockReading.includes('ROAD SECURITY'));
+    const returnTime = blockDetail.match(/Withdraw to .*: (\d+)h(\d+)m, 0 crowns/);
+    assert(returnTime, 'The touch offer quotes the saved return time');
+    const returnMinutes = Number(returnTime[1]) * 60 + Number(returnTime[2]);
     await page.screenshot({path: path.join(output, 'road-block-choice.png')});
     await controls.button(/Withdraw to .*: 0 crowns/).tap();
     await page.waitForFunction(hash => document.body.dataset.companyHash !== hash,
@@ -109,13 +114,16 @@ async function main() {
     assert.equal(returned.company.location, blocked.journey.origin);
     assert.equal(returned.company.coins, blocked.company.coins);
     assert.deepEqual(returned.company.cargo, blocked.company.cargo);
-    assert.equal(returned.day, blocked.day);
-    assert(returned.events.some(event => event.text.includes('refuses the fight and returns')));
+    const savedReturnMinutes = (returned.day - blocked.day) * 1440 +
+      returned.minute - blocked.minute;
+    assert.equal(savedReturnMinutes, returnMinutes);
+    assert(returned.events.some(event => event.text.includes('Road retreat to') &&
+      event.text.includes(`${returnMinutes} minutes`)));
     await page.waitForFunction(hash => document.body.dataset.companyHash === hash,
       returned.hash, {timeout: 30000});
     await controls.button(/^Book(?: B)?$/).tap();
     await page.waitForFunction(() => Module.crownlessTouchFrame?.reading?.includes(
-      'refuses the fight and returns'), undefined, {timeout: 30000});
+      'Road retreat to'), undefined, {timeout: 30000});
     await page.locator('#touch-actions').evaluate(element => {
       element.scrollTop = element.scrollHeight;
     });
@@ -131,7 +139,7 @@ async function main() {
       undefined, {timeout: 30000});
     await controls.button(/^Book(?: B)?$/).tap();
     await page.waitForFunction(() => Module.crownlessTouchFrame?.reading?.includes(
-      'refuses the fight and returns'), undefined, {timeout: 30000});
+      'Road retreat to'), undefined, {timeout: 30000});
     const returnState = await api(`/api/worlds/${worldIds.blocked}/state?campaign=1`);
     const revisit = returnState.state.travel.find(route =>
       route.id === blocked.journey.destination && route.available);
@@ -148,7 +156,7 @@ async function main() {
     console.log(JSON.stringify({claimant: 'The Ditch Parliament',
       warning: warningEvent.text, retreat: retreat.label,
       returnReceipt: returned.events.find(event =>
-        event.text.includes('refuses the fight and returns')).text,
+        event.text.includes('Road retreat to')).text,
       savedHash: returned.hash}));
   } finally {
     if (browser) await browser.close();

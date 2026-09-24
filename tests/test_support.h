@@ -23,7 +23,7 @@ static inline uint64_t CcTestBeforeCalendarHash(const CcSim *sim)
     CcSim *legacy = malloc(sizeof(*legacy));
     CC_CHECK(legacy != NULL);
     *legacy = *sim;
-    legacy->schema_version = 111U;
+    legacy->schema_version = 112U;
     uint64_t hash = CcSimHash(legacy);
     free(legacy);
     return hash;

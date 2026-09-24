@@ -104,6 +104,12 @@ static bool HearingFixture(void)
     sim.scriven.ages[0]=(CcScrivenAge){sim.dragon.id,175};sim.scriven.age_count=1;
     CHECK(Apply(CC_SCRIVEN_HEARING,0));
     CHECK(memcmp(&first,&sim.scriven.finding,sizeof(first))==0 && sim.scriven.editions==1);
+    /* A closer account in the first source still permits a second, independent source. */
+    ba->notes[1]=bb->notes[1];ba->notes[1].source_book_id=a->id;ba->notes[1].day=170;
+    (void)snprintf(ba->notes[1].text,144,"Day 170: the first field party saw a Deep Wyrm.");
+    sim.scriven.finding=(CcScrivenFinding){0};
+    CHECK(Apply(CC_SCRIVEN_HEARING,0));
+    CHECK(sim.scriven.finding.earliest_day==101 && sim.scriven.finding.latest_day==180);
     /* Moving the second book away removes it from a new hearing. */
     sim.scriven.finding=(CcScrivenFinding){0};
     sim.scriven.delegates[1].phase=CC_SCRIVEN_OUTWARD;
@@ -180,11 +186,55 @@ static bool WatchAndCopy(void)
     int day=sim.current_day;
     sim.clock.minute_subticks=0;
     CHECK(Apply(CC_SCRIVEN_SKY,0));
+    CHECK(CcScrivenBookById(&sim,id)->notes[3].kind==CC_SCRIVEN_NOTE_SKY);
     CHECK(Apply(CC_SCRIVEN_WAIT,0));CHECK(sim.current_day==day);
     CHECK(!Apply(CC_SCRIVEN_SKY,0));
     CHECK(Apply(CC_SCRIVEN_WAIT,0));CHECK(Apply(CC_SCRIVEN_WAIT,0));
     CHECK(sim.current_day==day+1 && sim.clock.minute_subticks==0);
     CHECK(RoundTrip());
+    return true;
+}
+static bool FieldNotes(void)
+{
+    CcSimInit(&sim,41);
+    sim.player.cargo_capacity=100;
+    sim.dragon.lair_settlement_id=sim.player.location_id;
+    sim.dragon.life_stage=CC_DRAGON_STAGE_CROWNED;
+    CcTreasure *t=Tome(&sim,0);CHECK(t!=NULL);
+    uint64_t before=CcSimHash(&sim);
+    CHECK(!Apply(CC_SCRIVEN_OBSERVE,t->id) && CcSimHash(&sim)==before);
+    CHECK(Apply(CC_SCRIVEN_BORROW,t->id));
+    int day=sim.current_day;
+    CHECK(Apply(CC_SCRIVEN_OBSERVE,t->id));
+    const CcScrivenBook *b=CcScrivenBookById(&sim,t->id);
+    CHECK(sim.current_day==day+1 && b->notes[0].day==day);
+    CHECK(b->notes[2].kind==CC_SCRIVEN_NOTE_GOBLINS);
+    before=CcSimHash(&sim);
+    CHECK(!Apply(CC_SCRIVEN_OBSERVE,t->id) && CcSimHash(&sim)==before);
+    CHECK(RoundTrip());
+    sim.current_day=CC_SIM_MAX_DAY;
+    before=CcSimHash(&sim);
+    CHECK(!Apply(CC_SCRIVEN_COMMISSION,0) && CcSimHash(&sim)==before);
+    CHECK(!Apply(CC_SCRIVEN_COPY,t->id) && CcSimHash(&sim)==before);
+    CHECK(!Apply(CC_SCRIVEN_OBSERVE,t->id) && CcSimHash(&sim)==before);
+    return true;
+}
+static bool Schema112(void)
+{
+    CcSimInit(&sim,717);
+    CcTreasure *t=Tome(&sim,0);CHECK(t!=NULL);
+    CcId id=t->id;
+    sim.schema_version=112;
+    memset(&sim.scriven,0,sizeof(sim.scriven));
+    uint64_t before=CcSimHash(&sim);
+    unsigned char *data=NULL;size_t length=0;
+    CHECK(CcSaveEncode(&sim,&data,&length,error,sizeof(error)));
+    CHECK(CcSaveDecode(data,length,&copy,error,sizeof(error)) || (fprintf(stderr,"%s\n",error),false));
+    CcSaveFreeBuffer(data);
+    CHECK(copy.schema_version==CC_SIM_SCHEMA_VERSION);
+    CHECK(CcScrivenBookById(&copy,id)!=NULL && copy.scriven.age_count==0);
+    copy.schema_version=112;
+    CHECK(CcSimHash(&copy)==before);
     return true;
 }
 static bool Codec(void)
@@ -217,7 +267,7 @@ static bool DailyReplay(void)
 }
 int main(void)
 {
-    if(!Calendar() || !Books() || !HearingFixture() || !Codec() || !Expeditions() || !WatchAndCopy() || !DailyReplay()) return 1;
+    if(!Calendar() || !Books() || !HearingFixture() || !Codec() || !Expeditions() || !WatchAndCopy() || !FieldNotes() || !Schema112() || !DailyReplay()) return 1;
     puts("Calendar, frozen passages, loans, evidence boundaries, codec, and daily replay passed.");
     return 0;
 }

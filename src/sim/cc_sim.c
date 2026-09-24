@@ -5142,7 +5142,7 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
         if (sim->treasures[i].destroyed && !CcScrivenReserved(sim, sim->treasures[i].id) && !CcSimArchiveConvoyHoldsBook(sim, sim->treasures[i].id)) {
             CcTreasure *treasure = &sim->treasures[i];
             *treasure = (CcTreasure){0};
-            if (sim->schema_version >= 112U) sim->scriven.books[i] = (CcScrivenBook){0};
+            if (sim->schema_version >= 113U) sim->scriven.books[i] = (CcScrivenBook){0};
             treasure->id = NextId(sim, CC_ENTITY_TREASURE);
             return treasure;
         }
@@ -7447,7 +7447,7 @@ static void AdvanceArchives(CcSim *sim)
                            "The scriptorium binds four chronicles into "
                            "the Codex of the Scriptorium; nothing is "
                            "lost that was written.");
-            if (sim->schema_version >= 112U)
+            if (sim->schema_version >= 113U)
                 (void)snprintf(text, sizeof(text), "The scriptorium binds four tomes into a codex, keeping selected passages, dated margins, and the latest almanac.");
             (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, codex->id,
                             oldest_location, eldest_parent,
@@ -8952,7 +8952,7 @@ static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
     CcDragon *dragon = &sim->dragon;
     if (dragon->life_stage == stage) return;
     dragon->life_stage = stage;
-    if (sim->schema_version >= 112U && stage == CC_DRAGON_STAGE_DEEP_WYRM) {
+    if (sim->schema_version >= 113U && stage == CC_DRAGON_STAGE_DEEP_WYRM) {
         CcScrivenAnchor(sim);
         return; /* The change becomes public through later sightings. */
     }
