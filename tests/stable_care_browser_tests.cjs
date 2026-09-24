@@ -92,6 +92,8 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${origin}/game/index.html?world=${worldId}`);
     await page.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout: 120000});
+    await page.waitForFunction(() => document.querySelector('#save-status')?.textContent ===
+      'Save status: Shared company saved on host.');
     await page.waitForFunction(() => Module.crownlessTouchFrame?.buttons?.length > 0, undefined, {timeout: 30000});
     await controls.button(/Care for horses:/).waitFor();
     const careButton = await controls.button(/Care for horses:/).read();
@@ -124,12 +126,15 @@ async function main() {
     if (output) await page.screenshot({path: path.join(output, 'stable-care-receipt.png')});
     await page.reload();
     await page.waitForFunction(() => document.body.dataset.companyReady === 'ready', undefined, {timeout: 120000});
+    await page.waitForFunction(() => document.querySelector('#save-status')?.textContent ===
+      'Save status: Shared company saved on host.');
     await page.waitForFunction(hash => document.body.dataset.companyHash === hash,
       cared.hash, {timeout: 30000});
     await page.waitForFunction(() => Module.crownlessTouchFrame?.buttons?.some(button =>
       button.label.includes('already healthy and rested') && !button.enabled));
     assert.equal(await page.locator('#touch-actions button').filter({hasText: 'already healthy and rested'}).count(), 1);
     assert.equal((await view()).state.hash, cared.hash, 'The touch action survives browser reload');
+    if (output) await page.screenshot({path: path.join(output, 'stable-care-after-reload.png')});
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({source: arrived.horse_care.source,
       cost: arrived.horse_care.cost, days: cared.day - arrived.day,

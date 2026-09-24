@@ -4338,9 +4338,15 @@ static bool NearParkedCarriage(const CcSim *sim, const LocalState *local)
 {
     if (sim == NULL || local == NULL || sim->journey.active ||
         local->journey_travel_active || local->market_interior ||
-        local->site_kind != CC_LOCAL_SITE_NONE) return false;
-    if (local->open_world)
-        return OpenWorldSettlementDistance(sim, local) < 18.0f;
+        local->site_kind != CC_LOCAL_SITE_NONE ||
+        sim->carriage.mode != CC_CARRIAGE_PARKED ||
+        sim->carriage.location_id != sim->player.location_id) return false;
+    if (local->open_world) {
+        if (!local->world_carriage.visible) return false;
+        float dx = local->agent.position.x - local->world_carriage.position.x;
+        float dz = local->agent.position.z - local->world_carriage.position.z;
+        return dx * dx + dz * dz < 16.0f;
+    }
     Vector2 position = LocalPosition(local);
     return GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
         GridDistance(position, LOCAL_CARRIAGE) < 1.85f;
@@ -5257,13 +5263,13 @@ static ContextActionSet BuildContextActions(
                              "Read town board");
             AddContextAction(&set, CONTEXT_ACTION_ENTER_MARKET,
                              "Enter market hall");
-            AddHorseCareAction(&set, sim);
             AddRestTeamAction(&set, sim);
             if (OutgoingRouteCount(sim) > 0) {
                 AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD,
                                  "Choose a road");
             }
         }
+        if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         return set;
     }
 

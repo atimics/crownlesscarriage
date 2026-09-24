@@ -205,7 +205,13 @@
     owner() { return Boolean(state?.owner); },
     travelStopped() { return Boolean(state?.travel_stopped); },
     paused() { return Boolean(state?.paused); },
-    ready(error) { startupError = error; document.body.dataset.companyReady = error ? 'error' : 'ready'; if (error) say(error); },
+    ready(error) {
+      startupError = error;
+      document.body.dataset.companyReady = error ? 'error' : 'ready';
+      Module.setCrownlessSaveStatus?.(error || 'Shared company saved on host.',
+        error ? 'failed' : 'ready');
+      if (error) say(error);
+    },
     take() { const value = pending; pending = null; return value; } };
   if (enabled && typeof document !== 'undefined') {
     const attach = () => {

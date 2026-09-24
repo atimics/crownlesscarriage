@@ -102,6 +102,38 @@ static int RunStableCareCardRegression(void)
     CARE_CHECK(CcSaveRead(path, &restored, error, sizeof(error)) &&
                CcSimHash(&restored) == hash,
                "Care card result survives journal restart.");
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    CARE_CHECK(InitializeOpenWorld(&sim, &local, false),
+               "The parked town opens in the world scene.");
+    local.open_world = true;
+    PositionOpenWorldAtSettlement(&sim, &local);
+    CARE_CHECK(local.world_carriage.visible,
+               "The parked carriage has a world anchor.");
+    RepositionHero(&local, (Vector2){local.world_carriage.position.x,
+                                     local.world_carriage.position.z}, false);
+    BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+    actions = BuildContextActions(&sim, &local, view, selected,
+                                  selected_situation);
+    CARE_CHECK(WorldCardIndex(&actions, CONTEXT_ACTION_CARE_HORSES, 0) >= 0,
+               "Care is visible beside the parked world carriage.");
+    const CcWorldSettlementPlacement *place =
+        CcWorldSettlementPlacementForId(&local.world_stream.manifest,
+                                        sim.player.location_id);
+    CARE_CHECK(place != NULL, "The town has a world placement.");
+    Vector2 far = {place->center.x + 8.0f, place->center.z};
+    if (hypotf(far.x - local.world_carriage.position.x,
+               far.y - local.world_carriage.position.z) < 6.0f)
+        far.x = place->center.x - 8.0f;
+    RepositionHero(&local, far, false);
+    CARE_CHECK(OpenWorldSettlementDistance(&sim, &local) < 18.0f,
+               "The far control stays inside the old town-center radius.");
+    BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+    actions = BuildContextActions(&sim, &local, view, selected,
+                                  selected_situation);
+    CARE_CHECK(WorldCardIndex(&actions, CONTEXT_ACTION_CARE_HORSES, 0) < 0,
+               "Care is offered beside the carriage, away from the town center.");
+    LeaveOpenWorld(&local);
     (void)remove(path);
     adventure_preferences = NULL;
 #undef CARE_CHECK
