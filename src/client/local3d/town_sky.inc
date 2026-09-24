@@ -178,6 +178,34 @@ static void DrawTownSky(const CcSim *sim, const CcSettlement *place, Camera3D ca
             TownSkyCloud(camera,yaw,elevation,0.0010f,0.0013f,light,light);
         }
     }
+    if (sim != NULL && colors.stars > 0.05f) {
+        /* Five bright points per sign make fixed patterns along the zodiac. */
+        static const float patterns[13][5][2] = {
+            {{-1,0},{0,1},{1,0},{0,-1},{0,0}},
+            {{-1,-1},{0,0},{0,1},{.4f,.2f},{1,1}},
+            {{-1,1},{-.5f,0},{0,.6f},{.5f,0},{1,1}},
+            {{-1,0},{-.6f,1},{0,.1f},{.5f,.8f},{1,-.2f}},
+            {{-1,1},{0,1},{1,1},{0,0},{0,-1}},
+            {{-1,1},{-.6f,-.2f},{0,-1},{.6f,-.2f},{1,1}},
+            {{-1,.8f},{-.5f,0},{0,-1},{.5f,0},{1,.8f}},
+            {{-1,-1},{-.5f,-.3f},{0,0},{.3f,.8f},{1,1}},
+            {{-1,-.5f},{-.5f,.5f},{0,1},{.5f,.5f},{1,-.5f}},
+            {{-1,-1},{-1,1},{0,1},{1,1},{1,-1}},
+            {{-1,-1},{-.6f,.2f},{0,1},{.6f,.2f},{1,-1}},
+            {{-1,.5f},{0,1},{1,.5f},{0,0},{0,-1}},
+            {{-1,-.5f},{-.5f,.5f},{0,-.5f},{.5f,.5f},{1,0}}
+        };
+        float turn = (float)sim->clock.minute_subticks / (float)CC_WORLD_DAY_SUBTICKS * 2.0f * PI;
+        Color star_light = BlendColor(colors.zenith, (Color){239,230,202,255}, colors.stars);
+        for (int sign = 0; sign < CC_ZODIAC_SIGNS; ++sign)
+            for (int point = 0; point < 5; ++point)
+                TownSkyCloud(camera, turn + ((float)sign + .5f) * 2.0f * PI / 13.0f + patterns[sign][point][0] * .075f,
+                    .50f + patterns[sign][point][1] * .075f, .0023f, .0025f, star_light, star_light);
+        float wanderer = (float)CcCalendarWanderer(sim->current_day,
+            sim->clock.minute_subticks / CC_WORLD_MINUTE_SUBTICKS) * 2.0f * PI;
+        Color gold = BlendColor(colors.zenith, (Color){250,192,104,255}, colors.stars);
+        TownSkyCloud(camera, turn + wanderer, .50f, .005f, .006f, gold, gold);
+    }
     ArtAtmosphereDefinition a=ArtAtmosphereCurrent();
     Vector3 source=Vector3Normalize(a.light_direction);
     float yaw=atan2f(source.x,source.z), elevation=asinf(CombatClamp(source.y,-1,1));

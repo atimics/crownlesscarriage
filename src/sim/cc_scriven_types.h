@@ -59,6 +59,8 @@ typedef struct CcScrivenState {
     int32_t meetings, comparisons, returns, failed_trips, editions, age_count;
     int32_t player_observed_day, player_read_day;
     uint64_t player_read_book;
-    char report[256];
+    char report[256], player_report[256];
 } CcScrivenState;
+_Static_assert(sizeof(CcScrivenState) == 47952,
+    "Review the scriven codec, save migration, validation, and hash when fields change");
 #endif

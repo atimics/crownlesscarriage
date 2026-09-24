@@ -19,7 +19,7 @@ int main(int argc,char **argv)
         for(int i=0;i<CC_SCRIVEN_DELEGATES;++i)
             if(sim.scriven.delegates[i].phase>=CC_SCRIVEN_EXPEDITION && sim.scriven.delegates[i].phase<=CC_SCRIVEN_RETURNING) ++waiting;
         printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",seed,years,sim.scriven.meetings,sim.scriven.comparisons,sim.scriven.returns,sim.scriven.failed_trips,sim.scriven.editions,sim.scriven.age_count,waiting,valid?1:0);
-        if(!valid) {fprintf(stderr,"Seed %d day %d: %s\n",seed,sim.current_day,error);++failed;}
+        if(!valid) { fprintf(stderr,"Seed %d day %d: %s\n",seed,sim.current_day,error);++failed;}
     }
     return failed?1:0;
 }

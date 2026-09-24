@@ -1,3 +1,4 @@
+#include "sim/cc_scriven.h"
 #include "persistence/cc_starting_campaign.h"
 #include "client/cc_audio.h"
 #include "client/cc_client_policy.h"
@@ -11256,6 +11257,9 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
             ++shown;
         }
         if (shown == 0) ClientReadSpeech(sim, "No one you know has been named yet.", 0);
+    } else if (local->book_page == 4) {
+        CcScrivenDescribe(sim, words, sizeof(words));
+        ClientReadSpeech(sim, words, 0);
     } else if (local->book_page == 3) {
         const CcEvent *note = CcOvenCourtNote(sim, local->book_offset);
         ClientReadSpeech(sim, note != NULL ? note->text :

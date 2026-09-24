@@ -1,3 +1,4 @@
+#include "sim/cc_scriven.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_road_council.h"
 #include "sim/cc_road_position.h"
@@ -1704,6 +1705,7 @@ static void DescribeUnderroad(const CcMetagame *metagame,
 static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
+           "Calendar and tomes:\n  calendar, tomes, scribe read|borrow|return|copy|observe NUMBER\n  scribe hearing|deliver|sky|wait|commission\n"
            "See the world:\n"
            "  look, people, talk NUMBER, rumors, charters, roads, council\n"
            "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, archives, status, history [COUNT]\n"
@@ -1959,7 +1961,27 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     if (command == NULL) return true;
 
     if (strcmp(command, "help") == 0) DescribeHelp(output, output_capacity);
-    else if (strcmp(command, "look") == 0) {
+    else if (strcmp(command, "calendar") == 0) {
+        CcScrivenDescribe(&metagame->sim, output, output_capacity);
+        Append(output, output_capacity, "\n%s\n", metagame->sim.scriven.player_report);
+    } else if (strcmp(command, "tomes") == 0) {
+        for (int i = 0; i < metagame->sim.treasure_count; ++i) {
+            const CcTreasure *t = &metagame->sim.treasures[i];
+            if (CcScrivenBookAccessible(&metagame->sim, t->id, metagame->sim.player.location_id))
+                Append(output, output_capacity, "%d. %s\n", i + 1, t->name);
+        }
+        Append(output, output_capacity, "scribe read|borrow|return|copy|observe NUMBER; scribe hearing|deliver|sky|wait|commission\n");
+    } else if (strcmp(command, "scribe") == 0) {
+        const char *names[] = {"", "read", "borrow", "return", "observe", "hearing", "copy", "deliver", "sky", "wait", "commission"};
+        int action = 0, index = -1;
+        for (int i = 1; first != NULL && i <= CC_SCRIVEN_COMMISSION; ++i)
+            if (strcmp(first, names[i]) == 0) action = i;
+        if (second != NULL && !ParseIndex(second, metagame->sim.treasure_count, &index)) return false;
+        CcCommand act = {.kind=CC_COMMAND_SCRIVEN,.amount=action,
+            .target_id=index >= 0 ? metagame->sim.treasures[index].id : 0};
+        if (!ApplyCommand(metagame, &act, output, output_capacity)) return false;
+        Append(output, output_capacity, "%s\n", metagame->sim.scriven.player_report);
+    } else if (strcmp(command, "look") == 0) {
         DescribeLook(metagame, output, output_capacity);
     } else if (strcmp(command, "causes") == 0) {
         DescribeCauses(metagame, output, output_capacity);
@@ -2947,7 +2969,8 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
             strcmp(command, "help") == 0 || strcmp(command, "quit") == 0 ||
             (strcmp(command, "road") == 0 && JourneyActionAllowed(&metagame->sim, first));
     }
-    if (strcmp(command, "help") == 0 || strcmp(command, "look") == 0 ||
+    if (strcmp(command, "calendar") == 0 || strcmp(command, "tomes") == 0 || strcmp(command, "scribe") == 0 ||
+        strcmp(command, "help") == 0 || strcmp(command, "look") == 0 ||
         strcmp(command, "people") == 0 ||
         strcmp(command, "rumors") == 0 ||
         strcmp(command, "charters") == 0 ||

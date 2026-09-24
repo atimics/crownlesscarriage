@@ -41,6 +41,7 @@ static bool Calendar(void)
 static bool RoundTrip(void)
 {
     unsigned char *data=NULL;size_t length=0;
+    sim.royal_trade_week=sim.current_day/7;
     CHECK(CcSimValidate(&sim,error,sizeof(error)) || (fprintf(stderr,"%s\n",error),false));
     CHECK(CcSaveEncode(&sim,&data,&length,error,sizeof(error)));
     CHECK(CcSaveDecode(data,length,&copy,error,sizeof(error)) || (fprintf(stderr,"%s\n",error),false));
@@ -92,6 +93,8 @@ static bool HearingFixture(void)
         sim.scriven.delegates[i]=(CcScrivenDelegate){.person_id=sim.characters[i].id,.book_id=t->id,
             .home_id=t->owner_id,.place_id=sim.scriven.host_id,.phase=CC_SCRIVEN_ATTENDING,.notice_day=140};
         t->location_id=sim.characters[i].id;
+        sim.characters[i].current_settlement_id=sim.scriven.host_id;
+        sim.characters[i].travel_destination_id=0;
     }
     CHECK(Apply(CC_SCRIVEN_HEARING,0));
     CHECK(sim.scriven.finding.earliest_day==101 && sim.scriven.finding.latest_day==180);
@@ -111,6 +114,77 @@ static bool HearingFixture(void)
     sim.scriven.delegates[1].place_id=sim.scriven.host_id;
     bb->notes[1].source_book_id=a->id;
     CHECK(Apply(CC_SCRIVEN_HEARING,0));CHECK(sim.scriven.finding.agreed_day==0);
+    return true;
+}
+static bool Expeditions(void)
+{
+    CcSimInit(&sim,91);
+    for(int i=0;i<sim.settlement_count;++i) {
+        CcSettlement *town=&sim.settlements[i];
+        town->hunger=0;town->security=100;
+        town->stock[CC_GOOD_WHEAT]=500;town->stock[CC_GOOD_PAPER]=100;town->stock[CC_GOOD_TOOLS]=100;
+        CcCharacter *p=NULL;
+        for(int j=0;j<sim.character_count;++j) {
+            CcCharacter *candidate=&sim.characters[j];
+            bool office=candidate->id==sim.archives.abbot_character_id;
+            for(int k=0;k<sim.kingdom_count;++k) office |= candidate->id==sim.kingdoms[k].ruler_character_id || candidate->id==sim.kingdoms[k].monastery_patron_id;
+            if(!office && candidate->home_settlement_id==town->id && candidate->birth_day<0) {p=candidate;break;}
+        }
+        CHECK(p!=NULL);
+        p->occupation=CC_OCCUPATION_SCRIBE;p->activity=CC_CHARACTER_ACTIVITY_WORKING;
+        p->home_settlement_id=town->id;p->current_settlement_id=town->id;
+        p->birth_day=-30*365;p->death_day=2000;p->travel_coins=1000;p->bandit_group_id=0;
+        p->travel_destination_id=0;p->travel_arrival_day=0;
+    }
+    for(int i=0;i<sim.route_count;++i) {sim.routes[i].closed=false;sim.routes[i].condition=100;}
+    for(int i=0;i<3;++i)for(int j=0;j<3;++j)sim.diplomacy[i][j]=CC_DIPLOMACY_PEACE;
+    sim.current_day=140;sim.dragon.life_stage=CC_DRAGON_STAGE_CROWNED;
+    CcScrivenAdvance(&sim);
+    CcId first_host=sim.scriven.host_id;CHECK(first_host!=0);
+    bool saved_traveller=false;
+    for(int day=141;day<=260;++day) {
+        sim.current_day=day;
+        CcScrivenAdvance(&sim);
+        if(!saved_traveller) for(int i=0;i<6;++i) if(sim.scriven.delegates[i].route_id!=0) {
+            CHECK(RoundTrip());saved_traveller=true;break;
+        }
+    }
+    CHECK(saved_traveller && sim.scriven.meetings==1 && sim.scriven.returns>=2);
+    int noted=0;
+    for(int i=0;i<CC_SCRIVEN_BOOKS;++i) if(sim.scriven.books[i].notes[0].kind==CC_SCRIVEN_NOTE_CROWNED) ++noted;
+    CHECK(noted>=2);
+    sim.current_day=300;sim.dragon.life_stage=CC_DRAGON_STAGE_DEEP_WYRM;CcScrivenAnchor(&sim);
+    for(int day=504;day<=624;++day) {sim.current_day=day;CcScrivenAdvance(&sim);}
+    CHECK(sim.scriven.host_id!=first_host && sim.scriven.meetings==2);
+    CHECK(sim.scriven.finding.agreed_day>0);
+    CHECK(sim.scriven.finding.earliest_day<=300 && sim.scriven.finding.latest_day>=300);
+    CHECK(sim.scriven.returns>=4 && sim.scriven.editions==1);
+    CHECK(sim.scriven.ages[0].first_deep_day==300 && sim.scriven.finding.proposed_day!=300);
+    int adopted=0;
+    for(int i=0;i<6;++i) if(sim.scriven.local[i].agreed_day>0) ++adopted;
+    CHECK(adopted>=2);
+    CHECK(RoundTrip());
+    return true;
+}
+static bool WatchAndCopy(void)
+{
+    CcSimInit(&sim,41);
+    sim.player.cargo_capacity=100;sim.player.coins=100;
+    sim.settlements[0].stock[CC_GOOD_PAPER]=10;sim.settlements[0].stock[CC_GOOD_WHEAT]=20;sim.settlements[0].stock[CC_GOOD_TOOLS]=10;
+    CcTreasure *t=Tome(&sim,0);CHECK(t!=NULL);
+    CcId id=t->id;CHECK(Apply(CC_SCRIVEN_BORROW,id));
+    CHECK(Apply(CC_SCRIVEN_COPY,id));
+    CHECK(CcScrivenBookById(&sim,id)->borrower_id==sim.player.id);
+    CHECK(sim.player.treasure_cargo_slots==2);
+    CHECK(RoundTrip());
+    int day=sim.current_day;
+    sim.clock.minute_subticks=0;
+    CHECK(Apply(CC_SCRIVEN_SKY,0));
+    CHECK(Apply(CC_SCRIVEN_WAIT,0));CHECK(sim.current_day==day);
+    CHECK(!Apply(CC_SCRIVEN_SKY,0));
+    CHECK(Apply(CC_SCRIVEN_WAIT,0));CHECK(Apply(CC_SCRIVEN_WAIT,0));
+    CHECK(sim.current_day==day+1 && sim.clock.minute_subticks==0);
+    CHECK(RoundTrip());
     return true;
 }
 static bool Codec(void)
@@ -143,7 +217,7 @@ static bool DailyReplay(void)
 }
 int main(void)
 {
-    if(!Calendar() || !Books() || !HearingFixture() || !Codec() || !DailyReplay()) return 1;
+    if(!Calendar() || !Books() || !HearingFixture() || !Codec() || !Expeditions() || !WatchAndCopy() || !DailyReplay()) return 1;
     puts("Calendar, frozen passages, loans, evidence boundaries, codec, and daily replay passed.");
     return 0;
 }

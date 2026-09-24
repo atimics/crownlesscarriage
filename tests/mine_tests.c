@@ -512,7 +512,7 @@ static void TestMineSurveyMigrationAndReturns(void)
     Check(CcSimValidate(&restored,error,sizeof(error)));
     uint64_t migrated_hash=CcSimHash(&restored);
     /* Schema 111 adds saved road claimant money to the migrated state. */
-    CC_CHECK(migrated_hash==UINT64_C(872505509252630140));
+    CC_CHECK(CcTestBeforeCalendarHash(&restored)==UINT64_C(872505509252630140));
     Check(CcSaveRead(fixture,&reloaded,error,sizeof(error)));
     CC_CHECK(CcSimHash(&reloaded)==migrated_hash);
     const CcCustodyEntry *depleted_gold=NULL;

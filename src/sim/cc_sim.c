@@ -7441,11 +7441,14 @@ static void AdvanceArchives(CcSim *sim)
             codex->craft_work = combined_lore;
             codex->appraised_value = combined_value;
             codex->created_day = sim->current_day;
+            CcScrivenRebind(sim, tome_slots, codex->id);
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(text, sizeof(text),
                            "The scriptorium binds four chronicles into "
                            "the Codex of the Scriptorium; nothing is "
                            "lost that was written.");
+            if (sim->schema_version >= 112U)
+                (void)snprintf(text, sizeof(text), "The scriptorium binds four tomes into a codex, keeping selected passages, dated margins, and the latest almanac.");
             (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, codex->id,
                             oldest_location, eldest_parent,
                             combined_lore, text);
@@ -15558,7 +15561,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 int32_t lore_burned = 0;
                 for (int32_t i = 0; i < sim->treasure_count; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id)) continue;
+                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id) || CcScrivenReserved(sim, t->id)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||
@@ -15569,7 +15572,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 for (int32_t i = 0;
                      i < sim->treasure_count && burned < burn_target; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id)) continue;
+                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id) || CcScrivenReserved(sim, t->id)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||

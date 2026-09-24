@@ -74,7 +74,7 @@ static void State(Wire *w, CcScrivenState *s)
     for (int i = 0; i < 6; ++i) { I32(w, &s->last_hosted[i]); I32(w, &s->notice_arrives[i]); }
     I32(w, &s->meetings); I32(w, &s->comparisons); I32(w, &s->returns); I32(w, &s->failed_trips);
     I32(w, &s->editions); I32(w, &s->age_count); I32(w, &s->player_observed_day); I32(w, &s->player_read_day);
-    U64(w, &s->player_read_book); Bytes(w, s->report, sizeof(s->report));
+    U64(w, &s->player_read_book); Bytes(w, s->report, sizeof(s->report)); Bytes(w, s->player_report, sizeof(s->player_report));
 }
 size_t CcScrivenEncode(const CcScrivenState *state, uint8_t *bytes, size_t capacity)
 {

@@ -53,7 +53,7 @@ bool CcScrivenCarries(const CcSim *sim, CcId book_id, CcId holder_id)
     for (int i = 0; i < CC_SCRIVEN_DELEGATES; ++i) {
         const CcScrivenDelegate *d = &sim->scriven.delegates[i];
         if (d->book_id == book_id && d->person_id == holder_id &&
-            d->phase >= CC_SCRIVEN_EXPEDITION && d->phase != CC_SCRIVEN_FINISHED) return true;
+            d->phase >= CC_SCRIVEN_EXPEDITION && d->phase <= CC_SCRIVEN_RETURNING) return true;
     }
     return false;
 }
@@ -65,7 +65,7 @@ bool CcScrivenReserved(const CcSim *sim, CcId id)
     for (int i = 0; i < CC_SCRIVEN_DELEGATES; ++i) {
         const CcScrivenDelegate *d = &sim->scriven.delegates[i];
         if (d->book_id == id && d->phase >= CC_SCRIVEN_EXPEDITION &&
-            d->phase != CC_SCRIVEN_FINISHED) return true;
+            d->phase <= CC_SCRIVEN_RETURNING) return true;
     }
     return false;
 }
@@ -99,6 +99,39 @@ void CcScrivenFreeze(CcSim *sim, CcId id)
         fresh.school_id = town != NULL ? town->kingdom_id : 0;
         sim->scriven.books[i] = fresh;
         return;
+    }
+}
+void CcScrivenRebind(CcSim *sim, const int32_t slots[4], CcId new_id)
+{
+    if (sim->schema_version < 112U) return;
+    CcScrivenBook combined = sim->scriven.books[slots[0]];
+    combined.id = new_id; combined.edition_day = sim->current_day;
+    combined.borrower_id = 0; combined.return_place_id = 0; combined.loan_due_day = 0;
+    combined.condition = 100;
+    memset(combined.notes, 0, sizeof(combined.notes));
+    CcId dragon = 0; int latest = 0;
+    for (int i = 0; i < 4; ++i) {
+        const CcScrivenBook *old = &sim->scriven.books[slots[i]];
+        for (int j = 0; j < 2; ++j)
+            if (old->notes[j].day > latest) { latest = old->notes[j].day; dragon = old->notes[j].dragon_id; }
+        if (old->almanac_id > combined.almanac_id) combined.almanac_id = old->almanac_id;
+    }
+    for (int i = 0; i < 4; ++i) {
+        const CcScrivenBook *old = &sim->scriven.books[slots[i]];
+        if (i < 3) (void)snprintf(combined.passages[i], CC_SCRIVEN_TEXT, "%s", old->passages[0]);
+        for (int j = 0; j < CC_SCRIVEN_NOTES; ++j) {
+            const CcScrivenNote *n = &old->notes[j];
+            CcScrivenNote *kept = &combined.notes[j];
+            if (n->kind == 0 || (j < 2 && n->dragon_id != dragon)) continue;
+            if (kept->kind == 0 || (j == 1 ? n->day < kept->day : n->day > kept->day)) *kept = *n;
+        }
+    }
+    for (int i = 0; i < 4; ++i) sim->scriven.books[slots[i]] = (CcScrivenBook){0};
+    sim->scriven.books[slots[0]] = combined;
+    /* Empty legacy margins receive an honest snapshot at the time of rebinding. */
+    if (combined.source_id == 0) {
+        sim->scriven.books[slots[0]] = (CcScrivenBook){0};
+        CcScrivenFreeze(sim, new_id);
     }
 }
 /* A road leg is a real route. Closed roads and war borders can delay a visit. */
@@ -200,7 +233,8 @@ static void Observe(CcSim *sim, CcScrivenBook *b, CcId author, CcId place)
         CcScrivenNote *n = &b->notes[2];
         int carriers = 0;
         for (int i = 0; i < CC_GOBLIN_FACTION_COUNT; ++i)
-            if (sim->goblin_politics.factions[i].porter_room >= 0) ++carriers;
+            if (sim->goblin_politics.factions[i].members > 0 &&
+                sim->goblin_politics.factions[i].porter_room == 19) ++carriers;
         *n = (CcScrivenNote){.dragon_id = sim->dragon.id, .author_id = author,
             .place_id = place, .source_book_id = b->id, .day = sim->current_day,
             .kind = CC_SCRIVEN_NOTE_GOBLINS, .value = carriers};
@@ -275,7 +309,7 @@ static void Invite(CcSim *sim, int town_slot)
     CcCharacter *person = Scribe(sim, town->id);
     int slot = -1;
     for (int i = 0; i < CC_SCRIVEN_DELEGATES; ++i)
-        if (s->delegates[i].phase == CC_SCRIVEN_IDLE || s->delegates[i].phase == CC_SCRIVEN_FINISHED) { slot = i; break; }
+        if (s->delegates[i].phase == CC_SCRIVEN_IDLE || s->delegates[i].phase == CC_SCRIVEN_FINISHED || s->delegates[i].phase == CC_SCRIVEN_FALLEN) { slot = i; break; }
     int days = 0;
     if (person == NULL || slot < 0 || town->stock[CC_GOOD_WHEAT] < 5 ||
         !Path(sim, town->id, s->host_id, NULL, NULL, &days) || sim->current_day + days > s->closes_day) return;
@@ -300,7 +334,7 @@ static void Travel(CcSim *sim, CcScrivenDelegate *d)
     CcCharacter *p = (CcCharacter *)CcSimCharacter(sim, d->person_id);
     CcTreasure *t = (CcTreasure *)CcSimTreasure(sim, d->book_id);
     if (!Alive(sim, p) || t == NULL || t->destroyed) {
-        if (t != NULL && !t->destroyed) t->location_id = d->place_id;
+        if (t != NULL && t->location_id == d->person_id) t->location_id = d->place_id;
         if (p != NULL) { p->travel_destination_id = 0; p->travel_arrival_day = 0; }
         d->phase = CC_SCRIVEN_FALLEN; d->route_id = 0; d->hop_id = 0;
         ++sim->scriven.failed_trips;
@@ -311,6 +345,18 @@ static void Travel(CcSim *sim, CcScrivenDelegate *d)
         d->place_id = d->hop_id; p->current_settlement_id = d->hop_id;
         d->route_id = 0; d->hop_id = 0; d->arrival_day = 0;
         p->travel_destination_id = 0; p->travel_arrival_day = 0;
+    }
+    if ((sim->current_day - d->notice_day) % 7 == 0) {
+        if (d->wheat > 0) { --d->wheat; ++d->spent; p->hungry_days = 0; }
+        else {
+            CcSettlement *town = CcSimSettlementMutable(sim, d->place_id);
+            CcMoney price = town != NULL && town->price[CC_GOOD_WHEAT] > 0 ? town->price[CC_GOOD_WHEAT] : 1;
+            if (town != NULL && town->stock[CC_GOOD_WHEAT] > 0 && p->travel_coins >= price &&
+                town->market_coins <= CC_SIM_MAX_MONEY - price) {
+                --town->stock[CC_GOOD_WHEAT]; town->market_coins += price;
+                p->travel_coins -= price; ++d->spent; p->hungry_days = 0;
+            } else p->hungry_days = 7;
+        }
     }
     if (d->phase != CC_SCRIVEN_RETURNING && sim->current_day > sim->scriven.closes_day)
         d->phase = CC_SCRIVEN_RETURNING;
@@ -367,6 +413,8 @@ static bool Hearing(CcSim *sim)
     CcScrivenState *s = &sim->scriven;
     CcScrivenFinding f = {0};
     int newest = 0;
+    for (int i = 0; i < CC_SCRIVEN_BOOKS; ++i)
+        if (CcScrivenBookAccessible(sim, s->books[i].id, s->host_id)) ++s->comparisons;
     for (int b = 0; b < CC_SCRIVEN_BOOKS; ++b) {
         const CcScrivenBook *book = &s->books[b];
         if (!CcScrivenBookAccessible(sim, book->id, s->host_id)) continue;
@@ -386,7 +434,6 @@ static bool Hearing(CcSim *sim)
     for (int b = 0; b < CC_SCRIVEN_BOOKS; ++b) {
         const CcScrivenBook *book = &s->books[b];
         if (!CcScrivenBookAccessible(sim, book->id, s->host_id)) continue;
-        ++s->comparisons;
         for (int n = 0; n < CC_SCRIVEN_NOTES; ++n) {
             const CcScrivenNote *note = &book->notes[n];
             if (note->dragon_id != f.dragon_id) continue;
@@ -405,7 +452,9 @@ static bool Hearing(CcSim *sim)
     for (int i = 0; i < CC_SCRIVEN_DELEGATES; ++i) {
         const CcScrivenDelegate *d = &s->delegates[i];
         const CcScrivenBook *b = CcScrivenBookById(sim, d->book_id);
-        if (d->phase != CC_SCRIVEN_ATTENDING || d->place_id != s->host_id || b == NULL) continue;
+        const CcCharacter *person = CcSimCharacter(sim, d->person_id);
+        if (!Alive(sim, person) || person->current_settlement_id != s->host_id || person->travel_destination_id != 0 ||
+            d->phase != CC_SCRIVEN_ATTENDING || d->place_id != s->host_id || b == NULL) continue;
         bool duplicate = false;
         for (int j = 0; j < f.schools; ++j) duplicate |= school_ids[j] == b->school_id;
         if (!duplicate) school_ids[f.schools++] = b->school_id;
@@ -468,7 +517,8 @@ void CcScrivenAdvance(CcSim *sim)
                 s->status = 4;
                 (void)snprintf(s->report, sizeof(s->report), "The host's stores failed. The scribes are taking their tomes home.");
                 for (int i = 0; i < CC_SCRIVEN_DELEGATES; ++i)
-                    if (CcScrivenTravelling(sim, s->delegates[i].person_id)) s->delegates[i].phase = CC_SCRIVEN_RETURNING;
+                    if (s->delegates[i].phase >= CC_SCRIVEN_EXPEDITION && s->delegates[i].phase <= CC_SCRIVEN_RETURNING)
+                        s->delegates[i].phase = CC_SCRIVEN_RETURNING;
             }
         }
     }
@@ -498,12 +548,12 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         (void)snprintf(s->report, sizeof(s->report), "%s", b->passages[0]);
         break;
     case CC_SCRIVEN_BORROW:
-        if (!accessible || t == NULL || t->owner_id == sim->player.id || b->borrower_id != 0 ||
+        if (!accessible || t == NULL || CcSimSettlement(sim, t->owner_id) == NULL || b->borrower_id != 0 ||
             CcScrivenReserved(sim, b->id) || CcSimArchiveConvoyHoldsBook(sim, b->id))
             return Fail(error, capacity, "Choose a town tome whose owner can lend it today.");
         if (CcPlayerCargoUsed(&sim->player) >= sim->player.cargo_capacity || sim->current_day > CC_SIM_MAX_DAY - 364)
             return Fail(error, capacity, "Make one cargo space for the borrowed tome.");
-        b->borrower_id = sim->player.id; b->return_place_id = t->location_id;
+        b->borrower_id = sim->player.id; b->return_place_id = t->owner_id;
         b->loan_due_day = sim->current_day + 364; t->location_id = sim->player.id;
         ++sim->player.treasure_cargo_slots;
         (void)snprintf(s->report, sizeof(s->report), "The owner lends %.47s for one solar year. Return this same tome. Reading and copying are permitted.", t->name);
@@ -546,7 +596,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         if (!accessible) return Fail(error, capacity, "Bring the source tome to a town with paper, wheat, and tools.");
         CcSettlement *town = CcSimSettlementMutable(sim, here);
         CcScrivenBook source = *b;
-        if (CcPlayerCargoUsed(&sim->player) >= sim->player.cargo_capacity || town == NULL || sim->player.coins < 2)
+        if (CcPlayerCargoUsed(&sim->player) >= sim->player.cargo_capacity || town == NULL || sim->player.coins < 2 || town->market_coins > CC_SIM_MAX_MONEY - 2)
             return Fail(error, capacity, "Copying needs two crowns and one free cargo space.");
         CcTreasure *copy = NewBook(sim, town);
         if (copy == NULL) return Fail(error, capacity, "The scribe needs paper, wheat, tools, and room for another tome.");
@@ -584,10 +634,33 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         (void)snprintf(s->report, sizeof(s->report), "The Wanderer stands in the %s. The daily sign is the %s.", CcZodiacName(sign), CcZodiacName(CcCalendar(sim->current_day).sign));
         break;
     }
-    default: return Fail(error, capacity, "Choose read, borrow, return, observe, hearing, copy, deliver, or sky.");
+    case CC_SCRIVEN_COMMISSION: {
+        CcSettlement *town = CcSimSettlementMutable(sim, here);
+        if (town == NULL || sim->player.coins < 2 || town->market_coins > CC_SIM_MAX_MONEY - 2 ||
+            CcPlayerCargoUsed(&sim->player) >= sim->player.cargo_capacity)
+            return Fail(error, capacity, "A field tome needs two crowns and one cargo space.");
+        CcTreasure *fresh = NewBook(sim, town);
+        if (fresh == NULL) return Fail(error, capacity, "The town needs paper, wheat, tools, and shelf room to bind a tome.");
+        fresh->owner_id = sim->player.id; ++sim->player.treasure_cargo_slots;
+        sim->player.coins -= 2; town->market_coins += 2;
+        CcSimAdvanceDays(sim, 1);
+        (void)snprintf(s->report, sizeof(s->report), "The company receives a field tome with room for dated sightings. It takes one cargo space.");
+        break;
+    }
+    case CC_SCRIVEN_WAIT: {
+        int32_t time = sim->clock.minute_subticks + CC_WORLD_WATCH_SUBTICKS;
+        if (time >= CC_WORLD_DAY_SUBTICKS && sim->current_day == CC_SIM_MAX_DAY)
+            return Fail(error, capacity, "The calendar has reached its final supported day.");
+        sim->clock.minute_subticks = time % CC_WORLD_DAY_SUBTICKS;
+        if (time >= CC_WORLD_DAY_SUBTICKS) CcSimAdvanceDays(sim, 1);
+        (void)snprintf(s->report, sizeof(s->report), "The company spends a watch with the calendar and town records.");
+        break;
+    }
+    default: return Fail(error, capacity, "Choose read, borrow, return, observe, hearing, copy, deliver, sky, or wait.");
     }
     if (command->amount == CC_SCRIVEN_READ && b != NULL && b->almanac_id > 0)
         s->company = s->almanacs[b->almanac_id - 1];
+    (void)snprintf(s->player_report, sizeof(s->player_report), "%s", s->report);
     if (error != NULL && capacity > 0) error[0] = '\0';
     return true;
 }
@@ -642,7 +715,7 @@ bool CcScrivenValidate(const CcSim *sim)
         s->player_observed_day < 0 || s->player_observed_day > sim->current_day ||
         s->player_read_day < 0 || s->player_read_day > sim->current_day ||
         (s->player_read_book != 0 && CcIdKind(s->player_read_book) != CC_ENTITY_TREASURE) ||
-        !TextValid(s->report, sizeof(s->report)) || !FindingValid(sim, &s->finding) || !FindingValid(sim, &s->company)) return false;
+        !TextValid(s->report, sizeof(s->report)) || !TextValid(s->player_report, sizeof(s->player_report)) || !FindingValid(sim, &s->finding) || !FindingValid(sim, &s->company)) return false;
     for (int i = 0; i < s->editions; ++i)
         if (!FindingValid(sim, &s->almanacs[i]) || s->almanacs[i].agreed_day == 0) return false;
     for (int i = 0; i < 6; ++i) {

@@ -1057,7 +1057,7 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
 
 static Rectangle AdventureBookPageBounds(Rectangle panel, int32_t page)
 {
-    return AdventureTab(panel,page,4);
+    return AdventureTab(panel,page,5);
 }
 
 static bool AdventureBookCompact(Rectangle panel)
@@ -1080,8 +1080,9 @@ static void DrawAdventureBookHead(Rectangle panel, const char *page_name,
     const char *pages[]={compact ? "Ahead" : "Ahead  1",
         compact ? "People" : "People  2",
         compact ? "Mine" : "Mine notes  3",
-        compact ? "Court" : "Court  4"};
-    for (int32_t page=0;page<4;++page)
+        compact ? "Court" : "Court  4",
+        compact ? "Dates" : "Calendar  5"};
+    for (int32_t page=0;page<5;++page)
         AdventureButton(AdventureBookPageBounds(panel,page),pages[page],true,
             page==active_page);
     ClientTouchRecordText(page_name);
@@ -1162,9 +1163,9 @@ static void DrawAdventurePeople(const CcSim *sim, const LocalState *local)
         CcOverlayDrawText(label, x, y, size + 2, INK);
         y += 30;
         const CcSettlement *where = CcSimSettlement(sim, person->current_settlement_id);
-        (void)AdventureWrap(TextFormat("%s, %s",
+        (void)AdventureWrap(TextFormat("%s, %s. Born under the %s.",
             where != NULL ? where->name : "the road",
-            CcCharacterActivityName(person->activity)), x + 4, y, width - 4, size - 3, MUTED);
+            CcCharacterActivityName(person->activity), CcZodiacName(CcCalendar(person->birth_day).sign)), x + 4, y, width - 4, size - 3, MUTED);
         y += 34;
         shown += 1;
     }
@@ -1253,8 +1254,11 @@ static void DrawAdventureMineNotes(const CcSim *sim, const LocalState *local)
     }
 }
 
+#include "client/cc_scriven_book.inc"
+
 static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
 {
+    if (local->book_page == 4) { DrawAdventureCalendar(sim, local); return; }
     if (local->book_page == 1) { DrawAdventurePeople(sim, local); return; }
     if (local->book_page == 2) { DrawAdventureMineNotes(sim,local); return; }
     if (local->book_page == 3) { DrawAdventureCourtNotes(sim, local); return; }
@@ -1267,7 +1271,7 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
-    for (int32_t page=0;page<4;++page) {
+    for (int32_t page=0;page<5;++page) {
         if (AdventureHit(AdventureBookPageBounds(panel,page))) {
             local->book_page=page;
             local->book_offset=0;
@@ -1281,10 +1285,10 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         (ClientKeyPressed(KEY_DOWN) || AdventureHit(AdventureBookMineStepBounds(panel,1)))) {
         if (local->book_offset < 2) local->book_offset+=1;
     } else if (ClientKeyPressed(KEY_LEFT)) {
-        local->book_page=(local->book_page+3)%4;
+        local->book_page=(local->book_page+4)%5;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_RIGHT)) {
-        local->book_page=(local->book_page+1)%4;
+        local->book_page=(local->book_page+1)%5;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_ONE)) {
         local->book_page = 0;
@@ -1296,6 +1300,8 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         local->book_page = 2;
         local->book_offset=0;
     }
+    if (ClientKeyPressed(KEY_FIVE)) { local->book_page = 4; local->book_offset = 0; }
+    if (local->book_page == 4) HandleAdventureCalendar(journal, sim, local, message, message_capacity);
     if (ClientKeyPressed(KEY_FOUR)) { local->book_page = 3; local->book_offset = 0; }
     if (local->book_page == 3 &&
         (ClientKeyPressed(KEY_UP) || AdventureHit(AdventureBookMineStepBounds(panel, 0)))) local->book_offset = 1;
@@ -1525,7 +1531,7 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
     int toolbar_width = 450;
     while (title_size > 12 && CcOverlayMeasureText(title, title_size) > GetScreenWidth() - toolbar_width) --title_size;
     CcOverlayDrawText(title, 24, 14, title_size, INK);
-    CcOverlayDrawText(TextFormat("Day %d  /  %" PRId64 " crowns  /  Cargo %d/%d", sim->current_day,
+    CcOverlayDrawText(TextFormat("%d %s  /  %" PRId64 " crowns  /  Cargo %d/%d", CcCalendar(sim->current_day).day_of_sign, CcZodiacName(CcCalendar(sim->current_day).sign),
         sim->player.coins, CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity),
         24, 43, AdventureTextSize(13), CC_GOLD);
     const CcRoadSite *stop = CcSimJourneyRoadSiteStop(sim);

@@ -1,3 +1,4 @@
+#include "sim/cc_scriven.h"
 #include "persistence/cc_save.h"
 #include "test_support.h"
 #include <string.h>
@@ -222,6 +223,7 @@ int main(int argc, char **argv)
     CcSaveFreeBuffer(bytes);
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&sim);
+    CcScrivenInit(&sim);
     for (int32_t i = 0; i < sim.character_count; ++i) {
         CC_CHECK(restored.characters[i].detail_active);
         CC_CHECK(restored.characters[i].last_active_day == sim.current_day);
