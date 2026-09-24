@@ -207,7 +207,7 @@ static Rectangle FrontendPanel(FrontendScreen screen)
     float width = screen == FRONTEND_TITLE || screen == FRONTEND_CAMPAIGN || screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR || screen == FRONTEND_COMPANY ||
         screen == FRONTEND_WORLDS || screen == FRONTEND_CREATE_WORLD || screen == FRONTEND_JOIN_WORLD ||
         screen == FRONTEND_INVITATION || screen == FRONTEND_SETTINGS ? 920.0f : 440.0f;
-    float height = screen == FRONTEND_SETTINGS ? 600.0f : 556.0f;
+    float height = screen == FRONTEND_SETTINGS ? 620.0f : 556.0f;
     return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
                        ((float)GetScreenHeight() - height) * 0.5f,
                        width, height};
@@ -217,7 +217,7 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
 {
     Rectangle panel = FrontendPanel(state->screen);
     float x = panel.x + 36.0f;
-    float y = panel.y + (state->screen == FRONTEND_SETTINGS ? 164.0f : 148.0f);
+    float y = panel.y + (state->screen == FRONTEND_SETTINGS ? 192.0f : 148.0f);
     if (state->screen == FRONTEND_INVITATION) {
         items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_INVITATION, {x, y + 32, 848, 76}, "Invitation", true};
         items[1] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x, y + 150, 412, 46}, "Share invitation", true};
@@ -911,11 +911,15 @@ static void DrawFrontend(const FrontendState *state,
                              top + 120, 12, MUTED);
     }
     if (state->screen == FRONTEND_SETTINGS) {
-        DrawRectangle((int)panel.x + 20, top + 108, (int)panel.width - 40, 46, (Color){12, 10, 15, 255});
-        FrontendCenteredText("Fixed: Esc back / arrows, Enter, Space choose / Tab Ledger / F5 save / F4 motion / F6 sound",
-            top + 121, 9, MUTED);
-        FrontendCenteredText("Remap keys: C I L O P U V Y Z / hints update in scenes / reading time sets speech length",
-            top + 140, 9, MUTED);
+        DrawRectangle((int)panel.x + 20, top + 106, (int)panel.width - 40, 78, (Color){12, 10, 15, 255});
+        FrontendCenteredText("Fixed navigation: Escape back; arrows, Enter, Space choose; Tab opens Ledger.",
+            top + 113, 16, MUTED);
+        FrontendCenteredText("Fixed shortcuts: F5 save; F4 motion; F6 sound. These keys stay reserved.",
+            top + 132, 16, MUTED);
+        FrontendCenteredText("Remap keys: C, I, L, O, P, U, V, Y, Z. Scene hints update with each binding.",
+            top + 151, 16, MUTED);
+        FrontendCenteredText("Reading time changes spoken-page length; caption size enlarges dialogue.",
+            top + 170, 16, MUTED);
     }
     FrontendItem items[16];
     int count = FrontendItems(state, items);
@@ -1024,7 +1028,7 @@ static void DrawFrontend(const FrontendState *state,
         /* Wrap long save errors inside the panel. */
         char line[64];
         size_t length = strlen(state->feedback);
-        int feedback_y = state->screen == FRONTEND_SETTINGS ? top + 534 : top + 478;
+        int feedback_y = state->screen == FRONTEND_SETTINGS ? top + 562 : top + 478;
         for (size_t start = 0; start < length && start < 150U; start += 50U) {
             (void)snprintf(line, sizeof(line), "%.50s", state->feedback + start);
             FrontendCenteredText(line, feedback_y + (int)(start / 50U) * 15, 12, CC_GOLD);
@@ -1036,7 +1040,8 @@ static void DrawFrontend(const FrontendState *state,
         "ARROWS / TAB  Choose     ENTER  Select" :
         state->screen == FRONTEND_AVATAR ? "UP / DOWN  Choose     LEFT / RIGHT  Change     ESC  Cancel" :
         "ESC  Back     ARROWS / TAB  Choose     ENTER  Select",
-        state->screen == FRONTEND_SETTINGS ? top + 582 : top + 531, 10, MUTED);
+        state->screen == FRONTEND_SETTINGS ? top + 603 : top + 531,
+        state->screen == FRONTEND_SETTINGS ? 14 : 10, MUTED);
 }
 
 #if defined(CC_CLIENT_SELF_TESTS)
