@@ -16049,6 +16049,63 @@ static bool HorseFeedAvailable(const CcSim *sim,
         settlement->stock, CC_NUTRITION_ANIMAL) >= CC_NUTRITION_PER_RATION;
 }
 
+bool CcSimHorseCarePreview(const CcSim *sim, CcHorseCarePreview *preview)
+{
+    if (preview == NULL) return false;
+    *preview = (CcHorseCarePreview){
+        .source = CC_HORSE_CARE_NO_FEED,
+        .cost = 4,
+        .days = 1,
+        .reason = "Park the carriage at a staffed stable."
+    };
+    if (sim == NULL || sim->schema_version < 111U) return true;
+    if (sim->journey.active ||
+        sim->carriage.location_id != sim->player.location_id) return true;
+    const CcSettlement *place = CcSimSettlement(sim,
+                                                 sim->player.location_id);
+    if (!CcSettlementHasService(place, CC_SERVICE_STABLE)) {
+        preview->reason = "This town has no staffed stable.";
+        return true;
+    }
+    preview->weekly_feed_due = (sim->current_day + 1) % 7 == 0;
+    bool needs_care = false;
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
+        const CcHorse *horse = &sim->horse_team[i];
+        if (horse->health < 100 || horse->hunger > 0 ||
+            horse->fatigue > 0) needs_care = true;
+    }
+    if (!needs_care) {
+        preview->reason = "The team is already healthy and rested.";
+        return true;
+    }
+    if (sim->player.feed_tray_wheat > 0)
+        preview->source = CC_HORSE_CARE_TRAY;
+    else if (sim->player.cargo[CC_GOOD_WHEAT] > 0)
+        preview->source = CC_HORSE_CARE_CARGO;
+    else if (place->stock[CC_GOOD_WHEAT] > 0) {
+        preview->source = CC_HORSE_CARE_MARKET;
+        preview->cost += MaximumI32(1, place->price[CC_GOOD_WHEAT]);
+    } else {
+        preview->reason = "Care needs 1 Wheat in the tray, carriage, or stable market.";
+        return true;
+    }
+    if (sim->player.coins < preview->cost) {
+        preview->reason = "The company cannot pay the stable's quoted care cost.";
+        return true;
+    }
+    if (place->market_coins > CC_SIM_MAX_MONEY - preview->cost) {
+        preview->reason = "The stable cannot receive that payment.";
+        return true;
+    }
+    if (sim->current_day >= CC_SIM_MAX_DAY) {
+        preview->reason = "The world clock cannot advance another day.";
+        return true;
+    }
+    preview->available = true;
+    preview->reason = "";
+    return true;
+}
+
 static void ConsumeHorseFeed(const CcSim *sim, CcSettlement *settlement)
 {
     if (sim->schema_version < 29U) {
@@ -19533,6 +19590,46 @@ static int32_t ReservedStableHorseSlots(const CcSim *sim)
     return reserved;
 }
 
+static bool ApplyCareHorses(CcSim *sim, char *error,
+                            size_t error_capacity)
+{
+    CcHorseCarePreview care;
+    if (!CcSimHorseCarePreview(sim, &care) || !care.available) {
+        SetError(error, error_capacity, care.reason);
+        return false;
+    }
+    CcSettlement *place = CcSimSettlementMutable(
+        sim, sim->player.location_id);
+    CcId town_id = place->id;
+    const char *source = "the feed tray";
+    if (care.source == CC_HORSE_CARE_TRAY) {
+        sim->player.feed_tray_wheat -= 1;
+    } else if (care.source == CC_HORSE_CARE_CARGO) {
+        sim->player.cargo[CC_GOOD_WHEAT] -= 1;
+        source = "the carriage cargo";
+    } else {
+        place->stock[CC_GOOD_WHEAT] -= 1;
+        source = "the stable market";
+    }
+    sim->player.coins -= care.cost;
+    place->market_coins += care.cost;
+    CcSimAdvanceDays(sim, care.days);
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
+        CcHorse *horse = &sim->horse_team[i];
+        horse->hunger = ClampI32(horse->hunger - 35, 0, 100);
+        horse->fatigue = ClampI32(horse->fatigue - 30, 0, 100);
+        horse->health = ClampI32(horse->health + 6, 1, 100);
+    }
+    char text[CC_EVENT_TEXT_CAPACITY];
+    (void)snprintf(text, sizeof(text),
+                   "The company spends 1 Wheat from %s and %lld crowns at %.24s stable; the team rests and receives care for one day.",
+                   source, (long long)care.cost, place->name);
+    (void)PushEvent(sim, CC_EVENT_HORSE_TEAM_CHANGED, sim->player.id,
+                    town_id, 0U, care.days, text);
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 static bool ApplyBreedHorses(CcSim *sim, const CcCommand *command,
                              char *error, size_t error_capacity)
 {
@@ -19862,6 +19959,7 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_REFUSE_SITUATION ||
         command->kind == CC_COMMAND_BREED_HORSES ||
         command->kind == CC_COMMAND_ASSIGN_HORSE ||
+        command->kind == CC_COMMAND_CARE_HORSES ||
         command->kind == CC_COMMAND_GOBLIN_TRADE ||
         command->kind == CC_COMMAND_GOBLIN_WARN ||
         command->kind == CC_COMMAND_GOBLIN_INTERCEPT ||
@@ -20026,6 +20124,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
             return ApplyBreedHorses(sim, command, error, error_capacity);
         case CC_COMMAND_ASSIGN_HORSE:
             return ApplyAssignHorse(sim, command, error, error_capacity);
+        case CC_COMMAND_CARE_HORSES:
+            return ApplyCareHorses(sim, error, error_capacity);
         case CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE:
             return ApplyInterceptDragonTribute(
                 sim, error, error_capacity);

@@ -1154,6 +1154,95 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(self.request(path, dict(self.command(self.a), amount=True))[0], 400)
         self.assertEqual(self.request(path, dict(self.command(self.a), target='18446744073709551616'))[0], 400)
 
+    def test_shared_stable_care_applies_once_and_survives_long_return(self):
+        departure = self.worlds.view(self.id, self.a)
+        route = next(option for option in departure['state']['travel']
+                     if option['available'])
+        started = self.worlds.command(self.id, self.a,
+            self.command(self.a, 'travel', target=route['id']))
+        self.assertTrue(started['accepted'])
+        for step in range(50):
+            state = self.worlds.view(self.id, self.a)['state']
+            journey = state['journey']
+            if not journey['active']:
+                break
+            site = journey['road_site']
+            if site:
+                action, target = 'pass_road_site', site['id']
+            elif journey['phase'] == 4:
+                position = state['road_position']
+                forward = [leg for leg in position['next_legs']
+                           if leg['direction'] == position['direction']]
+                self.assertTrue(forward)
+                leg = next((leg for leg in forward if leg['kind'] == 1),
+                           forward[0])
+                action, target = 'road_leg', leg['token']
+            elif journey['phase'] == 3:
+                action, target = ('break' if journey['stop'] == 1 else 'camp'), '0'
+            else:
+                self.assertEqual(journey['phase'], 1)
+                action, target = 'skip_watch', '0'
+            member = (self.a, self.b)[step % 2]
+            result = self.worlds.command(self.id, member,
+                self.command(member, action, target=target))
+            self.assertTrue(result['accepted'], result['message'])
+        arrived = self.worlds.view(self.id, self.b)
+        state = arrived['state']
+        self.assertFalse(state['journey']['active'])
+        self.assertEqual(state['company']['location'], route['id'])
+        offer = state['horse_care']
+        self.assertTrue(offer['available'])
+        self.assertEqual((offer['source'], offer['care_wheat'], offer['days']),
+                         ('stable market', 1, 1))
+        self.assertGreaterEqual(state['market']['stock'][7], 1)
+        bodies = [(token, self.command(token, 'care_horses'))
+                  for token in (self.a, self.b)]
+
+        def apply(item):
+            try:
+                return item[0], self.worlds.command(self.id, *item)
+            except ApiError as error:
+                self.assertEqual(error.status, 409)
+                return item[0], None
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(apply, bodies))
+        winners = [(token, result) for token, result in results if result is not None]
+        self.assertEqual(len(winners), 1)
+        winner, receipt = winners[0]
+        self.assertTrue(receipt['accepted'])
+        cared = receipt['world']['state']
+        self.assertEqual(cared['day'], state['day'] + 1)
+        self.assertEqual(cared['company']['coins'], state['company']['coins'] - offer['cost'])
+        self.assertTrue(any('receives care for one day' in event['text']
+                            for event in cared['events']))
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'],
+                         self.worlds.view(self.id, self.b)['state'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        repeat = self.worlds.command(self.id, winner,
+            next(body for token, body in bodies if token == winner))
+        self.assertTrue(repeat['duplicate'])
+        self.assertEqual(repeat['world']['state'], cared)
+
+        base = self.worlds.db.execute(
+            'SELECT last_human FROM away_clocks WHERE world=?',
+            (self.id,)).fetchone()[0]
+        self.worlds.seen.clear()
+        self.worlds.tick(wall_now=base + AWAY_GRACE - 1)
+        self.assertEqual(self.worlds.view(self.id, self.a, present=False)['state']['day'],
+                         cared['day'])
+        self.worlds.tick(wall_now=base + AWAY_GRACE + 3600)
+        long = self.worlds.view(self.id, self.a, present=False)
+        self.assertGreater(long['state']['day'], cared['day'] + 100)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        returned = self.worlds.view(self.id, self.b, campaign=True)
+        self.assertEqual(returned['state'], long['state'])
+        self.assertEqual(returned['state']['company']['location'], route['id'])
+        self.assertEqual(returned['state']['horse_care'],
+                         self.worlds.view(self.id, self.a)['state']['horse_care'])
+
     def test_campaign_poll_and_shared_skip(self):
         view = self.worlds.view(self.id, self.a, campaign=True)
         self.assertIn('campaign', view)

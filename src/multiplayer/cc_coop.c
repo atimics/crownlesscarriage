@@ -65,7 +65,7 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
     }
     CcCommand command = { .target_id = target, .good = (CcGood)good, .amount = amount };
     if (action != NULL) {
-        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_STOW_RELIEF_CRATE; ++i) {
+        for (int32_t i = 1; i <= (int32_t)CC_COMMAND_CARE_HORSES; ++i) {
             if (strcmp(action, CcCoopActionName((CcCommandKind)i)) == 0) command.kind = (CcCommandKind)i;
         }
     }
@@ -207,7 +207,20 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
         Put(&json, "%s{\"health\":%d,\"hunger\":%d,\"fatigue\":%d}",
             i ? "," : "", horse->health, horse->hunger, horse->fatigue);
     }
-    Put(&json, "]},\"journey\":{\"active\":%s,\"phase\":%d,\"route\":\"%" PRIu64 "\",\"origin\":\"%" PRIu64 "\",\"destination\":\"%" PRIu64 "\",\"pace\":%d,\"progress\":%d,\"watch\":%d,\"watches\":%d,\"eta\":%d,\"stop\":%d,\"lodge\":%s,\"bargain\":%d,\"road_site\":",
+    Put(&json, "]");
+    CcHorseCarePreview care;
+    (void)CcSimHorseCarePreview(sim, &care);
+    const char *care_source = care.source == CC_HORSE_CARE_TRAY ? "feed tray" :
+        care.source == CC_HORSE_CARE_CARGO ? "carriage cargo" :
+        care.source == CC_HORSE_CARE_MARKET ? "stable market" : "none";
+    Put(&json, "},\"horse_care\":{\"available\":%s,\"source\":",
+        care.available ? "true" : "false");
+    Quote(&json, care_source);
+    Put(&json, ",\"care_wheat\":1,\"cost\":%lld,\"days\":%d,\"weekly_feed_due\":%s,\"reason\":",
+        (long long)care.cost, care.days,
+        care.weekly_feed_due ? "true" : "false");
+    Quote(&json, care.reason);
+    Put(&json, "},\"journey\":{\"active\":%s,\"phase\":%d,\"route\":\"%" PRIu64 "\",\"origin\":\"%" PRIu64 "\",\"destination\":\"%" PRIu64 "\",\"pace\":%d,\"progress\":%d,\"watch\":%d,\"watches\":%d,\"eta\":%d,\"stop\":%d,\"lodge\":%s,\"bargain\":%d,\"road_site\":",
         sim->journey.active ? "true" : "false", (int)sim->journey.phase,
         sim->journey.route_id, sim->journey.origin_id, sim->journey.destination_id,
         (int)sim->journey.pace, sim->carriage.progress_milli,

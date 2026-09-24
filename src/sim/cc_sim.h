@@ -676,7 +676,8 @@ typedef enum CcCommandKind {
     /* Schema 109: relief crates move through the player's hands before the
        carriage receives them. */
     CC_COMMAND_PICKUP_RELIEF_CRATE = 79,
-    CC_COMMAND_STOW_RELIEF_CRATE = 80
+    CC_COMMAND_STOW_RELIEF_CRATE = 80,
+    CC_COMMAND_CARE_HORSES = 81
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -1957,6 +1958,22 @@ typedef struct CcTravelPreview {
     bool sponsored_guide;
 } CcTravelPreview;
 
+typedef enum CcHorseCareSource {
+    CC_HORSE_CARE_NO_FEED,
+    CC_HORSE_CARE_TRAY,
+    CC_HORSE_CARE_CARGO,
+    CC_HORSE_CARE_MARKET
+} CcHorseCareSource;
+
+typedef struct CcHorseCarePreview {
+    bool available;
+    CcHorseCareSource source;
+    CcMoney cost;
+    int32_t days;
+    bool weekly_feed_due;
+    const char *reason;
+} CcHorseCarePreview;
+
 typedef struct CcCarriageState {
     CcCarriageMode mode;
     CcId location_id;
@@ -2415,6 +2432,7 @@ const CcHorse *CcSimHorse(const CcSim *sim, CcId horse_id);
 const char *CcHorseSexName(CcHorseSex sex);
 const char *CcHorseLifeStageName(const CcHorse *horse);
 bool CcHorseWorkingReady(const CcHorse *horse);
+bool CcSimHorseCarePreview(const CcSim *sim, CcHorseCarePreview *preview);
 
 CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
