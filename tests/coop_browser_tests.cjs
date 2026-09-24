@@ -108,7 +108,7 @@ async function main() {
       world_id: worldId,
       seed: initial.state.seed,
       players: initial.crew.map(player => ({id:player.id, name:player.name})),
-      checkpoints: []
+      checkpoints: [], road_choices: []
     };
     assert.equal(receipt.players.length, 2);
     assert.notEqual(receipt.players[0].id, receipt.players[1].id);
@@ -273,8 +273,50 @@ async function main() {
     await ownerControls.button('Drive to Gloamgate').click();
     await ownerControls.button('Stop').click();
     await ownerControls.button('Road options').click();
-    const onwardLeg = road => road?.next_legs?.find(
-      leg => leg.direction === road.direction);
+    const goalDirection = beforeChoice.state.road_position.direction;
+    // These fixed pilot-road IDs match cc_road_position.h.
+    const junctionId = BigInt('0x7200032300000001').toString();
+    const millSegmentId = BigInt('0x7300032300000003').toString();
+    const onwardLeg = road => road?.next_legs?.find(leg =>
+      leg.direction === goalDirection && leg.segment !== millSegmentId);
+    const returnFromMill = road => road?.next_legs?.length === 1 &&
+      road.next_legs[0].kind === 2 &&
+      road.next_legs[0].segment === millSegmentId &&
+      road.next_legs[0].destination === junctionId &&
+      road.next_legs[0].direction === -goalDirection ?
+      road.next_legs[0] : null;
+    function recordRoadChoice(label, current, leg, result) {
+      const road = current.road_position;
+      const candidates = road.next_legs.map(candidate => ({
+        kind:candidate.kind, direction:candidate.direction,
+        segment:candidate.segment,
+        destination:candidate.destination, token:candidate.token}));
+      const detail = {label, route:current.journey.route, goal:road.goal,
+        anchor:road.anchor, candidates, selected:leg.token};
+      console.log('shared road choice', JSON.stringify(detail));
+      receipt.road_choices.push(detail);
+      assert(candidates.some(candidate => candidate.token === leg.token));
+      assert.equal(road.goal, current.journey.destination);
+      assert.equal(result.world.state.journey.route, current.journey.route);
+      assert.equal(result.world.state.road_position.goal, road.goal,
+        'The chosen leg keeps the route connected to Gloamgate');
+    }
+    function assertHostAdvancedAfterRejectedSkip(result, sampled) {
+      const latest = result.world?.state;
+      assert(latest, `Rejected Skip watch needs the latest host state: ${result.message}`);
+      const signature = world => ({active:world.journey.active,
+        phase:world.journey.phase, stop:world.journey.stop,
+        watch:world.journey.watch, progress:world.journey.progress,
+        road_revision:world.road_position?.revision});
+      assert(!latest.journey.active || latest.journey.phase !== 1,
+        `Rejected Skip watch must have left the travelling phase: ` +
+          JSON.stringify({message:result.message, sampled:signature(sampled),
+            latest:signature(latest)}));
+      assert.notDeepEqual(signature(latest), signature(sampled),
+        `Rejected Skip watch left the same road state: ` +
+          JSON.stringify({message:result.message, sampled:signature(sampled),
+            latest:signature(latest), choices:latest.road_position?.next_legs}));
+    }
     let firstWorld = null;
     for (let step = 0; step < 32 && firstWorld === null; ++step) {
       const current = (await state()).state;
@@ -282,19 +324,28 @@ async function main() {
         firstWorld = current;
         break;
       }
-      const leg = onwardLeg(current.road_position);
+      const leg = current.journey.phase === 4 ?
+        onwardLeg(current.road_position) : null;
+      assert(current.journey.phase !== 4 || leg,
+        `The first road choice must lead toward Gloamgate: ` +
+          JSON.stringify({goalDirection, journey:current.journey,
+            road:current.road_position}));
       if (leg) {
         const previousRevision = current.road_position.revision;
         const chosen = await owner.evaluate(token =>
           Module.ccCoop.apply('road_leg', token, 0, 0), leg.token);
         assert.equal(chosen.accepted, true, chosen.message);
+        recordRoadChoice('first-site-onward', current, leg, chosen);
         assert.notEqual(chosen.world.state.road_position.revision, previousRevision,
           'The exact current road token advances the shared revision');
         continue;
       }
       const advanced = await owner.evaluate(() =>
         Module.ccCoop.apply('skip_watch', '0', 0, 0));
-      assert.equal(advanced.accepted, true, advanced.message);
+      if (!advanced.accepted) {
+        assertHostAdvancedAfterRejectedSkip(advanced, current);
+        continue;
+      }
       if (advanced.world.state.journey.road_site) firstWorld = advanced.world.state;
     }
     assert(firstWorld?.journey.road_site, 'A nearby stop is offered');
@@ -305,6 +356,7 @@ async function main() {
     const leftSite = await owner.evaluate(token =>
       Module.ccCoop.apply('road_leg', token, 0, 0), siteLeg.token);
     assert.equal(leftSite.accepted, true, leftSite.message);
+    recordRoadChoice('leave-first-site', firstWorld, siteLeg, leftSite);
     assert.notEqual(leftSite.world.state.road_position.revision, siteRevision,
       'The exact site token resolves the physical road choice');
     // Resolving the physical site keeps the shared carriage moving.
@@ -350,21 +402,28 @@ async function main() {
         continue;
       }
       const road = current.road_position;
-      const mill = road?.next_legs?.find(leg => leg.kind === 3);
-      const onward = road?.next_legs?.find(leg => leg.direction === road.direction);
+      const mill = road?.anchor === junctionId && onwardLeg(road) &&
+        road.next_legs.find(leg => leg.kind === 3 &&
+          leg.segment === millSegmentId &&
+          leg.direction === goalDirection);
+      const onward = onwardLeg(road);
       if (current.journey.phase === 4 || current.journey.road_site) {
-        const choice = mill && millVisits < 8 ? mill : onward || road?.next_legs?.[0];
+        const choice = mill && millVisits < 1 ? mill :
+          onward || returnFromMill(road);
         assert(choice, JSON.stringify({journey:current.journey, road}));
         if (choice === mill) millVisits++;
         const result = await owner.evaluate(token =>
           Module.ccCoop.apply('road_leg', token, 0, 0), choice.token);
         assert(result.accepted, result.message);
+        recordRoadChoice(choice === mill ? 'mill-visit' :
+          choice === onward ? 'toward-goal' : 'return-from-mill',
+        current, choice, result);
         continue;
       }
       const result = await owner.evaluate(() =>
         Module.ccCoop.apply('skip_watch', '0', 0, 0));
-      assert(result.accepted, JSON.stringify({message:result.message,
-        journey:current.journey, road}));
+      if (!result.accepted)
+        assertHostAdvancedAfterRejectedSkip(result, current);
     }
     assert(afternoon, 'The road offers an afternoon camp watch');
     if (await ownerControls.button('Back to road').read())
