@@ -521,8 +521,24 @@ async function main() {
       retry:{accepted:retry.accepted, duplicate:retry.duplicate,
         sequence:retry.sequence}, revision:afterRetry.revision};
     await checkpoint('continue-retry-once');
-    await ownerControls.button('Travel').click();
+    const afterContinue = (await state()).state;
+    if (afterContinue.journey.phase !== 4 &&
+        await ownerControls.button('Travel').read())
+      await ownerControls.button('Travel').click();
+    await ownerControls.button('Drive to Gloamgate').waitFor();
+    const goalChoice = (await state()).state;
+    const goalLeg = onwardLeg(goalChoice.road_position);
+    assert(goalLeg && goalLeg.destination === goalChoice.journey.destination,
+      `The visible Gloamgate choice must lead to the route goal: ` +
+        JSON.stringify({journey:goalChoice.journey,
+          road:goalChoice.road_position}));
+    const goalResponse = owner.waitForResponse(response =>
+      response.url().includes(`/api/worlds/${worldId}/command`) &&
+      response.request().postDataJSON()?.action === 'road_leg');
     await ownerControls.button('Drive to Gloamgate').click();
+    const goalReceipt = await (await goalResponse).json();
+    assert.equal(goalReceipt.accepted, true, goalReceipt.message);
+    recordRoadChoice('final-goal', goalChoice, goalLeg, goalReceipt);
     let arrived = null;
     for (let step = 0; step < 120; ++step) {
       const current = (await state()).state;
