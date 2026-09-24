@@ -490,20 +490,26 @@ async function main() {
       hasTouch: true, isMobile: true, deviceScaleFactor: 3});
     const mobile = await phone.newPage();
     const lazyMapResponses = [];
+    const optionalVoiceMisses = new Set();
     mobile.on('response', response => {
       if (response.url().includes('/assets/maps/')) {
         lazyMapResponses.push({url:response.url(), status:response.status()});
       }
       if (response.status() === 404) {
-        errors.push(`HTTP 404: ${response.url()}`);
-        console.log(`HTTP 404: ${response.url()}`);
+        if (/\/speech\/[0-9a-f]{16}\.wav$/.test(response.url()))
+          optionalVoiceMisses.add(response.url());
+        else errors.push(`HTTP 404: ${response.url()}`);
       }
     });
     mobile.on('pageerror', error => errors.push(error.message));
     mobile.on('console', message => {
       if (message.type() === 'error' &&
-          !message.text().includes('Ignored attempt to cancel a touchcancel event'))
-        errors.push(`${message.text()} (${message.location().url})`);
+          !message.text().includes('Ignored attempt to cancel a touchcancel event')) {
+        const source = message.location().url;
+        if (!optionalVoiceMisses.has(source) ||
+            !message.text().includes('Failed to load resource'))
+          errors.push(`${message.text()} (${source})`);
+      }
     });
     try {
       await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
@@ -682,11 +688,15 @@ async function main() {
       const bookReading = await controls.reading();
       assert(bookReading.length > 30);
       assert.match(bookReading, /Next: Load 8 food boxes from the granary stack/i);
+      if (optionalVoiceMisses.size)
+        assert.match(bookReading, /Load 8 food boxes/,
+          'The charter stays readable when its optional voice pack is absent');
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
 
       await controls.button('Back').tap();
       await controls.button('Book').waitFor();
       await mobile.waitForFunction(() => Module.crownlessTouchFrame.title !== 'Company Book');
+      await mobile.waitForTimeout(300);
       if (await controls.button(/^1 Not now\./).read())
         await controls.button(/^1 Not now\./).tap();
       const openingCampaignId = await mobile.evaluate(() => Module.crownlessCampaignId);
@@ -695,11 +705,64 @@ async function main() {
           .filter({hasText:new RegExp(`^${name}$`)}).tap();
         await mobile.waitForTimeout(150);
       }
+      const reliefWalks = [];
+      async function walkRelief(crate, action, arrival) {
+        const samples = [];
+        const started = Date.now();
+        const destination = action === 'Walk to carriage' ? [42.4, 55.2] : [44.4, 26.8];
+        let taps = 0, stillIntervals = 0, previous = null;
+        const finish = () => reliefWalks.push({crate, action, seconds:(Date.now()-started)/1000,
+          taps, reissues:Math.max(0, taps-1), samples});
+        for (let attempt = 0; attempt < 12; ++attempt) {
+          if (await controls.button(arrival).read()) {
+            finish();
+            return;
+          }
+          if (await controls.button(/^1 Not now\./).read()) {
+            await controls.button(/^1 Not now\./).tap();
+            await mobile.waitForTimeout(300);
+          }
+          if (await controls.button(arrival).read()) {
+            finish();
+            return;
+          }
+          assert(await controls.button(action).read(),
+            `Crate ${crate} needs ${action}: ${JSON.stringify(await controls.buttons())}`);
+          const navigation = await mobile.evaluate(() => Module.crownlessLocalNavigation);
+          samples.push(navigation);
+          if (taps > 0 && navigation.navigation_active) {
+            assert(Math.hypot(navigation.command_x-destination[0],
+              navigation.command_z-destination[1]) < 2.2,
+              `Crate ${crate} navigation changed target: ${JSON.stringify(navigation)}`);
+          }
+          if (previous && Math.hypot(navigation.x-previous.x,
+              navigation.z-previous.z) < 0.25) stillIntervals++;
+          else stillIntervals = 0;
+          if (taps === 0 || stillIntervals >= 2 ||
+              (!navigation.navigation_active && stillIntervals >= 1)) {
+            assert(taps < 3,
+              `Crate ${crate} stopped approaching ${action}: ${JSON.stringify(samples)}`);
+            await tapRelief(action);
+            taps++;
+            stillIntervals = 0;
+          }
+          previous = navigation;
+          await mobile.waitForTimeout(6000);
+        }
+        if (await controls.button(arrival).read()) {
+          finish();
+          return;
+        }
+        samples.push(await mobile.evaluate(() => Module.crownlessLocalNavigation));
+        await mobile.screenshot({path:path.join(output, 'mobile-relief-walk-stall.png')});
+        await fs.writeFile(path.join(output, 'relief-walks.json'),
+          JSON.stringify([...reliefWalks, {crate, action, seconds:(Date.now()-started)/1000,
+            taps, reissues:Math.max(0,taps-1), samples}], null, 2));
+        assert.fail(`Crate ${crate} ${action} stalled: ${JSON.stringify(samples)}`);
+      }
       for (let crate = 1; crate <= 8; ++crate) {
         console.log('loading relief crate', crate);
-        if (await controls.button('Walk to granary stack').read())
-          await tapRelief('Walk to granary stack');
-        await controls.button('Lift one relief crate').waitFor();
+        await walkRelief(crate, 'Walk to granary stack', 'Lift one relief crate');
         await mobile.waitForTimeout(350);
         for (let attempt = 0; attempt < 4 &&
              !(await controls.button('Walk to carriage').read()); ++attempt) {
@@ -710,8 +773,7 @@ async function main() {
           `Relief crate ${crate} must be carried after lifting`);
         if (crate === 1)
           await mobile.screenshot({path:path.join(output, 'mobile-carrying-relief-crate.png')});
-        await tapRelief('Walk to carriage');
-        await controls.button('Place crate in carriage').waitFor();
+        await walkRelief(crate, 'Walk to carriage', 'Place crate in carriage');
         await mobile.waitForTimeout(350);
         for (let attempt = 0; attempt < 4 &&
              !(await controls.reading()).includes(`Cargo ${crate}/12`); ++attempt) {
@@ -720,8 +782,12 @@ async function main() {
         }
         assert.match(await controls.reading(), new RegExp(`Cargo ${crate}/12`));
         assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId), openingCampaignId);
+        await fs.writeFile(path.join(output, 'relief-walks.json'),
+          JSON.stringify(reliefWalks, null, 2));
         if (crate < 8) await controls.button('Walk to granary stack').waitFor();
       }
+      await fs.writeFile(path.join(output, 'relief-walks.json'),
+        JSON.stringify(reliefWalks, null, 2));
       await mobile.screenshot({path:path.join(output, 'mobile-relief-loaded.png')});
       await controls.button('Board Crownless carriage').tap();
       await controls.button('Open map case').tap();

@@ -47,6 +47,21 @@ EMSCRIPTEN_KEEPALIVE int CrownlessRoadGeometrySelfTest(void)
 {
     return CcRoadGeometryKnownFixtures() ? 1 : 0;
 }
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextra-semi"
+#endif
+EM_JS(void, ClientBrowserLocalNavigation,
+    (float x, float z, float command_x, float command_z, int target_valid,
+     int navigation_active, int path_index, int path_count,
+     float stall_seconds), {
+    Module.crownlessLocalNavigation = {x, z, command_x, command_z,
+        target_valid: !!target_valid, navigation_active: !!navigation_active,
+        path_index, path_count, stall_seconds};
+});
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #endif
 
 #define BACKGROUND CC_STYLE_BACKGROUND
@@ -12684,6 +12699,14 @@ int main(int argc, char **argv)
             view == VIEW_CHARACTER ? "conversation" :
             view == VIEW_TRADE ? "trade" :
             sim.journey.active || local.journey_travel_active ? "road" : "town");
+#if defined(PLATFORM_WEB)
+        ClientBrowserLocalNavigation(local.agent.position.x,
+            local.agent.position.z, local.agent.command_point.x,
+            local.agent.command_point.z, local.agent.target_valid,
+            local.agent.navigation_active, local.agent.navigation_point_index,
+            local.agent.navigation_point_count,
+            local.agent.movement_stall_seconds);
+#endif
         ClientTouchEnd();
         EndDrawing();
 #if defined(PLATFORM_WEB)
