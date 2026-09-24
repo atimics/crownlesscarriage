@@ -496,8 +496,43 @@ async function main() {
     const continueReceipt = await firstContinue.json();
     assert.equal(continueReceipt.accepted, true);
     assert.equal(continueReceipt.duplicate, false);
-    await crewControls.button('Stop').waitFor();
-    await ownerControls.button('Stop').click();
+    // A short remaining leg can reach the junction before Stop is tapped.
+    let stopCard, goalCard;
+    for (let step = 0; step < 100; ++step) {
+      stopCard = await ownerControls.button('Stop').read();
+      goalCard = await ownerControls.button('Drive to Gloamgate').read();
+      if (stopCard || goalCard) break;
+      await owner.waitForTimeout(100);
+    }
+    assert(stopCard || goalCard,
+      'Continue must show Stop or the next road choice');
+    let stoppedAfterContinue = false;
+    if (stopCard) {
+      const stopResponse = owner.waitForResponse(response =>
+        response.url().includes(`/api/worlds/${worldId}/command`) &&
+        response.request().postDataJSON()?.action === 'stop_travel',
+      {timeout:5000}).then(response => response.json()).catch(() => null);
+      const tapped = await ownerControls.button('Stop').clickIfVisible();
+      const stopReceipt = await stopResponse;
+      const latest = await state();
+      stoppedAfterContinue = Boolean(tapped && stopReceipt?.accepted);
+      if (stoppedAfterContinue) {
+        assert.equal(latest.travel_stopped, true);
+      } else {
+        assert(latest.state.journey.phase === 4 &&
+          onwardLeg(latest.state.road_position)?.destination ===
+            latest.state.journey.destination,
+        `A missed or rejected Stop must mean the host reached the junction: ` +
+          JSON.stringify({tapped, message:stopReceipt?.message,
+            phase:latest.state.journey.phase, road:latest.state.road_position}));
+      }
+    } else {
+      const latest = await state();
+      assert(latest.state.journey.phase === 4 &&
+        onwardLeg(latest.state.road_position)?.destination ===
+          latest.state.journey.destination,
+      'The next road choice must be visible when Stop is absent');
+    }
     const beforeRetry = await state();
     const retry = await owner.evaluate(async ({worldId, body}) => {
       const token = localStorage.getItem('cc-coop-token');
@@ -521,11 +556,31 @@ async function main() {
       retry:{accepted:retry.accepted, duplicate:retry.duplicate,
         sequence:retry.sequence}, revision:afterRetry.revision};
     await checkpoint('continue-retry-once');
-    const afterContinue = (await state()).state;
-    if (afterContinue.journey.phase !== 4 &&
-        await ownerControls.button('Travel').read())
+    if (stoppedAfterContinue) {
+      const resumeResponse = owner.waitForResponse(response =>
+        response.url().includes(`/api/worlds/${worldId}/command`) &&
+        response.request().postDataJSON()?.action === 'resume_travel');
       await ownerControls.button('Travel').click();
+      const resumed = await (await resumeResponse).json();
+      assert.equal(resumed.accepted, true, resumed.message);
+    }
+    let junction;
+    for (let step = 0; step < 120; ++step) {
+      junction = await state();
+      if (junction.state.journey.phase === 4 &&
+          onwardLeg(junction.state.road_position)?.destination ===
+            junction.state.journey.destination) break;
+      assert(junction.state.journey.active && junction.state.journey.phase === 1,
+        `Continue must lead toward the next junction: ${JSON.stringify({
+          phase:junction.state.journey.phase,
+          progress:junction.state.journey.progress,
+          road:junction.state.road_position})}`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    assert.equal(junction.state.journey.phase, 4,
+      'Continue must reach the next road choice');
     await ownerControls.button('Drive to Gloamgate').waitFor();
+    await crewControls.button('Drive to Gloamgate').waitFor();
     const goalChoice = (await state()).state;
     const goalLeg = onwardLeg(goalChoice.road_position);
     assert(goalLeg && goalLeg.destination === goalChoice.journey.destination,
