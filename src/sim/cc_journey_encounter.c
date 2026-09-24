@@ -45,7 +45,8 @@ static int32_t WithdrawalWorldSubticks(const CcSim *sim)
 
 int32_t CcSimJourneyWithdrawalMinutes(const CcSim *sim)
 {
-    if (sim == NULL || !sim->journey.active ||
+    if (sim == NULL || sim->schema_version < 112U ||
+        !sim->journey.active ||
         sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) return 0;
     int32_t subticks = WithdrawalWorldSubticks(sim);
     return (subticks + CC_WORLD_MINUTE_SUBTICKS - 1) /
@@ -56,10 +57,14 @@ static void AdvanceWithdrawalReturn(CcSim *sim)
 {
     int32_t remaining = WithdrawalRoadSubticks(sim);
     int32_t pace = CcJourneyPaceRate(sim->journey.pace);
+    int32_t quoted_subticks = CcSimJourneyWithdrawalMinutes(sim) *
+        CC_WORLD_MINUTE_SUBTICKS;
+    int32_t padding = quoted_subticks - WithdrawalWorldSubticks(sim);
     while (remaining > 0) {
         int32_t watch = MinimumI32(remaining, CC_WORLD_WATCH_SUBTICKS);
         int32_t elapsed = (int32_t)(((int64_t)watch *
             CC_TRAVEL_GAME_MINUTES_PER_SECOND + pace - 1) / pace);
+        if (watch == remaining) elapsed += padding;
         sim->clock.minute_subticks += elapsed;
         while (sim->clock.minute_subticks >= CC_WORLD_DAY_SUBTICKS) {
             sim->clock.minute_subticks -= CC_WORLD_DAY_SUBTICKS;
@@ -384,7 +389,8 @@ static bool ApplyWithdrawEncounter(CcSim *sim, const CcCommand *command,
     }
     int32_t return_minutes = 0;
     if (sim->schema_version >= 112U) {
-        int32_t elapsed = WithdrawalWorldSubticks(sim);
+        int32_t elapsed = CcSimJourneyWithdrawalMinutes(sim) *
+            CC_WORLD_MINUTE_SUBTICKS;
         int32_t return_days = (sim->clock.minute_subticks + elapsed) /
             CC_WORLD_DAY_SUBTICKS;
         if (sim->current_day > CC_SIM_MAX_DAY - return_days) {

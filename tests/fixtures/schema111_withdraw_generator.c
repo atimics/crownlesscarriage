@@ -6,6 +6,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if CC_SIM_SCHEMA_VERSION != 111
+#error "Build this journal generator against the schema-111 source revision."
+#endif
+
 static bool ContinueRoad(CcSim *sim, char *error, size_t capacity)
 {
     if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {

@@ -71,14 +71,97 @@ static bool ReachBanditBlock(CcSim *sim, char *error, size_t capacity)
         sim->journey.ambush_warned;
 }
 
-int main(void)
+static int CheckSavedWorldCopy(const char *path)
 {
+    static CcSim world, journey, reloaded;
+    char error[192] = "";
+    CHECK(CcSaveRead(path, &world, error, sizeof(error)));
+    CHECK(world.schema_version == CC_SIM_SCHEMA_VERSION);
+    CHECK(CcSimValidate(&world, error, sizeof(error)));
+    CcId destination = 0U;
+    for (int32_t i = 0; i < world.route_count; ++i) {
+        const CcRoute *route = &world.routes[i];
+        CcId neighbor = route->from_id == world.player.location_id ?
+            route->to_id : route->to_id == world.player.location_id ?
+                route->from_id : 0U;
+        CcTravelPreview preview = {0};
+        if (neighbor != 0U && CcSimTravelPreview(
+                &world, neighbor, &preview, error, sizeof(error))) {
+            destination = neighbor;
+            break;
+        }
+    }
+    CHECK(destination != 0U);
+    journey = world;
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL,
+                        .target_id = destination};
+    CHECK(CcSimApply(&journey, &travel, error, sizeof(error)));
+    CHECK(journey.journey.active);
+    for (int32_t step = 0; step < 6000 &&
+         journey.journey.elapsed_subticks <= CC_WORLD_WATCH_SUBTICKS;
+         ++step) {
+        CHECK(ContinueRoad(&journey, error, sizeof(error)));
+    }
+    CHECK(journey.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
+    CHECK(journey.journey.elapsed_subticks > CC_WORLD_WATCH_SUBTICKS);
+    /* A synthetic obstruction exercises the saved company on its real
+       passable road without changing the approved source snapshot. */
+    journey.journey.phase = CC_JOURNEY_PHASE_BLOCKED;
+    journey.journey.encounter_triggered = true;
+    journey.carriage.mode = CC_CARRIAGE_STOPPED;
+    journey.carriage.speed_milli_per_second = 0;
+    journey.clock.game_minutes_per_second = CC_IDLE_GAME_MINUTES_PER_SECOND;
+    if (!CcSimValidate(&journey, error, sizeof(error))) {
+        (void)fprintf(stderr, "copied-world road state: %s\n", error);
+        return EXIT_FAILURE;
+    }
+    int32_t before_day = journey.current_day;
+    int32_t before_minute = journey.clock.minute_subticks;
+    int32_t before_condition = journey.carriage.condition;
+    int32_t before_hunger = journey.horse_team[0].hunger;
+    CcMoney before_coins = journey.player.coins;
+    int32_t cargo[CC_GOOD_COUNT];
+    memcpy(cargo, journey.player.cargo, sizeof(cargo));
+    int32_t return_minutes = CcSimJourneyWithdrawalMinutes(&journey);
+    CHECK(return_minutes > 0);
+    const char *copy = "road-withdraw-saved-world-copy.ccsave";
+    (void)remove(copy);
+    CHECK(CcSaveWrite(copy, &journey, error, sizeof(error)));
+    CHECK(CcSaveRead(copy, &reloaded, error, sizeof(error)));
+    CHECK(CcSimHash(&reloaded) == CcSimHash(&journey));
+    CcCommand withdraw = {.kind = CC_COMMAND_WITHDRAW_ENCOUNTER};
+    CHECK(CcSimApply(&reloaded, &withdraw, error, sizeof(error)));
+    CHECK(!reloaded.journey.active &&
+          reloaded.player.location_id == world.player.location_id);
+    CHECK((reloaded.current_day - before_day) * CC_WORLD_DAY_SUBTICKS +
+          reloaded.clock.minute_subticks - before_minute ==
+          return_minutes * CC_WORLD_MINUTE_SUBTICKS);
+    CHECK(reloaded.carriage.condition <= before_condition);
+    CHECK(reloaded.horse_team[0].hunger >= before_hunger);
+    CHECK(reloaded.player.coins == before_coins);
+    CHECK(memcmp(cargo, reloaded.player.cargo, sizeof(cargo)) == 0);
+    CHECK(CcSaveWrite(copy, &reloaded, error, sizeof(error)));
+    CHECK(CcSaveRead(copy, &journey, error, sizeof(error)));
+    CHECK(CcSimHash(&reloaded) == CcSimHash(&journey));
+    (void)remove(copy);
+    (void)printf("Saved-world copy: return=%d minutes, day_delta=%d, condition_delta=%d, hunger_delta=%d, coins_delta=%lld, cargo_same=1, reload_same=1\n",
+                 return_minutes, reloaded.current_day - before_day,
+                 reloaded.carriage.condition - before_condition,
+                 reloaded.horse_team[0].hunger - before_hunger,
+                 (long long)(reloaded.player.coins - before_coins));
+    return EXIT_SUCCESS;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc == 2) return CheckSavedWorldCopy(argv[1]);
+    if (argc != 1) return 2;
     static CcSim blocked, saved, loaded, legacy, careful, push;
     char error[192] = "";
     CHECK(ReachBanditBlock(&blocked, error, sizeof(error)));
     CHECK(blocked.schema_version == 112U);
     int32_t physical = CcRoadRouteProgressSubticks(&blocked);
-    CHECK(physical > CC_WORLD_WATCH_SUBTICKS);
+    CHECK(physical > CC_WORLD_DAY_SUBTICKS);
     CHECK(physical < blocked.journey.total_subticks);
     CHECK(blocked.journey.pace == CC_JOURNEY_PACE_STEADY);
     int32_t expected_minutes =
@@ -92,7 +175,7 @@ int main(void)
     CHECK(CcSimJourneyWithdrawalMinutes(&careful) > expected_minutes);
     CHECK(CcSimJourneyWithdrawalMinutes(&push) < expected_minutes);
 
-    /* The return crosses one midnight while the horses remain on the road. */
+    /* The return crosses two midnights while the horses remain on the road. */
     blocked.clock.minute_subticks = CC_WORLD_DAY_SUBTICKS - 60;
     saved = blocked;
     int32_t before_day = blocked.current_day;
@@ -105,11 +188,11 @@ int main(void)
     memcpy(before_cargo, blocked.player.cargo, sizeof(before_cargo));
     CcCommand withdraw = {.kind = CC_COMMAND_WITHDRAW_ENCOUNTER};
     CHECK(CcSimApply(&blocked, &withdraw, error, sizeof(error)));
-    CHECK(blocked.current_day == before_day +
-          (CC_WORLD_DAY_SUBTICKS - 60 + physical) /
-              CC_WORLD_DAY_SUBTICKS);
+    CHECK(blocked.current_day == before_day + 2);
     CHECK(blocked.clock.minute_subticks ==
-        (CC_WORLD_DAY_SUBTICKS - 60 + physical) % CC_WORLD_DAY_SUBTICKS);
+        (CC_WORLD_DAY_SUBTICKS - 60 +
+         expected_minutes * CC_WORLD_MINUTE_SUBTICKS) %
+            CC_WORLD_DAY_SUBTICKS);
     CHECK(!blocked.journey.active &&
           blocked.carriage.mode == CC_CARRIAGE_PARKED);
     CHECK(blocked.player.location_id == saved.journey.origin_id &&
@@ -147,6 +230,7 @@ int main(void)
     /* Schema 111 journals keep their original instant-return result. */
     legacy = saved;
     legacy.schema_version = 111U;
+    CHECK(CcSimJourneyWithdrawalMinutes(&legacy) == 0);
     CHECK(CcSimApply(&legacy, &withdraw, error, sizeof(error)));
     CHECK(legacy.current_day == saved.current_day);
     CHECK(legacy.clock.minute_subticks == saved.clock.minute_subticks);
