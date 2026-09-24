@@ -17,9 +17,7 @@ function gameControls(page, touch = false) {
         await page.waitForTimeout(100);
       }
     }
-    async function click() {
-      await waitFor();
-      const item = await read();
+    async function clickItem(item) {
       assert(item.enabled, `Game button ${name} must be enabled`);
       const canvas = page.locator('#canvas');
       const bounds = await canvas.boundingBox();
@@ -30,7 +28,18 @@ function gameControls(page, touch = false) {
       else await page.mouse.click(x, y, {delay:80});
       await page.waitForTimeout(120);
     }
-    return {click, tap: click, waitFor, read, isDisabled: async () => !(await read()).enabled};
+    async function click() {
+      await waitFor();
+      await clickItem(await read());
+    }
+    async function clickIfVisible() {
+      const item = await read();
+      if (!item) return false;
+      await clickItem(item);
+      return true;
+    }
+    return {click, tap: click, clickIfVisible, waitFor, read,
+      isDisabled: async () => !(await read()).enabled};
   }
   return {button, buttons, reading: () => page.evaluate(() => Module.crownlessTouchFrame.reading)};
 }
