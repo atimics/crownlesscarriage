@@ -1,0 +1,5 @@
+seed,years,meetings,comparisons,returned,failed_trips,editions,true_ages,waiting,valid
+1,1000,2,5,4,2,0,1,0,1
+2,1000,0,0,1,0,0,1,0,1
+3,1000,2,5,4,2,0,1,0,1
+4,1000,0,0,0,0,0,1,0,1
