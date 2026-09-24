@@ -742,13 +742,13 @@ async function main() {
           if (previous && Math.hypot(navigation.x-previous.x,
               navigation.z-previous.z) < 0.25) stillIntervals++;
           else stillIntervals = 0;
-          if (taps === 0 || stillIntervals >= 2 ||
-              (!navigation.navigation_active && stillIntervals >= 1)) {
-            assert(taps < 3,
-              `Crate ${crate} stopped approaching ${action}: ${JSON.stringify(samples)}`);
+          if (taps === 0) {
             await tapRelief(action);
             taps++;
             stillIntervals = 0;
+          } else {
+            assert(stillIntervals < 3,
+              `Crate ${crate} stopped approaching ${action}: ${JSON.stringify(samples)}`);
           }
           previous = navigation;
           await mobile.waitForTimeout(6000);
