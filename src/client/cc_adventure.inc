@@ -1114,9 +1114,15 @@ static void DrawAdventureAhead(const CcSim *sim, const LocalState *local)
             AdventureButton((Rectangle){panel.x + 28.0f, panel.y + panel.height - 112.0f, (float)width, 42.0f},
                 "Deliver the DM's warning  /  E", true, false);
     }
-    const CcEvent *road_receipt = CcSimRecentEvent(sim, 0);
-    if (road_receipt != NULL &&
-        road_receipt->kind == CC_EVENT_ENCOUNTER_WITHDRAWN) {
+    const CcEvent *road_receipt = NULL;
+    for (int32_t offset = 0; offset < sim->event_count; ++offset) {
+        const CcEvent *entry = CcSimRecentEvent(sim, offset);
+        if (entry != NULL && entry->kind == CC_EVENT_ENCOUNTER_WITHDRAWN) {
+            road_receipt = entry;
+            break;
+        }
+    }
+    if (road_receipt != NULL) {
         CcOverlayDrawText("ROAD RECEIPT", x, y, AdventureTextSize(12), TEAL);
         y += 25;
         y += AdventureWrap(TextFormat("Day %d: %s",

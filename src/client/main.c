@@ -6931,6 +6931,15 @@ static void DrawJourneyEncounter(const CcSim *sim)
     int32_t demanded_quantity = 0;
     bool has_demand = CcSimBanditProvisionDemand(
         sim, sim->journey.route_id, &demanded_good, &demanded_quantity);
+    ClientTouchHeading(bandits != NULL ?
+        TextFormat("%.24s blocks the road", bandits->name) :
+        "The road is closed",
+        has_demand ? TextFormat("Demand: %d %s or %d crowns. Fight, parley or withdraw.",
+            demanded_quantity, CcGoodName(demanded_good),
+            sim->journey.bargain_cost) : bandits != NULL ?
+        TextFormat("Demand: %d crowns. Fight, parley or withdraw.",
+            sim->journey.bargain_cost) :
+        "Choose a safe response to the closed route.");
     int32_t reaction = CcSimBanditReactionRoll(
         sim, sim->journey.route_id);
     int32_t combat_damage = 7 + sim->journey.danger / 8;

@@ -95,6 +95,8 @@ async function main() {
     assert(retreat.enabled);
     assert(retreat.label.includes('0 crowns'));
     const blockReading = await page.evaluate(() => Module.crownlessTouchFrame.reading);
+    const blockDetail = await page.evaluate(() => Module.crownlessTouchFrame.detail);
+    assert(blockDetail.includes('Demand: 2 Bread or 8 crowns'));
     assert(blockReading.includes('The Ditch Parliament'));
     assert(blockReading.includes('DEMAND'));
     assert(blockReading.includes('CURRENT TIME'));
@@ -125,6 +127,11 @@ async function main() {
       returned.hash, {timeout: 30000});
     assert.equal((await api(`/api/worlds/${worldIds.blocked}/state?campaign=1`)).state.hash,
       returned.hash);
+    await page.waitForFunction(() => Module.crownlessTouchFrame?.buttons?.length > 0,
+      undefined, {timeout: 30000});
+    await controls.button(/^Book(?: B)?$/).tap();
+    await page.waitForFunction(() => Module.crownlessTouchFrame?.reading?.includes(
+      'refuses the fight and returns'), undefined, {timeout: 30000});
     const returnState = await api(`/api/worlds/${worldIds.blocked}/state?campaign=1`);
     const revisit = returnState.state.travel.find(route =>
       route.id === blocked.journey.destination && route.available);
