@@ -634,11 +634,15 @@ int main(void)
     CC_CHECK(authority != NULL);
     CcMoney treasury_before = authority->treasury;
     CcMoney company_before = lawful.sim.player.coins;
+    CcMoney market_before = lawful.sim.settlements[2].market_coins;
+    int32_t prosperity_before = lawful.sim.settlements[2].prosperity;
     CcMoney total_before = CcSimTrackedGold(&lawful.sim);
     CC_CHECK(CcMetagameExecute(&lawful, "road bargain", output,
                                sizeof(output)));
     CC_CHECK(authority->treasury - treasury_before ==
              company_before - lawful.sim.player.coins);
+    CC_CHECK(lawful.sim.settlements[2].market_coins == market_before);
+    CC_CHECK(lawful.sim.settlements[2].prosperity == prosperity_before);
     CC_CHECK(CcSimTrackedGold(&lawful.sim) == total_before);
     static CcSim checkpoint_restored;
     const char *checkpoint_save = "royal-checkpoint-payment.ccsave";

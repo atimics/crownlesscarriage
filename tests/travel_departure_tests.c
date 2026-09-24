@@ -111,6 +111,9 @@ static void CheckPaymentsAtEncounter(bool carriage_away)
     CcMoney bandit_coins = sim.bandits[0].coins;
     CcMoney destination_coins = CcSimSettlement(
         &sim, sim.journey.destination_id)->market_coins;
+    int32_t destination_prosperity = CcSimSettlement(
+        &sim, sim.journey.destination_id)->prosperity;
+    int32_t bandit_supplies = sim.bandits[0].supplies;
     int32_t passage_cost = sim.journey.bargain_cost;
     CC_CHECK(CcSimApply(&sim, &pay, error, sizeof(error)));
     CC_CHECK(sim.player.coins == 0);
@@ -118,6 +121,9 @@ static void CheckPaymentsAtEncounter(bool carriage_away)
     CC_CHECK(sim.bandits[0].coins == bandit_coins + passage_cost);
     CC_CHECK(CcSimSettlement(&sim, sim.journey.destination_id)->market_coins ==
              destination_coins);
+    CC_CHECK(CcSimSettlement(&sim, sim.journey.destination_id)->prosperity ==
+             destination_prosperity);
+    CC_CHECK(sim.bandits[0].supplies == bandit_supplies);
     CC_CHECK(route->closed);
     CC_CHECK(CcSimTrackedGold(&sim) == gold);
     if (carriage_away) CC_CHECK(sim.shipment_count == shipments);

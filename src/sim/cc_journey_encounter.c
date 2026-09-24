@@ -210,7 +210,8 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         origin->market_coins += medical_cost;
         route->security = ClampI32(route->security + 6, 0, 100);
         destination->security = ClampI32(destination->security + 2, 0, 100);
-        if (bandits != NULL) {
+        if (bandits != NULL &&
+            (sim->schema_version < 111U || active_bandits)) {
             bandits->members = ClampI32(bandits->members - 3, 0, 200);
             bandits->supplies = ClampI32(bandits->supplies - 4, 0, 100);
             bandits->influence = ClampI32(bandits->influence - 3, 0, 100);
@@ -231,9 +232,14 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
             destination->market_coins += journey.bargain_cost;
         }
         route->security = ClampI32(route->security - 1, 0, 100);
-        destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
-        if (bandits != NULL) {
-            bandits->supplies = ClampI32(bandits->supplies + 4, 0, 100);
+        if (sim->schema_version < 111U)
+            destination->prosperity = ClampI32(
+                destination->prosperity + 1, 0, 100);
+        if (bandits != NULL &&
+            (sim->schema_version < 111U || active_bandits)) {
+            if (sim->schema_version < 111U)
+                bandits->supplies = ClampI32(
+                    bandits->supplies + 4, 0, 100);
             bandits->influence = ClampI32(bandits->influence + 3, 0, 100);
         }
         if (sim->schema_version >= 111U && active_bandits) {
