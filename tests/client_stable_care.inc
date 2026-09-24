@@ -73,6 +73,22 @@ static int RunStableCareCardRegression(void)
                "Empty stable explains its feed need.");
     town->stock[CC_GOOD_WHEAT] = 100;
 
+    static CcSim foaling;
+    foaling = sim;
+    CcHorse stallion = foaling.horse_team[0];
+    foaling.horse_team[0] = foaling.horse_team[1];
+    foaling.horse_team[1] = stallion;
+    foaling.horse_team[0].pregnant_by_id = stallion.id;
+    foaling.horse_team[0].pregnancy_days_remaining = 20;
+    ContextActionSet road_actions = BuildContextActions(
+        &foaling, &local, VIEW_ROADS, selected, selected_situation);
+    int32_t road_index = WorldCardIndex(
+        &road_actions, CONTEXT_ACTION_TRAVEL, 0);
+    CARE_CHECK(road_index >= 0 && !road_actions.items[road_index].enabled &&
+               strcmp(road_actions.items[road_index].detail,
+                   "A mare near foaling must remain at the stable.") == 0,
+               "The road card shows the saved foaling departure reason.");
+
     journal = CcJournalStart(path, &sim, error, sizeof(error));
     CARE_CHECK(journal != NULL, error);
     CARE_CHECK(WorldCardPoint(&sim, &local, view, selected,

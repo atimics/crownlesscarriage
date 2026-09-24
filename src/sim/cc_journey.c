@@ -286,6 +286,16 @@ bool CcSimTravelPreview(const CcSim *sim, CcId destination_id,
                  "No direct carriage route connects those places.");
         return false;
     }
+    if (sim->schema_version >= 15U) {
+        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
+            int32_t due = sim->horse_team[i].pregnancy_days_remaining;
+            if (due > 0 && due <= 30) {
+                SetError(error, error_capacity,
+                         "A mare near foaling must remain at the stable.");
+                return false;
+            }
+        }
+    }
     const CcMap *map = CcSimMapForRoute(sim, route->id, sim->player.id);
     const CcSituation *accepted = CcSimAcceptedSituation(sim);
     bool sponsored_night_passage = route->smuggler_route &&
