@@ -10686,7 +10686,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             bool carrying = local->relief_approach ==
                 CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE;
             Vector2 stop = carrying ? LOCAL_CARRIAGE_BAY : LOCAL_RELIEF_CRATES;
-            float reach = carrying ? 1.80f : 2.04f;
+            /* Match the Lift and Stow card radii, so a visible action is safe. */
+            float reach = carrying ? 1.85f : 2.10f;
             if (GridDistance(LocalPosition(local), stop) <= reach) {
                 CcLocalAgentStop(&local->agent);
                 local->relief_carriage_descent_pending = false;
