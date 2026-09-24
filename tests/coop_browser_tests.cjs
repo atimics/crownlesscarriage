@@ -391,7 +391,12 @@ async function main() {
     if (await ownerControls.button('Road options').read())
       await ownerControls.button('Road options').click();
     await ownerControls.button('Camp until morning').waitFor();
+    const campResponse = owner.waitForResponse(response =>
+      response.url().includes(`/api/worlds/${worldId}/command`) &&
+      response.request().postDataJSON()?.action === 'camp');
     await ownerControls.button('Camp until morning').click();
+    const campReceipt = await (await campResponse).json();
+    assert.equal(campReceipt.accepted, true, campReceipt.message);
     const camped = await checkpoint('camped');
     assert.equal(camped.state.journey.progress,
       stoppedForCamp.state.journey.progress);
