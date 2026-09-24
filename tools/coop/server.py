@@ -523,8 +523,14 @@ class Worlds:
         now = time.monotonic() if now is None else now
         wall = time.time() if wall_now is None else wall_now
         with self.lock:
-            for row in list(self.db.execute("SELECT id,paused FROM worlds")):
-                world = row["id"]
+            world_ids = [row["id"] for row in self.db.execute("SELECT id FROM worlds")]
+        for world in world_ids:
+            # Let a waiting player request run between worlds. Re-read the row
+            # after reacquiring the lock because an owner may have changed it.
+            with self.lock:
+                row = self.db.execute("SELECT paused FROM worlds WHERE id=?", (world,)).fetchone()
+                if row is None:
+                    continue
                 previous = self.last_tick.get(world, now)
                 online = any(w == world and now - seen < 15 for (w, _), seen in self.seen.items())
                 ticks = min(60, int(max(0, now - previous) * 60))

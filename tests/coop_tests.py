@@ -8,13 +8,14 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools' / 'coop'))
-from engine import Engine
+from engine import Campaign, Engine
 from server import ACTIONS, ApiError, Application, Worlds, away_days, AWAY_GRACE, AWAY_RAMP, issue_world_pass
 
 LIBRARY = sys.argv.pop(1)
@@ -812,6 +813,71 @@ class CoopTests(unittest.TestCase):
         self.worlds.seen.clear()
         self.worlds.tick(now + 100)
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['tick'], 30)
+
+    def test_tick_yields_to_two_players_between_three_worlds(self):
+        worlds = [self.id, '2' * 32, '3' * 32]
+        routes = {}
+        for world in worlds[1:]:
+            self.create_world(world)
+        for world in worlds:
+            view = self.worlds.view(world, self.a)
+            route = next(option['id'] for option in view['state']['travel']
+                         if option['available'])
+            result = self.worlds.command(world, self.a, dict(
+                protocol=1, sequence=view['next_sequence'],
+                action_revision=view['action_revision'], action='travel',
+                target=route))
+            self.assertTrue(result['accepted'])
+            routes[world] = result['world']['state']['journey']['route']
+
+        def ready_tick():
+            now = time.monotonic()
+            for world in worlds:
+                self.worlds.last_tick[world] = now - .5
+                member = self.worlds.view(world, self.a)['member']
+                self.worlds.seen[(world, member)] = now
+            return now
+
+        started = threading.Event()
+        advance = Campaign.advance
+        def slower_advance(campaign, ticks, scale=1):
+            started.set()
+            time.sleep(.08)
+            return advance(campaign, ticks, scale)
+
+        with patch.object(Campaign, 'advance', slower_advance):
+            now = ready_tick()
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                begun = time.perf_counter()
+                ticking = workers.submit(self.worlds.tick, now)
+                self.assertTrue(started.wait(3))
+                waiting = time.perf_counter()
+                other_player = workers.submit(self.worlds.view, self.id, self.b)
+                seen = other_player.result(timeout=3)
+                wait = time.perf_counter() - waiting
+                ticking.result(timeout=3)
+                total = time.perf_counter() - begun
+            self.assertEqual(seen['id'], self.id)
+            self.assertLess(wait, total * .8,
+                            'A player request should finish between world ticks')
+
+            started.clear()
+            now = ready_tick()
+            stop = self.command(self.a, 'stop_travel', target=routes[self.id])
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                ticking = workers.submit(self.worlds.tick, now)
+                self.assertTrue(started.wait(3))
+                command = workers.submit(self.worlds.command, self.id, self.a, stop)
+                accepted = command.result(timeout=3)
+                ticking.result(timeout=3)
+            self.assertTrue(accepted['accepted'],
+                            (accepted['message'], accepted['world']['state']['journey']['phase']))
+            self.assertTrue(self.worlds.command(self.id, self.a, stop)['duplicate'])
+            saved = self.worlds.db.execute('SELECT state FROM worlds WHERE id=?',
+                                           (self.id,)).fetchone()[0]
+            with self.engine.open(saved=saved) as campaign:
+                self.assertEqual(campaign.snapshot(),
+                                 self.worlds.view(self.id, self.b)['state'])
 
     def test_away_clock_ramp_and_century_rate(self):
         self.assertEqual(away_days(-1), 0)
