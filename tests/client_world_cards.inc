@@ -173,12 +173,13 @@ static int RunWorldCardRegression(void)
         CARD_CHECK(first_card != NULL && local.course.situation_witness_active &&
             first_card->character_id == local.course.situation_witness_character_id,
             "The named situation witness must lead the town tray.");
+        CARD_CHECK(cards.items[1].target.kind == CC_INTERACTION_DOOR &&
+            cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
+            "The market handoff stays next and stable care stays visible.");
         float last_distance = -1;
-        for (int32_t i = 0; i < 3; ++i) {
+        for (int32_t i = 2; i < 3; ++i) {
             const CcInteractionTarget *target = CcInteractionFind(&local.interactions, cards.items[i].target);
             CARD_CHECK(target != NULL, "Each card must keep its world identity.");
-            if (target->key.kind == CC_INTERACTION_PERSON &&
-                target->character_id == local.course.situation_witness_character_id) continue;
             float distance = GridDistance(LocalPosition(&local), (Vector2){target->approach_x, target->approach_z});
             CARD_CHECK(distance >= last_distance,
                 "The remaining town cards must keep closest-object order.");
@@ -189,8 +190,10 @@ static int RunWorldCardRegression(void)
         cards = BuildContextActions(&sim, &local, view, selected, 0);
         CARD_CHECK(cards.count == 4 && cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
             "Stable care remains visible after the witness leaves.");
+        CARD_CHECK(cards.items[0].target.kind == CC_INTERACTION_DOOR,
+            "The market hall stays in the ordinary town tray.");
         last_distance = -1;
-        for (int32_t i = 0; i < 3; ++i) {
+        for (int32_t i = 1; i < 3; ++i) {
             const CcInteractionTarget *target = CcInteractionFind(
                 &local.interactions, cards.items[i].target);
             CARD_CHECK(target != NULL, "Each ordinary card must keep its world identity.");

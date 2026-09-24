@@ -4411,10 +4411,14 @@ static bool AdventureHandoffTarget(const CcSim *sim, const LocalState *local,
         target->key.kind == (local->market_interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR);
 }
 
-static bool AdventurePriorityTarget(const CcSim *sim, const LocalState *local,
-                                    const CcInteractionTarget *target)
+static int AdventurePriorityRank(const CcSim *sim, const LocalState *local,
+                                 const CcInteractionTarget *target)
 {
-    if (AdventureHandoffTarget(sim, local, target)) return true;
+    if (AdventureHandoffTarget(sim, local, target)) return 3;
+    if (target != NULL && target->key.kind == CC_INTERACTION_PERSON &&
+        local->course.situation_witness_active &&
+        target->character_id == local->course.situation_witness_character_id)
+        return 2;
     if (target != NULL &&
         target->key.kind == (local->market_interior ?
             CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR)) {
@@ -4424,11 +4428,9 @@ static bool AdventurePriorityTarget(const CcSim *sim, const LocalState *local,
              promise->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
             promise->target_id == sim->player.location_id &&
             sim->carriage.location_id == sim->player.location_id;
-        return !partial_delivery_at_destination;
+        return partial_delivery_at_destination ? 0 : 1;
     }
-    return target != NULL && target->key.kind == CC_INTERACTION_PERSON &&
-        local->course.situation_witness_active &&
-        target->character_id == local->course.situation_witness_character_id;
+    return 0;
 }
 
 static bool FirstDeliveryComplete(const CcSim *sim)
@@ -4503,11 +4505,15 @@ static ContextActionSet BuildContextActions(
             while (at > 0) {
                 const CcInteractionTarget *previous = CcInteractionFind(&local->interactions,
                     set.items[at - 1].target);
-                bool priority = AdventurePriorityTarget(sim, local, target);
-                bool previous_priority = AdventurePriorityTarget(sim, local, previous);
-                if (previous == NULL || previous_priority || (!priority &&
+                int priority = AdventurePriorityRank(sim, local, target);
+                int previous_priority = AdventurePriorityRank(sim, local,
+                                                               previous);
+                float previous_distance = previous != NULL ?
                     GridDistance(LocalPosition(local),
-                        (Vector2){previous->approach_x, previous->approach_z}) <= distance)) break;
+                        (Vector2){previous->approach_x, previous->approach_z}) : 0.0f;
+                if (previous == NULL || previous_priority > priority ||
+                    (previous_priority == priority && (priority > 0 ||
+                        previous_distance <= distance))) break;
                 ContextAction swap = set.items[at - 1];
                 set.items[at - 1] = set.items[at]; set.items[at] = swap;
                 --at;
@@ -4543,9 +4549,9 @@ static ContextActionSet BuildContextActions(
                     if (pass == 0 &&
                         action->kind != CONTEXT_ACTION_PICKUP_RELIEF_CRATE &&
                         action->kind != CONTEXT_ACTION_STOW_RELIEF_CRATE &&
-                        !AdventurePriorityTarget(sim, local,
+                        AdventurePriorityRank(sim, local,
                             CcInteractionFind(&local->interactions,
-                                              action->target))) continue;
+                                              action->target)) == 0) continue;
                     if (pass == 2 && action->kind != CONTEXT_ACTION_CARE_HORSES)
                         continue;
                     bool included = false;
