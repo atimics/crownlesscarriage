@@ -115,7 +115,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libsqlite3-dev
           cmake -S . -B out/build/coop -DCC_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release
-          cmake --build out/build/coop --target crownless_coop --parallel
+          cmake --build out/build/coop --target crownless_coop road_block_browser_fixture --parallel
           python3 -m venv out/build/coop/venv
           out/build/coop/venv/bin/python -m pip install -r tools/coop/requirements.txt
       - name: Test shared browser players
@@ -126,6 +126,7 @@ jobs:
         run: |
           node tests/coop_browser_tests.cjs out/build/coop/libcrownless_coop.so out/build/web/site
           node tests/stable_care_browser_tests.cjs out/build/coop/libcrownless_coop.so out/build/web/site browser-results/stable-care
+          node tests/road_block_browser_tests.cjs out/build/coop/libcrownless_coop.so out/build/web/site out/build/coop/road_block_browser_fixture browser-results/road-block
       - name: Upload browser checks
         if: always()
         uses: actions/upload-artifact@v4

@@ -86,8 +86,8 @@ static int RunRoadBlockChoiceRegression(void)
     const CcSettlement *origin = CcSimSettlement(
         &sim, sim.journey.origin_id);
     if (withdraw_index < 0 || origin == NULL ||
-        strstr(cards.items[withdraw_index].detail, origin->name) == NULL ||
-        strstr(cards.items[withdraw_index].detail, "0 CROWNS") == NULL ||
+        strstr(cards.items[withdraw_index].label, origin->name) == NULL ||
+        strstr(cards.items[withdraw_index].label, "0 crowns") == NULL ||
         strstr(cards.items[withdraw_index].detail, "CURRENT TIME") == NULL)
         return ClientRegressionFailure("The road choice needs exact retreat terms.");
     CcMoney coins = sim.player.coins;

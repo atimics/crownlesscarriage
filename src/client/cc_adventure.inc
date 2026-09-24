@@ -1530,6 +1530,23 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         local->road_choice_active ? "Choose a road card or tap its sign" :
         local->site_travel_active ? "Tap the carriage to stop or drive" :
         local->market_interior ? profile->interior_service : profile->identity;
+    if (local->journey_travel_active && sim->journey.active &&
+        sim->journey.ambush_warned && sim->journey.ambush_pending) {
+        const CcBanditGroup *bandits = CcSimBanditGroupOnRoute(
+            sim, sim->journey.route_id);
+        CcGood demanded_good = CC_GOOD_FOOD;
+        int32_t demanded_quantity = 0;
+        bool provisions = bandits != NULL && CcSimBanditProvisionDemand(
+            sim, sim->journey.route_id,
+            &demanded_good, &demanded_quantity);
+        detail = provisions ? TextFormat(
+            "Scouts: %.24s / likely %d %s or %d crowns / Careful pace may bypass",
+            bandits->name, demanded_quantity, CcGoodName(demanded_good),
+            sim->journey.bargain_cost) : bandits != NULL ? TextFormat(
+            "Scouts: %.24s / likely %d crowns / Careful pace may bypass",
+            bandits->name, sim->journey.bargain_cost) :
+            "Scouts: armed riders / Careful pace may bypass";
+    }
     char town_status[128];
     if (place != NULL &&
         (CcSettlementIsAbandoned(place) || place->hunger >= 40) &&

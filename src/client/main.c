@@ -4639,9 +4639,9 @@ static ContextActionSet BuildContextActions(
         const CcSettlement *origin = CcSimSettlement(
             sim, sim->journey.origin_id);
         AddDetailedContextAction(&set, CONTEXT_ACTION_WITHDRAW,
-                                 "Withdraw to origin", "3",
-                                 TextFormat("%.20s / 0 CROWNS / CURRENT TIME",
-                                     origin != NULL ? origin->name : "ORIGIN"),
+                                 TextFormat("Withdraw to %.16s: 0 crowns",
+                                     origin != NULL ? origin->name : "origin"),
+                                 "3", "CURRENT TIME / ROAD SECURITY MAY FALL",
                                  true, false);
         return set;
     }

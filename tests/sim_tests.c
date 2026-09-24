@@ -899,7 +899,7 @@ int main(void)
     CC_CHECK(CcSimValidate(&careful_escape, error, sizeof(error)));
     CC_CHECK(CcSimValidate(&warned_block, error, sizeof(error)));
 
-    const char *warning_path = "/tmp/crownless-warned-road.ccsave";
+    const char *warning_path = "crownless-warned-road.ccsave";
     (void)remove(warning_path);
     CC_CHECK(CcSaveWrite(warning_path, &warned_block, error, sizeof(error)));
     static CcSim warned_restored;
