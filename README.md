@@ -1,16 +1,36 @@
 # Crownless Carriage
 
-Crownless is a game about a travelling company in a changing world. Buy supplies
-in town, drive your carriage along the road, and explore Low Silver Pit. Bring
-gold back to sell, or return with news for the people who sent you.
+Crownless is a game about a travelling company in a changing world. Walk through
+town streets, meet the people who live there, and prepare your carriage for the
+road. Follow a lead into Low Silver Pit, bargain with its haulers, and bring
+goods or news home.
 
 [Play in your browser](https://crownless.ratimics.com).
 
-<img width="800" alt="Gameplay: the company and its carriage back in Silverwick after a mine trip" src="docs/reviews/silverwick-first-haul-2026-09-19/town-return.png" />
+<img width="800" alt="Thornford gameplay view: timber granary, townspeople, harvest board, and talk and trade controls under an amber sky" src="docs/screenshots/2026-09-24/thornford.png" />
 
-*Gameplay capture from the recorded Silverwick trip, 19 September 2026.*
+*Thornford's Threshing Green. In-game captures below are from the 24 September
+2026 native build. [Capture notes and scene setup](docs/screenshots/2026-09-24/README.md).*
 
 ## Gameplay today
+
+**Walk through towns with their own character.** Thornford has timber granaries
+and farm lanes. Gloamgate gathers around its market fountain. Silverwick climbs
+past workshops and ore yards. Alderwatch stands behind a fortified bridge and
+keep. Skies, clouds, and distant hills frame the streets as light and weather
+change.
+
+| Gloamgate — Market Circle | Silverwick — Foundry Terrace | Alderwatch — Keep |
+| --- | --- | --- |
+| [<img width="260" alt="Gloamgate's market fountain and timber shop fronts beneath a warm sky" src="docs/screenshots/2026-09-24/gloamgate.png" />](docs/screenshots/2026-09-24/gloamgate.png) | [<img width="260" alt="Silverwick's workshop fronts along the Foundry Terrace road" src="docs/screenshots/2026-09-24/silverwick.png" />](docs/screenshots/2026-09-24/silverwick.png) | [<img width="260" alt="The traveller at Alderwatch's tall stone keep and gate" src="docs/screenshots/2026-09-24/alderwatch.png" />](docs/screenshots/2026-09-24/alderwatch.png) |
+
+**Travel with the company.** Choose a destination and the carriage sets off.
+Stop to inspect the team, make camp, or choose a side road. Your supplies,
+carriage condition, and pace shape the trip.
+
+| Road — Low Silver Pit turn-off | Mine — the haulers' bargain |
+| --- | --- |
+| [<img width="400" alt="Carriage and pony stopped beside the Low Silver Pit hoist, with Enter, Travel on, and Site options controls" src="docs/screenshots/2026-09-24/road.png" />](docs/screenshots/2026-09-24/road.png) | [<img width="400" alt="Two goblin haulers in the mine offer one Gold for two Bread, with Bargain and Contest actions" src="docs/screenshots/2026-09-24/mine-haulers.png" />](docs/screenshots/2026-09-24/mine-haulers.png) |
 
 The playable town–road–mine trip gives you a small journey with lasting choices:
 
@@ -24,11 +44,7 @@ The playable town–road–mine trip gives you a small journey with lasting choi
    Sell your gold to Oren or tell Jory what you found. Save and resume with your
    goods, position, and Company Book notes intact.
 
-<img width="640" alt="Gameplay: reading the workers' records inside Low Silver Pit, with pack and action controls visible" src="docs/reviews/silverwick-first-haul-2026-09-19/records.png" />
-
-*Reading the workers' records during the same trip.*
-
-The [recorded playthrough](docs/reviews/silverwick-first-haul-2026-09-19.md)
+The [19 September playthrough](docs/reviews/silverwick-first-haul-2026-09-19.md)
 includes the road journey, food-for-gold bargain, cache recovery, return report,
 sale, and save checks. The [mine guide](docs/design/silverwick-mine-slice.md)
 explains the rooms, supplies, and choices in more detail.
@@ -39,11 +55,14 @@ Choose Offline for a campaign saved in this browser, or Online for shared play.
 Read the current action labels for the choices available at your location.
 
 - Click the ground to walk. In town, select an object or its card to approach it.
-- On the road, use the displayed travel, pace, stop, and boarding actions.
+- Choosing a destination starts road travel. Space uses the displayed **Stop**
+  or **Travel** action. Open **Road options** while stopped to camp, step down,
+  or turn back. At a landmark, choose **Travel on** or the named side road.
 - Underground, click visible floor to walk. W/S move forward/back; A/D turn.
   E uses a nearby mine object. Looking and turning keep the campaign position.
 - B opens the Company Book; M opens the map; F5 saves; Escape opens the menu.
 - At the mine carriage, use the pack controls to prepare for entry.
+- Open **Settings & controls** to change text size, contrast, motion, or key bindings.
 
 The [mine guide](docs/design/silverwick-mine-slice.md) explains its saved state,
 entry cost, and current controls. The pilot road supports carriage inspection,
@@ -52,8 +71,8 @@ physical position.
 
 ## Roadmap
 
-These concept images show the planned visual direction for Crownless. Click an
-image to open it at full size.
+These concept images show longer-term ideas for Crownless. Click an image to
+open it at full size.
 
 <p>
   <a href="https://github.com/user-attachments/assets/43cec7bf-e28e-4915-bbe4-f6ab454aa301"><img width="240" alt="Roadmap concept 1: planned visual direction for Crownless" src="https://github.com/user-attachments/assets/43cec7bf-e28e-4915-bbe4-f6ab454aa301" /></a>
@@ -61,19 +80,10 @@ image to open it at full size.
   <a href="https://github.com/user-attachments/assets/3163e010-3569-4927-ac42-7d291db24296"><img width="240" alt="Roadmap concept 3: planned visual direction for Crownless" src="https://github.com/user-attachments/assets/3163e010-3569-4927-ac42-7d291db24296" /></a>
 </p>
 
-The goal is one continuous world across town, road, and dungeon:
-
-| Place | Planned experience |
-| --- | --- |
-| Town | Meet people, prepare, trade, and return with news or goods in authored streets and interiors. |
-| Road | Travel with the carriage, inspect its load and team, stop, and choose a way onward. |
-| Dungeon | Explore, meet occupants, choose a load, and find the way back. |
-
-Town, road, and mine already share lighting and model helpers. The next work
-brings their targeting, approach, reach, and saved state under shared rules.
-The [continuous-world plan](docs/design/outside-city-redesign.md) describes the
-remaining work. [Issue #762](https://github.com/atimics/crownlesscarriage/issues/762)
-tracks the checks for a complete trip.
+The goal is one continuous world across town, road, and dungeon. The
+[continuous-world plan](docs/design/outside-city-redesign.md) covers shared
+movement and interaction rules. The [mine plan](docs/design/silverwick-mine-slice.md#scope)
+sets out the wider Underroad beyond the first playable level.
 
 ## Build and check
 
