@@ -29,6 +29,7 @@
   const databaseName = "crownless-carriage";
   const storeName = "campaign-files";
   const revisionPath = campaignPath + ".revision";
+  const identityPath = campaignPath + ".identity";
   const lockName = "crownless-carriage-campaign";
   const leaseKey = "crownless-carriage-campaign-lease";
   const leaseDuration = 8000;
@@ -186,6 +187,15 @@
     return Number.isSafeInteger(value) && value >= 0 ? value : 0;
   }
 
+  function newCampaignIdentity() {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function storedIdentity(value) {
+    return typeof value === "string" && /^[0-9a-f]{32}$/.test(value) ? value : null;
+  }
+
   function openDatabase() {
     if (databasePromise) return databasePromise;
     databasePromise = new Promise(function (resolve, reject) {
@@ -217,13 +227,15 @@
       readStoredFile(database, campaignPath),
       readStoredFile(database, sessionPath),
       readStoredFile(database, revisionPath),
-      readStoredFile(database, preferencesPath)
+      readStoredFile(database, preferencesPath),
+      readStoredFile(database, identityPath)
     ]);
     if (files[0]) FS.writeFile(campaignPath, files[0]);
     if (files[1]) FS.writeFile(sessionPath, files[1]);
     if (files[3]) FS.writeFile(preferencesPath, files[3]);
     Module.crownlessCampaignRestored = Boolean(files[0]);
     Module.crownlessSaveRevision = storedRevision(files[2]);
+    Module.crownlessCampaignId = files[0] ? storedIdentity(files[4]) : null;
     console.info(Module.crownlessCampaignAccess === 0
       ? (files[0]
         ? "Crownless Carriage campaign restored."
@@ -235,6 +247,9 @@
     requireCampaignWriteAccess();
     const database = await openDatabase();
     const expectedRevision = storedRevision(Module.crownlessSaveRevision);
+    const nextIdentity = campaign === null ? null :
+      clearSession || !Module.crownlessCampaignId ?
+        newCampaignIdentity() : Module.crownlessCampaignId;
     let nextRevision = expectedRevision;
     let failure = null;
     await new Promise(function (resolve, reject) {
@@ -274,12 +289,15 @@
         nextRevision = revision + 1;
         if (campaign === null) store.delete(campaignPath);
         else store.put(campaign, campaignPath);
+        if (nextIdentity === null) store.delete(identityPath);
+        else store.put(nextIdentity, identityPath);
         if (clearSession) store.delete(sessionPath);
         else if (session) store.put(session, sessionPath);
         store.put(nextRevision, revisionPath);
       };
     });
     Module.crownlessSaveRevision = nextRevision;
+    Module.crownlessCampaignId = nextIdentity;
   }
 
   Module.persistCrownlessSave = async function (campaignFile, sessionFile) {
