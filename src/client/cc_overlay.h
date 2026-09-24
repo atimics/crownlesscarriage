@@ -18,5 +18,6 @@ void CcOverlayDrawText(const char *text, int x, int y, int font_size,
 void CcOverlayDrawCaption(const char *text, int x, int y, int font_size,
                           Color color);
 int CcOverlayMeasureText(const char *text, int font_size);
+int CcOverlayMeasureCaptionText(const char *text, int font_size);
 
 #endif

@@ -102,7 +102,7 @@ static int RunRoadTravelInputRegression(const char *capture_directory)
             CcLocalDrawOpenWorld3D(&sim, &local.world_stream, &local.agent, &local.course,
                 &local.world_carriage, (float)f/60, target, (Rectangle){0,100,1040,494});
             CcOverlayBegin(1);
-            DrawLocalHeader(&sim, &local, false);
+            DrawLocalHeader(&sim, &local, view, false);
             DrawContextActionTray(&sim, &local, view, selected, situation);
             CcOverlayEnd();
             rlDrawRenderBatchActive();
