@@ -734,9 +734,16 @@ async function main() {
             `Crate ${crate} needs ${action}: ${JSON.stringify(await controls.buttons())}`);
           const navigation = await mobile.evaluate(() => ({
             ...Module.crownlessLocalNavigation,
+            frame_revision:Module.crownlessTouchFrame?.revision,
+            cards:Module.crownlessTouchFrame?.buttons.slice(0, 4).map(button => button.label),
+            status:Module.crownlessTouchFrame?.reading.split('\n').slice(6, 11),
             touch:Module.crownlessTouchLastActivation,
+            approach_started:Module.crownlessLastReliefApproach,
             context_action:Module.crownlessLastContextAction}));
           samples.push(navigation);
+          assert.equal(navigation.life_state, 0,
+            `Crate ${crate} actor must remain able to walk ${action}: ` +
+            JSON.stringify(samples));
           if (taps > 0 && navigation.navigation_active) {
             assert(Math.hypot(navigation.command_x-destination[0],
               navigation.command_z-destination[1]) <
@@ -778,15 +785,24 @@ async function main() {
       for (let crate = 1; crate <= 8; ++crate) {
         console.log('loading relief crate', crate);
         await walkRelief(crate, 'Walk to granary stack', 'Lift one relief crate');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} granary approach must stop when Lift appears`);
         assert.equal(reliefWalks.at(-1).reissues, 0,
           `Crate ${crate} should reach the granary with one Walk tap`);
         await mobile.waitForTimeout(350);
         await tapRelief('Lift one relief crate');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} Lift must hold the player at the granary`);
         await mobile.waitForFunction(() => Module.crownlessTouchFrame?.buttons.some(
           button => button.label === 'Walk to carriage'), undefined, {timeout:8000});
         if (crate === 1)
           await mobile.screenshot({path:path.join(output, 'mobile-carrying-relief-crate.png')});
         await walkRelief(crate, 'Walk to carriage', 'Place crate in carriage');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} carriage approach must stop when Stow appears`);
         await fs.writeFile(path.join(output, 'relief-walks.json'),
           JSON.stringify(reliefWalks, null, 2));
         assert.equal(reliefWalks.at(-1).reissues, 0,
@@ -794,6 +810,9 @@ async function main() {
           JSON.stringify(reliefWalks.at(-1)));
         await mobile.waitForTimeout(350);
         await tapRelief('Place crate in carriage');
+        assert.equal(await mobile.evaluate(() =>
+          Module.crownlessLocalNavigation.interaction_navigation), false,
+          `Crate ${crate} Stow must hold the player at the carriage`);
         try {
           await mobile.waitForFunction(crate =>
             Module.crownlessTouchFrame?.reading.includes(`Cargo ${crate}/12`),

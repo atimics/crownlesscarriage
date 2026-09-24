@@ -52,19 +52,26 @@ EMSCRIPTEN_KEEPALIVE int CrownlessRoadGeometrySelfTest(void)
 #pragma clang diagnostic ignored "-Wextra-semi"
 #endif
 EM_JS(void, ClientBrowserLocalNavigation,
-    (float x, float z, float command_x, float command_z, int target_valid,
+    (float x, float y, float z, float terrain_y,
+     float command_x, float command_z, int target_valid,
      int navigation_active, int path_index, int path_count,
      float stall_seconds, int interaction_approaching,
-     int interaction_navigation, int descent_pending), {
-    Module.crownlessLocalNavigation = {x, z, command_x, command_z,
+     int interaction_navigation, int descent_pending, int life_state,
+     float health, int traversal, int grounded), {
+    Module.crownlessLocalNavigation = {x, y, z, terrain_y,
+        command_x, command_z,
         target_valid: !!target_valid, navigation_active: !!navigation_active,
         path_index, path_count, stall_seconds,
         interaction_approaching: !!interaction_approaching,
         interaction_navigation: !!interaction_navigation,
-        descent_pending: !!descent_pending};
+        descent_pending: !!descent_pending, life_state, health, traversal,
+        grounded: !!grounded};
 });
 EM_JS(void, ClientBrowserContextAction, (int kind), {
     Module.crownlessLastContextAction = kind;
+});
+EM_JS(void, ClientBrowserReliefApproach, (int walking), {
+    Module.crownlessLastReliefApproach = !!walking;
 });
 #if defined(__clang__)
 #pragma clang diagnostic pop
@@ -276,6 +283,7 @@ typedef struct LocalState {
     ClientView interaction_view;
     bool carriage_stopped;
     bool relief_carriage_descent_pending;
+    ContextActionKind relief_approach;
     bool road_actions_expanded;
     CcClientTravelSample shared_travel_sample;
     CcId shared_travel_route, shared_travel_origin, shared_travel_segment;
@@ -10673,6 +10681,21 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     (void)CcLocalAgentApproachInteraction(&local->agent,
                         LOCAL_CARRIAGE_BAY, 1.6f, false);
         }
+        if (local->relief_approach == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ||
+            local->relief_approach == CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE) {
+            bool carrying = local->relief_approach ==
+                CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE;
+            Vector2 stop = carrying ? LOCAL_CARRIAGE_BAY : LOCAL_RELIEF_CRATES;
+            float reach = carrying ? 1.80f : 2.04f;
+            if (GridDistance(LocalPosition(local), stop) <= reach) {
+                CcLocalAgentStop(&local->agent);
+                local->relief_carriage_descent_pending = false;
+                local->relief_approach = CONTEXT_ACTION_NONE;
+            } else if (!local->agent.interaction_navigation &&
+                       !local->relief_carriage_descent_pending) {
+                local->relief_approach = CONTEXT_ACTION_NONE;
+            }
+        }
         if (local->movement_reticle_valid) {
             local->movement_reticle_age += delta_time;
             float reticle_lifetime = local->movement_reticle_accepted ?
@@ -10793,7 +10816,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ||
             context_action == CONTEXT_ACTION_STOW_RELIEF_CRATE) {
+            CcLocalAgentStop(&local->agent);
             local->relief_carriage_descent_pending = false;
+            local->relief_approach = CONTEXT_ACTION_NONE;
             const CcSituation *relief=CcSimAcceptedSituation(sim);
             CcCommand carry={
                 .kind=context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ?
@@ -10811,6 +10836,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 1.8f : 1.6f;
             bool walking=CcLocalAgentApproachInteraction(&local->agent,
                 destination,radius,false);
+            local->relief_approach = walking ? context_action : CONTEXT_ACTION_NONE;
+#if defined(PLATFORM_WEB)
+            ClientBrowserReliefApproach(walking);
+#endif
             local->relief_carriage_descent_pending = walking &&
                 context_action == CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE &&
                 !local->agent.navigation_active &&
@@ -12737,14 +12766,18 @@ int main(int argc, char **argv)
             sim.journey.active || local.journey_travel_active ? "road" : "town");
 #if defined(PLATFORM_WEB)
         ClientBrowserLocalNavigation(local.agent.position.x,
-            local.agent.position.z, local.agent.command_point.x,
+            local.agent.position.y, local.agent.position.z,
+            CcLocalTerrainHeightAt(local.agent.position.x,
+                local.agent.position.z), local.agent.command_point.x,
             local.agent.command_point.z, local.agent.target_valid,
             local.agent.navigation_active, local.agent.navigation_point_index,
             local.agent.navigation_point_count,
             local.agent.movement_stall_seconds,
             local.interaction.approaching,
             local.agent.interaction_navigation,
-            local.relief_carriage_descent_pending);
+            local.relief_carriage_descent_pending,
+            (int)local.agent.combat.life_state, local.agent.combat.health,
+            (int)local.agent.traversal, local.agent.grounded);
 #endif
         ClientTouchEnd();
         EndDrawing();
