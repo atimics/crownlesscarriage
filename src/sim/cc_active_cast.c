@@ -1,3 +1,4 @@
+#include "sim/cc_scriven.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_archive_staff.h"
 
@@ -27,6 +28,7 @@ int32_t CcSimActiveCharacterCount(const CcSim *sim)
 
 static bool ProtectedPerson(const CcSim *sim, const CcCharacter *person)
 {
+    if (CcScrivenTravelling(sim, person->id)) return true;
     if (person->travel_destination_id != 0U || person->bandit_group_id != 0U ||
         person->current_settlement_id == sim->player.location_id ||
         person->id == sim->archives.abbot_character_id ||

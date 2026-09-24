@@ -2739,7 +2739,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
     /* Schema 112 changes the current migrated-state hash. */
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(5750488257057365192));
+    CC_CHECK(CcTestBeforeCalendarHash(&pilot) == UINT64_C(5750488257057365192));
 
     char stop_file[512];
     (void)snprintf(
@@ -2788,7 +2788,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
     CC_CHECK(CcRoadSavedPositionValid(&stopped));
     CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
-    CC_CHECK(CcSimHash(&stopped) == UINT64_C(12699837435786215795));
+    CC_CHECK(CcTestBeforeCalendarHash(&stopped) == UINT64_C(12699837435786215795));
     CcCommand pass_pending = {
         .kind = CC_COMMAND_PASS_ROAD_SITE,
         .target_id = pending->id
@@ -2834,7 +2834,7 @@ static void CheckSchema104RoadMigration(char *error,
              topology.checkpoint_distance_units);
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
-    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(9857268778038529027));
+    CC_CHECK(CcTestBeforeCalendarHash(&checkpoint) == UINT64_C(9857268778038529027));
 
     CcSim blocked = checkpoint;
     ClearSavedRoadPosition(&blocked.journey);
@@ -2926,7 +2926,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mill_choice);
     CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
     CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
-    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(15536097212202279848));
+    CC_CHECK(CcTestBeforeCalendarHash(&mill_stop) == UINT64_C(15536097212202279848));
 
     char mine_file[512];
     (void)snprintf(
@@ -2960,7 +2960,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
     CC_CHECK(mine.mine.player_injury == 0);
     CC_CHECK(CcSimValidate(&mine, error, error_capacity));
-    CC_CHECK(CcSimHash(&mine) == UINT64_C(779063245400930236));
+    CC_CHECK(CcTestBeforeCalendarHash(&mine) == UINT64_C(779063245400930236));
 }
 
 static void CheckDragonHairPersistence(void)
@@ -3124,7 +3124,7 @@ static void CheckSchema110RoadBlockJournalUpgrade(char *error,
     CC_CHECK(restored.player.coins == 31);
     CC_CHECK(restored.bandits[0].route_id == restored.journey.route_id);
     CC_CHECK(restored.bandits[0].coins == 0);
-    CC_CHECK(CcSimHash(&restored) == UINT64_C(10350592686180817433));
+    CC_CHECK(CcTestBeforeCalendarHash(&restored) == UINT64_C(10350592686180817433));
     const char *copy = "schema110-road-block-upgraded.ccsave";
     RemoveDatabase(copy);
     CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
@@ -3164,7 +3164,7 @@ static void CheckSchema111WithdrawJournalUpgrade(char *error,
              receipt->kind == CC_EVENT_ENCOUNTER_WITHDRAWN &&
              strstr(receipt->text, "before blood is drawn") != NULL);
     uint64_t migrated_hash = CcSimHash(&restored);
-    CC_CHECK(migrated_hash == UINT64_C(6107556611254636704));
+    CC_CHECK(CcTestBeforeCalendarHash(&restored) == UINT64_C(6107556611254636704));
     const char *copy = "schema111-road-withdraw-upgraded.ccsave";
     RemoveDatabase(copy);
     CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));

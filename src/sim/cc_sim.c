@@ -1,3 +1,4 @@
+#include "sim/cc_scriven.h"
 #include "sim/cc_sim_custody.h"
 #include "sim/cc_archive_staff.h"
 #include "sim/cc_prophecy.h"
@@ -3930,6 +3931,11 @@ bool CcSimTomePassage(const CcSim *sim, CcId treasure_id, int index,
 {
     if (sim == NULL || text == NULL || capacity == 0U ||
         index < 0 || index >= CC_TOME_PASSAGES) return false;
+    const CcScrivenBook *saved = CcScrivenBookById(sim, treasure_id);
+    if (saved != NULL) {
+        (void)snprintf(text, capacity, "%s", saved->passages[index]);
+        return text[0] != '\0';
+    }
     const CcTreasure *tome = CcSimTreasure(sim, treasure_id);
     if (tome == NULL || tome->destroyed) return false;
     const CcSettlement *made = CcSimSettlement(sim, tome->maker_settlement_id);
@@ -4001,6 +4007,12 @@ CcId CcSimReadableTome(const CcSim *sim, CcId character_id)
 {
     const CcCharacter *reader = CcSimCharacter(sim, character_id);
     if (reader == NULL) return 0U;
+    for (int i = 0; sim->schema_version >= 113U && i < CC_SCRIVEN_DELEGATES; ++i) {
+        const CcScrivenDelegate *d = &sim->scriven.delegates[i];
+        const CcTreasure *carried = CcSimTreasure(sim, d->book_id);
+        if (d->person_id == character_id && CcScrivenCarries(sim, d->book_id, character_id) &&
+            carried != NULL && !carried->destroyed) return carried->id;
+    }
     /* Where they stand first, where they are from second: a traveller quotes
        the archive in front of them before the one back home. */
     for (int pass = 0; pass < 2; ++pass) {
@@ -5025,6 +5037,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcMineInitializeLoad(sim);
     CcSimInitializeOccupations(sim);
     CcSimInitializeUnderroadNetwork(sim);
+    CcScrivenInit(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -5132,9 +5145,10 @@ bool CcSimFoodEconomyAtSettlement(const CcSim *sim, CcId settlement_id,
 static CcTreasure *AllocateTreasure(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->treasure_count; ++i) {
-        if (sim->treasures[i].destroyed && !CcSimArchiveConvoyHoldsBook(sim, sim->treasures[i].id)) {
+        if (sim->treasures[i].destroyed && !CcScrivenReserved(sim, sim->treasures[i].id) && !CcSimArchiveConvoyHoldsBook(sim, sim->treasures[i].id)) {
             CcTreasure *treasure = &sim->treasures[i];
             *treasure = (CcTreasure){0};
+            if (sim->schema_version >= 113U) sim->scriven.books[i] = (CcScrivenBook){0};
             treasure->id = NextId(sim, CC_ENTITY_TREASURE);
             return treasure;
         }
@@ -6833,6 +6847,7 @@ static CcTreasure *BindArchiveTomeAt(CcSim *sim, CcSettlement *vault, bool plain
     tome->craft_work = 1;
     tome->appraised_value = plain ? 1 : 6;
     tome->created_day = sim->current_day;
+    CcScrivenFreeze(sim, tome->id);
     return tome;
 }
 
@@ -7432,11 +7447,14 @@ static void AdvanceArchives(CcSim *sim)
             codex->craft_work = combined_lore;
             codex->appraised_value = combined_value;
             codex->created_day = sim->current_day;
+            CcScrivenRebind(sim, tome_slots, codex->id);
             char text[CC_EVENT_TEXT_CAPACITY];
             (void)snprintf(text, sizeof(text),
                            "The scriptorium binds four chronicles into "
                            "the Codex of the Scriptorium; nothing is "
                            "lost that was written.");
+            if (sim->schema_version >= 113U)
+                (void)snprintf(text, sizeof(text), "The scriptorium binds four tomes into a codex, keeping selected passages, dated margins, and the latest almanac.");
             (void)PushEvent(sim, CC_EVENT_LORE_RECORDED, codex->id,
                             oldest_location, eldest_parent,
                             combined_lore, text);
@@ -8940,6 +8958,10 @@ static void ChangeDragonStage(CcSim *sim, CcDragonLifeStage stage,
     CcDragon *dragon = &sim->dragon;
     if (dragon->life_stage == stage) return;
     dragon->life_stage = stage;
+    if (sim->schema_version >= 113U && stage == CC_DRAGON_STAGE_DEEP_WYRM) {
+        CcScrivenAnchor(sim);
+        return; /* The change becomes public through later sightings. */
+    }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text), "%s becomes %s: %s.",
                    dragon->name, CcDragonLifeStageName(stage), reason);
@@ -15545,7 +15567,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 int32_t lore_burned = 0;
                 for (int32_t i = 0; i < sim->treasure_count; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id)) continue;
+                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id) || CcScrivenReserved(sim, t->id)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||
@@ -15556,7 +15578,7 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
                 for (int32_t i = 0;
                      i < sim->treasure_count && burned < burn_target; ++i) {
                     CcTreasure *t = &sim->treasures[i];
-                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id)) continue;
+                    if (!CcArchiveVolumeIsLive(t) || CcSimArchiveConvoyHoldsBook(sim, t->id) || CcScrivenReserved(sim, t->id)) continue;
                     CcSettlement *vault = CcSimSettlementMutable(
                         sim, t->owner_id);
                     if (vault == NULL ||
@@ -16338,6 +16360,7 @@ static void AdvanceCharacterTravel(CcSim *sim)
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
         if (!CcSimCharacterIsActive(sim, person)) continue;
+        if (CcScrivenTravelling(sim, person->id)) continue;
         if (person->death_day > 0 && person->death_day <= sim->current_day) continue;
 
         if (person->travel_destination_id != 0U) {
@@ -16433,6 +16456,7 @@ static void AdvanceTravellerNeeds(CcSim *sim)
 {
     for (int32_t i = 0; i < sim->character_count; ++i) {
         CcCharacter *person = &sim->characters[i];
+        if (CcScrivenTravelling(sim, person->id)) continue;
         /* Meals and shelter are coarse life costs for every retained visitor. */
         if (sim->schema_version >= 84U &&
             (sim->archive_recruitment.person_id == person->id || sim->archive_recruitment.trainer_id == person->id) &&
@@ -16728,6 +16752,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         SettleChangedRoyalDestinations(sim);
         DeliverDelayedEchoIfReady(sim);
         AdvanceGoblinPolitics(sim);
+        CcScrivenAdvance(sim);
     }
 }
 
@@ -17420,6 +17445,10 @@ static bool ApplyBuyTreasure(CcSim *sim, const CcCommand *command,
 {
     CcTreasure *treasure = (CcTreasure *)CcSimTreasure(
         sim, command->target_id);
+    if (treasure != NULL && CcScrivenReserved(sim, treasure->id)) {
+        SetError(error, error_capacity, "This tome is reserved for a scribe journey or loan.");
+        return false;
+    }
     if (treasure != NULL && treasure == CcSimDeepWyrmProphecy(sim)) {
         SetError(error, error_capacity, "This book is entrusted to the town council in Gloamgate.");
         return false;
@@ -19960,6 +19989,7 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_BREED_HORSES ||
         command->kind == CC_COMMAND_ASSIGN_HORSE ||
         command->kind == CC_COMMAND_CARE_HORSES ||
+        command->kind == CC_COMMAND_SCRIVEN ||
         command->kind == CC_COMMAND_GOBLIN_TRADE ||
         command->kind == CC_COMMAND_GOBLIN_WARN ||
         command->kind == CC_COMMAND_GOBLIN_INTERCEPT ||
@@ -20124,6 +20154,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
             return ApplyBreedHorses(sim, command, error, error_capacity);
         case CC_COMMAND_ASSIGN_HORSE:
             return ApplyAssignHorse(sim, command, error, error_capacity);
+        case CC_COMMAND_SCRIVEN:
+            return CcScrivenApply(sim, command, error, error_capacity);
         case CC_COMMAND_CARE_HORSES:
             return ApplyCareHorses(sim, error, error_capacity);
         case CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE:
@@ -20298,6 +20330,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
         SetError(error, error_capacity, "Simulation is missing.");
+        return false;
+    }
+    if (!CcScrivenValidate(sim)) {
+        SetError(error, error_capacity, "Saved tomes or the scribe gathering are invalid.");
         return false;
     }
     if (!CcSimSupportsVersions(sim->schema_version, sim->generator_version)) {
@@ -20947,6 +20983,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             !ValidBoundedText(treasure->name, sizeof(treasure->name)) ||
             CcSimSettlement(sim, treasure->maker_settlement_id) == NULL ||
             (CcSimSettlement(sim, treasure->location_id) == NULL &&
+             !CcScrivenCarries(sim, treasure->id, treasure->location_id) &&
              !(CcSimArchiveConvoyCarriesBook(sim, treasure->id) && treasure->location_id == sim->archive_convoy.carriage_id)) ||
             !valid_owner || (!plain_archive && treasure->gold_content < 1) ||
             treasure->gold_content > CC_SIM_MAX_UNITS ||
@@ -20961,6 +20998,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "Treasure state is invalid.");
             return false;
         }
+        if (!treasure->destroyed && CcScrivenCarries(sim, treasure->id, sim->player.id))
+            player_treasure_count += 1;
         if (!treasure->destroyed &&
             treasure->owner_id == sim->player.id) {
             if (treasure->location_id != sim->player.location_id) {

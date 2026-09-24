@@ -146,15 +146,15 @@ class NativeTests(unittest.TestCase):
     def test_actual_people_and_owned_views(self):
         result = subprocess.check_output([str(PROBE), '--seed', '1202', '--days', '367',
                                           '--first', '1369094286720630904',
-                                          '--second', '1369094286720630894'], text=True)
+                                          '--second', '1369094286720630838'], text=True)
         s = json.loads(result)
         a, b = s['participants']
         self.assertEqual(a['self']['name'], 'Harthild Underwick')
-        self.assertEqual(b['self']['name'], 'Hartha Stonehewer')
+        self.assertEqual(b['self']['name'], 'Jory Fen')
         self.assertEqual(a['day'], 368)
         self.assertNotIn('death_day', result)
         self.assertNotIn('stress', a['listener'])
-        self.assertTrue(any(r['kind'] == 39 for r in a['held_accounts']))
+        self.assertTrue(any(r['kind'] == 118 for r in a['held_accounts']))
         self.assertEqual(subprocess.check_output([str(PROBE), '--seed', '1202', '--days', '367',
                          '--first', a['self']['id'], '--second', b['self']['id']], text=True), result)
 

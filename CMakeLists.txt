@@ -107,6 +107,9 @@ cc_strict_warnings(crownless_locomotion)
 
 add_library(crownless_sim
     src/quest/cc_quest.c
+    src/sim/cc_calendar.c
+    src/sim/cc_scriven.c
+    src/sim/cc_scriven_codec.c
     src/sim/cc_sim.c
     src/sim/cc_custody.c
     src/sim/cc_sim_custody.c

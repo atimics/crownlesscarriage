@@ -76,8 +76,8 @@ async function main() {
       assert.equal(mobileDetailSize, '16px', 'mobile trade detail stays at the readable 16px touch size');
     }
     const before = await controls.reading();
-    assert.match(before, /Day\s+1\s*\/\s*42 crowns\s*\/\s*Cargo 0\/12/,
-      `${name}: fresh campaign purse and cargo: ${before}`);
+    assert.match(before, /2 Lantern\s*\/\s*42 crowns\s*\/\s*Cargo 0\/12/,
+      `${name}: fresh campaign calendar, purse, and cargo: ${before}`);
 
     await fs.mkdir(path.join(output, name), {recursive: true});
     await page.screenshot({path: path.join(output, name, 'town.png')});

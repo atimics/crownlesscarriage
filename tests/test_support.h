@@ -16,6 +16,19 @@
         }                                                                      \
     } while (0)
 
+/* Pin the complete pre-calendar state of shipped migrations independently of
+   the new saved pages. Current-schema round trips are tested separately. */
+static inline uint64_t CcTestBeforeCalendarHash(const CcSim *sim)
+{
+    CcSim *legacy = malloc(sizeof(*legacy));
+    CC_CHECK(legacy != NULL);
+    *legacy = *sim;
+    legacy->schema_version = 112U;
+    uint64_t hash = CcSimHash(legacy);
+    free(legacy);
+    return hash;
+}
+
 static inline bool CcTestContinueJourneyPause(
     CcSim *sim, char *error, size_t error_capacity)
 {

@@ -12,7 +12,7 @@ int main(void)
     const CcCharacter *a = NULL, *b = NULL;
     for (int32_t i = 0; i < sim.character_count; ++i) {
         if (strcmp(sim.characters[i].name, "Harthild Underwick") == 0) a = &sim.characters[i];
-        if (strcmp(sim.characters[i].name, "Hartha Stonehewer") == 0) b = &sim.characters[i];
+        if (strcmp(sim.characters[i].name, "Jory Fen") == 0) b = &sim.characters[i];
     }
     CC_CHECK(a != NULL && b != NULL);
     uint64_t before = CcSimHash(&sim);
@@ -25,7 +25,7 @@ int main(void)
     CC_CHECK(first.coins == a->travel_coins && first.occupation == a->occupation);
     CC_CHECK(strcmp(first.name, a->name) == 0 && strcmp(first.listener_name, b->name) == 0);
     CC_CHECK(first.account_count > 0U);
-    bool fire = false;
+    bool local_work = false;
     for (size_t i = 0; i < first.account_count; ++i) {
         const CcGossipVersion *held = NULL;
         const CcGossip *story = CcSimPersonalGossip(&sim, a->id, (int32_t)i, &held);
@@ -34,9 +34,9 @@ int main(void)
         CcGossipText(&sim, story, held, text, sizeof(text));
         CC_CHECK(strcmp(first.accounts[i].telling, text) == 0);
         CC_CHECK(first.accounts[i].source_id == held->source_character_id);
-        if (story->kind == CC_EVENT_DRAGON_RETALIATION) fire = true;
+        if (story->kind == CC_EVENT_QUARRY_OUTPUT) local_work = true;
     }
-    CC_CHECK(fire);
+    CC_CHECK(local_work);
     /* Distinct private knowledge remains with its owner. */
     CcCharacter *owner = &sim.characters[0], *other = &sim.characters[1];
     owner->knowledge_count = 1;

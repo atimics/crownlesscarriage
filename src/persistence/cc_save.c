@@ -1,4 +1,5 @@
 #include "persistence/cc_save.h"
+#include "sim/cc_scriven.h"
 #include "sim/cc_occupations.h"
 #include "persistence/cc_journal_internal.h"
 #include "persistence/cc_legacy_runtime_internal.h"
@@ -1538,7 +1539,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " report_recipient_id INTEGER NOT NULL,report_event_id INTEGER NOT NULL,report_day INTEGER NOT NULL,"
         " report_quantity INTEGER NOT NULL,report_good INTEGER NOT NULL,report_kind INTEGER NOT NULL,"
         " reported_encounter_outcome INTEGER NOT NULL);";
-    return Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
+    return Execute(database, "CREATE TABLE IF NOT EXISTS scriven_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS notice_board (slot INTEGER PRIMARY KEY,situation_id INTEGER NOT NULL,event_id INTEGER NOT NULL,settlement_id INTEGER NOT NULL,sponsor_id INTEGER NOT NULL,day INTEGER NOT NULL,text TEXT NOT NULL);", error, error_capacity) &&
@@ -3654,6 +3656,7 @@ invalid:
 
 #include "persistence/cc_save_custody.inc"
 #include "persistence/cc_save_notices.inc"
+#include "persistence/cc_save_scriven.inc"
 #include "persistence/cc_save_mine.inc"
 #include "persistence/cc_save_goblin_politics.inc"
 
@@ -3720,6 +3723,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveGossip(database, sim, error, error_capacity) &&
         SaveCustody(database, sim, error, error_capacity) &&
         SaveNotices(database, sim, error, error_capacity) &&
+        SaveScriven(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SaveTownRecovery(database, sim, error, error_capacity) &&
@@ -6477,6 +6481,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadGossip(database, sim, error, error_capacity) &&
               ReadCustody(database, sim, error, error_capacity) &&
               ReadNotices(database, sim, error, error_capacity) &&
+              ReadScriven(database, sim, error, error_capacity) &&
               ReadGoblinPolitics(database, sim, error, error_capacity) &&
               ReadMine(database, sim, error, error_capacity);
     if (!ok) {

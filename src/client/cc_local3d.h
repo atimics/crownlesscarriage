@@ -9,6 +9,7 @@
 #include "locomotion/cc_multileg.h"
 #include "locomotion/cc_robotics.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_calendar.h"
 #include "world/cc_world.h"
 
 #include "raylib.h"
@@ -210,7 +211,7 @@ static inline CcLocalAtmospherePreset CcLocalAtmosphereForClock(
     int32_t day, int32_t minute_subticks)
 {
     int32_t minutes = minute_subticks / CC_WORLD_MINUTE_SUBTICKS;
-    if (minutes >= 16 * 60) return CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT;
+    if (minutes >= CC_CALENDAR_NIGHT_MINUTE) return CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT;
     if (minutes >= 10 * 60) return CC_LOCAL_ATMOSPHERE_AMBER_DUSK;
     int32_t beat = day % 8;
     if (beat < 0) beat += 8;

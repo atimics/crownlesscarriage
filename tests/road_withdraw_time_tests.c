@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     static CcSim blocked, saved, loaded, legacy, careful, push;
     char error[192] = "";
     CHECK(ReachBanditBlock(&blocked, error, sizeof(error)));
-    CHECK(blocked.schema_version == 112U);
+    CHECK(blocked.schema_version == CC_SIM_SCHEMA_VERSION);
     int32_t physical = CcRoadRouteProgressSubticks(&blocked);
     CHECK(physical > CC_WORLD_DAY_SUBTICKS);
     CHECK(physical < blocked.journey.total_subticks);

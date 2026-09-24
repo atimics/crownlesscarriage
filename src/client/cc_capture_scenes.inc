@@ -894,6 +894,7 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             scene->local->trade_mode = 5;
             scene->local->trade_good = (CcGood)1;
         }
+        if (request->capture_ux_view == 35) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 4; scene->local->book_offset = 0; }
         if (request->capture_ux_view == 4) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 0; }
         if (request->capture_ux_view == 11 || request->capture_ux_view == 12) {
             (*scene->view) = VIEW_CARRIAGE;
