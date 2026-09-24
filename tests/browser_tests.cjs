@@ -806,6 +806,9 @@ async function main() {
       const revision = await mobile.evaluate(() => Module.crownlessSaveRevision);
       await controls.button('Save world').tap();
       await mobile.waitForFunction(before => Module.crownlessSaveRevision > before, revision);
+      if (process.env.CC_BROWSER_CAPTURE_STORAGE)
+        await phone.storageState({path:process.env.CC_BROWSER_CAPTURE_STORAGE,
+          indexedDB:true});
       const timings = await mobile.evaluate(() =>
         JSON.parse(Module.exportCrownlessDiagnostics()));
       assert(timings.entries.length <= timings.capacity);
