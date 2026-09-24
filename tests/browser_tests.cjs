@@ -135,7 +135,8 @@ async function main() {
   });
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 && document.querySelector('#loading').hidden && window.shaderLinks.some(link => link.skinned), undefined, {timeout: 120000});
+    await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 &&
+      document.querySelector('#loading').hidden, undefined, {timeout: 120000});
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
     assert.equal(await page.evaluate(() => Module._CrownlessRoadGeometrySelfTest()), 1,
       'WebAssembly road geometry must match the native known fixtures');
@@ -195,6 +196,8 @@ async function main() {
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing' && Module.crownlessSaveRevision > 0);
+    const campaignIdentity = await page.evaluate(() => Module.crownlessCampaignId);
+    assert.match(campaignIdentity, /^[0-9a-f]{32}$/);
     await page.screenshot({path: path.join(output, 'opening.png')});
     await page.waitForFunction(() => [...document.querySelectorAll('[data-crownless-music]')]
       .some(media => !media.paused && media.readyState >= 3), {timeout: 60000});
@@ -256,6 +259,8 @@ async function main() {
       return {zeroLength, omittedLength};
     });
     assert.deepEqual(uploadOverloads, {zeroLength: 6, omittedLength: 6});
+    await page.waitForFunction(() => window.shaderLinks.some(link => link.skinned),
+      undefined, {timeout:30000});
     const shaders = await page.evaluate(() => window.shaderLinks);
     assert(shaders.every(shader => shader.linked), JSON.stringify(shaders));
     assert(shaders.every(shader => shader.vectors <= 256), JSON.stringify(shaders));
@@ -339,14 +344,43 @@ async function main() {
     const beforeSave = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.keyboard.press('Control+s');
     await page.waitForFunction(previous => Module.crownlessSaveRevision > previous, beforeSave);
-    const revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    let revision = await page.evaluate(() => Module.crownlessSaveRevision);
     await page.reload();
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignRestored && document.querySelector('#loading').hidden);
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision);
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
     await page.locator('#canvas').focus();
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => Module.crownlessScreen === 'playing');
+    const secondTab = await context.newPage();
+    await secondTab.goto(`http://127.0.0.1:${server.address().port}/`);
+    await secondTab.waitForFunction(() => window.Module &&
+      Module.crownlessCampaignAccess === 1 && Module.crownlessCampaignRestored,
+      undefined, {timeout:120000});
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessSaveRevision), revision);
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Control+s');
+    await page.waitForFunction(previous => Module.crownlessSaveRevision > previous, revision);
+    revision = await page.evaluate(() => Module.crownlessSaveRevision);
+    const staleWrite = await secondTab.evaluate(async () => {
+      try {
+        await Module.persistCrownlessSave('/crownless-save/crownless_campaign.ccsave',
+          '/crownless-save/crownless_campaign.ccsave.session');
+        return null;
+      } catch (error) { return error.message; }
+    });
+    assert.match(staleWrite, /read-only|another tab|reload/i);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessSaveRevision), revision - 1);
+    await secondTab.reload();
+    await secondTab.waitForFunction(expected => window.Module &&
+      Module.crownlessSaveRevision === expected && Module.crownlessCampaignRestored,
+      revision, {timeout:120000});
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignId), campaignIdentity);
+    assert.equal(await secondTab.evaluate(() => Module.crownlessCampaignAccess), 1);
+    await secondTab.screenshot({path: path.join(output, 'same-campaign-two-tabs.png')});
+    await secondTab.close();
     rejectedWrite = true;
     await page.evaluate(() => {
       const transaction = IDBDatabase.prototype.transaction;
@@ -402,6 +436,16 @@ async function main() {
             `A fresh campaign stalled on screen '${screen}' after Enter at title.`);
     }
     assert.equal(await page.evaluate(() => Module.crownlessSaveRevision), revision + 2);
+    const newCampaignIdentity = await page.evaluate(() => Module.crownlessCampaignId);
+    assert.match(newCampaignIdentity, /^[0-9a-f]{32}$/);
+    assert.notEqual(newCampaignIdentity, campaignIdentity);
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessCampaignRestored &&
+      Module.crownlessScreen === 'title', undefined, {timeout:120000});
+    assert.equal(await page.evaluate(() => Module.crownlessCampaignId), newCampaignIdentity);
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing');
     await assertSaveStatusLane(page, 1280, 720);
     await page.screenshot({path: path.join(output, 'save-lane-desktop.png')});
     const recovery = await page.evaluate(() => {
@@ -445,7 +489,22 @@ async function main() {
     const phone = await browser.newContext({viewport: {width: 390, height: 844},
       hasTouch: true, isMobile: true, deviceScaleFactor: 3});
     const mobile = await phone.newPage();
+    const lazyMapResponses = [];
+    mobile.on('response', response => {
+      if (response.url().includes('/assets/maps/')) {
+        lazyMapResponses.push({url:response.url(), status:response.status()});
+      }
+      if (response.status() === 404) {
+        errors.push(`HTTP 404: ${response.url()}`);
+        console.log(`HTTP 404: ${response.url()}`);
+      }
+    });
     mobile.on('pageerror', error => errors.push(error.message));
+    mobile.on('console', message => {
+      if (message.type() === 'error' &&
+          !message.text().includes('Ignored attempt to cancel a touchcancel event'))
+        errors.push(`${message.text()} (${message.location().url})`);
+    });
     try {
       await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
       await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' && Module.crownlessTouchFrame?.buttons.length);
@@ -625,9 +684,57 @@ async function main() {
       assert.match(bookReading, /Next: Load 8 food boxes from the granary stack/i);
       await mobile.screenshot({path: path.join(output, 'mobile-book.png')});
 
-      const backButton = mobile.locator('#touch-actions button').filter({hasText: /^Back/});
-      await backButton.focus();
-      await mobile.keyboard.press('Enter');
+      await controls.button('Back').tap();
+      await controls.button('Book').waitFor();
+      await mobile.waitForFunction(() => Module.crownlessTouchFrame.title !== 'Company Book');
+      if (await controls.button(/^1 Not now\./).read())
+        await controls.button(/^1 Not now\./).tap();
+      const openingCampaignId = await mobile.evaluate(() => Module.crownlessCampaignId);
+      async function tapRelief(name) {
+        await mobile.locator('#touch-actions .touch-buttons button')
+          .filter({hasText:new RegExp(`^${name}$`)}).tap();
+        await mobile.waitForTimeout(150);
+      }
+      for (let crate = 1; crate <= 8; ++crate) {
+        console.log('loading relief crate', crate);
+        if (await controls.button('Walk to granary stack').read())
+          await tapRelief('Walk to granary stack');
+        await controls.button('Lift one relief crate').waitFor();
+        await mobile.waitForTimeout(350);
+        for (let attempt = 0; attempt < 4 &&
+             !(await controls.button('Walk to carriage').read()); ++attempt) {
+          await tapRelief('Lift one relief crate');
+          await mobile.waitForTimeout(250);
+        }
+        assert(await controls.button('Walk to carriage').read(),
+          `Relief crate ${crate} must be carried after lifting`);
+        if (crate === 1)
+          await mobile.screenshot({path:path.join(output, 'mobile-carrying-relief-crate.png')});
+        await tapRelief('Walk to carriage');
+        await controls.button('Place crate in carriage').waitFor();
+        await mobile.waitForTimeout(350);
+        for (let attempt = 0; attempt < 4 &&
+             !(await controls.reading()).includes(`Cargo ${crate}/12`); ++attempt) {
+          await tapRelief('Place crate in carriage');
+          await mobile.waitForTimeout(250);
+        }
+        assert.match(await controls.reading(), new RegExp(`Cargo ${crate}/12`));
+        assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId), openingCampaignId);
+        if (crate < 8) await controls.button('Walk to granary stack').waitFor();
+      }
+      await mobile.screenshot({path:path.join(output, 'mobile-relief-loaded.png')});
+      await controls.button('Board Crownless carriage').tap();
+      await controls.button('Open map case').tap();
+      await controls.button('Close map case').waitFor();
+      assert(lazyMapResponses.some(item => item.status === 200 &&
+        /\/assets\/maps\/(?:gloamgate_to_alderwatch|collectible_map_atlas)\.png$/.test(item.url)),
+        JSON.stringify(lazyMapResponses));
+      await mobile.screenshot({path: path.join(output, 'mobile-road-map.png')});
+      await controls.button('Close map case').tap();
+      console.log('loaded carriage', JSON.stringify({
+        buttons:await controls.buttons(), reading:await controls.reading()}));
+      await controls.button('Step away').tap();
+      await controls.button('Menu').waitFor();
       await controls.button('Menu').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'paused');
       const revision = await mobile.evaluate(() => Module.crownlessSaveRevision);
@@ -677,6 +784,12 @@ async function main() {
         await controls.button('Full screen').tap();
         await mobile.waitForFunction(() => !document.querySelector('#stage').classList.contains('expanded'));
       }
+      await controls.button('Resume').tap();
+      await controls.button('Board Crownless carriage').waitFor();
+      await controls.button('Board Crownless carriage').tap();
+      await controls.button('Travel').tap();
+      console.log('departure road', JSON.stringify({
+        buttons:await controls.buttons(), reading:await controls.reading()}));
     } finally { await phone.close(); }
     assert.deepEqual(errors, []);
     console.log('Browser desktop and mobile layout, touch input, menus, saves, shaders, fullscreen, and reload checks passed');

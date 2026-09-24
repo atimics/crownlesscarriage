@@ -214,6 +214,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_MINE_REPORT,
     CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
     CONTEXT_ACTION_STOW_RELIEF_CRATE,
+    CONTEXT_ACTION_APPROACH_RELIEF_CRATES,
+    CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE,
     CONTEXT_ACTION_OVEN_QUESTION
 } ContextActionKind;
 
@@ -4568,17 +4570,25 @@ static ContextActionSet BuildContextActions(
             sim->player.location_id == CcSimSituationOfferSettlementId(sim, relief)) {
             Vector2 position = LocalPosition(local);
             if (!relief->loading_crate_carried &&
-                CcSimReliefCratesToLoad(relief) > 0 &&
-                GridDistance(position, LOCAL_RELIEF_CRATES) < 2.1f) {
-                AddDetailedContextAction(&set, CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
-                    "Lift one relief crate", "F",
+                CcSimReliefCratesToLoad(relief) > 0) {
+                bool near = GridDistance(position, LOCAL_RELIEF_CRATES) < 2.1f;
+                AddDetailedContextAction(&set, near ?
+                    CONTEXT_ACTION_PICKUP_RELIEF_CRATE :
+                    CONTEXT_ACTION_APPROACH_RELIEF_CRATES,
+                    near ? "Lift one relief crate" : "Walk to granary stack",
+                    near ? TextFormat("%c", adventure_preferences != NULL ?
+                        adventure_preferences->key_interact : KEY_F) : "",
                     TextFormat("%d STILL AT GRANARY", CcSimReliefCratesToLoad(relief)),
                     true, false);
-            } else if (relief->loading_crate_carried &&
-                (GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
-                 GridDistance(position, LOCAL_CARRIAGE) < 1.85f)) {
-                AddDetailedContextAction(&set, CONTEXT_ACTION_STOW_RELIEF_CRATE,
-                    "Place crate in carriage", "F",
+            } else if (relief->loading_crate_carried) {
+                bool near = GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
+                    GridDistance(position, LOCAL_CARRIAGE) < 1.85f;
+                AddDetailedContextAction(&set, near ?
+                    CONTEXT_ACTION_STOW_RELIEF_CRATE :
+                    CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE,
+                    near ? "Place crate in carriage" : "Walk to carriage",
+                    near ? TextFormat("%c", adventure_preferences != NULL ?
+                        adventure_preferences->key_interact : KEY_F) : "",
                     TextFormat("%d OF %d ABOARD", relief->loading_progress,
                         relief->quantity), true, false);
             }
@@ -5399,18 +5409,24 @@ static ContextActionSet BuildContextActions(
     if (relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
         sim->player.location_id == CcSimSituationOfferSettlementId(sim,relief)) {
         if (!relief->loading_crate_carried &&
-            CcSimReliefCratesToLoad(relief)>0 &&
-            GridDistance(position,LOCAL_RELIEF_CRATES)<2.1f) {
-            AddDetailedContextAction(&set,CONTEXT_ACTION_PICKUP_RELIEF_CRATE,
-                "Lift one relief crate","F",
+            CcSimReliefCratesToLoad(relief)>0) {
+            bool near=GridDistance(position,LOCAL_RELIEF_CRATES)<2.1f;
+            AddDetailedContextAction(&set,near ? CONTEXT_ACTION_PICKUP_RELIEF_CRATE :
+                CONTEXT_ACTION_APPROACH_RELIEF_CRATES,
+                near ? "Lift one relief crate" : "Walk to granary stack",
+                near ? TextFormat("%c", adventure_preferences != NULL ?
+                    adventure_preferences->key_interact : KEY_F) : "",
                 TextFormat("%d STILL AT GRANARY",CcSimReliefCratesToLoad(relief)),
                 true,false);
         }
-        if (relief->loading_crate_carried &&
-            (GridDistance(position,LOCAL_CARRIAGE_BAY)<1.85f ||
-             GridDistance(position,LOCAL_CARRIAGE)<1.85f)) {
-            AddDetailedContextAction(&set,CONTEXT_ACTION_STOW_RELIEF_CRATE,
-                "Place crate in carriage","F",
+        if (relief->loading_crate_carried) {
+            bool near=GridDistance(position,LOCAL_CARRIAGE_BAY)<1.85f ||
+                GridDistance(position,LOCAL_CARRIAGE)<1.85f;
+            AddDetailedContextAction(&set,near ? CONTEXT_ACTION_STOW_RELIEF_CRATE :
+                CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE,
+                near ? "Place crate in carriage" : "Walk to carriage",
+                near ? TextFormat("%c", adventure_preferences != NULL ?
+                    adventure_preferences->key_interact : KEY_F) : "",
                 TextFormat("%d OF %d ABOARD",relief->loading_progress,
                     relief->quantity),true,false);
         }
@@ -10739,6 +10755,20 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     CC_COMMAND_PICKUP_RELIEF_CRATE : CC_COMMAND_STOW_RELIEF_CRATE,
                 .target_id=relief != NULL ? relief->id : 0U};
             (void)ApplyCommand(*journal,sim,carry,message,message_capacity);
+            return;
+        }
+        if (context_action == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ||
+            context_action == CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE) {
+            CcInteractionCancel(&local->interaction, "");
+            Vector2 destination=context_action == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ?
+                LOCAL_RELIEF_CRATES : LOCAL_CARRIAGE_BAY;
+            float radius=context_action == CONTEXT_ACTION_APPROACH_RELIEF_CRATES ?
+                1.8f : 1.6f;
+            bool walking=CcLocalAgentApproachInteraction(&local->agent,
+                destination,radius,false);
+            (void)snprintf(message,message_capacity,"%s",walking ?
+                "Walking to the next relief stop." :
+                "Choose a clear path toward the relief stop.");
             return;
         }
         if (interact || context_action != CONTEXT_ACTION_NONE) {
