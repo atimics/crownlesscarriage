@@ -2704,6 +2704,10 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
     }
     if (sim->schema_version >= 86U) total += sim->archive_recruitment.purse;
     if (sim->schema_version >= 92U) total += sim->archive_convoy.purse;
+    if (sim->schema_version >= 111U) {
+        for (int32_t i = 0; i < sim->bandit_count; ++i)
+            total += sim->bandits[i].coins;
+    }
     for (int32_t i = 0; i < sim->kingdom_count; ++i) {
         total += sim->kingdoms[i].treasury;
     }
@@ -21203,7 +21207,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             !ValidBoundedText(bandits->name, sizeof(bandits->name)) ||
             bandits->members < 0 || bandits->members > 120 ||
             bandits->supplies < 0 || bandits->supplies > 100 ||
-            bandits->influence < 0 || bandits->influence > 100) {
+            bandits->influence < 0 || bandits->influence > 100 ||
+            (sim->schema_version >= 111U &&
+             (bandits->coins < 0 || bandits->coins > CC_SIM_MAX_MONEY))) {
             SetError(error, error_capacity, "Bandit camp state is invalid.");
             return false;
         }

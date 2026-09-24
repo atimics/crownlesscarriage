@@ -347,6 +347,7 @@ uint64_t CcSimHash(const CcSim *sim)
         const CcBanditGroup *item = &sim->bandits[i];
         HASH_VALUE(item->id); HASH_VALUE(item->route_id); hash = HashString(hash, item->name);
         HASH_VALUE(item->members); HASH_VALUE(item->supplies); HASH_VALUE(item->influence);
+        if (sim->schema_version >= 111U) HASH_VALUE(item->coins);
         if (sim->schema_version >= 5U) {
             HASH_VALUE(item->camp_size); HASH_VALUE(item->service_mask);
             HASH_VALUE(item->raid_phase); HASH_VALUE(item->raid_target_id);

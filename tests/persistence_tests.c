@@ -2738,8 +2738,8 @@ static void CheckSchema104RoadMigration(char *error,
              topology.main_length_units);
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
-    /* Schema 110 includes the Underroad network, relief loading, and company memory. */
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(1929923815532300758));
+    /* Schema 111 adds saved road claimant money to the migrated state. */
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(4218671708288473085));
 
     char stop_file[512];
     (void)snprintf(
@@ -2788,7 +2788,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
     CC_CHECK(CcRoadSavedPositionValid(&stopped));
     CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
-    CC_CHECK(CcSimHash(&stopped) == UINT64_C(11485163251610530645));
+    CC_CHECK(CcSimHash(&stopped) == UINT64_C(11691673544305195830));
     CcCommand pass_pending = {
         .kind = CC_COMMAND_PASS_ROAD_SITE,
         .target_id = pending->id
@@ -2834,7 +2834,7 @@ static void CheckSchema104RoadMigration(char *error,
              topology.checkpoint_distance_units);
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
-    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(13983857644455183497));
+    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(13060270219596856870));
 
     CcSim blocked = checkpoint;
     ClearSavedRoadPosition(&blocked.journey);
@@ -2926,7 +2926,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mill_choice);
     CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
     CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
-    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(14957158054912345142));
+    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(10255154608615446321));
 
     char mine_file[512];
     (void)snprintf(
@@ -2960,7 +2960,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
     CC_CHECK(mine.mine.player_injury == 0);
     CC_CHECK(CcSimValidate(&mine, error, error_capacity));
-    CC_CHECK(CcSimHash(&mine) == UINT64_C(5201846885352537418));
+    CC_CHECK(CcSimHash(&mine) == UINT64_C(12192256954273969565));
 }
 
 static void CheckDragonHairPersistence(void)
@@ -3095,6 +3095,41 @@ static void CheckSchema109IntroductionJournalUpgrade(char *error,
     CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
     CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
     CC_CHECK(CcSimHash(&reloaded) == migrated_hash);
+    RemoveDatabase(copy);
+}
+
+static void CheckSchema110RoadBlockJournalUpgrade(char *error,
+                                                  size_t error_capacity)
+{
+    /* Created with the shipped schema-110 client, seed 0x205722. The
+       closed road has a bandit claimant and one pending travel command.
+       Checkpointed to SQLite DELETE mode for read-only fixture loading.
+       SHA-256: 4e0273156867d4c8944f2c494202a9c161095ad3ff31ac5be34a80d50bddaaef */
+    const char *fixture = CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/"
+        "schema-110-generator-25-road-block-journal.ccsave";
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT schema_version=110 AND generator_version=25 AND "
+        "journal_generation=1 AND journal_cursor=0 AND "
+        "state_hash='2e7a035ead69ac16' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT COUNT(*) FROM action_journal WHERE ordinal=1 AND "
+        "command_kind=2 AND sim_schema_version=110 AND "
+        "post_state_hash='1f5095a1b0263277';") == 1);
+    static CcSim restored, reloaded;
+    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.journey.active);
+    CC_CHECK(restored.journey.route_id == UINT64_C(216172782113783818));
+    CC_CHECK(restored.player.coins == 31);
+    CC_CHECK(restored.bandits[0].route_id == restored.journey.route_id);
+    CC_CHECK(restored.bandits[0].coins == 0);
+    CC_CHECK(CcSimHash(&restored) == UINT64_C(15091959056674726392));
+    const char *copy = "schema110-road-block-upgraded.ccsave";
+    RemoveDatabase(copy);
+    CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
+    CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
+    CC_CHECK(CcSimHash(&reloaded) == CcSimHash(&restored));
     RemoveDatabase(copy);
 }
 
@@ -3818,6 +3853,7 @@ int main(void)
     CheckSchema104RoadMigration(error, sizeof(error));
     CheckSchema108ReliefJournalUpgrade(error, sizeof(error));
     CheckSchema109IntroductionJournalUpgrade(error, sizeof(error));
+    CheckSchema110RoadBlockJournalUpgrade(error, sizeof(error));
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();
