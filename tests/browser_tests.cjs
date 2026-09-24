@@ -795,9 +795,9 @@ async function main() {
         assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId), openingCampaignId);
         await fs.writeFile(path.join(output, 'relief-walks.json'),
           JSON.stringify(reliefWalks, null, 2));
-        if (crate >= 4 && process.env.CC_BROWSER_CAPTURE_STORAGE) {
+        if (process.env.CC_BROWSER_CAPTURE_STORAGE) {
           const saved = await mobile.evaluate(() => Module.crownlessSaveRevision);
-          await controls.button('Save F5').tap();
+          await controls.button('Save').tap();
           await mobile.waitForFunction(before => Module.crownlessSaveRevision > before,
             saved);
           await phone.storageState({path:process.env.CC_BROWSER_CAPTURE_STORAGE + `.crate${crate}`,
