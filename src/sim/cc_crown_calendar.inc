@@ -105,7 +105,8 @@ static bool CrownHearing(CcSim *sim)
     /* Equal dates share an edition; each changed date keeps a separate edition. */
     uint64_t edition = 0;
     for (int i = 0; i < c->editions; ++i)
-        if (c->almanacs[i].dragon_id == dragon && c->almanacs[i].proposed_day == f.proposed_day) {
+        if (c->almanacs[i].dragon_id == dragon && c->almanacs[i].proposed_day == f.proposed_day &&
+            c->almanacs[i].book_ids[0] == f.book_ids[0] && c->almanacs[i].book_ids[1] == f.book_ids[1]) {
             f = c->almanacs[i]; edition = (uint64_t)i + 1;
         }
     if (edition == 0) {
