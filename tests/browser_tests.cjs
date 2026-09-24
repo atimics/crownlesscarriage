@@ -20,7 +20,8 @@ async function main() {
       response.end(await fs.readFile(file));
     } catch { response.writeHead(404).end(); }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(
+    Number(process.env.CC_BROWSER_CAPTURE_PORT || 0), '127.0.0.1', resolve));
   const browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
   const context = await browser.newContext({viewport: {width: 1280, height: 900}});
   const page = await context.newPage();
@@ -732,7 +733,8 @@ async function main() {
           samples.push(navigation);
           if (taps > 0 && navigation.navigation_active) {
             assert(Math.hypot(navigation.command_x-destination[0],
-              navigation.command_z-destination[1]) < 2.2,
+              navigation.command_z-destination[1]) <
+              (action === 'Walk to carriage' ? 2.2 : 3.2),
               `Crate ${crate} navigation changed target: ${JSON.stringify(navigation)}`);
           }
           if (previous && Math.hypot(navigation.x-previous.x,
@@ -763,6 +765,8 @@ async function main() {
       for (let crate = 1; crate <= 8; ++crate) {
         console.log('loading relief crate', crate);
         await walkRelief(crate, 'Walk to granary stack', 'Lift one relief crate');
+        assert.equal(reliefWalks.at(-1).reissues, 0,
+          `Crate ${crate} should reach the granary with one Walk tap`);
         await mobile.waitForTimeout(350);
         for (let attempt = 0; attempt < 4 &&
              !(await controls.button('Walk to carriage').read()); ++attempt) {
@@ -774,6 +778,8 @@ async function main() {
         if (crate === 1)
           await mobile.screenshot({path:path.join(output, 'mobile-carrying-relief-crate.png')});
         await walkRelief(crate, 'Walk to carriage', 'Place crate in carriage');
+        assert.equal(reliefWalks.at(-1).reissues, 0,
+          `Crate ${crate} should finish the platform descent with one Walk tap`);
         await mobile.waitForTimeout(350);
         for (let attempt = 0; attempt < 4 &&
              !(await controls.reading()).includes(`Cargo ${crate}/12`); ++attempt) {

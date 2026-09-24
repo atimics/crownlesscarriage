@@ -268,6 +268,7 @@ typedef struct LocalState {
     Vector2 presented_card_origin;
     ClientView interaction_view;
     bool carriage_stopped;
+    bool relief_carriage_descent_pending;
     bool road_actions_expanded;
     CcClientTravelSample shared_travel_sample;
     CcId shared_travel_route, shared_travel_origin, shared_travel_segment;
@@ -10644,6 +10645,21 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)CcLocalWorldUpdate(
             &local->course, &local->agent, sim, delta_time,
             local->market_interior, advance_course);
+        /* A relief walk can first step down from the raised granary platform.
+           Continue toward the original stop once that descent has settled. */
+        if (local->relief_carriage_descent_pending &&
+            local->agent.interaction_navigation &&
+            !local->agent.exact_target_valid &&
+            !local->agent.navigation_active) {
+            const CcSituation *relief = CcSimAcceptedSituation(sim);
+            local->relief_carriage_descent_pending = false;
+            if (relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
+                relief->loading_crate_carried &&
+                sim->player.location_id == CcSimSituationOfferSettlementId(sim, relief) &&
+                GridDistance(LocalPosition(local), LOCAL_CARRIAGE_BAY) > 1.6f)
+                    (void)CcLocalAgentApproachInteraction(&local->agent,
+                        LOCAL_CARRIAGE_BAY, 1.6f, false);
+        }
         if (local->movement_reticle_valid) {
             local->movement_reticle_age += delta_time;
             float reticle_lifetime = local->movement_reticle_accepted ?
@@ -10764,6 +10780,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         if (context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ||
             context_action == CONTEXT_ACTION_STOW_RELIEF_CRATE) {
+            local->relief_carriage_descent_pending = false;
             const CcSituation *relief=CcSimAcceptedSituation(sim);
             CcCommand carry={
                 .kind=context_action == CONTEXT_ACTION_PICKUP_RELIEF_CRATE ?
@@ -10781,6 +10798,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 1.8f : 1.6f;
             bool walking=CcLocalAgentApproachInteraction(&local->agent,
                 destination,radius,false);
+            local->relief_carriage_descent_pending = walking &&
+                context_action == CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE &&
+                !local->agent.navigation_active &&
+                local->agent.command_point_valid &&
+                GridDistance((Vector2){local->agent.command_point.x,
+                    local->agent.command_point.z}, destination) > radius;
             (void)snprintf(message,message_capacity,"%s",walking ?
                 "Walking to the next relief stop." :
                 "Choose a clear path toward the relief stop.");

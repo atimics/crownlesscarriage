@@ -122,11 +122,28 @@ async function main() {
       minute: world.minute
     });
     async function checkpoint(label) {
-      const authoritative = await state();
+      let authoritative;
+      const syncSamples = [];
+      for (let attempt = 0; attempt < 30; ++attempt) {
+        authoritative = await state();
+        const browsers = await Promise.all([owner, game].map(page =>
+          page.evaluate(() => ({hash:document.body.dataset.companyHash,
+            ready:document.body.dataset.companyReady,
+            sync:Module.ccCoop.syncStatus()}))));
+        const sample = {host:{revision:authoritative.revision,
+          action_revision:authoritative.action_revision,
+          hash:authoritative.state.hash,
+          travel_stopped:authoritative.travel_stopped}, browsers};
+        if (attempt === 0 || JSON.stringify(sample) !== JSON.stringify(syncSamples.at(-1)))
+          syncSamples.push(sample);
+        if (browsers.every(browser => browser.hash === authoritative.state.hash)) break;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      const synced = syncSamples.at(-1);
+      assert(synced.browsers.every(browser => browser.hash === synced.host.hash),
+        `Shared ${label} did not converge: ${JSON.stringify(syncSamples)}`);
       const signature = journeySignature(authoritative.state);
       for (const page of [owner, game]) {
-        await page.waitForFunction(hash => document.body.dataset.companyHash === hash,
-          authoritative.state.hash, {timeout:30000});
         const peer = await page.evaluate(async id => {
           const token = localStorage.getItem('cc-coop-token');
           const response = await fetch(`/api/worlds/${id}/state?campaign=1`,
@@ -304,7 +321,13 @@ async function main() {
       if (current.journey.active && current.journey.phase === 1 &&
           current.journey.stop === 0 && current.journey.watch % 2 === 0 &&
           !current.journey.road_site) {
-        afternoon = current;
+        const held = await owner.evaluate(route =>
+          Module.ccCoop.apply('stop_travel', String(route), 0, 0),
+        current.journey.route);
+        assert(held.accepted, held.message);
+        assert(held.world.travel_stopped,
+          'The host holds the carriage before the afternoon camp choice');
+        afternoon = held.world.state;
         break;
       }
       assert(current.journey.active, 'The company must reach the afternoon road watch');
@@ -333,11 +356,12 @@ async function main() {
     assert(afternoon, 'The road offers an afternoon camp watch');
     if (await ownerControls.button('Back to road').read())
       await ownerControls.button('Back to road').click();
-    if (await ownerControls.button('Travel').read())
-      await ownerControls.button('Travel').click();
-    await ownerControls.button('Stop').click();
     const stoppedForCamp = await checkpoint('afternoon-stop');
     assert.equal(stoppedForCamp.travel_stopped, true);
+    assert.equal(stoppedForCamp.state.journey.route, afternoon.journey.route);
+    assert.equal(stoppedForCamp.state.journey.progress, afternoon.journey.progress);
+    assert.equal(stoppedForCamp.state.journey.watch, afternoon.journey.watch,
+      'Camp remains at the stopped afternoon watch');
     await ownerControls.button('Save').click();
     await owner.screenshot({path:'browser-results/shared-afternoon-stop.png'});
     await game.reload();
