@@ -1,7 +1,6 @@
 #include "sim/cc_road_council.h"
 #include "sim/cc_occupations.h"
 /* Scene actions and modal UI share the same input boundary. */
-static CcClientPreferences *adventure_preferences;
 static bool adventure_preferences_dirty;
 
 static bool AdventureScene(const LocalState *local)
@@ -461,14 +460,14 @@ static bool HandleAdventureScene(CcJournal *journal, CcSim *sim,
         CcLocalAgentStop(&local->agent);
         return true;
     }
-    if (ClientKeyPressed(KEY_E))
+    if (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_target_next : KEY_E))
         CcInteractionCycle(&local->interaction, &local->interactions,
             IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? -1 : 1);
     Vector2 mouse = ClientPointerPosition();
     const CcInteractionTarget *hover = CcInteractionPick(&local->interactions, mouse.x, mouse.y);
     bool click = ClientMouseButtonPressed(MOUSE_BUTTON_LEFT);
     const CcInteractionTarget *focus = AdventureFocus(local);
-    bool activate = ClientKeyPressed(KEY_F);
+    bool activate = ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_interact : KEY_F);
     const CcInteractionTarget *chosen = card_target != NULL ? card_target :
         click && hover != NULL ? hover : activate ? focus : NULL;
     if (chosen == NULL && activate) {
@@ -1232,7 +1231,7 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
 {
     if (*view != VIEW_LEDGER || ClientKeyPressed(KEY_F5)) return false;
     Rectangle panel = AdventurePanel();
-    if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(KEY_B) || ClientKeyPressed(KEY_TAB) ||
+    if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
     for (int32_t page=0;page<4;++page) {
         if (AdventureHit(AdventureBookPageBounds(panel,page))) {
@@ -1271,7 +1270,8 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
     const CcTreasure *book = CcSimDeepWyrmProphecy(sim);
     if (local->book_page == 0 && book != NULL && !book->destroyed &&
         book->owner_id == sim->player.id && CcSimCanDeliverProphecy(sim) &&
-        (ClientKeyPressed(KEY_E) || AdventureHit((Rectangle){panel.x + 28, panel.y + panel.height - 112, panel.width - 56, 42}))) {
+        (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_interact : KEY_E) ||
+         AdventureHit((Rectangle){panel.x + 28, panel.y + panel.height - 112, panel.width - 56, 42}))) {
         CcCommand deliver = {.kind = CC_COMMAND_DELIVER_PROPHECY, .target_id = book->id};
         (void)ApplyCommand(journal, sim, deliver, message, message_capacity);
     }
@@ -1289,7 +1289,7 @@ static void DrawAdventurePause(const LocalState *local)
     AdventurePanelTitle(panel, CcCoopClientActive() ? "Company menu" : "Paused");
     AdventureButton(AdventureMenuItem(panel, 0), "Resume  Esc", true, false);
     AdventureButton(AdventureMenuItem(panel, 1), "Save game  F5", true, false);
-    AdventureButton(AdventureMenuItem(panel, 2), "Company Book  B", true, false);
+    AdventureButton(AdventureMenuItem(panel, 2), TextFormat("Company Book  %c", adventure_preferences != NULL ? adventure_preferences->key_book : 'B'), true, false);
     if (adventure_preferences != NULL) {
         AdventureButton(AdventureMenuItem(panel, 3), adventure_preferences->reduced_motion ?
             "Motion: gentle  F4" : "Motion: full  F4", true, false);
@@ -1298,11 +1298,17 @@ static void DrawAdventurePause(const LocalState *local)
         AdventureButton(AdventureMenuItem(panel, 5), adventure_preferences->focus_hints ? "Target hints: shown  H" : "Target hints: focus only  H", true, false);
         AdventureButton(AdventureMenuItem(panel, 6), adventure_preferences->audio_mode == 0 ? "Sound: full  F6" :
             adventure_preferences->audio_mode == 1 ? "Sound: effects  F6" : "Sound: muted  F6", true, false);
+        AdventureButton(AdventureMenuItem(panel, 7), "Settings & controls  S", true, false);
     }
     int x = (int)(panel.x + panel.width * 0.53f), y = (int)panel.y + 84;
     CcOverlayDrawText(CcCoopClientActive() ? "The host keeps company time" : "At your own pace", x, y, AdventureTextSize(20), CC_GOLD);
     y += 46;
-    (void)AdventureWrap("Choose an object card or tap the object to approach and act. Browse more cards with the arrows. Click the ground to walk. Tap a road to turn, the carriage to stop or drive, and a camp to rest.\n\nE selects the next visible target. Shift+E goes back. F uses the selected action.\n\nB opens the Company Book. Q opens promises. M opens the map case.\n\nEsc cancels an approach or returns to the scene. F5 saves.",
+    (void)AdventureWrap(TextFormat("Choose an object card or tap the object to approach and act. Browse more cards with the arrows. Click the ground to walk. Tap a road to turn, the carriage to stop or drive, and a camp to rest.\n\n%c selects the next visible target. Shift+%c goes back. %c uses the selected action.\n\n%c opens the Company Book. %c opens promises. M opens the map case.\n\nEsc cancels an approach or returns to the scene. F5 saves.",
+        adventure_preferences != NULL ? adventure_preferences->key_target_next : 'E',
+        adventure_preferences != NULL ? adventure_preferences->key_target_next : 'E',
+        adventure_preferences != NULL ? adventure_preferences->key_interact : 'F',
+        adventure_preferences != NULL ? adventure_preferences->key_book : 'B',
+        adventure_preferences != NULL ? adventure_preferences->key_promises : 'Q'),
         x, y, (int)(panel.width * 0.47f - 30.0f), AdventureTextSize(14), INK);
     (void)local;
 }
@@ -1316,7 +1322,7 @@ static bool HandleAdventurePause(LocalState *local, ClientView *view, ClientView
     }
     if (AdventureHit(AdventureMenuItem(panel, 1))) { local->request_save = true; return false; }
     if (ClientKeyPressed(KEY_F5)) return false;
-    if (ClientKeyPressed(KEY_B) || AdventureHit(AdventureMenuItem(panel, 2))) {
+    if (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || AdventureHit(AdventureMenuItem(panel, 2))) {
         *return_view = VIEW_PAUSE; *view = VIEW_LEDGER; return true;
     }
     if (adventure_preferences != NULL) {
@@ -1335,6 +1341,10 @@ static bool HandleAdventurePause(LocalState *local, ClientView *view, ClientView
         if (AdventureHit(AdventureMenuItem(panel, 6))) {
             adventure_preferences->audio_mode = (adventure_preferences->audio_mode + 1) % 3;
             adventure_preferences_dirty = true;
+        }
+        if (ClientKeyPressed(KEY_S) || AdventureHit(AdventureMenuItem(panel, 7))) {
+            local->settings_requested = true;
+            return true;
         }
     }
     return true;

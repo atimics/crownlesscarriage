@@ -14,11 +14,13 @@ typedef struct CcOverlayTextItem {
     int font_size;
     Color color;
     bool body;
+    bool caption;
 } CcOverlayTextItem;
 
 static CcOverlayTextItem overlay_text[CC_OVERLAY_MAX_TEXT_ITEMS];
 static int overlay_text_count = 0;
 static float overlay_text_scale = 1.0f;
+static float overlay_caption_scale = 1.0f;
 static bool overlay_active = false;
 static Font body_font;
 static void (*overlay_text_observer)(const char *text);
@@ -69,7 +71,8 @@ static float OverlaySpacing(bool body, float size)
 
 static void DrawOverlayTextItem(const CcOverlayTextItem *item)
 {
-    float font_size = ScaledFontSize(item->font_size);
+    float scale = item->caption ? overlay_caption_scale : overlay_text_scale;
+    float font_size = fmaxf(9.0f, (float)item->font_size * scale);
     DrawTextEx(OverlayFont(item->body), item->text,
                (Vector2){(float)item->x, (float)item->y}, font_size,
                OverlaySpacing(item->body, font_size), item->color);
@@ -79,7 +82,13 @@ void CcOverlayBegin(float text_scale)
 {
     overlay_text_count = 0;
     overlay_text_scale = fmaxf(0.50f, fminf(text_scale, 3.0f));
+    overlay_caption_scale = overlay_text_scale;
     overlay_active = true;
+}
+
+void CcOverlaySetCaptionScale(float text_scale)
+{
+    overlay_caption_scale = fmaxf(0.50f, fminf(text_scale, 3.0f));
 }
 
 void CcOverlayFlush(void)
@@ -97,13 +106,14 @@ void CcOverlayEnd(void)
 }
 
 static void QueueOverlayText(const char *text, int x, int y, int font_size,
-                             Color color, bool body)
+                             Color color, bool body, bool caption)
 {
     if (text == NULL) return;
     if (overlay_text_observer != NULL) overlay_text_observer(text);
     if (!overlay_active) {
         CcOverlayTextItem item = {
-            .x = x, .y = y, .font_size = font_size, .color = color, .body = body
+            .x = x, .y = y, .font_size = font_size, .color = color, .body = body,
+            .caption = caption
         };
         (void)snprintf(item.text, sizeof(item.text), "%s", text);
         DrawOverlayTextItem(&item);
@@ -116,6 +126,7 @@ static void QueueOverlayText(const char *text, int x, int y, int font_size,
     item->font_size = font_size;
     item->color = color;
     item->body = body;
+    item->caption = caption;
     (void)snprintf(item->text, sizeof(item->text), "%s", text);
 }
 
@@ -130,12 +141,17 @@ int CcOverlayMeasureText(const char *text, int font_size)
 
 void CcOverlayDrawText(const char *text, int x, int y, int font_size, Color color)
 {
-    QueueOverlayText(text, x, y, font_size, color, false);
+    QueueOverlayText(text, x, y, font_size, color, false, false);
+}
+
+void CcOverlayDrawCaption(const char *text, int x, int y, int font_size, Color color)
+{
+    QueueOverlayText(text, x, y, font_size, color, false, true);
 }
 
 void CcOverlayDrawBodyText(const char *text, int x, int y, int font_size, Color color)
 {
-    QueueOverlayText(text, x, y, font_size, color, true);
+    QueueOverlayText(text, x, y, font_size, color, true, false);
 }
 
 int CcOverlayMeasureBodyText(const char *text, int font_size)

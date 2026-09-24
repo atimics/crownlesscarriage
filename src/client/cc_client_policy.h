@@ -8,13 +8,20 @@
 typedef struct CcClientPreferences {
     bool reduced_motion;
     int32_t text_size; /* 0: standard, 1: large, 2: largest */
+    int32_t caption_size; /* 0: standard, 1: large, 2: largest */
+    int32_t reading_time; /* 0: brief, 1: standard, 2: relaxed */
     bool focus_hints;
+    bool focus_assist;
     int32_t audio_mode; /* 0: full, 1: effects, 2: muted */
     int32_t voice_volume; /* 0..100 */
     int32_t player_voice; /* -1: text replies, 5..12: version-one cast */
     bool read_aloud;
     bool ambient_voices;
     uint32_t avatar; /* Five appearance choices, three bits per choice. */
+    int32_t key_target_next;
+    int32_t key_interact;
+    int32_t key_book;
+    int32_t key_promises;
 } CcClientPreferences;
 
 typedef enum CcClientConvoyGait {
@@ -85,6 +92,7 @@ bool CcClientInteractionActivated(bool requested, float distance,
 CcClientCampaignAccess CcClientCampaignAccessFor(bool normal_play,
                                                  bool journal_available);
 void CcClientPreferencesDefault(CcClientPreferences *preferences);
+bool CcClientBindingKeyAllowed(int32_t key);
 bool CcClientPreferencesLoad(const char *path,
                              CcClientPreferences *preferences,
                              char *error, size_t error_capacity);

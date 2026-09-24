@@ -6,7 +6,19 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CC_CLIENT_PREFERENCES_VERSION 5U
+#define CC_CLIENT_PREFERENCES_VERSION 6U
+
+static bool ValidBinding(int32_t key)
+{
+    return CcClientBindingKeyAllowed(key);
+}
+
+bool CcClientBindingKeyAllowed(int32_t key)
+{
+    return key == 'E' || key == 'F' || key == 'B' || key == 'Q' ||
+        key == 'C' || key == 'I' || key == 'L' || key == 'O' ||
+        key == 'P' || key == 'U' || key == 'V' || key == 'Y' || key == 'Z';
+}
 
 static bool ValidAvatar(uint32_t avatar)
 {
@@ -25,8 +37,10 @@ static void SetPreferencesError(char *error, size_t capacity,
 void CcClientPreferencesDefault(CcClientPreferences *preferences)
 {
     if (preferences == NULL) return;
-    *preferences = (CcClientPreferences){.focus_hints = true, .voice_volume = 100,
-        .player_voice = 5, .ambient_voices = true};
+    *preferences = (CcClientPreferences){.focus_hints = true, .focus_assist = true,
+        .reading_time = 1, .voice_volume = 100, .player_voice = 5, .ambient_voices = true,
+        .key_target_next = 'E', .key_interact = 'F', .key_book = 'B',
+        .key_promises = 'Q'};
 }
 
 bool CcClientPreferencesLoad(const char *path,
@@ -88,6 +102,26 @@ bool CcClientPreferencesLoad(const char *path,
             fscanf(file, "%31s %d", setting, &ambient_voices) == 2 &&
             strcmp(setting, "ambient_voices") == 0 && (ambient_voices == 0 || ambient_voices == 1);
     }
+    int caption_size = 0, reading_time = 1, focus_assist = 1;
+    int key_target_next = 'E', key_interact = 'F', key_book = 'B', key_promises = 'Q';
+    if (valid && version >= 6U) {
+        valid = fscanf(file, "%31s %d", setting, &caption_size) == 2 &&
+            strcmp(setting, "caption_size") == 0 && caption_size >= 0 && caption_size <= 2 &&
+            fscanf(file, "%31s %d", setting, &reading_time) == 2 &&
+            strcmp(setting, "reading_time") == 0 && reading_time >= 0 && reading_time <= 2 &&
+            fscanf(file, "%31s %d", setting, &focus_assist) == 2 &&
+            strcmp(setting, "focus_assist") == 0 && (focus_assist == 0 || focus_assist == 1) &&
+            fscanf(file, "%31s %d", setting, &key_target_next) == 2 &&
+            strcmp(setting, "key_target_next") == 0 && ValidBinding(key_target_next) &&
+            fscanf(file, "%31s %d", setting, &key_interact) == 2 &&
+            strcmp(setting, "key_interact") == 0 && ValidBinding(key_interact) &&
+            fscanf(file, "%31s %d", setting, &key_book) == 2 &&
+            strcmp(setting, "key_book") == 0 && ValidBinding(key_book) &&
+            fscanf(file, "%31s %d", setting, &key_promises) == 2 &&
+            strcmp(setting, "key_promises") == 0 && ValidBinding(key_promises) &&
+            key_target_next != key_interact && key_target_next != key_book && key_target_next != key_promises &&
+            key_interact != key_book && key_interact != key_promises && key_book != key_promises;
+    }
     if (fclose(file) != 0) valid = false;
     if (!valid) {
         CcClientPreferencesDefault(preferences);
@@ -104,6 +138,13 @@ bool CcClientPreferencesLoad(const char *path,
     preferences->player_voice = player_voice;
     preferences->read_aloud = read_aloud != 0;
     preferences->ambient_voices = ambient_voices != 0;
+    preferences->caption_size = caption_size;
+    preferences->reading_time = reading_time;
+    preferences->focus_assist = focus_assist != 0;
+    preferences->key_target_next = key_target_next;
+    preferences->key_interact = key_interact;
+    preferences->key_book = key_book;
+    preferences->key_promises = key_promises;
     SetPreferencesError(error, error_capacity, "");
     return true;
 }
@@ -115,9 +156,19 @@ bool CcClientPreferencesSave(const char *path,
     if (path == NULL || path[0] == '\0' || preferences == NULL ||
         preferences->audio_mode < 0 || preferences->audio_mode > 2 ||
         preferences->text_size < 0 || preferences->text_size > 2 ||
+        preferences->caption_size < 0 || preferences->caption_size > 2 ||
+        preferences->reading_time < 0 || preferences->reading_time > 2 ||
         preferences->voice_volume < 0 || preferences->voice_volume > 100 ||
         (preferences->player_voice != -1 && (preferences->player_voice < 5 || preferences->player_voice > 12)) ||
-        !ValidAvatar(preferences->avatar)) {
+        !ValidAvatar(preferences->avatar) ||
+        !ValidBinding(preferences->key_target_next) || !ValidBinding(preferences->key_interact) ||
+        !ValidBinding(preferences->key_book) || !ValidBinding(preferences->key_promises) ||
+        preferences->key_target_next == preferences->key_interact ||
+        preferences->key_target_next == preferences->key_book ||
+        preferences->key_target_next == preferences->key_promises ||
+        preferences->key_interact == preferences->key_book ||
+        preferences->key_interact == preferences->key_promises ||
+        preferences->key_book == preferences->key_promises) {
         SetPreferencesError(error, error_capacity,
                             "Preferences path or state is invalid.");
         return false;
@@ -144,14 +195,25 @@ bool CcClientPreferencesSave(const char *path,
                                "voice_volume %d\n"
                                "player_voice %d\n"
                                "read_aloud %d\n"
-                               "ambient_voices %d\n",
+                               "ambient_voices %d\n"
+                               "caption_size %d\n"
+                               "reading_time %d\n"
+                               "focus_assist %d\n"
+                               "key_target_next %d\n"
+                               "key_interact %d\n"
+                               "key_book %d\n"
+                               "key_promises %d\n",
                          CC_CLIENT_PREFERENCES_VERSION,
                          preferences->reduced_motion ? 1 : 0,
                          preferences->audio_mode, preferences->text_size,
                          preferences->focus_hints ? 1 : 0,
                          (unsigned int)preferences->avatar, preferences->voice_volume,
                          preferences->player_voice, preferences->read_aloud ? 1 : 0,
-                         preferences->ambient_voices ? 1 : 0) > 0;
+                         preferences->ambient_voices ? 1 : 0,
+                         preferences->caption_size, preferences->reading_time,
+                         preferences->focus_assist ? 1 : 0,
+                         preferences->key_target_next, preferences->key_interact,
+                         preferences->key_book, preferences->key_promises) > 0;
     saved = saved && fflush(file) == 0;
     if (fclose(file) != 0) saved = false;
     if (saved && rename(temporary, path) != 0) saved = false;
