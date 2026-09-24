@@ -572,7 +572,8 @@ static int TownPresence(void)
     CHECK(strstr(status, "Abandoned") != NULL);
     town->population = 180;
     CcLocalTownStatus(&sim, town->id, status, sizeof(status));
-    CHECK(strcmp(status, "180 residents") == 0);
+    CHECK(strstr(status, "180 residents") != NULL);
+    CHECK(strstr(status, "food rations") != NULL);
     sim.character_count = 1;
     CcCharacter *person = &sim.characters[0];
     person->current_settlement_id = town->id;
@@ -581,6 +582,11 @@ static int TownPresence(void)
     person->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
     CHECK(CcLocalTownPerson(&sim, town->id, 0) == person);
     CHECK(CcLocalTownPerson(&sim, town->id, 1) == NULL);
+    person->home_settlement_id = sim.settlements[0].id;
+    town->population = 0;
+    CcLocalTownStatus(&sim, town->id, status, sizeof(status));
+    CHECK(strstr(status, "0 residents / 1 visitor") != NULL);
+    town->population = 180;
     person->activity = CC_CHARACTER_ACTIVITY_TRAVELLING;
     CHECK(CcLocalTownPerson(&sim, town->id, 0) == NULL);
     person->activity = CC_CHARACTER_ACTIVITY_RECOVERING;

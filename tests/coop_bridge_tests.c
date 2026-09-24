@@ -408,8 +408,52 @@ static void CheckTravelHoldClock(void)
     CcCoopDestroy(normal); CcCoopDestroy(fast);
 }
 
+static void CheckTownAndTeamFacts(void)
+{
+    CcSim *sim = CcCoopCreate(42U);
+    CC_CHECK(sim != NULL);
+    CcSettlement *town = CcSimSettlementMutable(sim,
+                                                  sim->player.location_id);
+    CC_CHECK(town != NULL);
+    town->population = 0;
+    town->hunger = 100;
+    town->service_mask = 0U;
+    memset(town->stock, 0, sizeof(town->stock));
+    for (int32_t i = 0; i < sim->character_count; ++i)
+        sim->characters[i].current_settlement_id = sim->settlements[1].id;
+    CcCharacter *visitor = &sim->characters[0];
+    visitor->home_settlement_id = sim->settlements[1].id;
+    visitor->current_settlement_id = town->id;
+    visitor->activity = CC_CHARACTER_ACTIVITY_RECOVERING;
+    visitor->birth_day = sim->current_day - 30 * 365;
+    visitor->death_day = 0;
+    sim->carriage.condition = 0;
+    sim->horse_team[0].health = 1;
+    sim->horse_team[0].hunger = 100;
+    uint64_t before = CcSimHash(sim);
+    char *json = malloc(CC_COOP_JSON_CAPACITY);
+    CC_CHECK(json != NULL);
+    CC_CHECK(CcCoopSnapshot(sim, json, CC_COOP_JSON_CAPACITY));
+    CC_CHECK(strstr(json, "\"residents\":0,\"visitors\":1,\"abandoned\":true") != NULL);
+    CC_CHECK(strstr(json, "\"civilian_food_rations\":0,\"animal_feed_rations\":0,\"services\":[]") != NULL);
+    CC_CHECK(strstr(json, "\"carriage_condition\":0") != NULL);
+    CC_CHECK(strstr(json, "\"health\":1,\"hunger\":100") != NULL);
+    CC_CHECK(CcSimHash(sim) == before);
+
+    town->population = 180;
+    town->hunger = 70;
+    town->service_mask = UINT32_C(1) << CC_SERVICE_STABLE;
+    town->stock[CC_GOOD_BREAD] = 8;
+    CC_CHECK(CcCoopSnapshot(sim, json, CC_COOP_JSON_CAPACITY));
+    CC_CHECK(strstr(json, "\"residents\":180,\"visitors\":1,\"abandoned\":false") != NULL);
+    CC_CHECK(strstr(json, "\"services\":[\"Stable\"]") != NULL);
+    free(json);
+    CcCoopDestroy(sim);
+}
+
 int main(void)
 {
+    CheckTownAndTeamFacts();
     CheckTravelHoldClock();
     CheckCommandRoundTrips();
     CheckCurrentSharedCommandNames();

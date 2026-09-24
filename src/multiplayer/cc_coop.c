@@ -199,7 +199,15 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
         sim->player.id, sim->player.location_id, sim->player.coins, sim->player.reputation,
         sim->player.cargo_capacity, CcPlayerCargoUsed(&sim->player), sim->player.accepted_situation_id);
     Goods(&json, sim->player.cargo);
-    Put(&json, "},\"journey\":{\"active\":%s,\"phase\":%d,\"route\":\"%" PRIu64 "\",\"origin\":\"%" PRIu64 "\",\"destination\":\"%" PRIu64 "\",\"pace\":%d,\"progress\":%d,\"watch\":%d,\"watches\":%d,\"eta\":%d,\"stop\":%d,\"lodge\":%s,\"bargain\":%d,\"road_site\":",
+    Put(&json, ",\"feed_tray_wheat\":%d},\"team\":{\"readiness\":%d,\"carriage_condition\":%d,\"carriage_location\":\"%" PRIu64 "\",\"horses\":[",
+        sim->player.feed_tray_wheat, CcSimHorseTeamReadiness(sim),
+        sim->carriage.condition, sim->carriage.location_id);
+    for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
+        const CcHorse *horse = &sim->horse_team[i];
+        Put(&json, "%s{\"health\":%d,\"hunger\":%d,\"fatigue\":%d}",
+            i ? "," : "", horse->health, horse->hunger, horse->fatigue);
+    }
+    Put(&json, "]},\"journey\":{\"active\":%s,\"phase\":%d,\"route\":\"%" PRIu64 "\",\"origin\":\"%" PRIu64 "\",\"destination\":\"%" PRIu64 "\",\"pace\":%d,\"progress\":%d,\"watch\":%d,\"watches\":%d,\"eta\":%d,\"stop\":%d,\"lodge\":%s,\"bargain\":%d,\"road_site\":",
         sim->journey.active ? "true" : "false", (int)sim->journey.phase,
         sim->journey.route_id, sim->journey.origin_id, sim->journey.destination_id,
         (int)sim->journey.pace, sim->carriage.progress_milli,
@@ -271,8 +279,33 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
     Put(&json, "],\"market\":");
     const CcSettlement *market = CcSimSettlement(sim, sim->player.location_id);
     if (market != NULL && !sim->journey.active) {
+        int32_t visitors = 0;
+        for (int32_t i = 0; i < sim->character_count; ++i) {
+            const CcCharacter *person = &sim->characters[i];
+            if (person->current_settlement_id == market->id &&
+                person->home_settlement_id != market->id &&
+                person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+                person->birth_day <= sim->current_day &&
+                (person->death_day == 0 ||
+                 person->death_day > sim->current_day)) ++visitors;
+        }
         Put(&json, "{\"name\":"); Quote(&json, market->name);
-        Put(&json, ",\"hunger\":%d,\"stock\":", market->hunger); Goods(&json, market->stock);
+        Put(&json, ",\"residents\":%d,\"visitors\":%d,\"abandoned\":%s,\"hunger\":%d,\"civilian_food_rations\":%d,\"animal_feed_rations\":%d,\"services\":[",
+            market->population, visitors,
+            CcSettlementIsAbandoned(market) ? "true" : "false",
+            market->hunger,
+            CcNutritionAvailable(market->stock, CC_NUTRITION_CIVILIAN) /
+                CC_NUTRITION_PER_RATION,
+            CcNutritionAvailable(market->stock, CC_NUTRITION_ANIMAL) /
+                CC_NUTRITION_PER_RATION);
+        bool service_comma = false;
+        for (int32_t service = 0; service < CC_SERVICE_COUNT; ++service) {
+            if (!CcSettlementHasService(market, (CcServiceKind)service)) continue;
+            Put(&json, "%s", service_comma ? "," : "");
+            Quote(&json, CcServiceName((CcServiceKind)service));
+            service_comma = true;
+        }
+        Put(&json, "],\"stock\":"); Goods(&json, market->stock);
         Put(&json, ",\"prices\":"); Goods(&json, market->price); Put(&json, "}");
     } else Put(&json, "null");
     Put(&json, ",\"roads\":[");

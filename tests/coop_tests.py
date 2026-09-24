@@ -458,6 +458,95 @@ class CoopTests(unittest.TestCase):
             self.assertEqual(sum(pool.map(apply, bodies)), 1)
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['company']['cargo'][0], 1)
 
+    def test_shared_road_request_return_and_town_facts_survive_restart(self):
+        bought = self.worlds.command(self.id, self.a,
+            self.command(self.a, 'trade', good=2, amount=1))
+        self.assertTrue(bought['accepted'])
+        before = self.worlds.view(self.id, self.a)
+        origin = before['state']['company']['location']
+        route = next(option for option in before['state']['travel']
+                     if option['available'])
+        bodies = [(token, self.command(token, 'travel', target=route['id']))
+                  for token in (self.a, self.b)]
+
+        def depart(item):
+            try:
+                return item[0], self.worlds.command(self.id, *item)
+            except ApiError as error:
+                self.assertEqual(error.status, 409)
+                return item[0], None
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(depart, bodies))
+        winners = [(token, result) for token, result in results if result is not None]
+        self.assertEqual(len(winners), 1)
+        winner, first = winners[0]
+        self.assertTrue(first['accepted'])
+        self.assertTrue(first['world']['state']['journey']['active'])
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'],
+                         self.worlds.view(self.id, self.b)['state'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        retry = self.worlds.command(self.id, winner,
+            next(body for token, body in bodies if token == winner))
+        self.assertTrue(retry['duplicate'])
+        self.assertEqual(retry['world']['state'], first['world']['state'])
+
+        for step in range(50):
+            state = self.worlds.view(self.id, self.a)['state']
+            journey = state['journey']
+            if not journey['active']:
+                break
+            site = journey['road_site']
+            if site:
+                action, target = 'pass_road_site', site['id']
+            elif journey['phase'] == 4:
+                position = state['road_position']
+                forward = [leg for leg in position['next_legs']
+                           if leg['direction'] == position['direction']]
+                self.assertTrue(forward)
+                leg = next((leg for leg in forward if leg['kind'] == 1),
+                           forward[0])
+                action, target = 'road_leg', leg['token']
+            elif journey['phase'] == 3:
+                action, target = ('break' if journey['stop'] == 1 else 'camp'), 0
+            else:
+                self.assertEqual(journey['phase'], 1)
+                action, target = 'skip_watch', 0
+            member = (self.a, self.b)[step % 2]
+            result = self.worlds.command(self.id, member,
+                self.command(member, action, target=str(target)))
+            self.assertTrue(result['accepted'], result['message'])
+        arrived = self.worlds.view(self.id, self.b)
+        self.assertFalse(arrived['state']['journey']['active'])
+        self.assertEqual(arrived['state']['company']['location'], route['id'])
+        self.assertEqual(arrived['state']['company']['cargo'][2], 1)
+        self.assertEqual(arrived['state']['team']['carriage_location'], route['id'])
+        self.assertGreater(arrived['state']['market']['residents'], 0)
+        self.assertTrue(arrived['state']['market']['services'])
+        self.assertTrue(any(option['id'] == origin
+                            for option in arrived['state']['travel']))
+
+        base = self.worlds.db.execute(
+            'SELECT last_human FROM away_clocks WHERE world=?',
+            (self.id,)).fetchone()[0]
+        self.worlds.seen.clear()
+        self.worlds.tick(wall_now=base + AWAY_GRACE - 1)
+        short = self.worlds.view(self.id, self.a, present=False)
+        self.assertEqual(short['state']['day'], arrived['state']['day'])
+        self.worlds.tick(wall_now=base + AWAY_GRACE + 3600)
+        long = self.worlds.view(self.id, self.a, present=False)
+        self.assertGreater(long['state']['day'], short['state']['day'] + 100)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        returned = self.worlds.view(self.id, self.b, campaign=True)
+        self.assertEqual(returned['state'], long['state'])
+        self.assertEqual(returned['state']['company']['location'], route['id'])
+        self.assertEqual(returned['state']['company']['cargo'][2], 1)
+        self.assertEqual(returned['state']['team']['carriage_location'], route['id'])
+        self.assertEqual(returned['state']['market']['residents'],
+                         self.worlds.view(self.id, self.a)['state']['market']['residents'])
+
     def test_road_and_pony_actions_reach_the_simulation(self):
         for action in ('repair_road_site', 'transfer_road_site', 'clear_road_site', 'camp_road_site', 'pass_road_site', 'meet_pony',
                        'help_pony', 'swap_pony', 'leave_pony'):

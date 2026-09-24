@@ -1512,7 +1512,8 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local)
         local->site_travel_active ? "Tap the carriage to stop or drive" :
         local->market_interior ? profile->interior_service : profile->identity;
     char town_status[128];
-    if (place != NULL && CcSettlementIsAbandoned(place) &&
+    if (place != NULL &&
+        (CcSettlementIsAbandoned(place) || place->hunger >= 40) &&
         local->site_kind == CC_LOCAL_SITE_NONE && !local->journey_travel_active &&
         !local->site_travel_active) {
         CcLocalTownStatus(sim, place->id, town_status, sizeof(town_status));
