@@ -33,6 +33,8 @@ if(CC_BUILD_CLIENT)
              COMMAND crownless_carriage --test-world-cards)
     add_test(NAME stable_care_card_and_restart
              COMMAND crownless_carriage --test-stable-care-card)
+    add_test(NAME road_block_choice
+             COMMAND crownless_carriage --test-road-block-choice)
     add_test(NAME silverwick_mine_input
              COMMAND crownless_carriage --test-mine-input)
     add_test(NAME mine_hauler_visual_identity
