@@ -139,7 +139,10 @@ static int RunDeliveryHandoffRegression(void)
         "Neighbour", "Talk", (Vector3){0}, 1, 2, 1, position, 1);
     if (door == NULL || person == NULL) return ClientRegressionFailure("Create the handoff targets.");
     ContextActionSet actions = BuildContextActions(&sim, &local, VIEW_LOCAL, 0, 0);
-    if (actions.count != 2 || actions.items[0].target.kind != CC_INTERACTION_DOOR)
+    if (actions.count != 3 ||
+        actions.items[0].target.kind != CC_INTERACTION_DOOR ||
+        actions.items[1].target.kind != CC_INTERACTION_PERSON ||
+        actions.items[2].kind != CONTEXT_ACTION_CARE_HORSES)
         return ClientRegressionFailure("The market handoff must lead the arrival tray.");
     int32_t cargo = sim.player.cargo[promise->good];
     sim.player.cargo[promise->good] = promise->quantity - 1;
@@ -192,6 +195,8 @@ static int RunPresentedTargetRegression(void)
     ResetLocalState(&local);
     local.adventure_ui = true;
     Vector2 origin = LocalPosition(&local);
+    RepositionHero(&local, (Vector2){origin.x + 20.0f, origin.y + 20.0f}, false);
+    origin = LocalPosition(&local);
     for (int i = 0; i < 6; ++i) {
         CcInteractionTarget *target = AdventureTarget(&local, &sim,
             CC_INTERACTION_PERSON, (uint64_t)i + 1U, "Neighbour", "Talk",
@@ -267,6 +272,8 @@ static int RunSituationWitnessCardPriorityRegression(void)
     if (mara == NULL || strcmp(mara->name, "Mara Venn") != 0)
         return ClientRegressionFailure("The opening fixture needs Mara Venn.");
     Vector2 origin = LocalPosition(&local);
+    RepositionHero(&local, (Vector2){origin.x + 20.0f, origin.y + 20.0f}, false);
+    origin = LocalPosition(&local);
     int32_t generic = 0;
     for (int32_t i = 0; i < sim.character_count && generic < 4; ++i) {
         if (sim.characters[i].id == mara->id) continue;

@@ -164,20 +164,22 @@ static int RunWorldCardRegression(void)
         view = VIEW_LOCAL;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         ContextActionSet cards = BuildContextActions(&sim, &local, view, selected, 0);
-        CARD_CHECK(local.interactions.count > 4 && cards.count == 4,
-            "Town controls show four objects.");
+        CARD_CHECK(local.interactions.count > 4 && cards.count == 4 &&
+            cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
+            "Town controls show nearby objects and stable care.");
         CARD_CHECK(ContextCardsPerPage() == 4, "The tray must show four choices.");
         const CcInteractionTarget *first_card = CcInteractionFind(
             &local.interactions, cards.items[0].target);
         CARD_CHECK(first_card != NULL && local.course.situation_witness_active &&
             first_card->character_id == local.course.situation_witness_character_id,
             "The named situation witness must lead the town tray.");
+        CARD_CHECK(cards.items[1].target.kind == CC_INTERACTION_DOOR &&
+            cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
+            "The market handoff stays next and stable care stays visible.");
         float last_distance = -1;
-        for (int32_t i = 0; i < cards.count; ++i) {
+        for (int32_t i = 2; i < 3; ++i) {
             const CcInteractionTarget *target = CcInteractionFind(&local.interactions, cards.items[i].target);
             CARD_CHECK(target != NULL, "Each card must keep its world identity.");
-            if (target->key.kind == CC_INTERACTION_PERSON &&
-                target->character_id == local.course.situation_witness_character_id) continue;
             float distance = GridDistance(LocalPosition(&local), (Vector2){target->approach_x, target->approach_z});
             CARD_CHECK(distance >= last_distance,
                 "The remaining town cards must keep closest-object order.");
@@ -186,8 +188,12 @@ static int RunWorldCardRegression(void)
         local.course.situation_witness_active = false;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         cards = BuildContextActions(&sim, &local, view, selected, 0);
+        CARD_CHECK(cards.count == 4 && cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
+            "Stable care remains visible after the witness leaves.");
+        CARD_CHECK(cards.items[0].target.kind == CC_INTERACTION_DOOR,
+            "The market hall stays in the ordinary town tray.");
         last_distance = -1;
-        for (int32_t i = 0; i < cards.count; ++i) {
+        for (int32_t i = 1; i < 3; ++i) {
             const CcInteractionTarget *target = CcInteractionFind(
                 &local.interactions, cards.items[i].target);
             CARD_CHECK(target != NULL, "Each ordinary card must keep its world identity.");
@@ -217,7 +223,7 @@ static int RunWorldCardRegression(void)
         message[0] = '\0';
 
         CARD_CHECK(cards.count == 4 && ContextCardCount(&cards, 0) == 4,
-            "Town controls must show the nearest four options together.");
+            "Town controls must show nearby objects and care together.");
         /* Card identity remains valid when the object is outside the camera. */
         CcInteractionTarget *door = NULL;
         for (int32_t i = 0; i < local.interactions.count; ++i)

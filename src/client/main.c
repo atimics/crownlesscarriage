@@ -140,6 +140,7 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_OPEN_MAP,
     CONTEXT_ACTION_OPEN_PROMISES,
     CONTEXT_ACTION_REST_TEAM,
+    CONTEXT_ACTION_CARE_HORSES,
     CONTEXT_ACTION_EXPEDITION,
     CONTEXT_ACTION_BUY_CARGO,
     CONTEXT_ACTION_SELL_CARGO,
@@ -4327,13 +4328,67 @@ static void AddRestTeamAction(ContextActionSet *set, const CcSim *sim)
 {
     if (sim == NULL || sim->journey.active ||
         sim->dungeon_expedition.active) return;
-    const CcSettlement *place = CcSimSettlement(
-        sim, sim->player.location_id);
-    bool stable = CcSettlementHasService(place, CC_SERVICE_STABLE);
     AddDetailedContextAction(
         set, CONTEXT_ACTION_REST_TEAM, "Rest the team", "R",
-        stable ? "ONE DAY / STABLE CARE" : "ONE DAY / NO STABLE HERE",
+        "ONE DAY / NORMAL UPKEEP",
         true, CcSimHorseTeamReadiness(sim) < 30);
+}
+
+static bool NearParkedCarriage(const CcSim *sim, const LocalState *local)
+{
+    if (sim == NULL || local == NULL || sim->journey.active ||
+        local->journey_travel_active || local->market_interior ||
+        local->site_kind != CC_LOCAL_SITE_NONE ||
+        sim->carriage.mode != CC_CARRIAGE_PARKED ||
+        sim->carriage.location_id != sim->player.location_id) return false;
+    if (local->open_world) {
+        if (!local->world_carriage.visible) return false;
+        float dx = local->agent.position.x - local->world_carriage.position.x;
+        float dz = local->agent.position.z - local->world_carriage.position.z;
+        return dx * dx + dz * dz < 16.0f;
+    }
+    Vector2 position = LocalPosition(local);
+    return GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
+        GridDistance(position, LOCAL_CARRIAGE) < 1.85f;
+}
+
+static const char *HorseCareSourceLabel(CcHorseCareSource source)
+{
+    switch (source) {
+        case CC_HORSE_CARE_TRAY: return "feed tray";
+        case CC_HORSE_CARE_CARGO: return "carriage cargo";
+        case CC_HORSE_CARE_MARKET: return "stable market";
+        default: return "none";
+    }
+}
+
+static void AddHorseCareAction(ContextActionSet *set, const CcSim *sim)
+{
+    CcHorseCarePreview offer;
+    if (!CcSimHorseCarePreview(sim, &offer)) return;
+    char label[64] = "Care for horses";
+    char detail[48];
+    if (offer.available) {
+        const char *source = offer.source == CC_HORSE_CARE_TRAY ? "tray" :
+            offer.source == CC_HORSE_CARE_CARGO ? "cargo" : "market";
+        (void)snprintf(label, sizeof(label), "Care for horses: %lld crowns",
+                       (long long)offer.cost);
+        (void)snprintf(detail, sizeof(detail),
+            "1 Wheat from %s / 1 day%s", source,
+            offer.weekly_feed_due ? " + upkeep" : "");
+    } else if (offer.source == CC_HORSE_CARE_NO_FEED &&
+               strstr(offer.reason, "1 Wheat") != NULL) {
+        (void)snprintf(detail, sizeof(detail),
+                       "Bring 1 Wheat in tray, cargo, or market.");
+    } else {
+        (void)snprintf(detail, sizeof(detail), "%s", offer.reason);
+    }
+    char hint[16];
+    (void)snprintf(hint, sizeof(hint), "Shift+%c",
+        adventure_preferences != NULL ?
+            adventure_preferences->key_interact : KEY_F);
+    AddDetailedContextAction(set, CONTEXT_ACTION_CARE_HORSES,
+        label, hint, detail, offer.available, false);
 }
 
 static const CcSituation *AdventureDeliveryAtHand(const CcSim *sim)
@@ -4356,10 +4411,14 @@ static bool AdventureHandoffTarget(const CcSim *sim, const LocalState *local,
         target->key.kind == (local->market_interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR);
 }
 
-static bool AdventurePriorityTarget(const CcSim *sim, const LocalState *local,
-                                    const CcInteractionTarget *target)
+static int AdventurePriorityRank(const CcSim *sim, const LocalState *local,
+                                 const CcInteractionTarget *target)
 {
-    if (AdventureHandoffTarget(sim, local, target)) return true;
+    if (AdventureHandoffTarget(sim, local, target)) return 3;
+    if (target != NULL && target->key.kind == CC_INTERACTION_PERSON &&
+        local->course.situation_witness_active &&
+        target->character_id == local->course.situation_witness_character_id)
+        return 2;
     if (target != NULL &&
         target->key.kind == (local->market_interior ?
             CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR)) {
@@ -4369,11 +4428,9 @@ static bool AdventurePriorityTarget(const CcSim *sim, const LocalState *local,
              promise->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
             promise->target_id == sim->player.location_id &&
             sim->carriage.location_id == sim->player.location_id;
-        return !partial_delivery_at_destination;
+        return partial_delivery_at_destination ? 0 : 1;
     }
-    return target != NULL && target->key.kind == CC_INTERACTION_PERSON &&
-        local->course.situation_witness_active &&
-        target->character_id == local->course.situation_witness_character_id;
+    return 0;
 }
 
 static bool FirstDeliveryComplete(const CcSim *sim)
@@ -4448,23 +4505,33 @@ static ContextActionSet BuildContextActions(
             while (at > 0) {
                 const CcInteractionTarget *previous = CcInteractionFind(&local->interactions,
                     set.items[at - 1].target);
-                bool priority = AdventurePriorityTarget(sim, local, target);
-                bool previous_priority = AdventurePriorityTarget(sim, local, previous);
-                if (previous == NULL || previous_priority || (!priority &&
+                int priority = AdventurePriorityRank(sim, local, target);
+                int previous_priority = AdventurePriorityRank(sim, local,
+                                                               previous);
+                float previous_distance = previous != NULL ?
                     GridDistance(LocalPosition(local),
-                        (Vector2){previous->approach_x, previous->approach_z}) <= distance)) break;
+                        (Vector2){previous->approach_x, previous->approach_z}) : 0.0f;
+                if (previous == NULL || previous_priority > priority ||
+                    (previous_priority == priority && (priority > 0 ||
+                        previous_distance <= distance))) break;
                 ContextAction swap = set.items[at - 1];
                 set.items[at - 1] = set.items[at]; set.items[at] = swap;
                 --at;
             }
         }
+        if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         if (local->world_cards_presented && (local->interaction.approaching ||
             GridDistance(LocalPosition(local), local->presented_card_origin) <= 3.0f)) {
             ContextActionSet steady = {0};
-            /* Delivery and named situation witnesses lead, then shown cards, then vacancies. */
-            for (int pass = 0; pass < 3; ++pass) {
+            bool care_present = false;
+            for (int i = 0; i < set.count; ++i)
+                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES)
+                    care_present = true;
+            /* Delivery and named witnesses lead. Keep one place for care after shown cards. */
+            for (int pass = 0; pass < 4; ++pass) {
                 int count = pass == 1 ? local->presented_target_count : set.count;
-                for (int i = 0; i < count && steady.count < 4; ++i) {
+                int limit = pass < 2 && care_present ? 3 : 4;
+                for (int i = 0; i < count && steady.count < limit; ++i) {
                     int candidate = i;
                     if (pass == 1) {
                         candidate = -1;
@@ -4479,17 +4546,32 @@ static ContextActionSet BuildContextActions(
                     }
                     if (candidate < 0) continue;
                     const ContextAction *action = &set.items[candidate];
-                    if (pass == 0 && !AdventurePriorityTarget(sim, local,
-                        CcInteractionFind(&local->interactions, action->target))) continue;
+                    if (pass == 0 &&
+                        action->kind != CONTEXT_ACTION_PICKUP_RELIEF_CRATE &&
+                        action->kind != CONTEXT_ACTION_STOW_RELIEF_CRATE &&
+                        AdventurePriorityRank(sim, local,
+                            CcInteractionFind(&local->interactions,
+                                              action->target)) == 0) continue;
+                    if (pass == 2 && action->kind != CONTEXT_ACTION_CARE_HORSES)
+                        continue;
                     bool included = false;
                     for (int j = 0; j < steady.count; ++j)
-                        if (CcInteractionKeyEqual(steady.items[j].target, action->target)) included = true;
+                        if (steady.items[j].kind == action->kind &&
+                            CcInteractionKeyEqual(steady.items[j].target,
+                                                  action->target)) included = true;
                     if (!included) steady.items[steady.count++] = *action;
                 }
             }
             set = steady;
         }
-        if (set.count > 4) set.count = 4;
+        if (set.count > 4) {
+            for (int i = 4; i < set.count; ++i)
+                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES) {
+                    set.items[3] = set.items[i];
+                    break;
+                }
+            set.count = 4;
+        }
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
@@ -5193,6 +5275,7 @@ static ContextActionSet BuildContextActions(
                                  "Choose a road");
             }
         }
+        if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         return set;
     }
 
@@ -5235,6 +5318,7 @@ static ContextActionSet BuildContextActions(
     }
     if (GridDistance(position, LOCAL_CARRIAGE_BAY) < 1.85f ||
         GridDistance(position, LOCAL_CARRIAGE) < 1.85f) {
+        AddHorseCareAction(&set, sim);
         AddRestTeamAction(&set, sim);
     }
     const CcDungeon *dungeon = DungeonAtSettlement(
@@ -5460,6 +5544,11 @@ static const char *ContextTouchActionLabel(
     if (action->kind == CONTEXT_ACTION_WORLD_TARGET) {
         (void)snprintf(label, label_capacity, "%s %s",
                        action->detail, action->label);
+        return label;
+    }
+    if (action->kind == CONTEXT_ACTION_CARE_HORSES) {
+        (void)snprintf(label, label_capacity, "%s. %s",
+                       action->label, action->detail);
         return label;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER) {
@@ -7005,6 +7094,25 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     return true;
 }
 
+static bool ApplyHorseCare(CcJournal *journal, CcSim *sim,
+                           char *message, size_t message_capacity)
+{
+    CcHorseCarePreview offer = {0};
+    if (!CcSimHorseCarePreview(sim, &offer)) return false;
+    if (!offer.available) {
+        (void)snprintf(message, message_capacity, "%s", offer.reason);
+        return false;
+    }
+    if (!ApplyCommand(journal, sim,
+                      (CcCommand){.kind = CC_COMMAND_CARE_HORSES},
+                      message, message_capacity)) return false;
+    (void)snprintf(message, message_capacity,
+        "Stable care: 1 Wheat from %s, %lld crowns, 1 day.%s",
+        HorseCareSourceLabel(offer.source), (long long)offer.cost,
+        offer.weekly_feed_due ? " Normal day upkeep also ran." : "");
+    return true;
+}
+
 static void DrawAdventureCourtNotes(const CcSim *sim, const LocalState *local);
 #include "client/cc_adventure.inc"
 #include "client/cc_oven_court.inc"
@@ -7078,7 +7186,7 @@ static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
     LeaveOpenWorld(local);
     ResetLocalStatePreservingAthletics(local);
     (void)snprintf(message, message_capacity,
-                   "The team is watered and stabled.");
+                   "The carriage is parked in town.");
 }
 
 static bool HandleTownArrivalAction(
@@ -7554,7 +7662,7 @@ static int RunTownArrivalParkingRegression(void)
         skipped.convoy.phase != CC_LOCAL_CONVOY_PARKED ||
         skipped.convoy.phase_progress != 0.0f ||
         selected != FirstOutgoingRouteIndex(&sim) ||
-        strcmp(message, "The team is watered and stabled.") != 0) {
+        strcmp(message, "The carriage is parked in town.") != 0) {
         (void)fprintf(stderr,
                       "Park carriage did not reach the parked town state.\n");
         return 1;
@@ -9220,6 +9328,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     ContextActionKind context_action = pressed_action.kind;
+    bool care_key = (IsKeyDown(KEY_LEFT_SHIFT) ||
+                     IsKeyDown(KEY_RIGHT_SHIFT)) &&
+        ClientKeyPressed(adventure_preferences != NULL ?
+            adventure_preferences->key_interact : KEY_F);
+    if (*view == VIEW_LOCAL && NearParkedCarriage(sim, local) &&
+        (context_action == CONTEXT_ACTION_CARE_HORSES || care_key)) {
+        (void)ApplyHorseCare(*journal, sim, message, message_capacity);
+        return;
+    }
     if (context_action == CONTEXT_ACTION_NONE && ClientKeyPressed(KEY_SPACE)) {
         for (int32_t i = 0; i < available_cards.count; ++i) {
             if (available_cards.items[i].kind == CONTEXT_ACTION_HOLD_TRAVEL &&
@@ -9964,7 +10081,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         (void)snprintf(message, message_capacity, "%s",
                        advanced ?
-                           "The team rests a day in the stalls." :
+                           "The team rests one day with normal upkeep." :
                            error);
         if (advanced) return;
     }
@@ -11022,6 +11139,7 @@ static int ClientRegressionFailure(const char *message)
 #include "../../tests/client_oven_court.inc"
 #include "../../tests/client_mine_flow.inc"
 #include "../../tests/client_world_cards.inc"
+#include "../../tests/client_stable_care.inc"
 #include "../../tests/client_bridge_scene.inc"
 #include "../../tests/map_texture_lifetime.inc"
 
@@ -11367,6 +11485,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-travel-audio") == 0) return RunTravelAudioRegression();
     if (argc == 2 && strcmp(argv[1], "--test-bridge-scene") == 0) return RunBridgeSceneRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-stable-care-card") == 0) return RunStableCareCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-mine-input") == 0) return RunMineInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-mine-hauler-visual") == 0) return RunMineHaulerVisualRegression();
     if (argc == 2 && strcmp(argv[1], "--test-road-journey-save") == 0) return RunRoadJourneySaveRegression();
