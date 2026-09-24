@@ -54,10 +54,14 @@ EMSCRIPTEN_KEEPALIVE int CrownlessRoadGeometrySelfTest(void)
 EM_JS(void, ClientBrowserLocalNavigation,
     (float x, float z, float command_x, float command_z, int target_valid,
      int navigation_active, int path_index, int path_count,
-     float stall_seconds), {
+     float stall_seconds, int interaction_approaching,
+     int interaction_navigation, int descent_pending), {
     Module.crownlessLocalNavigation = {x, z, command_x, command_z,
         target_valid: !!target_valid, navigation_active: !!navigation_active,
-        path_index, path_count, stall_seconds};
+        path_index, path_count, stall_seconds,
+        interaction_approaching: !!interaction_approaching,
+        interaction_navigation: !!interaction_navigation,
+        descent_pending: !!descent_pending};
 });
 #if defined(__clang__)
 #pragma clang diagnostic pop
@@ -12728,7 +12732,10 @@ int main(int argc, char **argv)
             local.agent.command_point.z, local.agent.target_valid,
             local.agent.navigation_active, local.agent.navigation_point_index,
             local.agent.navigation_point_count,
-            local.agent.movement_stall_seconds);
+            local.agent.movement_stall_seconds,
+            local.interaction.approaching,
+            local.agent.interaction_navigation,
+            local.relief_carriage_descent_pending);
 #endif
         ClientTouchEnd();
         EndDrawing();
