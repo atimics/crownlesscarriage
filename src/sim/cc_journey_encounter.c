@@ -137,11 +137,32 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
                  "The road encounter no longer matches the prepared journey.");
         return false;
     }
+    bool active_bandits = bandits != NULL && bandits->members > 0;
+    const CcSituation *situation = CcSimSituation(sim,
+                                                  journey.situation_id);
+    bool official_checkpoint = sim->schema_version >= 111U &&
+        !active_bandits && route->closed && !route->smuggler_route &&
+        situation != NULL &&
+        situation->kind == CC_SITUATION_RELIEF_DELIVERY;
+    CcKingdom *authority = NULL;
+    if (official_checkpoint) {
+        for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+            if (sim->kingdoms[i].id == destination->kingdom_id) {
+                authority = &sim->kingdoms[i];
+                break;
+            }
+        }
+    }
     if (outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
         sim->schema_version >= 111U &&
-        (bandits == NULL || bandits->members <= 0)) {
+        !active_bandits && authority == NULL) {
         SetError(error, error_capacity,
                  "The road collectors have left; there is nobody to pay.");
+        return false;
+    }
+    if (provisions && authority != NULL) {
+        SetError(error, error_capacity,
+                 "The royal checkpoint asks for crowns, not provisions.");
         return false;
     }
     if (!provisions && outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
@@ -151,11 +172,17 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         return false;
     }
     if (!provisions && outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
-        sim->schema_version >= 111U && bandits != NULL &&
-        bandits->members > 0 &&
+        sim->schema_version >= 111U && active_bandits &&
         bandits->coins > CC_SIM_MAX_MONEY - journey.bargain_cost) {
         SetError(error, error_capacity,
                  "The road collectors cannot hold that payment.");
+        return false;
+    }
+    if (!provisions && outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
+        authority != NULL &&
+        authority->treasury > CC_SIM_MAX_MONEY - journey.bargain_cost) {
+        SetError(error, error_capacity,
+                 "The checkpoint treasury cannot hold that payment.");
         return false;
     }
     CcGood demanded_good = CC_GOOD_FOOD;
@@ -193,9 +220,10 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         magnitude = damage;
     } else if (!provisions) {
         sim->player.coins -= journey.bargain_cost;
-        if (sim->schema_version >= 111U && bandits != NULL &&
-            bandits->members > 0) {
+        if (sim->schema_version >= 111U && active_bandits) {
             bandits->coins += journey.bargain_cost;
+        } else if (authority != NULL) {
+            authority->treasury += journey.bargain_cost;
         } else {
             /* Pending older encounters retain their original recipient. */
             destination->market_coins += journey.bargain_cost;
@@ -206,11 +234,14 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
             bandits->supplies = ClampI32(bandits->supplies + 4, 0, 100);
             bandits->influence = ClampI32(bandits->influence + 3, 0, 100);
         }
-        if (sim->schema_version >= 111U && bandits != NULL &&
-            bandits->members > 0) {
+        if (sim->schema_version >= 111U && active_bandits) {
             (void)snprintf(text, sizeof(text),
                            "The Crownless company pays %.24s %d crowns for this crossing; the road remains under their watch.",
                            bandits->name, journey.bargain_cost);
+        } else if (authority != NULL) {
+            (void)snprintf(text, sizeof(text),
+                           "The Crownless company pays %d crowns at %.24s's royal checkpoint; the chain opens for this crossing.",
+                           journey.bargain_cost, destination->name);
         } else {
             (void)snprintf(text, sizeof(text),
                            "The Crownless company buys passage for %d crowns; commerce moves immediately, but the collectors grow stronger.",

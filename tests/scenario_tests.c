@@ -198,7 +198,6 @@ int main(void)
     official.routes[0].condition = 100;
     official.routes[2].security = 100;
     official.routes[2].condition = 100;
-    official.bandits[0].route_id = official.routes[1].id;
 
     CcSituation *relief = ActiveSituation(
         &official, CC_SITUATION_RELIEF_DELIVERY);

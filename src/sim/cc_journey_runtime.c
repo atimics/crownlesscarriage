@@ -162,6 +162,8 @@ static void InterruptJourney(CcSim *sim,
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcBanditGroup *bandits = services->bandits(
         sim, sim->journey.route_id);
+    if (sim->schema_version >= 111U && bandits != NULL &&
+        bandits->members <= 0) bandits = NULL;
     char text[CC_EVENT_TEXT_CAPACITY];
     if (route != NULL && route->closed && bandits == NULL) {
         (void)snprintf(

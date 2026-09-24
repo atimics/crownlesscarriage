@@ -1,4 +1,5 @@
 #include "metagame/cc_metagame.h"
+#include "persistence/cc_save.h"
 #include "story/cc_story.h"
 
 #include "test_support.h"
@@ -624,8 +625,32 @@ int main(void)
                                sizeof(output)));
     ResolveRoadRhythm(&lawful, output, sizeof(output));
     CC_CHECK(strstr(output, "Captain Ilyra Senn") != NULL);
+    CcId authority_id = lawful.sim.settlements[2].kingdom_id;
+    CcKingdom *authority = NULL;
+    for (int32_t i = 0; i < lawful.sim.kingdom_count; ++i) {
+        if (lawful.sim.kingdoms[i].id == authority_id)
+            authority = &lawful.sim.kingdoms[i];
+    }
+    CC_CHECK(authority != NULL);
+    CcMoney treasury_before = authority->treasury;
+    CcMoney company_before = lawful.sim.player.coins;
+    CcMoney total_before = CcSimTrackedGold(&lawful.sim);
     CC_CHECK(CcMetagameExecute(&lawful, "road bargain", output,
                                sizeof(output)));
+    CC_CHECK(authority->treasury - treasury_before ==
+             company_before - lawful.sim.player.coins);
+    CC_CHECK(CcSimTrackedGold(&lawful.sim) == total_before);
+    static CcSim checkpoint_restored;
+    const char *checkpoint_save = "royal-checkpoint-payment.ccsave";
+    (void)remove(checkpoint_save);
+    CC_CHECK(CcSaveWrite(checkpoint_save, &lawful.sim,
+                         error, sizeof(error)));
+    CC_CHECK(CcSaveRead(checkpoint_save, &checkpoint_restored,
+                        error, sizeof(error)));
+    CC_CHECK(CcSimHash(&checkpoint_restored) == CcSimHash(&lawful.sim));
+    (void)remove(checkpoint_save);
+    (void)remove("royal-checkpoint-payment.ccsave-wal");
+    (void)remove("royal-checkpoint-payment.ccsave-shm");
     CC_CHECK(strstr(output, "report will blame the bridge machinery") != NULL);
     ResolveRoadRhythm(&lawful, output, sizeof(output));
     CC_CHECK(CcMetagameExecute(&lawful, "travel 3", output,

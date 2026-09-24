@@ -152,12 +152,15 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
             contract_journey = true;
         }
     }
+    bool official_checkpoint = sanctioned_closed_crossing &&
+        !route->smuggler_route;
     bool encounter_planned = contract_journey &&
         (sanctioned_closed_crossing ||
          (accepted != NULL &&
           accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
           route->smuggler_route)) &&
-        (sim->schema_version < 111U || bandit_block);
+        (sim->schema_version < 111U || bandit_block ||
+         official_checkpoint);
     int32_t danger = ClampI32(
         CcSimRouteDanger(sim, route->id) +
         CcRouteDragonShadowDanger(sim, route), 0, 95);

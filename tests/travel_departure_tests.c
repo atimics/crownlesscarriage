@@ -98,12 +98,15 @@ static void CheckPaymentsAtEncounter(bool carriage_away)
     int32_t shipments = sim.shipment_count;
     sim.player.coins = sim.journey.bargain_cost;
     int32_t members = sim.bandits[0].members;
+    bool smuggler_route = route->smuggler_route;
+    route->smuggler_route = true;
     sim.bandits[0].members = 0;
     uint64_t vanished = CcSimHash(&sim);
     CC_CHECK(!CcSimApply(&sim, &pay, error, sizeof(error)));
     CC_CHECK(strstr(error, "nobody to pay") != NULL);
     CC_CHECK(CcSimHash(&sim) == vanished);
     sim.bandits[0].members = members;
+    route->smuggler_route = smuggler_route;
     CcMoney gold = CcSimTrackedGold(&sim);
     CcMoney bandit_coins = sim.bandits[0].coins;
     CcMoney destination_coins = CcSimSettlement(
