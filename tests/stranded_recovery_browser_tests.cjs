@@ -12,7 +12,7 @@ async function main() {
   const port = 20000 + process.pid % 20000;
   const origin = `http://127.0.0.1:${port}`;
   const token = 'd'.repeat(64);
-  const worlds = {recover: '5'.repeat(32), foaling: '6'.repeat(32)};
+  const worlds = {recover: '5'.repeat(32), foaling: '6'.repeat(32), tap: '7'.repeat(32)};
   const library = path.resolve(process.argv[2]);
   const site = path.resolve(process.argv[3]);
   const fixtureTool = path.resolve(process.argv[4]);
@@ -71,7 +71,7 @@ async function main() {
       await api('/api/worlds', {id: world, name: `Synthetic ${mode} road`,
         player: 'Mara', seed: 0xc0a71a9e, world_pass: worldPass});
       const fixture = path.join(temp, `${mode}.bin`);
-      execFileSync(fixtureTool, [mode, fixture]);
+      execFileSync(fixtureTool, [mode === 'tap' ? 'recover' : mode, fixture]);
       execFileSync(python, [
         'tests/road_block_browser_seed.py', library, database, world, fixture
       ]);
@@ -128,6 +128,18 @@ async function main() {
       await fs.mkdir(output, {recursive: true});
       await page.screenshot({path: path.join(output, 'foaling-road-choice.png')});
     }
+    await loadWorld(worlds.tap);
+    const passableRoad = await controls.button(/^Choose a road/).read();
+    assert(passableRoad && passableRoad.enabled);
+    await controls.button(/^Choose a road/).tap();
+    await page.waitForFunction(() => Module.crownlessTouchFrame?.scene === 'road' &&
+      Module.crownlessTouchFrame.buttons.some(button =>
+        button.label.startsWith('Drive to ')), undefined, {timeout: 45000});
+    const roadChoices = (await controls.buttons()).filter(button =>
+      button.label.startsWith('Drive to '));
+    assert.equal(roadChoices.length, 2);
+    assert(roadChoices.some(button => button.label.includes(unavailable.market.name)));
+    if (output) await page.screenshot({path: path.join(output, 'abandoned-road-choice.png')});
     await loadWorld(worlds.recover);
     const originButtons = await controls.buttons();
     assert(originButtons.some(button =>
