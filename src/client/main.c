@@ -4482,7 +4482,6 @@ static ContextActionSet BuildContextActions(
                         relief->quantity), true, false);
             }
         }
-        if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         for (int32_t i = 0; i < local->interactions.count; ++i) {
             const CcInteractionTarget *target = &local->interactions.targets[i];
             if (target->key.kind == CC_INTERACTION_ACTION) continue;
@@ -4508,15 +4507,21 @@ static ContextActionSet BuildContextActions(
                 --at;
             }
         }
+        if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         if (local->world_cards_presented && (local->interaction.approaching ||
             GridDistance(LocalPosition(local), local->presented_card_origin) <= 3.0f)) {
             ContextActionSet steady = {0};
-            /* Delivery and named situation witnesses lead, then shown cards, then vacancies. */
+            bool care_present = false;
+            for (int i = 0; i < set.count; ++i)
+                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES)
+                    care_present = true;
+            /* Delivery and named witnesses lead. Keep one place for care after shown cards. */
             for (int pass = 0; pass < 4; ++pass) {
-                int count = pass == 2 ? local->presented_target_count : set.count;
-                for (int i = 0; i < count && steady.count < 4; ++i) {
+                int count = pass == 1 ? local->presented_target_count : set.count;
+                int limit = pass < 2 && care_present ? 3 : 4;
+                for (int i = 0; i < count && steady.count < limit; ++i) {
                     int candidate = i;
-                    if (pass == 2) {
+                    if (pass == 1) {
                         candidate = -1;
                         for (int j = 0; j < set.count; ++j)
                             if (CcInteractionKeyEqual(set.items[j].target, local->presented_targets[i])) {
@@ -4535,7 +4540,7 @@ static ContextActionSet BuildContextActions(
                         !AdventurePriorityTarget(sim, local,
                             CcInteractionFind(&local->interactions,
                                               action->target))) continue;
-                    if (pass == 1 && action->kind != CONTEXT_ACTION_CARE_HORSES)
+                    if (pass == 2 && action->kind != CONTEXT_ACTION_CARE_HORSES)
                         continue;
                     bool included = false;
                     for (int j = 0; j < steady.count; ++j)
@@ -4547,7 +4552,14 @@ static ContextActionSet BuildContextActions(
             }
             set = steady;
         }
-        if (set.count > 4) set.count = 4;
+        if (set.count > 4) {
+            for (int i = 4; i < set.count; ++i)
+                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES) {
+                    set.items[3] = set.items[i];
+                    break;
+                }
+            set.count = 4;
+        }
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
