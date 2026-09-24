@@ -993,7 +993,26 @@ async function main() {
       assert(roadJourney.roadsideStops > 0, JSON.stringify(roadJourney));
       assert(roadJourney.bridgePaid, JSON.stringify(roadJourney));
       await controls.button('Deliver promise Company store').tap();
-      await controls.button('Deliver promise Oren — Company clerk').waitFor();
+      const storeApproach = [];
+      for (let step = 0; step < 18; ++step) {
+        if (await controls.button('Deliver promise Oren — Company clerk').read())
+          break;
+        const position = await mobile.evaluate(() => ({
+          ...Module.crownlessLocalNavigation,
+          cards:Module.crownlessTouchFrame?.buttons.slice(0, 4).map(button =>
+            button.label)}));
+        storeApproach.push(position);
+        assert.equal(position.life_state, 0,
+          `Company store walk keeps the actor upright: ${JSON.stringify(storeApproach)}`);
+        if (storeApproach.length > 2) {
+          const earlier = storeApproach.at(-3);
+          assert(Math.hypot(position.x-earlier.x, position.z-earlier.z) > 0.25,
+          `Company store walk must keep progressing: ${JSON.stringify(storeApproach)}`);
+        }
+        await mobile.waitForTimeout(5000);
+      }
+      assert(await controls.button('Deliver promise Oren — Company clerk').read(),
+        `Company store walk must reach the clerk: ${JSON.stringify(storeApproach)}`);
       await controls.button('Deliver promise Oren — Company clerk').tap();
       await mobile.waitForFunction(() => Module.crownlessTouchFrame?.scene === 'trade',
         undefined, {timeout:30000});
