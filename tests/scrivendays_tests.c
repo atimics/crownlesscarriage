@@ -15,7 +15,10 @@ static CcTreasure *Tome(CcSim *world, int town)
     *t = (CcTreasure){.id=CcMakeId(CC_ENTITY_TREASURE,world->next_entity_serial++),
         .maker_settlement_id=world->settlements[town].id, .owner_id=world->settlements[town].id,
         .location_id=world->settlements[town].id,.created_day=world->current_day,.craft_work=1,.appraised_value=2};
-    (void)snprintf(t->name,sizeof(t->name),"Annal of %s",world->settlements[town].name);
+    char town_name[sizeof(world->settlements[town].name)];
+    memcpy(town_name,world->settlements[town].name,sizeof(town_name));
+    town_name[sizeof(town_name)-1]='\0';
+    (void)snprintf(t->name,sizeof(t->name),"Annal of %s",town_name);
     CcScrivenFreeze(world,t->id);
     world->archives.lore_stored=CcSimArchivePhysicalLore(world);
     return t;
@@ -152,6 +155,7 @@ static bool Expeditions(void)
         sim.current_day=day;
         CcScrivenAdvance(&sim);
         if(!saved_traveller) for(int i=0;i<6;++i) if(sim.scriven.delegates[i].route_id!=0) {
+            CHECK(CcSimReadableTome(&sim,sim.scriven.delegates[i].person_id)==sim.scriven.delegates[i].book_id);
             CHECK(RoundTrip());saved_traveller=true;break;
         }
     }
@@ -185,11 +189,12 @@ static bool WatchAndCopy(void)
     CHECK(RoundTrip());
     int day=sim.current_day;
     sim.clock.minute_subticks=0;
-    CHECK(Apply(CC_SCRIVEN_SKY,0));
-    CHECK(CcScrivenBookById(&sim,id)->notes[3].kind==CC_SCRIVEN_NOTE_SKY);
+    CHECK(!Apply(CC_SCRIVEN_SKY,0));
     CHECK(Apply(CC_SCRIVEN_WAIT,0));CHECK(sim.current_day==day);
     CHECK(!Apply(CC_SCRIVEN_SKY,0));
-    CHECK(Apply(CC_SCRIVEN_WAIT,0));CHECK(Apply(CC_SCRIVEN_WAIT,0));
+    CHECK(Apply(CC_SCRIVEN_WAIT,0));CHECK(Apply(CC_SCRIVEN_SKY,0));
+    CHECK(CcScrivenBookById(&sim,id)->notes[3].kind==CC_SCRIVEN_NOTE_SKY);
+    CHECK(Apply(CC_SCRIVEN_WAIT,0));
     CHECK(sim.current_day==day+1 && sim.clock.minute_subticks==0);
     CHECK(RoundTrip());
     return true;

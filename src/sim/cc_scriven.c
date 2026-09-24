@@ -644,8 +644,10 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         break;
     }
     case CC_SCRIVEN_SKY: {
-        if ((sim->clock.minute_subticks / CC_WORLD_MINUTE_SUBTICKS) < 1080 && (sim->clock.minute_subticks / CC_WORLD_MINUTE_SUBTICKS) >= 360)
+        if ((sim->clock.minute_subticks / CC_WORLD_MINUTE_SUBTICKS) < CC_CALENDAR_NIGHT_MINUTE)
             return Fail(error, capacity, "Watch after sunset to read the Wanderer among the signs.");
+        if (!sim->dragon.slain && sim->dragon.omen_days_remaining > 0 && sim->dragon.retaliation_target_id == here)
+            return Fail(error, capacity, "Read the Wanderer when the dragon's haze clears.");
         int sign = (int)(CcCalendarWanderer(sim->current_day, (sim->clock.minute_subticks / CC_WORLD_MINUTE_SUBTICKS)) * 13.0) % 13;
         s->player_observed_day = sim->current_day;
         (void)snprintf(s->report, sizeof(s->report), "The Wanderer stands in the %s. The daily sign is the %s.", CcZodiacName(sign), CcZodiacName(CcCalendar(sim->current_day).sign));

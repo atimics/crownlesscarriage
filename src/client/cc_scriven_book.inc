@@ -49,7 +49,9 @@ static void DrawAdventureCalendar(const CcSim *sim, const LocalState *local)
             char finding[240];
             (void)snprintf(finding, sizeof(finding), "Almanac, agreed day %d: age begins on proposed day %d. Evidence places it between days %d and %d. %d schools signed.",
                 f->agreed_day, f->proposed_day, f->earliest_day, f->latest_day, f->schools);
-            (void)AdventureWrap(finding, x, y, width, size, INK);
+            y += AdventureWrap(finding, x, y, width, size, INK) + 10;
+            y += AdventureWrap(f->citations[0], x, y, width, size - 2, TEAL) + 8;
+            (void)AdventureWrap(f->citations[1], x, y, width, size - 2, TEAL);
         } else (void)AdventureWrap("Bring this tome to Scrivendays to receive a cited almanac.", x, y, width, size, MUTED);
         const char *labels[6] = {"Next tome", "Next passage", book->borrower_id == sim->player.id ? "Return tome" : t != NULL && t->owner_id == sim->player.id ? "Company tome" : "Borrow tome",
             "Copy: 2 crowns", "Record lair sighting", "Commission tome"};
@@ -92,7 +94,11 @@ static void HandleAdventureCalendar(CcJournal *journal, CcSim *sim, LocalState *
         } else if (clicked == 1) {
             int base = (local->book_offset - 1) / 8 * 8;
             local->book_offset = base + local->book_offset % 8 + 1;
-        } else if (clicked == 2) action.amount = book->borrower_id == sim->player.id ? CC_SCRIVEN_RETURN : CC_SCRIVEN_BORROW;
+        } else if (clicked == 2) {
+            const CcTreasure *t = CcSimTreasure(sim, book->id);
+            if (t != NULL && t->owner_id != sim->player.id)
+                action.amount = book->borrower_id == sim->player.id ? CC_SCRIVEN_RETURN : CC_SCRIVEN_BORROW;
+        }
         else if (clicked == 3) action.amount = CC_SCRIVEN_COPY;
         else if (clicked == 4) action.amount = CC_SCRIVEN_OBSERVE;
         else if (clicked == 5) action.amount = CC_SCRIVEN_COMMISSION;

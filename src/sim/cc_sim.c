@@ -4007,6 +4007,12 @@ CcId CcSimReadableTome(const CcSim *sim, CcId character_id)
 {
     const CcCharacter *reader = CcSimCharacter(sim, character_id);
     if (reader == NULL) return 0U;
+    for (int i = 0; sim->schema_version >= 113U && i < CC_SCRIVEN_DELEGATES; ++i) {
+        const CcScrivenDelegate *d = &sim->scriven.delegates[i];
+        const CcTreasure *carried = CcSimTreasure(sim, d->book_id);
+        if (d->person_id == character_id && CcScrivenCarries(sim, d->book_id, character_id) &&
+            carried != NULL && !carried->destroyed) return carried->id;
+    }
     /* Where they stand first, where they are from second: a traveller quotes
        the archive in front of them before the one back home. */
     for (int pass = 0; pass < 2; ++pass) {
