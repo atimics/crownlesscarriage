@@ -6776,7 +6776,7 @@ static void DrawCharacterConversation(const CcSim *sim,
     }
     CcOverlayDrawText("\"", speech_x, (int)panel_y + 42, 24, MUTED);
     int32_t available_width = text_right - speech_x - 30;
-    float caption_scale = 1.0f + (adventure_preferences != NULL ? adventure_preferences->caption_size * 0.2f : 0.0f);
+    float caption_scale = 1.0f + (adventure_preferences != NULL ? (float)adventure_preferences->caption_size * 0.2f : 0.0f);
     size_t line_capacity = (size_t)((float)available_width / (9.0f * caption_scale));
     if (line_capacity < 16U) line_capacity = 16U;
     if (line_capacity > 104U) line_capacity = 104U;
@@ -12137,8 +12137,8 @@ int main(int argc, char **argv)
         CcLocalCrewBeginFrame(frame_delta_time);
         BeginDrawing();
         ClearBackground(BACKGROUND);
-        CcOverlayBegin(1.0f + preferences.text_size * 0.18f);
-        CcOverlaySetCaptionScale(1.0f + preferences.caption_size * 0.2f);
+        CcOverlayBegin(1.0f + (float)preferences.text_size * 0.18f);
+        CcOverlaySetCaptionScale(1.0f + (float)preferences.caption_size * 0.2f);
         bool road_choice_underlay = view == VIEW_ROADS ||
                             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
                              return_view == VIEW_ROADS);

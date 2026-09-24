@@ -33,7 +33,18 @@ async function main() {
     await page.keyboard.press('Enter');
   }
   async function prefs() {
-    return page.evaluate(() => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'}));
+    return page.evaluate(() => {
+      const file = '/crownless-save/crownless_campaign.ccsave.preferences';
+      return FS.analyzePath(file).exists ? FS.readFile(file, {encoding:'utf8'}) : '';
+    });
+  }
+  async function waitForPrefs(...needles) {
+    await page.waitForFunction(values => {
+      const file = '/crownless-save/crownless_campaign.ccsave.preferences';
+      if (!FS.analyzePath(file).exists) return false;
+      const content = FS.readFile(file, {encoding:'utf8'});
+      return values.every(value => content.includes(value));
+    }, needles, {timeout:5000});
   }
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
@@ -42,22 +53,21 @@ async function main() {
     await page.waitForFunction(() => Module.crownlessScreen === 'settings');
     await page.screenshot({path:path.join(output,'settings-default.png')});
     await selectMenuItem(1);
-    await page.waitForFunction(async () => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'}).includes('caption_size 1'), undefined, {timeout:5000});
+    await waitForPrefs('caption_size 1');
     await selectMenuItem(0);
-    await page.waitForFunction(async () => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'}).includes('text_size 1'), undefined, {timeout:5000});
+    await waitForPrefs('text_size 1');
     await page.screenshot({path:path.join(output,'settings-large.png')});
     await selectMenuItem(6);
+    await page.waitForFunction(() => Module.crownlessTouchFrame?.buttons?.some(
+      button => button.label === 'Press a key, or Escape to cancel'), undefined, {timeout:2000});
     await page.keyboard.press('i');
-    await page.waitForFunction(async () => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'}).includes('key_target_next 73'), undefined, {timeout:5000});
+    await waitForPrefs('key_target_next 73');
     let saved = await prefs();
     assert.match(saved,/caption_size 1\n/);
     assert.match(saved,/text_size 1\n/);
     assert.match(saved,/key_target_next 73\n/);
     await selectMenuItem(10);
-    await page.waitForFunction(async () => {
-      const value = FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'});
-      return value.includes('caption_size 0') && value.includes('text_size 0') && value.includes('key_target_next 69');
-    },undefined,{timeout:5000});
+    await waitForPrefs('caption_size 0', 'text_size 0', 'key_target_next 69');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
     await page.reload();
@@ -74,7 +84,10 @@ async function main() {
     await controls.button('Settings & controls').tap();
     await mobile.waitForFunction(() => Module.crownlessScreen === 'settings');
     await controls.button(/^Caption size:/).tap();
-    await mobile.waitForFunction(async () => FS.readFile('/crownless-save/crownless_campaign.ccsave.preferences', {encoding:'utf8'}).includes('caption_size 1'), undefined, {timeout:5000});
+    await mobile.waitForFunction(() => {
+      const file = '/crownless-save/crownless_campaign.ccsave.preferences';
+      return FS.analyzePath(file).exists && FS.readFile(file, {encoding:'utf8'}).includes('caption_size 1');
+    }, undefined, {timeout:5000});
     await mobile.screenshot({path:path.join(output,'settings-touch.png')});
     await phone.close();
     console.log('Browser settings, remapping, defaults, and reload persistence passed');
