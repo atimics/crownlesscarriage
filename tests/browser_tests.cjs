@@ -223,9 +223,11 @@ async function main() {
     const frameMs = Object.fromEntries([['median', 0.5], ['p95', 0.95], ['p99', 0.99]]
       .map(([name, fraction]) => [name, frameTimes[Math.min(frameTimes.length - 1,
         Math.floor(frameTimes.length * fraction))]]));
-    const p95LimitMs = process.env.CI ? 400 : 100;
+    const diagnosticLimit = Number(process.env.CC_BROWSER_DIAGNOSTIC_P95_MS || 0);
+    const p95LimitMs = diagnosticLimit > 0 ? diagnosticLimit : process.env.CI ? 400 : 100;
     await fs.writeFile(path.join(output, 'frame-budget.json'),
-      JSON.stringify({environment: process.env.CI ? 'ci-software' : 'local-software',
+      JSON.stringify({environment: diagnosticLimit > 0 ? 'local-diagnostic-software' :
+        process.env.CI ? 'ci-software' : 'local-software',
         p95LimitMs, frames: drawn, perFrame, frameMs}, null, 2));
     assert(frameTimes.length >= 20, `Frame timing needs a useful sample, not ${frameTimes.length} frames`);
     assert(frameMs.p95 <= p95LimitMs,
