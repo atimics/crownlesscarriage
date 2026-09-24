@@ -536,6 +536,7 @@ async function main() {
             {label: 'Unload 1', enabled: false, active: false}
           ]
         };
+        const savedFrame = Module.crownlessTouchFrame;
         const activate = Module._CrownlessTouchActivate;
         window.semanticActivations = [];
         Module._CrownlessTouchActivate = (index, revision) =>
@@ -588,7 +589,7 @@ async function main() {
         loading.focus();
         const recovery = panel.hidden && document.activeElement === loading;
         loading.hidden = true;
-        Module.renderCrownlessTouch(Module.crownlessTouchFrame);
+        Module.renderCrownlessTouch(savedFrame);
         Module._CrownlessTouchActivate = activate;
         return {...content,
           activation: window.semanticActivations,
