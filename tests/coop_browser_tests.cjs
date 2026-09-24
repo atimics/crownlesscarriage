@@ -388,7 +388,9 @@ async function main() {
     await crewControls.button('Camp until morning').waitFor();
     assert((await crewControls.button('Camp until morning').read()).enabled,
       'The second player sees the same camp choice');
-    await ownerControls.button('Road options').click();
+    if (await ownerControls.button('Road options').read())
+      await ownerControls.button('Road options').click();
+    await ownerControls.button('Camp until morning').waitFor();
     await ownerControls.button('Camp until morning').click();
     const camped = await checkpoint('camped');
     assert.equal(camped.state.journey.progress,
