@@ -26,7 +26,7 @@ static void CheckCommandRoundTrips(void)
     CcSim *direct = CcCoopCreate(42U);
     CcSim *shared = CcCoopCreate(42U);
     CC_CHECK(direct != NULL && shared != NULL);
-    for (int32_t kind = 1; kind <= (int32_t)CC_COMMAND_MINE_CACHE; ++kind) {
+    for (int32_t kind = 1; kind < (int32_t)CC_COMMAND_COUNT; ++kind) {
         CcSimInit(direct, 42U);
         *shared = *direct;
         const char *name = CcCoopActionName((CcCommandKind)kind);
@@ -37,11 +37,20 @@ static void CheckCommandRoundTrips(void)
                               .amount = 1, .dungeon_state = (CcDungeonState)1};
         char direct_error[256] = "", shared_error[256] = "";
         bool expected = CcSimApply(direct, &command, direct_error, sizeof(direct_error));
+        uint64_t before = CcSimHash(shared);
         bool actual = CcCoopApply(shared, name, 0U, CC_GOOD_BREAD, 1,
                                   shared_error, sizeof(shared_error));
+        if (kind == CC_COMMAND_MINE_CONTEST ||
+            kind == CC_COMMAND_MINE_RESOLVE_CONTEST ||
+            (kind >= CC_COMMAND_FOOD_RELIEF_PROPOSE &&
+             kind <= CC_COMMAND_FOOD_RELIEF_EXECUTE)) {
+            CC_CHECK(!actual && shared_error[0] != '\0');
+            CC_CHECK(CcSimHash(shared) == before);
+            continue;
+        }
         CC_CHECK(actual == expected);
         CC_CHECK(strcmp(direct_error, shared_error) == 0);
-        if (expected) CC_CHECK(CcSimHash(direct) == CcSimHash(shared));
+        CC_CHECK(CcSimHash(direct) == CcSimHash(shared));
     }
     CcCoopDestroy(direct);
     CcCoopDestroy(shared);
@@ -58,7 +67,8 @@ static void CheckCurrentSharedCommandNames(void)
                     "pickup_relief_crate")==0);
     CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_STOW_RELIEF_CRATE),
                     "stow_relief_crate")==0);
-    for (int32_t kind=1;kind<=(int32_t)CC_COMMAND_STOW_RELIEF_CRATE;++kind) {
+    CC_CHECK(CcCoopActionName(CC_COMMAND_COUNT)[0]=='\0');
+    for (int32_t kind=1;kind<(int32_t)CC_COMMAND_COUNT;++kind) {
         const char *name=CcCoopActionName((CcCommandKind)kind);
         CC_CHECK(name[0]!='\0');
         for (int32_t prior=1;prior<kind;++prior)

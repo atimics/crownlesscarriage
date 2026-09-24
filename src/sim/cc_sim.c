@@ -20267,6 +20267,7 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
             return true;
         }
         case CC_COMMAND_NONE:
+        case CC_COMMAND_COUNT:
             break;
     }
     SetError(error, error_capacity, "Command kind is invalid.");

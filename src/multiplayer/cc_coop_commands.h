@@ -73,6 +73,8 @@ static inline const char *CcCoopActionName(CcCommandKind kind)
         "observe_oven_court",
         "pickup_relief_crate", "stow_relief_crate", "care_horses", "scriven",
     };
-    return kind > CC_COMMAND_NONE && kind <= CC_COMMAND_SCRIVEN ? names[(int)kind] : "";
+    _Static_assert(sizeof(names) / sizeof(names[0]) == CC_COMMAND_COUNT,
+        "Add every shared command to the action name table");
+    return kind > CC_COMMAND_NONE && kind < CC_COMMAND_COUNT ? names[(int)kind] : "";
 }
 #endif
