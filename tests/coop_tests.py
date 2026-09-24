@@ -1214,7 +1214,9 @@ class CoopTests(unittest.TestCase):
         cared = receipt['world']['state']
         self.assertEqual(cared['day'], state['day'] + 1)
         self.assertEqual(cared['company']['coins'], state['company']['coins'] - offer['cost'])
-        self.assertTrue(any('receives care for one day' in event['text']
+        self.assertTrue(any('Care at ' in event['text'] and
+                            '1 Wheat from the stable market' in event['text'] and
+                            '1 day.' in event['text']
                             for event in cared['events']))
         self.assertEqual(self.worlds.view(self.id, self.a)['state'],
                          self.worlds.view(self.id, self.b)['state'])

@@ -19622,8 +19622,8 @@ static bool ApplyCareHorses(CcSim *sim, char *error,
     }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
-                   "The company spends 1 Wheat from %s and %lld crowns at %.24s stable; the team rests and receives care for one day.",
-                   source, (long long)care.cost, place->name);
+                   "Care at %.24s: 1 Wheat from %.18s, %lld crowns, 1 day.",
+                   place->name, source, (long long)care.cost);
     (void)PushEvent(sim, CC_EVENT_HORSE_TEAM_CHANGED, sim->player.id,
                     town_id, 0U, care.days, text);
     SetError(error, error_capacity, "");
