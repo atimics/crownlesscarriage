@@ -351,6 +351,12 @@ static int RunWorldCardRegression(void)
         sim.player.cargo[CC_GOOD_TOOLS] = 2;
         sim.player.cargo[CC_GOOD_WOOD] = 1;
         CARD_CHECK(CcJournalCheckpoint(journal, &sim, error, sizeof(error)), error);
+        CARD_CHECK(WorldCardPoint(&sim, &local, view, selected,
+            CONTEXT_ACTION_ROAD_OPTIONS, 0, false),
+            "A road stop needs a Site options card.");
+        CARD_INPUT();
+        CARD_CHECK(local.road_actions_expanded,
+            "Site options must reveal the road stop actions.");
         CARD_CHECK(WorldCardPoint(&sim, &local, view, selected, CONTEXT_ACTION_CLEAR_ROAD_SITE, 0, mode != 0),
             "A blocked site needs matching clearing card and world actions.");
         CARD_INPUT();
