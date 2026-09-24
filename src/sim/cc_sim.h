@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "sim/cc_custody.h"
+#include "sim/cc_scriven_types.h"
 
 #define CC_MAX_KINGDOMS 3
 #define CC_MAX_SETTLEMENTS 6
@@ -70,7 +71,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 111
+#define CC_SIM_SCHEMA_VERSION 112
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -677,7 +678,8 @@ typedef enum CcCommandKind {
        carriage receives them. */
     CC_COMMAND_PICKUP_RELIEF_CRATE = 79,
     CC_COMMAND_STOW_RELIEF_CRATE = 80,
-    CC_COMMAND_CARE_HORSES = 81
+    CC_COMMAND_CARE_HORSES = 81,
+    CC_COMMAND_SCRIVEN = 82
 } CcCommandKind;
 
 typedef enum CcHorseSex {
@@ -2261,6 +2263,7 @@ typedef struct CcSim {
     CcArchiveStaff archive_staff;
     CcArchiveConvoyOrder archive_convoy;
     CcNoticeBoard notice_board;
+    CcScrivenState scriven;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
@@ -2317,7 +2320,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 608072,
+_Static_assert(sizeof(CcSim) == 608072 + sizeof(CcScrivenState),
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

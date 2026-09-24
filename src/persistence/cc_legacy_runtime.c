@@ -1,3 +1,4 @@
+#include "sim/cc_scriven.h"
 #include "persistence/cc_legacy_runtime_internal.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_road_position.h"
@@ -771,5 +772,6 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     /* Legacy upgrades can seed residents and situation casts through
        separate paths; make the final living cast unique before validation. */
     MakeLegacyCharacterNamesUnique(sim);
+    if (legacy_version < 112U) CcScrivenInit(sim);
     return true;
 }
