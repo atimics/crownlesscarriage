@@ -516,7 +516,17 @@ async function main() {
     });
     try {
       await mobile.goto(`http://127.0.0.1:${server.address().port}/`);
-      await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' && Module.crownlessTouchFrame?.buttons.length);
+      try {
+        await mobile.waitForFunction(() => window.Module?.crownlessScreen === 'title' &&
+          Module.crownlessTouchFrame?.buttons.length, undefined, {timeout:120000});
+      } catch (error) {
+        console.error('mobile startup', JSON.stringify(await mobile.evaluate(() => ({
+          ready:document.readyState, screen:window.Module?.crownlessScreen,
+          cards:window.Module?.crownlessTouchFrame?.buttons.length,
+          loading:document.querySelector('#loading')?.textContent?.slice(0, 200)
+        }))));
+        throw error;
+      }
       await mobile.evaluate(() => Module.setCrownlessSaveStatus(
         'could not save. Your journal and scene remain in this tab. Reload after checking browser storage.', 'failed'));
       await assertSaveStatusLane(mobile, 390, 844);
