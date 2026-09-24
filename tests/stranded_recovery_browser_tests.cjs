@@ -53,16 +53,21 @@ async function main() {
         sequence: current.next_sequence, action_revision: current.action_revision,
         action, target, good: 0, amount: 0});
     }
-    async function holdMovingRoad(receipt) {
-      const current = receipt.world;
-      const journey = current.state.journey;
-      if (!journey.active || ![1, 3].includes(journey.phase)) return;
-      const hold = await api(`/api/worlds/${worlds.recover}/command`, {
-        protocol: 1, sequence: current.next_sequence,
-        action_revision: current.action_revision, action: 'stop_travel',
-        target: journey.route, good: 0, amount: 0
-      }, true);
-      assert(hold.accepted, `The host holds the road: ${hold.message}`);
+    async function holdMovingRoad() {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const current = await view(worlds.recover);
+        const journey = current.state.journey;
+        if (!journey.active || ![1, 3].includes(journey.phase)) return;
+        const hold = await api(`/api/worlds/${worlds.recover}/command`, {
+          protocol: 1, sequence: current.next_sequence,
+          action_revision: current.action_revision, action: 'stop_travel',
+          target: journey.route, good: 0, amount: 0
+        }, true);
+        if (hold.accepted) return;
+        assert.equal(hold.message,
+          'The road has changed. Review the current journey.');
+      }
+      assert.fail('The shared host holds a moving road after fresh state review');
     }
     for (const [mode, world] of Object.entries(worlds)) {
       const worldPass = execFileSync(python, [
@@ -159,7 +164,7 @@ async function main() {
       assert(route && route.available, 'The next saved road is passable');
       const started = await command(worlds.recover, 'travel', destination);
       assert(started.accepted);
-      await holdMovingRoad(started);
+      await holdMovingRoad();
       for (let step = 0; step < 100; step++) {
         const current = (await view(worlds.recover)).state;
         const journey = current.journey;
@@ -182,7 +187,7 @@ async function main() {
         }
         const result = await command(worlds.recover, action, target);
         assert(result.accepted, `${action}: ${result.message}`);
-        await holdMovingRoad(result);
+        await holdMovingRoad();
       }
       const arrived = (await view(worlds.recover)).state;
       assert.equal(arrived.journey.active, false);
