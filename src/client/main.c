@@ -4653,7 +4653,7 @@ static ContextActionSet BuildContextActions(
             for (int i = 0; i < set.count; ++i)
                 if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES)
                     care_present = true;
-            /* Delivery and named witnesses lead. Keep one place for care after shown cards. */
+            /* Keep the current relief step visible while nearby town cards change. */
             for (int pass = 0; pass < 4; ++pass) {
                 int count = pass == 1 ? local->presented_target_count : set.count;
                 int limit = pass < 2 && care_present ? 3 : 4;
@@ -4673,7 +4673,9 @@ static ContextActionSet BuildContextActions(
                     if (candidate < 0) continue;
                     const ContextAction *action = &set.items[candidate];
                     if (pass == 0 &&
+                        action->kind != CONTEXT_ACTION_APPROACH_RELIEF_CRATES &&
                         action->kind != CONTEXT_ACTION_PICKUP_RELIEF_CRATE &&
+                        action->kind != CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE &&
                         action->kind != CONTEXT_ACTION_STOW_RELIEF_CRATE &&
                         AdventurePriorityRank(sim, local,
                             CcInteractionFind(&local->interactions,
