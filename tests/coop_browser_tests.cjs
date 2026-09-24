@@ -336,7 +336,17 @@ async function main() {
       assert(current.journey.active, 'The company must reach the afternoon road watch');
       if (current.journey.stop === 1) {
         const result = await owner.evaluate(() => Module.ccCoop.apply('press_on', '0', 0, 0));
-        assert(result.accepted, result.message);
+        if (!result.accepted) {
+          const latest = result.world?.state?.journey || (await state()).state.journey;
+          assert.equal(result.message, 'The carriage is not waiting at a travel stop.',
+            JSON.stringify({message:result.message, sampled:current.journey, latest}));
+          assert(latest.stop !== current.journey.stop ||
+            latest.phase !== current.journey.phase ||
+            latest.watch !== current.journey.watch ||
+            latest.progress !== current.journey.progress,
+          `A rejected Press on must have crossed the sampled watch: ` +
+            JSON.stringify({sampled:current.journey, latest}));
+        }
         continue;
       }
       const road = current.road_position;
@@ -373,6 +383,11 @@ async function main() {
     const reloadedStop = await checkpoint('afternoon-stop-reloaded');
     assert.deepEqual(journeySignature(reloadedStop.state),
       journeySignature(stoppedForCamp.state));
+    await crewControls.button('Road options').waitFor();
+    await crewControls.button('Road options').tap();
+    await crewControls.button('Camp until morning').waitFor();
+    assert((await crewControls.button('Camp until morning').read()).enabled,
+      'The second player sees the same camp choice');
     await ownerControls.button('Road options').click();
     await ownerControls.button('Camp until morning').click();
     const camped = await checkpoint('camped');
@@ -400,6 +415,9 @@ async function main() {
     const reconnectedCamp = await checkpoint('second-client-reconnected');
     assert.deepEqual(journeySignature(reconnectedCamp.state),
       journeySignature(camped.state));
+    await crewControls.button('Travel').waitFor();
+    assert((await crewControls.button('Travel').read()).enabled,
+      'The reconnected second player sees the same continue choice');
     await game.screenshot({path:'browser-results/shared-reconnected-camp.png'});
     await ownerControls.button('Back to road').click();
     const continuationResponse = owner.waitForResponse(response => {
@@ -412,6 +430,7 @@ async function main() {
     const continueReceipt = await firstContinue.json();
     assert.equal(continueReceipt.accepted, true);
     assert.equal(continueReceipt.duplicate, false);
+    await crewControls.button('Stop').waitFor();
     await ownerControls.button('Stop').click();
     const beforeRetry = await state();
     const retry = await owner.evaluate(async ({worldId, body}) => {
