@@ -4360,6 +4360,17 @@ static bool AdventurePriorityTarget(const CcSim *sim, const LocalState *local,
                                     const CcInteractionTarget *target)
 {
     if (AdventureHandoffTarget(sim, local, target)) return true;
+    if (target != NULL &&
+        target->key.kind == (local->market_interior ?
+            CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR)) {
+        const CcSituation *promise = CcSimAcceptedSituation(sim);
+        bool partial_delivery_at_destination = promise != NULL &&
+            (promise->kind == CC_SITUATION_RELIEF_DELIVERY ||
+             promise->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
+            promise->target_id == sim->player.location_id &&
+            sim->carriage.location_id == sim->player.location_id;
+        return !partial_delivery_at_destination;
+    }
     return target != NULL && target->key.kind == CC_INTERACTION_PERSON &&
         local->course.situation_witness_active &&
         target->character_id == local->course.situation_witness_character_id;

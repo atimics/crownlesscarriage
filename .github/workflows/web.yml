@@ -109,6 +109,7 @@ jobs:
           node tests/matrix_upload_browser.cjs out/build/web/matrix-probe browser-results
           node tests/music_browser_tests.cjs browser-results
           node tests/browser_tests.cjs out/build/web/site browser-results
+          node tests/town_trade_touch_tests.cjs out/build/web/site browser-results/town-trade-touch
       - name: Build the shared carriage host
         if: matrix.suite == 'shared-world'
         run: |

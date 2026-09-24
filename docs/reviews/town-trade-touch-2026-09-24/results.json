@@ -1,0 +1,54 @@
+[
+  {
+    "viewport": "1040x620",
+    "before": {
+      "crowns": 42,
+      "cargo": {}
+    },
+    "quoteCrowns": 8,
+    "chargedCrowns": 8,
+    "bought": {
+      "good": "Bread",
+      "quantity": 2
+    },
+    "after": {
+      "crowns": 34,
+      "cargo": {
+        "Bread": 2
+      }
+    },
+    "reload": {
+      "crowns": 34,
+      "cargo": {
+        "Bread": 2
+      }
+    },
+    "savedRevision": 2
+  },
+  {
+    "viewport": "390x844",
+    "before": {
+      "crowns": 42,
+      "cargo": {}
+    },
+    "quoteCrowns": 8,
+    "chargedCrowns": 8,
+    "bought": {
+      "good": "Bread",
+      "quantity": 2
+    },
+    "after": {
+      "crowns": 34,
+      "cargo": {
+        "Bread": 2
+      }
+    },
+    "reload": {
+      "crowns": 34,
+      "cargo": {
+        "Bread": 2
+      }
+    },
+    "savedRevision": 2
+  }
+]
