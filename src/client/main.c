@@ -4638,10 +4638,13 @@ static ContextActionSet BuildContextActions(
                                  "ENTER PARLEY", true, false);
         const CcSettlement *origin = CcSimSettlement(
             sim, sim->journey.origin_id);
+        int32_t return_minutes = CcSimJourneyWithdrawalMinutes(sim);
         AddDetailedContextAction(&set, CONTEXT_ACTION_WITHDRAW,
                                  TextFormat("Withdraw to %.16s: 0 crowns",
                                      origin != NULL ? origin->name : "origin"),
-                                 "3", "CURRENT TIME / ROAD SECURITY MAY FALL",
+                                 "3", TextFormat(
+                                     "RETURN %dH %02dM / ROAD SECURITY MAY FALL",
+                                     return_minutes / 60, return_minutes % 60),
                                  true, false);
         return set;
     }
@@ -6931,15 +6934,20 @@ static void DrawJourneyEncounter(const CcSim *sim)
     int32_t demanded_quantity = 0;
     bool has_demand = CcSimBanditProvisionDemand(
         sim, sim->journey.route_id, &demanded_good, &demanded_quantity);
+    int32_t return_minutes = CcSimJourneyWithdrawalMinutes(sim);
     ClientTouchHeading(bandits != NULL ?
         TextFormat("%.24s blocks the road", bandits->name) :
         "The road is closed",
-        has_demand ? TextFormat("Demand: %d %s or %d crowns. Fight, parley or withdraw.",
+        has_demand ? TextFormat("Demand: %d %s or %d crowns. Withdraw to %.16s: %dh%02dm, 0 crowns.",
             demanded_quantity, CcGoodName(demanded_good),
-            sim->journey.bargain_cost) : bandits != NULL ?
-        TextFormat("Demand: %d crowns. Fight, parley or withdraw.",
-            sim->journey.bargain_cost) :
-        "Choose a safe response to the closed route.");
+            sim->journey.bargain_cost, from != NULL ? from->name : "origin",
+            return_minutes / 60, return_minutes % 60) : bandits != NULL ?
+        TextFormat("Demand: %d crowns. Withdraw to %.16s: %dh%02dm, 0 crowns.",
+            sim->journey.bargain_cost, from != NULL ? from->name : "origin",
+            return_minutes / 60, return_minutes % 60) :
+        TextFormat("Closed road. Withdraw to %.16s: %dh%02dm, 0 crowns.",
+            from != NULL ? from->name : "origin",
+            return_minutes / 60, return_minutes % 60));
     int32_t reaction = CcSimBanditReactionRoll(
         sim, sim->journey.route_id);
     int32_t combat_damage = 7 + sim->journey.danger / 8;

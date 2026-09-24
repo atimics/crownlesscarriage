@@ -70,7 +70,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 111
+#define CC_SIM_SCHEMA_VERSION 112
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -2412,6 +2412,7 @@ uint64_t CcSimHash(const CcSim *sim);
 int32_t CcSimHorseTeamReadiness(const CcSim *sim);
 const char *CcJourneyPaceName(CcJourneyPace pace);
 int32_t CcSimJourneyEtaMinutes(const CcSim *sim);
+int32_t CcSimJourneyWithdrawalMinutes(const CcSim *sim);
 CcJourneyStopKind CcSimJourneyStop(const CcSim *sim);
 int32_t CcSimJourneyWatchNumber(const CcSim *sim);
 /* True once the afternoon watch has begun and the company is on the road:

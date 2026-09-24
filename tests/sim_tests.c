@@ -916,6 +916,8 @@ int main(void)
     int32_t blocked_influence = blocked_bandits->influence;
     int32_t warning_blocked_day = warned_restored.current_day;
     int32_t blocked_minute = warned_restored.clock.minute_subticks;
+    int32_t return_minutes =
+        CcSimJourneyWithdrawalMinutes(&warned_restored);
     CcMoney blocked_gold = CcSimTrackedGold(&warned_restored);
     CcCommand turn_back = {
         .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
@@ -926,8 +928,13 @@ int main(void)
     CC_CHECK(!warned_restored.journey.active);
     CC_CHECK(warned_restored.player.location_id == warned_origin);
     CC_CHECK(warned_restored.carriage.location_id == warned_origin);
-    CC_CHECK(warned_restored.current_day == warning_blocked_day);
-    CC_CHECK(warned_restored.clock.minute_subticks == blocked_minute);
+    int32_t return_subticks =
+        (warned_restored.current_day - warning_blocked_day) *
+            CC_WORLD_DAY_SUBTICKS +
+        warned_restored.clock.minute_subticks - blocked_minute;
+    CC_CHECK(return_minutes > 0 &&
+             return_subticks == return_minutes *
+                 CC_WORLD_MINUTE_SUBTICKS);
     CC_CHECK(warned_restored.player.coins == warning_coins);
     CC_CHECK(CcPlayerCargoUsed(&warned_restored.player) == warning_cargo);
     CC_CHECK(CcSimTrackedGold(&warned_restored) == blocked_gold);

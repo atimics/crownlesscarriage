@@ -85,10 +85,14 @@ static int RunRoadBlockChoiceRegression(void)
         &cards, CONTEXT_ACTION_WITHDRAW, 0);
     const CcSettlement *origin = CcSimSettlement(
         &sim, sim.journey.origin_id);
+    int32_t return_minutes = CcSimJourneyWithdrawalMinutes(&sim);
+    char return_time[32];
+    (void)snprintf(return_time, sizeof(return_time), "RETURN %dH %02dM",
+                   return_minutes / 60, return_minutes % 60);
     if (withdraw_index < 0 || origin == NULL ||
         strstr(cards.items[withdraw_index].label, origin->name) == NULL ||
         strstr(cards.items[withdraw_index].label, "0 crowns") == NULL ||
-        strstr(cards.items[withdraw_index].detail, "CURRENT TIME") == NULL)
+        strstr(cards.items[withdraw_index].detail, return_time) == NULL)
         return ClientRegressionFailure("The road choice needs exact retreat terms.");
     CcMoney coins = sim.player.coins;
     int32_t cargo = CcPlayerCargoUsed(&sim.player);
@@ -108,10 +112,13 @@ static int RunRoadBlockChoiceRegression(void)
         (Rectangle){0}, 1.0f / 60.0f, path, "", message,
         sizeof(message), feedback, sizeof(feedback), &feedback_age);
     ClientInputClearPressed();
+    int32_t elapsed_return =
+        (sim.current_day - day) * CC_WORLD_DAY_SUBTICKS +
+        sim.clock.minute_subticks - minute;
     if (view != VIEW_LOCAL || sim.journey.active ||
         sim.carriage.location_id != origin->id ||
         sim.player.coins != coins || CcPlayerCargoUsed(&sim.player) != cargo ||
-        sim.current_day != day || sim.clock.minute_subticks != minute ||
+        elapsed_return != return_minutes * CC_WORLD_MINUTE_SUBTICKS ||
         CcSimRecentEvent(&sim, 0)->kind != CC_EVENT_ENCOUNTER_WITHDRAWN) {
         (void)fprintf(stderr, "Road choice: view=%d active=%d carriage=%llu origin=%llu coins=%lld cargo=%d day=%d minute=%d event=%d message=%s\n",
             (int)view, (int)sim.journey.active,

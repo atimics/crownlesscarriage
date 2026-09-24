@@ -2738,8 +2738,8 @@ static void CheckSchema104RoadMigration(char *error,
              topology.main_length_units);
     CC_CHECK(CcRoadSavedPositionValid(&pilot));
     CC_CHECK(CcSimValidate(&pilot, error, error_capacity));
-    /* Schema 111 adds saved road claimant money to the migrated state. */
-    CC_CHECK(CcSimHash(&pilot) == UINT64_C(4218671708288473085));
+    /* Schema 112 changes the current migrated-state hash. */
+    CC_CHECK(CcSimHash(&pilot) == UINT64_C(5750488257057365192));
 
     char stop_file[512];
     (void)snprintf(
@@ -2788,7 +2788,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(CcSimJourneyRoadSiteStop(&stopped) == pending);
     CC_CHECK(CcRoadSavedPositionValid(&stopped));
     CC_CHECK(CcSimValidate(&stopped, error, error_capacity));
-    CC_CHECK(CcSimHash(&stopped) == UINT64_C(11691673544305195830));
+    CC_CHECK(CcSimHash(&stopped) == UINT64_C(12699837435786215795));
     CcCommand pass_pending = {
         .kind = CC_COMMAND_PASS_ROAD_SITE,
         .target_id = pending->id
@@ -2834,7 +2834,7 @@ static void CheckSchema104RoadMigration(char *error,
              topology.checkpoint_distance_units);
     CC_CHECK(CcRoadSavedPositionValid(&checkpoint));
     CC_CHECK(CcSimValidate(&checkpoint, error, error_capacity));
-    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(13060270219596856870));
+    CC_CHECK(CcSimHash(&checkpoint) == UINT64_C(9857268778038529027));
 
     CcSim blocked = checkpoint;
     ClearSavedRoadPosition(&blocked.journey);
@@ -2926,7 +2926,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mill_choice);
     CC_CHECK(CcRoadSavedPositionValid(&mill_stop));
     CC_CHECK(CcSimValidate(&mill_stop, error, error_capacity));
-    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(10255154608615446321));
+    CC_CHECK(CcSimHash(&mill_stop) == UINT64_C(15536097212202279848));
 
     char mine_file[512];
     (void)snprintf(
@@ -2960,7 +2960,7 @@ static void CheckSchema104RoadMigration(char *error,
     CC_CHECK(mine.mine.encounter_outcome == CC_MINE_ENCOUNTER_OPEN);
     CC_CHECK(mine.mine.player_injury == 0);
     CC_CHECK(CcSimValidate(&mine, error, error_capacity));
-    CC_CHECK(CcSimHash(&mine) == UINT64_C(12192256954273969565));
+    CC_CHECK(CcSimHash(&mine) == UINT64_C(779063245400930236));
 }
 
 static void CheckDragonHairPersistence(void)
@@ -3124,12 +3124,52 @@ static void CheckSchema110RoadBlockJournalUpgrade(char *error,
     CC_CHECK(restored.player.coins == 31);
     CC_CHECK(restored.bandits[0].route_id == restored.journey.route_id);
     CC_CHECK(restored.bandits[0].coins == 0);
-    CC_CHECK(CcSimHash(&restored) == UINT64_C(15091959056674726392));
+    CC_CHECK(CcSimHash(&restored) == UINT64_C(10350592686180817433));
     const char *copy = "schema110-road-block-upgraded.ccsave";
     RemoveDatabase(copy);
     CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
     CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
     CC_CHECK(CcSimHash(&reloaded) == CcSimHash(&restored));
+    RemoveDatabase(copy);
+}
+
+static void CheckSchema111WithdrawJournalUpgrade(char *error,
+                                                 size_t error_capacity)
+{
+    /* Produced by tests/fixtures/schema111_withdraw_generator.c linked
+       against the shipped schema-111 client. The pending withdrawal keeps
+       the old instant-return clock during replay. SQLite DELETE mode makes
+       this fixture portable. SHA-256:
+       f41522a37cab89605f5f752bd099d126adbd310cc70b79282d2d06fdd9695c30 */
+    const char *fixture = CC_TEST_SOURCE_DIR
+        "/tests/fixtures/shipped/"
+        "schema-111-generator-25-road-withdraw-journal.ccsave";
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT schema_version=111 AND generator_version=25 AND "
+        "journal_generation=1 AND journal_cursor=0 AND "
+        "state_hash='b146123f5b247d48' FROM meta WHERE id=1;") == 1);
+    CC_CHECK(ReadSqliteInteger(fixture,
+        "SELECT COUNT(*) FROM action_journal WHERE ordinal=1 AND "
+        "command_kind=21 AND sim_schema_version=111 AND "
+        "post_state_hash='870d628b353e443f';") == 1);
+    static CcSim restored, reloaded;
+    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.current_day == 2);
+    CC_CHECK(restored.clock.minute_subticks == CC_WORLD_DAY_SUBTICKS - 60);
+    CC_CHECK(!restored.journey.active &&
+             restored.carriage.mode == CC_CARRIAGE_PARKED);
+    const CcEvent *receipt = CcSimRecentEvent(&restored, 0);
+    CC_CHECK(receipt != NULL &&
+             receipt->kind == CC_EVENT_ENCOUNTER_WITHDRAWN &&
+             strstr(receipt->text, "before blood is drawn") != NULL);
+    uint64_t migrated_hash = CcSimHash(&restored);
+    CC_CHECK(migrated_hash == UINT64_C(6107556611254636704));
+    const char *copy = "schema111-road-withdraw-upgraded.ccsave";
+    RemoveDatabase(copy);
+    CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
+    CC_CHECK(CcSaveRead(copy, &reloaded, error, error_capacity));
+    CC_CHECK(CcSimHash(&reloaded) == migrated_hash);
     RemoveDatabase(copy);
 }
 
@@ -3854,6 +3894,7 @@ int main(void)
     CheckSchema108ReliefJournalUpgrade(error, sizeof(error));
     CheckSchema109IntroductionJournalUpgrade(error, sizeof(error));
     CheckSchema110RoadBlockJournalUpgrade(error, sizeof(error));
+    CheckSchema111WithdrawJournalUpgrade(error, sizeof(error));
     CheckSupportedVersionPairings();
     CheckDragonHairPersistence();
     CheckSchema41Upgrade();
