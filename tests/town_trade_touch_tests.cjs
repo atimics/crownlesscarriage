@@ -93,7 +93,14 @@ async function main() {
     await controls.button('Sell').tap();
     const blockedSell = page.getByRole('button',
       {name: /^Sell 2 Bread\. Sale value: \d+ crowns\. Bring the full quantity to the counter\.$/});
-    await blockedSell.focus();
+    await blockedSell.evaluate(node => node.previousElementSibling.focus());
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => document.activeElement?.textContent?.startsWith('Sell 2 Bread.'),
+      undefined, {timeout: 3000});
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), '+',
+      `${name}: Shift+Tab returns to the quantity control`);
+    await page.keyboard.press('Tab');
     assert.match(await page.evaluate(() => document.activeElement?.textContent),
       /^Sell 2 Bread\. Sale value: \d+ crowns\. Bring the full quantity to the counter\.$/,
       `${name}: keyboard focus includes the precise disabled Sell reason`);
@@ -153,6 +160,8 @@ async function main() {
     const restoredBalance = Number(restored.match(/Purse (\d+)\s*\|\s*Cargo/)[1]);
     assert.equal(restoredBalance, receiptBalance, `${name}: reload retained charged balance`);
     await gameControls(page, true).button('Sell').tap();
+    await page.waitForFunction(() => /Sale value: \d+ crowns/.test(Module.crownlessTouchFrame?.detail || ''),
+      undefined, {timeout: 10000});
     const sellQuote = await page.evaluate(() => Module.crownlessTouchFrame.detail);
     const sellValue = Number(sellQuote.match(/Sale value: (\d+) crowns/)[1]);
     const sellName = `Sell 1 Bread. Sale value: ${sellValue} crowns.`;
@@ -162,6 +171,8 @@ async function main() {
       `${name}: a saved cargo load has a complete, focusable Sell offer`);
     assert.equal(await sellControl.getAttribute('aria-disabled'), 'false');
     await gameControls(page, true).button('Buy').tap();
+    await page.waitForFunction(() => /Total cost: \d+ crowns/.test(Module.crownlessTouchFrame?.detail || ''),
+      undefined, {timeout: 10000});
     await page.screenshot({path: path.join(output, name, 'trade-after-reload.png')});
 
     await gameControls(page, true).button('+').tap();
@@ -203,6 +214,22 @@ async function main() {
     assert.match(secondReload, /Bread\s+76 units/);
     assert.match(secondReload, /Carriage 4/);
     await page.screenshot({path: path.join(output, name, 'trade-next-after-reload.png')});
+    if (name === 'desktop-1040x620') {
+      await page.locator('#touch-actions summary').focus();
+      await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(() =>
+        document.querySelector('#touch-actions').contains(document.activeElement)), false,
+      'Tab after the last action leaves the semantic action list');
+      await page.locator('#touch-actions .touch-buttons button').first().focus();
+      await page.keyboard.press('Shift+Tab');
+      assert.equal(await page.evaluate(() =>
+        document.querySelector('#touch-actions').contains(document.activeElement)), false,
+      'Shift+Tab before the first action leaves the semantic action list');
+      await page.locator('#canvas').focus();
+      await page.keyboard.press('Tab');
+      await page.waitForFunction(() => Module.crownlessTouchFrame?.title === 'Company Book',
+        undefined, {timeout: 10000});
+    }
     assert.deepEqual(errors, [], `${name}: browser runtime errors`);
     const result = {viewport: `${width}x${height}`, before: {crowns: 42, cargo: {}},
       quoteCrowns: quotedCost, chargedCrowns: charged,
