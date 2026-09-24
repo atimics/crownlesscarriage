@@ -141,7 +141,9 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
     const CcSituation *situation = CcSimSituation(sim,
                                                   journey.situation_id);
     bool official_checkpoint = sim->schema_version >= 111U &&
-        !active_bandits && route->closed && !route->smuggler_route &&
+        !active_bandits &&
+        CcJourneyAlderwatchChain(sim, route, journey.origin_id,
+                                  journey.destination_id) &&
         situation != NULL &&
         situation->kind == CC_SITUATION_RELIEF_DELIVERY;
     CcKingdom *authority = NULL;

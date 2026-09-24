@@ -1,6 +1,7 @@
 #include "sim/cc_mine.h"
 #include "sim/cc_road_council.h"
 #include "sim/cc_road_position.h"
+#include "sim/cc_journey_internal.h"
 #include "metagame/cc_metagame.h"
 
 #include "persistence/cc_save.h"
@@ -2507,8 +2508,10 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         int32_t food_before = metagame->sim.player.cargo[CC_GOOD_FOOD];
         const CcRoute *blocked_route = CcSimRoute(
             &metagame->sim, metagame->sim.journey.route_id);
-        bool king_chain = blocked_route != NULL && blocked_route->closed &&
-            !blocked_route->smuggler_route;
+        bool king_chain = CcJourneyAlderwatchChain(
+            &metagame->sim, blocked_route,
+            metagame->sim.journey.origin_id,
+            metagame->sim.journey.destination_id);
         bool night_road = blocked_route != NULL &&
             blocked_route->smuggler_route;
         CcCommand action = {0};

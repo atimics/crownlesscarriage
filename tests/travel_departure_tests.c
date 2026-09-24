@@ -282,6 +282,48 @@ static void CheckAbandonedTownExit(void)
     (void)remove("abandoned-company-exit.ccsave-shm");
 }
 
+static void CheckOtherClosedReliefRoad(void)
+{
+    CcSimInit(&sim, 42U);
+    CcSituation *relief = NULL;
+    for (int32_t i = 0; i < sim.situation_count; ++i) {
+        if (sim.situations[i].kind == CC_SITUATION_RELIEF_DELIVERY &&
+            sim.situations[i].status == CC_SITUATION_ACTIVE) {
+            relief = &sim.situations[i];
+            break;
+        }
+    }
+    CC_CHECK(relief != NULL);
+    relief->target_id = sim.settlements[1].id;
+    CcCommand accept = {.kind = CC_COMMAND_ACCEPT_SITUATION,
+                        .target_id = relief->id};
+    CC_CHECK(CcSimApply(&sim, &accept, error, sizeof(error)));
+    CC_CHECK(CcTestLoadReliefCrates(&sim, relief, error, sizeof(error)));
+    sim.routes[0].closed = true;
+    sim.bandits[0].route_id = sim.routes[6].id;
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL,
+                        .target_id = sim.settlements[1].id};
+    CC_CHECK(CcSimApply(&sim, &travel, error, sizeof(error)));
+    CC_CHECK(sim.journey.active && sim.journey.situation_id == relief->id);
+    CC_CHECK(sim.journey.encounter_subticks == 0);
+    CC_CHECK(!sim.journey.ambush_pending);
+    for (int32_t step = 0; step < 12000 && sim.journey.active; ++step) {
+        if (sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING)
+            CcSimAdvanceRuntimeTicks(&sim, 1);
+        else
+            CC_CHECK(CcTestContinueJourneyPause(&sim, error,
+                                                 sizeof(error)));
+    }
+    CC_CHECK(!sim.journey.active);
+    CC_CHECK(sim.player.location_id == sim.settlements[1].id);
+    CC_CHECK(sim.routes[0].closed);
+    for (int32_t i = 0; i < sim.event_count; ++i) {
+        const CcEvent *event = CcSimRecentEvent(&sim, i);
+        CC_CHECK(event == NULL ||
+                 event->kind != CC_EVENT_JOURNEY_ENCOUNTER);
+    }
+}
+
 int main(void)
 {
     CheckFreeRoads();
@@ -289,6 +331,7 @@ int main(void)
     CheckPaymentsAtEncounter(true);
     CheckJourneySaves();
     CheckAbandonedTownExit();
+    CheckOtherClosedReliefRoad();
     puts("Free departures: every road, both directions, encounter payments and save replay passed");
     return 0;
 }

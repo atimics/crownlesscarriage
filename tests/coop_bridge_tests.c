@@ -284,6 +284,7 @@ static void CheckJourneyQuestRetirement(void)
                                 0, 0, error, sizeof(error)));
         }
         sim->routes[0].closed = true;
+        sim->bandits[0].route_id = sim->routes[0].id;
         CC_CHECK(CcCoopApply(sim, "travel", offer->target_id,
                             0, 0, error, sizeof(error)));
         for (int tick = 0; tick < 2000 &&

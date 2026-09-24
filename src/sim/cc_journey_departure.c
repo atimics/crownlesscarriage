@@ -153,7 +153,8 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
         }
     }
     bool official_checkpoint = sanctioned_closed_crossing &&
-        !route->smuggler_route;
+        CcJourneyAlderwatchChain(sim, route, sim->player.location_id,
+                                  destination->id);
     bool encounter_planned = contract_journey &&
         (sanctioned_closed_crossing ||
          (accepted != NULL &&
