@@ -524,7 +524,7 @@ class Worlds:
         wall = time.time() if wall_now is None else wall_now
         with self.lock:
             world_ids = [row["id"] for row in self.db.execute("SELECT id FROM worlds")]
-        for world in world_ids:
+        for index, world in enumerate(world_ids):
             # Let a waiting player request run between worlds. Re-read the row
             # after reacquiring the lock because an owner may have changed it.
             with self.lock:
@@ -570,6 +570,8 @@ class Worlds:
                 except Exception:
                     self.failed.add(world)
                     logging.exception("World %s needs recovery", world)
+            if index + 1 < len(world_ids):
+                time.sleep(0)
 
     def delete_world(self, world, token):
         with self.lock:

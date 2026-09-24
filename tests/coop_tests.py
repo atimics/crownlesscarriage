@@ -838,30 +838,39 @@ class CoopTests(unittest.TestCase):
                 self.worlds.seen[(world, member)] = now
             return now
 
+        between_worlds = threading.Event()
+        resume_tick = threading.Event()
+        real_sleep = time.sleep
+        def staged_yield(seconds):
+            if seconds == 0 and not between_worlds.is_set():
+                between_worlds.set()
+                if not resume_tick.wait(3):
+                    raise AssertionError('Player view did not run between world ticks')
+            else:
+                real_sleep(seconds)
+
+        now = ready_tick()
+        with patch('server.time.sleep', staged_yield):
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                ticking = workers.submit(self.worlds.tick, now)
+                self.assertTrue(between_worlds.wait(3))
+                try:
+                    seen = workers.submit(self.worlds.view, self.id, self.b).result(timeout=3)
+                    self.assertEqual(seen['id'], self.id)
+                    self.assertFalse(ticking.done(),
+                                     'Player view must finish between world ticks')
+                finally:
+                    resume_tick.set()
+                ticking.result(timeout=3)
+
         started = threading.Event()
         advance = Campaign.advance
         def slower_advance(campaign, ticks, scale=1):
             started.set()
-            time.sleep(.08)
+            real_sleep(.08)
             return advance(campaign, ticks, scale)
 
         with patch.object(Campaign, 'advance', slower_advance):
-            now = ready_tick()
-            with ThreadPoolExecutor(max_workers=2) as workers:
-                begun = time.perf_counter()
-                ticking = workers.submit(self.worlds.tick, now)
-                self.assertTrue(started.wait(3))
-                waiting = time.perf_counter()
-                other_player = workers.submit(self.worlds.view, self.id, self.b)
-                seen = other_player.result(timeout=3)
-                wait = time.perf_counter() - waiting
-                ticking.result(timeout=3)
-                total = time.perf_counter() - begun
-            self.assertEqual(seen['id'], self.id)
-            self.assertLess(wait, total * .8,
-                            'A player request should finish between world ticks')
-
-            started.clear()
             now = ready_tick()
             stop = self.command(self.a, 'stop_travel', target=routes[self.id])
             with ThreadPoolExecutor(max_workers=2) as workers:
