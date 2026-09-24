@@ -235,6 +235,9 @@ static bool EnsureRealmColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "bandit_group", "camp_settlement_id",
             "ALTER TABLE bandit_group ADD COLUMN camp_settlement_id INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "bandit_group", "coins",
+            "ALTER TABLE bandit_group ADD COLUMN coins INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -1128,7 +1131,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " raid_phase INTEGER NOT NULL, raid_target_id INTEGER NOT NULL,"
         " raid_good INTEGER NOT NULL, raid_quantity INTEGER NOT NULL,"
         " raid_days_remaining INTEGER NOT NULL, raids_completed INTEGER NOT NULL,"
-        " camp_settlement_id INTEGER NOT NULL DEFAULT 0);";
+        " camp_settlement_id INTEGER NOT NULL DEFAULT 0,"
+        " coins INTEGER NOT NULL DEFAULT 0);";
     const char *situation_schema =
         "CREATE TABLE IF NOT EXISTS situation ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE, kind INTEGER NOT NULL,"
@@ -2475,7 +2479,7 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
                         char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO bandit_group VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         const CcBanditGroup *b = &sim->bandits[i];
@@ -2492,6 +2496,7 @@ static bool SaveThreats(sqlite3 *database, const CcSim *sim,
         BindInt(statement, 15, b->raid_days_remaining);
         BindInt(statement, 16, b->raids_completed);
         BindId(statement, 17, b->camp_settlement_id);
+        BindMoney(statement, 18, b->coins);
         if (!StepDone(database, statement, error, error_capacity) ||
             !ResetStatement(database, statement, error, error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -4906,6 +4911,7 @@ static bool ReadThreats(sqlite3 *database, CcSim *sim,
         b->raid_days_remaining = sqlite3_column_int(statement, 14);
         b->raids_completed = sqlite3_column_int(statement, 15);
         b->camp_settlement_id = (CcId)sqlite3_column_int64(statement, 16);
+        b->coins = sqlite3_column_int64(statement, 17);
         rows += 1;
     }
     sqlite3_finalize(statement);

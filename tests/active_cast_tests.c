@@ -139,7 +139,7 @@ static void CheckNewCompanyIntroductions(void)
     char error[256];
     (void)remove(path);
     CcSimInit(&sim, 42U);
-    CC_CHECK(sim.schema_version == 110U);
+    CC_CHECK(sim.schema_version == 111U);
     CcId company = sim.player.id;
     CcId introduced_id = 0U;
     for (int32_t i = 0; i < sim.character_count; ++i)

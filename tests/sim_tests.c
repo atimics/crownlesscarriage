@@ -849,6 +849,7 @@ int main(void)
 
     static CcSim warned_road;
     CcSimInit(&warned_road, UINT32_C(0x5ca17));
+    warned_road.bandits[0].route_id = warned_road.routes[0].id;
     CcCommand warned_travel = {
         .kind = CC_COMMAND_TRAVEL,
         .target_id = warned_road.settlements[1].id

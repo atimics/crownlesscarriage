@@ -137,10 +137,54 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
                  "The road encounter no longer matches the prepared journey.");
         return false;
     }
+    bool active_bandits = bandits != NULL && bandits->members > 0;
+    const CcSituation *situation = CcSimSituation(sim,
+                                                  journey.situation_id);
+    bool official_checkpoint = sim->schema_version >= 111U &&
+        !active_bandits &&
+        CcJourneyAlderwatchChain(sim, route, journey.origin_id,
+                                  journey.destination_id) &&
+        situation != NULL &&
+        situation->kind == CC_SITUATION_RELIEF_DELIVERY;
+    CcKingdom *authority = NULL;
+    if (official_checkpoint) {
+        for (int32_t i = 0; i < sim->kingdom_count; ++i) {
+            if (sim->kingdoms[i].id == destination->kingdom_id) {
+                authority = &sim->kingdoms[i];
+                break;
+            }
+        }
+    }
+    if (outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
+        sim->schema_version >= 111U &&
+        !active_bandits && authority == NULL) {
+        SetError(error, error_capacity,
+                 "The road collectors have left; there is nobody to pay.");
+        return false;
+    }
+    if (provisions && authority != NULL) {
+        SetError(error, error_capacity,
+                 "The royal checkpoint asks for crowns, not provisions.");
+        return false;
+    }
     if (!provisions && outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
         sim->player.coins < journey.bargain_cost) {
         SetError(error, error_capacity,
                  "The company cannot cover the negotiated passage.");
+        return false;
+    }
+    if (!provisions && outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
+        sim->schema_version >= 111U && active_bandits &&
+        bandits->coins > CC_SIM_MAX_MONEY - journey.bargain_cost) {
+        SetError(error, error_capacity,
+                 "The road collectors cannot hold that payment.");
+        return false;
+    }
+    if (!provisions && outcome == CC_JOURNEY_OUTCOME_NEGOTIATED &&
+        authority != NULL &&
+        authority->treasury > CC_SIM_MAX_MONEY - journey.bargain_cost) {
+        SetError(error, error_capacity,
+                 "The checkpoint treasury cannot hold that payment.");
         return false;
     }
     CcGood demanded_good = CC_GOOD_FOOD;
@@ -166,7 +210,8 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         origin->market_coins += medical_cost;
         route->security = ClampI32(route->security + 6, 0, 100);
         destination->security = ClampI32(destination->security + 2, 0, 100);
-        if (bandits != NULL) {
+        if (bandits != NULL &&
+            (sim->schema_version < 111U || active_bandits)) {
             bandits->members = ClampI32(bandits->members - 3, 0, 200);
             bandits->supplies = ClampI32(bandits->supplies - 4, 0, 100);
             bandits->influence = ClampI32(bandits->influence - 3, 0, 100);
@@ -178,16 +223,38 @@ static bool ApplyResolveEncounter(CcSim *sim, CcJourneyOutcome outcome,
         magnitude = damage;
     } else if (!provisions) {
         sim->player.coins -= journey.bargain_cost;
-        destination->market_coins += journey.bargain_cost;
+        if (sim->schema_version >= 111U && active_bandits) {
+            bandits->coins += journey.bargain_cost;
+        } else if (authority != NULL) {
+            authority->treasury += journey.bargain_cost;
+        } else {
+            /* Pending older encounters retain their original recipient. */
+            destination->market_coins += journey.bargain_cost;
+        }
         route->security = ClampI32(route->security - 1, 0, 100);
-        destination->prosperity = ClampI32(destination->prosperity + 1, 0, 100);
-        if (bandits != NULL) {
-            bandits->supplies = ClampI32(bandits->supplies + 4, 0, 100);
+        if (sim->schema_version < 111U)
+            destination->prosperity = ClampI32(
+                destination->prosperity + 1, 0, 100);
+        if (bandits != NULL &&
+            (sim->schema_version < 111U || active_bandits)) {
+            if (sim->schema_version < 111U)
+                bandits->supplies = ClampI32(
+                    bandits->supplies + 4, 0, 100);
             bandits->influence = ClampI32(bandits->influence + 3, 0, 100);
         }
-        (void)snprintf(text, sizeof(text),
-                       "The Crownless company buys passage for %d crowns; commerce moves immediately, but the collectors grow stronger.",
-                       journey.bargain_cost);
+        if (sim->schema_version >= 111U && active_bandits) {
+            (void)snprintf(text, sizeof(text),
+                           "The Crownless company pays %.24s %d crowns for this crossing; the road remains under their watch.",
+                           bandits->name, journey.bargain_cost);
+        } else if (authority != NULL) {
+            (void)snprintf(text, sizeof(text),
+                           "The Crownless company pays %d crowns at %.24s's royal checkpoint; the chain opens for this crossing.",
+                           journey.bargain_cost, destination->name);
+        } else {
+            (void)snprintf(text, sizeof(text),
+                           "The Crownless company buys passage for %d crowns; commerce moves immediately, but the collectors grow stronger.",
+                           journey.bargain_cost);
+        }
         event_kind = CC_EVENT_ENCOUNTER_NEGOTIATED;
         magnitude = journey.bargain_cost;
     } else {

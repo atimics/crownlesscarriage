@@ -162,11 +162,20 @@ static void InterruptJourney(CcSim *sim,
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
     const CcBanditGroup *bandits = services->bandits(
         sim, sim->journey.route_id);
+    if (sim->schema_version >= 111U && bandits != NULL &&
+        bandits->members <= 0) bandits = NULL;
     char text[CC_EVENT_TEXT_CAPACITY];
-    if (route != NULL && route->closed && bandits == NULL) {
+    if (route != NULL && route->closed && bandits == NULL &&
+        (sim->schema_version < 111U ||
+         CcJourneyAlderwatchChain(sim, route, sim->journey.origin_id,
+                                   sim->journey.destination_id))) {
         (void)snprintf(
             text, sizeof(text),
             "Captain Ilyra Senn lowers Alderwatch's bright chain across the road. 'Orders,' she says, while a hungry boy eats too quickly on the wall.");
+    } else if (sim->schema_version >= 111U && bandits == NULL) {
+        (void)snprintf(text, sizeof(text),
+                       "The carriage stops near %.24s. The route is closed, and no road collectors are present.",
+                       destination != NULL ? destination->name : "the far gate");
     } else if (situation == NULL) {
         (void)snprintf(
             text, sizeof(text),

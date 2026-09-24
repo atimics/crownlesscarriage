@@ -83,6 +83,8 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
         accepted != NULL &&
         accepted->kind == CC_SITUATION_RELIEF_DELIVERY &&
         full_contract_load;
+    const CcBanditGroup *enforcers = CcSimBanditGroupOnRoute(sim, route->id);
+    bool bandit_block = enforcers != NULL && enforcers->members > 0;
     bool uncharted = !preview.charted && !sponsored_night_passage;
     int32_t days = preview.travel_days;
     /* Replay older journals with their original departure transfers. */
@@ -150,11 +152,16 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
             contract_journey = true;
         }
     }
+    bool official_checkpoint = sanctioned_closed_crossing &&
+        CcJourneyAlderwatchChain(sim, route, sim->player.location_id,
+                                  destination->id);
     bool encounter_planned = contract_journey &&
         (sanctioned_closed_crossing ||
          (accepted != NULL &&
           accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
-          route->smuggler_route));
+          route->smuggler_route)) &&
+        (sim->schema_version < 111U || bandit_block ||
+         official_checkpoint);
     int32_t danger = ClampI32(
         CcSimRouteDanger(sim, route->id) +
         CcRouteDragonShadowDanger(sim, route), 0, 95);
@@ -167,6 +174,8 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
         CC_WORLD_WATCH_SUBTICKS;
     bool ambush_pending = !encounter_planned &&
         (int32_t)(services->next_random(sim) % 100U) < danger / 2;
+    if (sim->schema_version >= 111U && !bandit_block)
+        ambush_pending = false;
     sim->resolved_journey_situation_id = 0U;
     sim->resolved_journey_outcome = CC_JOURNEY_OUTCOME_NONE;
     sim->player.coins -= fare;

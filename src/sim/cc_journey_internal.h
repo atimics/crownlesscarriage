@@ -2,6 +2,31 @@
 #define CROWNLESS_JOURNEY_INTERNAL_H
 
 #include "sim/cc_sim.h"
+#include <string.h>
+
+/* The authored chain belongs to Alderwatch's approach and its living
+ * captain. Other closed roads have their own causes and people. */
+static inline bool CcJourneyAlderwatchChain(const CcSim *sim,
+    const CcRoute *route, CcId origin_id, CcId destination_id)
+{
+    if (sim == NULL || route == NULL || sim->route_count <= 1 ||
+        sim->settlement_count <= 2 || !route->closed ||
+        route->id != sim->routes[1].id ||
+        route->from_id != sim->settlements[1].id ||
+        route->to_id != sim->settlements[2].id ||
+        origin_id != route->from_id || destination_id != route->to_id)
+        return false;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *captain = &sim->characters[i];
+        if (strcmp(captain->name, "Ilyra Senn") == 0 &&
+            captain->birth_day <= sim->current_day &&
+            (captain->death_day == 0 ||
+             captain->death_day > sim->current_day) &&
+            captain->current_settlement_id == origin_id)
+            return true;
+    }
+    return false;
+}
 
 /* Shared by journey execution, validation, and road-house generation. */
 int32_t CcJourneyPaceRate(CcJourneyPace pace);
