@@ -154,7 +154,10 @@ async function main() {
         assert.deepEqual(journeySignature(peer.state), signature);
       }
       receipt.checkpoints.push({label, revision:authoritative.revision,
-        action_revision:authoritative.action_revision, ...signature});
+        action_revision:authoritative.action_revision, ...signature,
+        browser_sync:synced.browsers.map(browser => ({
+          revision:browser.sync.revision, hash:browser.hash,
+          ready:browser.ready}))});
       return authoritative;
     }
     await ownerControls.button('Enter world').click();

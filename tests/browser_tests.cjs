@@ -768,13 +768,9 @@ async function main() {
         assert.equal(reliefWalks.at(-1).reissues, 0,
           `Crate ${crate} should reach the granary with one Walk tap`);
         await mobile.waitForTimeout(350);
-        for (let attempt = 0; attempt < 4 &&
-             !(await controls.button('Walk to carriage').read()); ++attempt) {
-          await tapRelief('Lift one relief crate');
-          await mobile.waitForTimeout(250);
-        }
-        assert(await controls.button('Walk to carriage').read(),
-          `Relief crate ${crate} must be carried after lifting`);
+        await tapRelief('Lift one relief crate');
+        await mobile.waitForFunction(() => Module.crownlessTouchFrame?.buttons.some(
+          button => button.label === 'Walk to carriage'), undefined, {timeout:8000});
         if (crate === 1)
           await mobile.screenshot({path:path.join(output, 'mobile-carrying-relief-crate.png')});
         await walkRelief(crate, 'Walk to carriage', 'Place crate in carriage');
@@ -784,21 +780,25 @@ async function main() {
           `Crate ${crate} should finish the platform descent with one Walk tap: ` +
           JSON.stringify(reliefWalks.at(-1)));
         await mobile.waitForTimeout(350);
-        for (let attempt = 0; attempt < 4 &&
-             !(await controls.reading()).includes(`Cargo ${crate}/12`); ++attempt) {
-          await tapRelief('Place crate in carriage');
-          await mobile.waitForTimeout(250);
+        await tapRelief('Place crate in carriage');
+        try {
+          await mobile.waitForFunction(crate =>
+            Module.crownlessTouchFrame?.reading.includes(`Cargo ${crate}/12`),
+          crate, {timeout:8000});
+        } catch (error) {
+          await mobile.screenshot({path:path.join(output, 'mobile-relief-stow-mismatch.png')});
+          const frame = await mobile.evaluate(() => Module.crownlessTouchFrame);
+          assert.fail(`Crate ${crate} stow result: ${JSON.stringify(frame)}; ${error.message}`);
         }
-        assert.match(await controls.reading(), new RegExp(`Cargo ${crate}/12`));
         assert.equal(await mobile.evaluate(() => Module.crownlessCampaignId), openingCampaignId);
         await fs.writeFile(path.join(output, 'relief-walks.json'),
           JSON.stringify(reliefWalks, null, 2));
-        if (crate === 7 && process.env.CC_BROWSER_CAPTURE_STORAGE) {
+        if (crate >= 4 && process.env.CC_BROWSER_CAPTURE_STORAGE) {
           const saved = await mobile.evaluate(() => Module.crownlessSaveRevision);
           await controls.button('Save F5').tap();
           await mobile.waitForFunction(before => Module.crownlessSaveRevision > before,
             saved);
-          await phone.storageState({path:process.env.CC_BROWSER_CAPTURE_STORAGE + '.crate7',
+          await phone.storageState({path:process.env.CC_BROWSER_CAPTURE_STORAGE + `.crate${crate}`,
             indexedDB:true});
         }
         if (crate < 8) await controls.button('Walk to granary stack').waitFor();
