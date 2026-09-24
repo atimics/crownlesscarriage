@@ -3187,7 +3187,7 @@ static const char *TravelForecastLine(const CcSim *sim)
             CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
     }
     if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-        return "ROAD AHEAD  /  BLOCKED  /  FACE OR NEGOTIATE";
+        return "ROAD AHEAD  /  BLOCKED  /  FIGHT, PARLEY OR RETURN";
     }
     if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
         return "RESTING  /  THE TEAM RECOVERS  /  RISE WHEN READY";
@@ -3206,7 +3206,10 @@ static const char *TravelForecastLine(const CcSim *sim)
             road_stop->accessible ? (road_stop->condition < 100 ? "REPAIRABLE" : "CLEAR") : "BLOCKED");
     }
     if (sim->journey.ambush_warned && !sim->journey.ambush_resolved) {
-        return "ROAD AHEAD  /  DANGER SIGNALLED  /  PRESS ON OR BUNK DOWN";
+        const CcBanditGroup *bandits = CcSimBanditGroupOnRoute(
+            sim, sim->journey.route_id);
+        return TextFormat("SCOUTS  /  %.24s  /  CAREFUL PACE MAY BYPASS",
+            bandits != NULL ? bandits->name : "ARMED RIDERS");
     }
     if (sim->pony_company.encounter >= 0) {
         return "ROAD AHEAD  /  PONY COMPANY  /  MEET THEM";
@@ -3552,10 +3555,16 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                                CcSimHorseTeamReadiness(sim),
                                sim->carriage.condition, eta_hours),
                     content_x, 189, 8, INK);
+                const CcBanditGroup *warned_bandits =
+                    sim->journey.ambush_warned &&
+                    sim->journey.ambush_pending ?
+                        CcSimBanditGroupOnRoute(
+                            sim, sim->journey.route_id) : NULL;
                 CcOverlayDrawText(
                     sim->journey.ambush_warned &&
                     sim->journey.ambush_pending ?
-                        "SCOUTS: RIDERS SHADOWING THE ROAD" :
+                        TextFormat("SCOUTS: %.24s RIDERS", warned_bandits != NULL ?
+                            warned_bandits->name : "ARMED") :
                     journey_stop == CC_JOURNEY_STOP_OVERNIGHT &&
                     CcSimJourneyRoadHouseAvailable(sim) ?
                         TextFormat("%s · %d MILES OUT",
@@ -3567,6 +3576,21 @@ static void DrawLocalPanel(const CcSim *sim, const LocalState *local)
                     content_x, 208, 7,
                     sim->journey.ambush_warned &&
                     sim->journey.ambush_pending ? DANGER : TEAL);
+                if (sim->journey.ambush_warned &&
+                    sim->journey.ambush_pending && warned_bandits != NULL) {
+                    CcGood demanded_good = CC_GOOD_FOOD;
+                    int32_t demanded_quantity = 0;
+                    bool demand = CcSimBanditProvisionDemand(
+                        sim, sim->journey.route_id,
+                        &demanded_good, &demanded_quantity);
+                    CcOverlayDrawText(demand ?
+                        TextFormat("POSSIBLE TOLL: %d %s OR %d CROWNS",
+                            demanded_quantity, CcGoodName(demanded_good),
+                            sim->journey.bargain_cost) :
+                        TextFormat("POSSIBLE TOLL: %d CROWNS",
+                            sim->journey.bargain_cost),
+                        content_x, 223, 7, DANGER);
+                }
                 CcOverlayDrawText(
                     journey_stop == CC_JOURNEY_STOP_MIDDAY ?
                         "ENTER BREAK  /  P PRESS ON" :
@@ -4612,6 +4636,13 @@ static ContextActionSet BuildContextActions(
         AddDetailedContextAction(&set, CONTEXT_ACTION_PAY,
                                  "Hear them out", "2",
                                  "ENTER PARLEY", true, false);
+        const CcSettlement *origin = CcSimSettlement(
+            sim, sim->journey.origin_id);
+        AddDetailedContextAction(&set, CONTEXT_ACTION_WITHDRAW,
+                                 "Withdraw to origin", "3",
+                                 TextFormat("%.20s / 0 CROWNS / CURRENT TIME",
+                                     origin != NULL ? origin->name : "ORIGIN"),
+                                 true, false);
         return set;
     }
     if (view == VIEW_DUNGEON) {
@@ -6944,7 +6975,7 @@ static void DrawJourneyEncounter(const CcSim *sim)
                    combat_damage, wound_cost),
         386, 425, 10, DANGER);
     CcOverlayDrawText(
-        "You may withdraw. Under fire, retreat also costs condition and care.",
+        "Withdraw now: 0 crowns, no extra clock time; road security may fall.",
         386, 455, 9, MUTED);
 }
 
@@ -9499,6 +9530,18 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             *view = VIEW_LOCAL;
             (void)snprintf(message, message_capacity,
                            "Walk to the captain and hear the demand.");
+        } else if (ClientKeyPressed(KEY_THREE) ||
+                   context_action == CONTEXT_ACTION_WITHDRAW) {
+            CcCommand withdraw = {
+                .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
+                .amount = 0
+            };
+            if (ApplyCommand(*journal, sim, withdraw, message,
+                             message_capacity)) {
+                ResetLocalStatePreservingAthletics(local);
+                *selected = FirstVisibleMapIndex(sim);
+                *view = VIEW_LOCAL;
+            }
         }
         return;
     }
@@ -11140,6 +11183,7 @@ static int ClientRegressionFailure(const char *message)
 #include "../../tests/client_mine_flow.inc"
 #include "../../tests/client_world_cards.inc"
 #include "../../tests/client_stable_care.inc"
+#include "../../tests/client_road_block.inc"
 #include "../../tests/client_bridge_scene.inc"
 #include "../../tests/map_texture_lifetime.inc"
 
@@ -11486,6 +11530,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-bridge-scene") == 0) return RunBridgeSceneRegression();
     if (argc == 2 && strcmp(argv[1], "--test-world-cards") == 0) return RunWorldCardRegression();
     if (argc == 2 && strcmp(argv[1], "--test-stable-care-card") == 0) return RunStableCareCardRegression();
+    if (argc == 2 && strcmp(argv[1], "--test-road-block-choice") == 0) return RunRoadBlockChoiceRegression();
     if (argc == 2 && strcmp(argv[1], "--test-mine-input") == 0) return RunMineInputRegression();
     if (argc == 2 && strcmp(argv[1], "--test-mine-hauler-visual") == 0) return RunMineHaulerVisualRegression();
     if (argc == 2 && strcmp(argv[1], "--test-road-journey-save") == 0) return RunRoadJourneySaveRegression();

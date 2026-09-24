@@ -1,5 +1,5 @@
 add_executable(sim_tests tests/sim_tests.c)
-target_link_libraries(sim_tests PRIVATE crownless_sim)
+target_link_libraries(sim_tests PRIVATE crownless_persistence)
 cc_strict_warnings(sim_tests)
 cc_large_sim_stack(sim_tests)
 add_test(NAME deterministic_simulation COMMAND sim_tests)

@@ -1,5 +1,6 @@
 #include "sim/cc_sim.h"
 #include "sim/cc_road_position.h"
+#include "persistence/cc_save.h"
 
 #include "test_support.h"
 #include <stdio.h>
@@ -897,6 +898,61 @@ int main(void)
     CC_CHECK(CcPlayerCargoUsed(&warned_block.player) == warning_cargo);
     CC_CHECK(CcSimValidate(&careful_escape, error, sizeof(error)));
     CC_CHECK(CcSimValidate(&warned_block, error, sizeof(error)));
+
+    const char *warning_path = "/tmp/crownless-warned-road.ccsave";
+    (void)remove(warning_path);
+    CC_CHECK(CcSaveWrite(warning_path, &warned_block, error, sizeof(error)));
+    static CcSim warned_restored;
+    CC_CHECK(CcSaveRead(warning_path, &warned_restored, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&warned_restored) == CcSimHash(&warned_block));
+    CcId warned_route = warned_restored.journey.route_id;
+    CcId warned_origin = warned_restored.journey.origin_id;
+    CcId warned_destination = warned_restored.journey.destination_id;
+    const CcRoute *blocked_route = CcSimRoute(&warned_restored, warned_route);
+    const CcBanditGroup *blocked_bandits = CcSimBanditGroupOnRoute(
+        &warned_restored, warned_route);
+    CC_CHECK(blocked_route != NULL && blocked_bandits != NULL);
+    int32_t blocked_security = blocked_route->security;
+    int32_t blocked_influence = blocked_bandits->influence;
+    int32_t warning_blocked_day = warned_restored.current_day;
+    int32_t blocked_minute = warned_restored.clock.minute_subticks;
+    CcMoney blocked_gold = CcSimTrackedGold(&warned_restored);
+    CcCommand turn_back = {
+        .kind = CC_COMMAND_WITHDRAW_ENCOUNTER,
+        .amount = 0
+    };
+    CC_CHECK(CcSimApply(&warned_restored, &turn_back,
+                        error, sizeof(error)));
+    CC_CHECK(!warned_restored.journey.active);
+    CC_CHECK(warned_restored.player.location_id == warned_origin);
+    CC_CHECK(warned_restored.carriage.location_id == warned_origin);
+    CC_CHECK(warned_restored.current_day == warning_blocked_day);
+    CC_CHECK(warned_restored.clock.minute_subticks == blocked_minute);
+    CC_CHECK(warned_restored.player.coins == warning_coins);
+    CC_CHECK(CcPlayerCargoUsed(&warned_restored.player) == warning_cargo);
+    CC_CHECK(CcSimTrackedGold(&warned_restored) == blocked_gold);
+    CC_CHECK(CcSimRoute(&warned_restored, warned_route)->security ==
+             blocked_security - 1);
+    CC_CHECK(CcSimBanditGroupOnRoute(
+        &warned_restored, warned_route)->influence ==
+             blocked_influence + 1);
+    CC_CHECK(CcSimRecentEvent(&warned_restored, 0)->kind ==
+             CC_EVENT_ENCOUNTER_WITHDRAWN);
+    CC_CHECK(CcSaveWrite(warning_path, &warned_restored,
+                         error, sizeof(error)));
+    CC_CHECK(CcSaveRead(warning_path, &warned_block, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&warned_restored) == CcSimHash(&warned_block));
+    CC_CHECK(CcSimApply(&warned_block, &warned_travel,
+                        error, sizeof(error)));
+    CC_CHECK(warned_block.journey.active &&
+             warned_block.journey.destination_id == warned_destination &&
+             warned_block.journey.route_id == warned_route);
+    CC_CHECK(CcSimRoute(&warned_block, warned_route)->security ==
+             blocked_security - 1);
+    CC_CHECK(CcSimBanditGroupOnRoute(
+        &warned_block, warned_route)->influence ==
+             blocked_influence + 1);
+    (void)remove(warning_path);
 
     static CcSim fine_ticks;
     static CcSim batched_ticks;
