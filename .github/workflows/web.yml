@@ -185,10 +185,9 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, time, urllib.error, urllib.request
-          # The host stops when nobody is playing, so the first request after a
-          # deploy pays for a cold boot and for reading every world off the
-          # volume. Wait for the machine rather than failing a good deploy.
-          def health(origin, deadline):
+          # A deployment can serve the previous revision while the new machine
+          # starts and reads its saved worlds. Wait for the expected revision.
+          def health(origin, expected, deadline):
               last = None
               while True:
                   request = urllib.request.Request(
@@ -197,17 +196,18 @@ jobs:
                   )
                   try:
                       with urllib.request.urlopen(request, timeout=30) as response:
-                          return json.load(response)
+                          reading = json.load(response)
+                      if reading.get('status') == 'ready' and reading.get('revision') == expected:
+                          return reading
+                      last = reading
                   except (urllib.error.URLError, TimeoutError, ConnectionError, json.JSONDecodeError) as error:
                       last = error
-                      if time.monotonic() >= deadline:
-                          raise AssertionError(f'{origin} never answered: {last!r}')
-                      print(f'{origin} is still waking up ({error!r}); asking again.')
-                      time.sleep(5)
+                  if time.monotonic() >= deadline:
+                      raise AssertionError(f'{origin} did not serve {expected}: {last!r}')
+                  print(f'{origin} is serving {last!r}; checking again.')
+                  time.sleep(5)
           for origin in ('https://crownless-ratimics.fly.dev', 'https://crownless.ratimics.com'):
-              reading = health(origin, time.monotonic() + 180)
-              assert reading['status'] == 'ready', reading
-              assert reading['revision'] == os.environ['EXPECTED_REVISION'], reading
+              reading = health(origin, os.environ['EXPECTED_REVISION'], time.monotonic() + 180)
               stranded = reading.get('worlds_needing_recovery', 0)
               if stranded:
                   print(f'::warning::{origin} is serving with {stranded} world(s) needing recovery.')

@@ -8,4 +8,4 @@ The current engine decoded all three saved states without repair and reproduced 
 
 The focused `test_historical_cast_recovery_preserves_backup_players_and_retry` regression uses the shipped schema-73 retired-cast fixture, the kind of old save that previously failed validation. It confirms the older record upgrades, player records survive, travel is accepted, and retry after restart applies once. It also checks a consistent pre-recovery backup and its SQLite integrity. The focused shared-carriage and quest-cast checks passed.
 
-The original failed host record from 8 September was not retained separately. This check covers every saved world currently on the host and the historical failure shape in a public synthetic fixture. It does not claim that the exact earlier failure was replayed byte for byte.
+The retained evidence for the 8 September failure is the historical error report and a public synthetic fixture. This check covers every saved world currently on the host and the earlier failure shape.
