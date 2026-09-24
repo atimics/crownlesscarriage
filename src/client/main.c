@@ -4540,9 +4540,8 @@ static ContextActionSet BuildContextActions(
                     bool included = false;
                     for (int j = 0; j < steady.count; ++j)
                         if (steady.items[j].kind == action->kind &&
-                            (action->kind != CONTEXT_ACTION_WORLD_TARGET ||
-                             CcInteractionKeyEqual(steady.items[j].target,
-                                                   action->target))) included = true;
+                            CcInteractionKeyEqual(steady.items[j].target,
+                                                  action->target)) included = true;
                     if (!included) steady.items[steady.count++] = *action;
                 }
             }
