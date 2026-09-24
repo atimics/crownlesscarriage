@@ -590,8 +590,22 @@ async function main() {
   } catch (error) {
     await fs.mkdir('browser-results', {recursive:true});
     if (deployed && testWorldId) {
+      let deleted = false;
+      if (owner && !owner.isClosed()) {
+        try {
+          deleted = await owner.evaluate(async id => {
+            const token = localStorage.getItem('cc-coop-token');
+            const response = await fetch(`/api/worlds/${id}/host`, {
+              method:'POST', headers:{'Content-Type':'application/json',
+                Authorization:`Bearer ${token}`},
+              body:JSON.stringify({action:'delete'})});
+            return response.ok && (await response.json()).deleted === true;
+          }, testWorldId);
+        } catch {}
+      }
       await fs.writeFile('browser-results/shared-world-cleanup.json',
-        JSON.stringify({world_id:testWorldId, needs_cleanup:true}, null, 2));
+        JSON.stringify({world_id:testWorldId, deleted,
+          needs_cleanup:!deleted}, null, 2));
     }
     for (const [name, page] of [['owner', owner], ['crew', crew]]) {
       if (page && !page.isClosed()) {
