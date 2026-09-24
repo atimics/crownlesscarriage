@@ -410,26 +410,16 @@ async function main() {
         sequence:retry.sequence}, revision:afterRetry.revision};
     await checkpoint('continue-retry-once');
     await ownerControls.button('Travel').click();
+    await ownerControls.button('Drive to Gloamgate').click();
     let arrived = null;
     for (let step = 0; step < 120; ++step) {
       const current = (await state()).state;
       if (!current.journey.active) {arrived = current; break;}
-      let action, target = '0';
-      if (current.journey.stop === 1) action = 'press_on';
-      else if (current.journey.stop === 2) action = 'camp';
-      else if (current.journey.phase === 4 || current.journey.road_site) {
-        const road = current.road_position;
-        const leg = road?.next_legs?.find(item => item.destination === road.goal) ||
-          road?.next_legs?.find(item => item.direction === 1 && item.kind !== 3) ||
-          road?.next_legs?.find(item => item.direction === 1) ||
-          current.road_position?.next_legs?.[0];
-        assert(leg, JSON.stringify(current.journey));
-        action = 'road_leg'; target = leg.token;
-      } else action = 'skip_watch';
-      const result = await owner.evaluate(({action, target}) =>
-        Module.ccCoop.apply(action, target, 0, 0), {action, target});
-      assert(result.accepted, JSON.stringify({action, message:result.message,
-        journey:current.journey}));
+      if (await ownerControls.button('Travel on').read())
+        await ownerControls.button('Travel on').click();
+      else if (await ownerControls.button('Travel').read())
+        await ownerControls.button('Travel').click();
+      else await owner.waitForTimeout(500);
     }
     assert(arrived, 'Both players reach the route destination');
     assert.equal(arrived.company.location, camped.state.journey.destination);
