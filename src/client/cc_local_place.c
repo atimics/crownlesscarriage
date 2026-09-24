@@ -906,11 +906,34 @@ void CcLocalTownStatus(const CcSim *sim, CcId town, char *text, size_t capacity)
     if (text == NULL || capacity == 0U) return;
     const CcSettlement *place = sim != NULL ? CcSimSettlement(sim, town) : NULL;
     const CcBanditGroup *band = CcLocalTownOccupier(sim, town);
-    if (place == NULL) (void)snprintf(text, capacity, "Roadside");
-    else if (!CcSettlementIsAbandoned(place))
-        (void)snprintf(text, capacity, "%d residents", place->population);
-    else if (band != NULL)
-        (void)snprintf(text, capacity, "Occupied ruins / %.40s / %d bandits / Town services closed",
-                       band->name, band->members);
-    else (void)snprintf(text, capacity, "Abandoned / 0 residents / Town services closed");
+    if (place == NULL) {
+        (void)snprintf(text, capacity, "Roadside");
+        return;
+    }
+    int32_t visitors = 0;
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (person->current_settlement_id == town &&
+            person->home_settlement_id != town &&
+            person->activity != CC_CHARACTER_ACTIVITY_TRAVELLING &&
+            person->birth_day <= sim->current_day &&
+            (person->death_day == 0 ||
+             person->death_day > sim->current_day)) ++visitors;
+    }
+    int32_t food = CcNutritionAvailable(
+        place->stock, CC_NUTRITION_CIVILIAN) / CC_NUTRITION_PER_RATION;
+    if (!CcSettlementIsAbandoned(place)) {
+        (void)snprintf(text, capacity,
+                       "%d residents / %d visitor%s / %d food rations%s",
+                       place->population, visitors, visitors == 1 ? "" : "s", food,
+                       place->hunger >= 40 ? " / Hungry town" : "");
+    } else if (band != NULL) {
+        (void)snprintf(text, capacity,
+                       "Occupied ruins / 0 residents / %d visitor%s / %d bandits / Services closed",
+                       visitors, visitors == 1 ? "" : "s", band->members);
+    } else {
+        (void)snprintf(text, capacity,
+                       "Abandoned / 0 residents / %d visitor%s / %d food rations / Services closed",
+                       visitors, visitors == 1 ? "" : "s", food);
+    }
 }
