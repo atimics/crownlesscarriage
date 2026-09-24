@@ -1,5 +1,6 @@
 import io
 import ctypes as c
+import hashlib
 import json
 from pathlib import Path
 import sqlite3
@@ -163,6 +164,66 @@ class CoopTests(unittest.TestCase):
 
     def test_travelling_cached_view_refreshes_on_restart(self):
         self.check_cached_view_upgrade(travelling=True)
+
+    def test_historical_cast_recovery_preserves_backup_players_and_retry(self):
+        fixture = Path(__file__).parent / 'fixtures/shipped/schema-73-retired-cast.ccsave'
+        historical = fixture.read_bytes()
+        fixture_hash = hashlib.sha256(historical).hexdigest()
+        with self.engine.open(saved=historical) as sim:
+            expected = sim.snapshot()
+        self.assertEqual(expected['day'], 12411)
+        self.worlds.command(self.id, self.a, self.command(self.a, good=0, amount=1))
+        view = self.worlds.appearance(self.id, self.a,
+            {'appearance': dict(skin=1, hair=2, style=3, face=1, coat=4)})
+        self.worlds.save_session(self.id, self.a, dict(sequence=1,
+            context=view['session_context'], session='CROWNLESS_SESSION 7\nrecovery test\n'))
+        self.worlds.db.execute('UPDATE worlds SET state=?,view=? WHERE id=?',
+                              (historical, json.dumps({'historical': True}), self.id))
+        before = dict(self.worlds.db.execute('SELECT * FROM worlds WHERE id=?', (self.id,)).fetchone())
+        preserved_tables = ('members', 'receipts', 'appearances', 'sessions',
+                            'party_lives', 'party_wipes', 'world_starts')
+        def records(db):
+            return {table: [tuple(row) for row in db.execute(f'SELECT * FROM {table} ORDER BY rowid')]
+                    for table in preserved_tables}
+        players = records(self.worlds.db)
+        backup = Path(self.temp.name) / 'before-recovery.sqlite3'
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / 'tools/coop/server.py'),
+                        '--database', str(self.path), '--backup-to', str(backup)], check=True)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.failed, set())
+        self.assertEqual(records(self.worlds.db), players)
+        restored = self.worlds.view(self.id, self.b)
+        self.assertEqual(restored['state'], expected)
+        self.assertEqual(restored['revision'], before['revision'] + 1)
+        self.assertEqual(restored['action_revision'], before['action_revision'] + 1)
+        self.assertEqual(restored['next_sequence'], 1)
+        target = next(route['id'] for route in expected['travel'] if route['available'])
+        command = self.command(self.b, 'travel', target=target)
+        result = self.worlds.command(self.id, self.b, command)
+        self.assertTrue(result['accepted'])
+        self.assertTrue(result['world']['state']['journey']['active'])
+        self.assertEqual(result['world']['state']['company'], expected['company'])
+        saved = self.worlds.db.execute('SELECT state FROM worlds WHERE id=?', (self.id,)).fetchone()[0]
+        with self.engine.open(saved=saved) as sim:
+            self.assertEqual(sim.snapshot(), result['world']['state'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        self.assertEqual(self.worlds.failed, set())
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], result['world']['state'])
+        retry = self.worlds.command(self.id, self.b, command)
+        self.assertTrue(retry['duplicate'])
+        self.assertEqual(retry['world']['state'], result['world']['state'])
+        self.assertEqual(retry['world']['revision'], result['world']['revision'])
+        self.assertEqual(self.worlds.db.execute(
+            'SELECT count(*) FROM receipts WHERE world=? AND member=? AND sequence=?',
+            (self.id, restored['member'], command['sequence'])).fetchone()[0], 1)
+        with sqlite3.connect(backup) as db:
+            db.row_factory = sqlite3.Row
+            self.assertEqual(dict(db.execute('SELECT * FROM worlds WHERE id=?', (self.id,)).fetchone()), before)
+            self.assertEqual(records(db), players)
+            self.assertEqual(db.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+        self.assertEqual(hashlib.sha256(fixture.read_bytes()).hexdigest(), fixture_hash)
 
     def enter(self, token):
         state = self.worlds.view(self.id, token, campaign=True, enter=True)
