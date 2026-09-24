@@ -902,6 +902,7 @@ async function main() {
         await controls.button('Full screen').tap();
         await mobile.waitForFunction(() => !document.querySelector('#stage').classList.contains('expanded'));
       }
+      await mobile.setViewportSize({width:390, height:844});
       await controls.button('Resume').tap();
       await controls.button('Board Crownless carriage').waitFor();
       await controls.button('Board Crownless carriage').tap();
