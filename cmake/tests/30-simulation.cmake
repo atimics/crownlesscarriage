@@ -6,6 +6,10 @@ add_test(NAME deterministic_simulation COMMAND sim_tests)
 add_executable(road_block_browser_fixture tests/road_block_browser_fixture.c)
 target_link_libraries(road_block_browser_fixture PRIVATE crownless_persistence)
 cc_strict_warnings(road_block_browser_fixture)
+add_executable(stranded_recovery_browser_fixture
+    tests/stranded_recovery_browser_fixture.c)
+target_link_libraries(stranded_recovery_browser_fixture PRIVATE crownless_persistence)
+cc_strict_warnings(stranded_recovery_browser_fixture)
 
 add_executable(road_withdraw_time_tests tests/road_withdraw_time_tests.c)
 target_link_libraries(road_withdraw_time_tests PRIVATE crownless_persistence)

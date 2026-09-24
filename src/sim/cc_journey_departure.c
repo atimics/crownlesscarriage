@@ -105,16 +105,6 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
        simply sets out at a careful pace. */
     bool hungry_team = sim->schema_version >= 101U &&
         preview.horse_readiness < 30;
-    if (sim->schema_version >= 15U) {
-        for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
-            int32_t due = sim->horse_team[i].pregnancy_days_remaining;
-            if (due > 0 && due <= 30) {
-                SetError(error, error_capacity,
-                         "A mare near foaling must remain at the stable.");
-                return false;
-            }
-        }
-    }
     if (sim->schema_version >= 14U && sim->schema_version < 101U &&
         (origin == NULL ||
         CcNutritionAvailable(origin->stock, CC_NUTRITION_ANIMAL) <

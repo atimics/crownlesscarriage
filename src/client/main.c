@@ -4653,6 +4653,32 @@ static ContextActionSet BuildContextActions(
                 --at;
             }
         }
+        const CcSettlement *place = CcSimSettlement(
+            sim, sim->player.location_id);
+        if (!local->market_interior &&
+            local->site_kind == CC_LOCAL_SITE_NONE &&
+            !sim->journey.active && place != NULL && place->population <= 0 &&
+            OutgoingRouteCount(sim) > 0) {
+            bool passable = false;
+            char reason[192] = "";
+            for (int32_t i = 0; i < sim->route_count; ++i) {
+                const CcRoute *route = SelectedOutgoingRoute(sim, i);
+                if (route == NULL) continue;
+                char option_reason[192] = "";
+                CcTravelPreview option = {0};
+                if (CcSimTravelPreview(sim,
+                        RouteOtherEnd(route, sim->player.location_id),
+                        &option, option_reason, sizeof(option_reason))) {
+                    passable = true;
+                    break;
+                }
+                if (reason[0] == '\0')
+                    (void)snprintf(reason, sizeof(reason), "%s", option_reason);
+            }
+            AddDetailedContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD,
+                "Choose a road", "", passable ? "OPEN THE DEPARTURE ROAD" :
+                reason, passable, false);
+        }
         if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         if (local->world_cards_presented && (local->interaction.approaching ||
             GridDistance(LocalPosition(local), local->presented_card_origin) <= 3.0f)) {
@@ -5033,16 +5059,21 @@ static ContextActionSet BuildContextActions(
             const CcRoute *route = SelectedOutgoingRoute(sim, i);
             if (route == NULL) continue;
             char label[64];
-            char detail[48];
+            char detail[64];
             RoadChoiceLabel(sim, route, label, sizeof(label));
             CcTravelPreview preview = {0};
-            (void)CcSimTravelPreview(sim,
+            char reason[192] = "";
+            bool available = CcSimTravelPreview(sim,
                 RouteOtherEnd(route, sim->player.location_id),
-                &preview, NULL, 0U);
-            (void)snprintf(detail, sizeof(detail),
-                "%d HOURS ON THE ROAD", preview.travel_watches * 8);
+                &preview, reason, sizeof(reason));
+            if (available) {
+                (void)snprintf(detail, sizeof(detail),
+                    "%d HOURS ON THE ROAD", preview.travel_watches * 8);
+            } else {
+                (void)snprintf(detail, sizeof(detail), "%s", reason);
+            }
             AddDetailedContextAction(&set, CONTEXT_ACTION_TRAVEL,
-                label, i == selected ? "ENTER" : "", detail, true,
+                label, i == selected ? "ENTER" : "", detail, available,
                 i == selected);
             set.items[set.count - 1].amount = i;
             set.items[set.count - 1].target = (CcInteractionKey){sim->player.location_id, route->id, CC_INTERACTION_ACTION};
@@ -5699,6 +5730,11 @@ static const char *ContextTouchActionLabel(
         return label;
     }
     if (action->kind == CONTEXT_ACTION_CARE_HORSES) {
+        (void)snprintf(label, label_capacity, "%s. %s",
+                       action->label, action->detail);
+        return label;
+    }
+    if (action->kind == CONTEXT_ACTION_CHOOSE_ROAD && !action->enabled) {
         (void)snprintf(label, label_capacity, "%s. %s",
                        action->label, action->detail);
         return label;
@@ -10853,19 +10889,26 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (interact || context_action != CONTEXT_ACTION_NONE) {
-            if (local->open_world && !local->market_interior &&
+            if (!local->market_interior &&
                 context_action == CONTEXT_ACTION_CHOOSE_ROAD) {
                 *selected = FirstOutgoingRouteIndex(sim);
-                const CcRoute *route = SelectedOutgoingRoute(
-                    sim, *selected);
-                if (route != NULL) {
-                    SetOpenWorldCarriageAtRoadGate(
-                        sim, local, route->id);
+                if (local->open_world) {
+                    const CcRoute *route = SelectedOutgoingRoute(
+                        sim, *selected);
+                    if (route != NULL) {
+                        SetOpenWorldCarriageAtRoadGate(
+                            sim, local, route->id);
+                    }
+                    *view = VIEW_ROADS;
+                    message[0] = '\0';
+                    (void)StartOnlyOutgoingRoad(*journal, sim, local, view,
+                        selected, message, message_capacity);
+                } else {
+                    BeginRoadChoiceApproachState(local, true);
+                    *view = VIEW_LOCAL;
+                    (void)snprintf(message, message_capacity,
+                        "You take the reins and leave the loading bay.");
                 }
-                *view = VIEW_ROADS;
-                message[0] = '\0';
-                (void)StartOnlyOutgoingRoad(*journal, sim, local, view,
-                    selected, message, message_capacity);
                 return;
             }
             if (local->open_world && !local->market_interior &&

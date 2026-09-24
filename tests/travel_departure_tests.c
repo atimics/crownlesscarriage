@@ -9,6 +9,38 @@ static CcSim sim;
 static CcSim restored;
 static char error[256];
 
+static void CheckFoalingRouteOffer(void)
+{
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcId destination = sim.routes[0].to_id;
+    CcTravelPreview preview = {0};
+    CC_CHECK(CcSimTravelPreview(&sim, destination, &preview,
+                                error, sizeof(error)));
+    CcHorse stallion = sim.horse_team[0];
+    sim.horse_team[0] = sim.horse_team[1];
+    sim.horse_team[1] = stallion;
+    sim.horse_team[0].pregnant_by_id = stallion.id;
+    sim.horse_team[0].pregnancy_days_remaining = 20;
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    uint64_t before = CcSimHash(&sim);
+    CC_CHECK(!CcSimTravelPreview(&sim, destination, &preview,
+                                 error, sizeof(error)));
+    CC_CHECK(strcmp(error,
+        "A mare near foaling must remain at the stable.") == 0);
+    CC_CHECK(CcSimHash(&sim) == before);
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL,
+                        .target_id = destination};
+    CC_CHECK(!CcSimApply(&sim, &travel, error, sizeof(error)));
+    CC_CHECK(strcmp(error,
+        "A mare near foaling must remain at the stable.") == 0);
+    CC_CHECK(CcSimHash(&sim) == before);
+    sim.horse_team[0].pregnancy_days_remaining = 0;
+    sim.horse_team[0].pregnant_by_id = 0U;
+    CC_CHECK(CcSimTravelPreview(&sim, destination, &preview,
+                                error, sizeof(error)));
+    CC_CHECK(CcSimApply(&sim, &travel, error, sizeof(error)));
+}
+
 static void CheckFreeRoads(void)
 {
     CcSimInit(&sim, 42U);
@@ -332,6 +364,7 @@ static void CheckOtherClosedReliefRoad(void)
 
 int main(void)
 {
+    CheckFoalingRouteOffer();
     CheckFreeRoads();
     CheckPaymentsAtEncounter(false);
     CheckPaymentsAtEncounter(true);
