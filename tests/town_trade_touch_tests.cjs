@@ -70,6 +70,11 @@ async function main() {
     await startGame(page);
     const controls = gameControls(page, true);
     await controls.button('Enter Granary hall').waitFor();
+    if (width === 390) {
+      const mobileDetailSize = await page.locator('#touch-actions .touch-detail')
+        .evaluate(node => getComputedStyle(node).fontSize);
+      assert.equal(mobileDetailSize, '16px', 'mobile trade detail stays at the readable 16px touch size');
+    }
     const before = await controls.reading();
     assert.match(before, /Day\s+1\s*\/\s*42 crowns\s*\/\s*Cargo 0\/12/,
       `${name}: fresh campaign purse and cargo: ${before}`);
@@ -103,8 +108,13 @@ async function main() {
       revision, {timeout: 20000});
     const after = await controls.reading();
     assert.match(after, /Bought 2 Bread\./);
+    assert.match(after, /Total cost 8 crowns/, `${name}: completed offer keeps its confirmed price beside the receipt`);
     assert.match(after, /Purse 34\s*\|\s*Cargo 2\/12/);
     assert.match(after, /Carriage 2/);
+    const completedBuyEnabled = await page.evaluate(() =>
+      Module.crownlessTouchFrame.buttons.find(button => /^Buy\s+Enter$/.test(button.label))?.enabled);
+    assert.equal(completedBuyEnabled, false,
+      `${name}: the completed purchase stays disabled until the player changes the offer`);
     const receipt = after.match(/Bought 2 Bread\. -(\d+) crowns\. Purse: (\d+)\./);
     assert(receipt, `${name}: receipt reports exact price and balance: ${after}`);
     const charged = Number(receipt[1]);
@@ -131,11 +141,50 @@ async function main() {
     const restoredBalance = Number(restored.match(/Purse (\d+)\s*\|\s*Cargo/)[1]);
     assert.equal(restoredBalance, receiptBalance, `${name}: reload retained charged balance`);
     await page.screenshot({path: path.join(output, name, 'trade-after-reload.png')});
+
+    await gameControls(page, true).button('+').tap();
+    await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Buy: 2 Bread') &&
+      Module.crownlessTouchFrame.reading.includes('Total cost 10 crowns'),
+    undefined, {timeout: 10000});
+    const nextOffer = await gameControls(page, true).reading();
+    assert.match(nextOffer, /Purse 34\s*\|\s*Cargo 2\/12/);
+    await page.screenshot({path: path.join(output, name, 'trade-next-quote.png')});
+    const secondRevision = await page.evaluate(() => Module.crownlessSaveRevision);
+    await tapRaw(page, /^Buy\s+Enter$/);
+    await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Bought 2 Bread'),
+      undefined, {timeout: 20000});
+    const secondReceiptText = await gameControls(page, true).reading();
+    assert.match(secondReceiptText, /Total cost 10 crowns/);
+    assert.match(secondReceiptText, /Purse 24\s*\|\s*Cargo 4\/12/);
+    const secondReceipt = secondReceiptText.match(/Bought 2 Bread\. -(\d+) crowns\. Purse: (\d+)\./);
+    assert(secondReceipt, `${name}: repeated purchase receipt reports its price and balance: ${secondReceiptText}`);
+    assert.equal(Number(secondReceipt[1]), 10, `${name}: repeated purchase charges the newly displayed quote`);
+    assert.equal(Number(secondReceipt[2]), 24, `${name}: repeated purchase receipt matches purse`);
+    await page.screenshot({path: path.join(output, name, 'trade-next-receipt.png')});
+    await page.keyboard.press('F5');
+    await page.waitForFunction(previous => Module.crownlessSaveRevision > previous,
+      secondRevision, {timeout: 20000});
+    await page.reload();
+    await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title',
+      undefined, {timeout: 120000});
+    await page.locator('#canvas').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Module.crownlessScreen === 'playing',
+      undefined, {timeout: 120000});
+    await enterTrade(page);
+    const secondReload = await gameControls(page, true).reading();
+    assert.match(secondReload, /Purse 24\s*\|\s*Cargo 4\/12/);
+    assert.match(secondReload, /Bread\s+76 units/);
+    assert.match(secondReload, /Carriage 4/);
+    await page.screenshot({path: path.join(output, name, 'trade-next-after-reload.png')});
     assert.deepEqual(errors, [], `${name}: browser runtime errors`);
     const result = {viewport: `${width}x${height}`, before: {crowns: 42, cargo: {}},
       quoteCrowns: quotedCost, chargedCrowns: charged,
       bought: {good: 'Bread', quantity: 2}, after: {crowns: 34, cargo: {Bread: 2}},
-      reload: {crowns: 34, cargo: {Bread: 2}}, savedRevision: await page.evaluate(() => Module.crownlessSaveRevision)};
+      reload: {crowns: 34, cargo: {Bread: 2}}, nextQuoteCrowns: 10,
+      nextChargedCrowns: Number(secondReceipt[1]),
+      nextReload: {crowns: 24, cargo: {Bread: 4}},
+      savedRevision: await page.evaluate(() => Module.crownlessSaveRevision)};
     await fs.writeFile(path.join(output, name, 'result.json'), JSON.stringify(result, null, 2));
     await context.close();
     return result;

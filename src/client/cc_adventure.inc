@@ -728,12 +728,14 @@ static Rectangle AdventureGoodBounds(Rectangle panel, int32_t good)
 static Rectangle AdventureQuantityBounds(Rectangle panel, int index)
 {
     return (Rectangle){panel.x + panel.width * 0.52f + (float)index * 68.0f,
-        panel.y + 230.0f, 60.0f, 44.0f};
+        panel.y + (panel.width >= 700.0f && panel.height >= 520.0f ? 270.0f : 230.0f),
+        60.0f, 44.0f};
 }
 
 static Rectangle AdventureConfirmBounds(Rectangle panel)
 {
-    return (Rectangle){panel.x + panel.width * 0.52f, panel.y + 302.0f,
+    return (Rectangle){panel.x + panel.width * 0.52f,
+        panel.y + (panel.width >= 700.0f && panel.height >= 520.0f ? 340.0f : 302.0f),
         panel.width * 0.48f - 24.0f, 46.0f};
 }
 
@@ -871,17 +873,20 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
         return;
     }
     AdventureQuote quote = AdventureTradeQuote(sim, local);
-    local->trade_quote_presented = true;
-    local->trade_presented_total = quote.total;
-    local->trade_presented_reward = quote.reward;
-    local->trade_presented_promise_id = quote.promise_id;
-    local->trade_presented_command = quote.command;
+    if (!local->trade_confirmed) {
+        local->trade_quote_presented = true;
+        local->trade_presented_total = quote.total;
+        local->trade_presented_reward = quote.reward;
+        local->trade_presented_promise_id = quote.promise_id;
+        local->trade_presented_command = quote.command;
+    }
+    CcMoney displayed_total = local->trade_confirmed ? local->trade_presented_total : quote.total;
     AdventurePanelTitle(panel, CcLocalPlaceProfileForSettlement(place)->interior_service);
     const char *modes[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
     ClientTouchHeading(CcLocalPlaceProfileForSettlement(place)->interior_service,
         TextFormat("%s %d %s. %s: %" PRId64 " crowns. Purse: %" PRId64 ". %s",
             modes[local->trade_mode], abs(quote.command.amount), CcGoodName(quote.command.good),
-            local->trade_mode == 0 ? "Total cost" : "Sale value", quote.total,
+            local->trade_mode == 0 ? "Total cost" : "Sale value", displayed_total,
             sim->player.coins, quote.reason));
     for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), modes[i], true, i == local->trade_mode);
     CcOverlayDrawText(local->trade_mode == 0 ? "WAREHOUSE STOCK" : "CARRIAGE LOAD",
@@ -907,35 +912,49 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
     int x = (int)(panel.x + panel.width * 0.52f), y = (int)panel.y + 134;
     (void)DrawEconomicGoodIcon(economic_goods, quote.command.good,
         (Rectangle){(float)x, (float)y - 2, 40, 40}, WHITE);
-    int title_size = AdventureTextSize(18);
+    bool readable_canvas = panel.width >= 700.0f && panel.height >= 520.0f;
+    int title_size = AdventureTextSize(readable_canvas ? 32 : 18);
     const char *title = TextFormat("%s: %d %s", modes[local->trade_mode],
         abs(quote.command.amount), CcGoodName(quote.command.good));
-    while (title_size > 12 && CcOverlayMeasureText(title, title_size) >
-        (int)(panel.width * 0.48f) - 74) --title_size;
-    CcOverlayDrawText(title, x + 48, y + 8, title_size, INK);
-    CcOverlayDrawText(TextFormat("%s %" PRId64 " crowns", local->trade_mode == 0 ? "Total cost" : "Sale value", quote.total),
-        x, y + 34, AdventureTextSize(17), CC_GOLD);
-    CcOverlayDrawText(TextFormat("Purse %" PRId64 "  |  Cargo %d/%d", sim->player.coins,
-        CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity), x, y + 66, AdventureTextSize(14), MUTED);
+    int summary_width = (int)(panel.width * 0.48f) - 28;
+    while (title_size > 16 && CcOverlayMeasureBodyText(title, title_size) > summary_width - 48) --title_size;
+    if (readable_canvas) CcOverlayDrawBodyText(title, x + 48, y + 5, title_size, INK);
+    else CcOverlayDrawText(title, x + 48, y + 8, title_size, INK);
+    const char *quote_line = TextFormat("%s %" PRId64 " crowns",
+        local->trade_mode == 0 ? "Total cost" : "Sale value", displayed_total);
+    int quote_size = AdventureTextSize(readable_canvas ? 36 : 17);
+    while (quote_size > 18 && CcOverlayMeasureBodyText(quote_line, quote_size) > summary_width) --quote_size;
+    if (readable_canvas) CcOverlayDrawBodyText(quote_line, x, y + 47, quote_size, CC_GOLD);
+    else CcOverlayDrawText(quote_line, x, y + 34, quote_size, CC_GOLD);
+    const char *purse_line = TextFormat("Purse %" PRId64 "  |  Cargo %d/%d", sim->player.coins,
+        CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
+    int purse_size = AdventureTextSize(readable_canvas ? 20 : 14);
+    if (readable_canvas) CcOverlayDrawBodyText(purse_line, x, y + 84, purse_size, MUTED);
+    else CcOverlayDrawText(purse_line, x, y + 66, purse_size, MUTED);
     if (local->trade_mode != 2) {
         AdventureButton(AdventureQuantityBounds(panel, 0), "-", local->trade_quantity > 1, false);
         AdventureButton(AdventureQuantityBounds(panel, 1), "+", local->trade_quantity < 999, false);
-        CcOverlayDrawText("Quantity: - / + keys", x + 144, (int)panel.y + 244, AdventureTextSize(12), MUTED);
+        if (readable_canvas) CcOverlayDrawBodyText("Quantity: - / + keys", x + 144,
+            (int)panel.y + 294, AdventureTextSize(16), MUTED);
+        else CcOverlayDrawText("Quantity: - / + keys", x + 144,
+            (int)panel.y + 244, AdventureTextSize(12), MUTED);
     } else {
         CcOverlayDrawText(TextFormat("Promise reward +%" PRId64 " crowns", quote.reward), x,
-            (int)panel.y + 244, AdventureTextSize(14), TEAL);
+            (int)panel.y + (readable_canvas ? 269 : 244), AdventureTextSize(14), TEAL);
     }
     AdventureButton(AdventureConfirmBounds(panel), TextFormat("%s  Enter", modes[local->trade_mode]), quote.available, false);
     CcOverlayDrawText(TextFormat("Warehouse %d  |  Carriage %d",
         place->stock[quote.command.good], sim->player.cargo[quote.command.good]),
-        x, (int)panel.y + 278, AdventureTextSize(12), TEAL);
-    (void)AdventureWrap(quote.reason, x, (int)panel.y + 360, (int)(panel.width * 0.48f - 28.0f), AdventureTextSize(13), MUTED);
-    DrawLine((int)panel.x + 24, (int)(panel.y + panel.height) - 89,
-        (int)(panel.x + panel.width) - 24, (int)(panel.y + panel.height) - 89, Fade(TEAL, 0.5f));
+        x, (int)panel.y + (readable_canvas ? 390 : 278), AdventureTextSize(readable_canvas ? 15 : 12), TEAL);
+    (void)AdventureWrap(quote.reason, x, (int)panel.y + (readable_canvas ? 415 : 360),
+        summary_width, AdventureTextSize(readable_canvas ? 15 : 13), MUTED);
+    DrawLine((int)panel.x + 24, (int)(panel.y + panel.height) - (readable_canvas ? 106 : 89),
+        (int)(panel.x + panel.width) - 24,
+        (int)(panel.y + panel.height) - (readable_canvas ? 106 : 89), Fade(TEAL, 0.5f));
     (void)AdventureWrap(local->receipt[0] != '\0' ? local->receipt :
         "Buy loads goods from this warehouse into your carriage. Sell unloads them here.",
-        (int)panel.x + 24, (int)(panel.y + panel.height) - 72,
-        (int)panel.width - 48, AdventureTextSize(14), INK);
+        (int)panel.x + 24, (int)(panel.y + panel.height) - (readable_canvas ? 86 : 72),
+        (int)panel.width - 48, AdventureTextSize(readable_canvas ? 36 : 14), INK);
 }
 
 static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *local,
