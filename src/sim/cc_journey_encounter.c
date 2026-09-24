@@ -1,4 +1,5 @@
 #include "sim/cc_journey_internal.h"
+#include "sim/cc_road_position.h"
 
 #include <stdio.h>
 
@@ -16,6 +17,59 @@ static void SetError(char *error, size_t capacity, const char *message)
 }
 
 static int32_t MinimumI32(int32_t a, int32_t b) { return a < b ? a : b; }
+
+static int32_t WithdrawalRoadSubticks(const CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) return 0;
+    if (sim->journey.road_position_active) {
+        int32_t progress = CcRoadRouteProgressSubticks(sim);
+        if (progress >= 0) return progress;
+    }
+    return sim->journey.elapsed_subticks;
+}
+
+static int32_t WithdrawalWorldSubticks(const CcSim *sim)
+{
+    int32_t remaining = WithdrawalRoadSubticks(sim);
+    int32_t pace = CcJourneyPaceRate(sim->journey.pace);
+    int32_t total = 0;
+    while (remaining > 0) {
+        int32_t watch = MinimumI32(remaining, CC_WORLD_WATCH_SUBTICKS);
+        total += (int32_t)(((int64_t)watch *
+            CC_TRAVEL_GAME_MINUTES_PER_SECOND + pace - 1) / pace);
+        remaining -= watch;
+    }
+    return total;
+}
+
+int32_t CcSimJourneyWithdrawalMinutes(const CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_BLOCKED) return 0;
+    int32_t subticks = WithdrawalWorldSubticks(sim);
+    return (subticks + CC_WORLD_MINUTE_SUBTICKS - 1) /
+        CC_WORLD_MINUTE_SUBTICKS;
+}
+
+static void AdvanceWithdrawalReturn(CcSim *sim)
+{
+    int32_t remaining = WithdrawalRoadSubticks(sim);
+    int32_t pace = CcJourneyPaceRate(sim->journey.pace);
+    while (remaining > 0) {
+        int32_t watch = MinimumI32(remaining, CC_WORLD_WATCH_SUBTICKS);
+        int32_t elapsed = (int32_t)(((int64_t)watch *
+            CC_TRAVEL_GAME_MINUTES_PER_SECOND + pace - 1) / pace);
+        sim->clock.minute_subticks += elapsed;
+        while (sim->clock.minute_subticks >= CC_WORLD_DAY_SUBTICKS) {
+            sim->clock.minute_subticks -= CC_WORLD_DAY_SUBTICKS;
+            CcSimAdvanceDays(sim, 1);
+        }
+        if (watch == CC_WORLD_WATCH_SUBTICKS)
+            CcJourneyApplyWatchStrain(sim);
+        remaining -= watch;
+    }
+}
 
 static int32_t RollD6(CcSim *sim,
                        const CcJourneyEncounterServices *services)
@@ -328,6 +382,18 @@ static bool ApplyWithdrawEncounter(CcSim *sim, const CcCommand *command,
                  "The road withdrawal no longer matches this journey.");
         return false;
     }
+    int32_t return_minutes = 0;
+    if (sim->schema_version >= 112U) {
+        int32_t elapsed = WithdrawalWorldSubticks(sim);
+        int32_t return_days = (sim->clock.minute_subticks + elapsed) /
+            CC_WORLD_DAY_SUBTICKS;
+        if (sim->current_day > CC_SIM_MAX_DAY - return_days) {
+            SetError(error, error_capacity,
+                     "The world clock cannot cover the return road.");
+            return false;
+        }
+        return_minutes = CcSimJourneyWithdrawalMinutes(sim);
+    }
     bool under_fire = command->amount == 1;
     int32_t damage = under_fire ? ClampI32(4 + journey.danger / 15,
                                            4, 10) : 0;
@@ -343,8 +409,17 @@ static bool ApplyWithdrawEncounter(CcSim *sim, const CcCommand *command,
         bandits->influence = ClampI32(
             bandits->influence + (under_fire ? 2 : 1), 0, 100);
     }
+    if (sim->schema_version >= 112U) AdvanceWithdrawalReturn(sim);
     char text[CC_EVENT_TEXT_CAPACITY];
-    if (under_fire) {
+    if (sim->schema_version >= 112U && under_fire) {
+        (void)snprintf(text, sizeof(text),
+            "Road retreat to %.24s: %d minutes, %d damage, %d crowns treatment.",
+            origin->name, return_minutes, damage, medical_cost);
+    } else if (sim->schema_version >= 112U) {
+        (void)snprintf(text, sizeof(text),
+            "Road retreat to %.24s: %d minutes, 0 crowns.",
+            origin->name, return_minutes);
+    } else if (under_fire) {
         (void)snprintf(
             text, sizeof(text),
             "The Crownless carriage withdraws under fire to %s; it takes %d damage and treatment costs %d crowns.",

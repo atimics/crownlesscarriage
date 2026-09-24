@@ -7,6 +7,12 @@ add_executable(road_block_browser_fixture tests/road_block_browser_fixture.c)
 target_link_libraries(road_block_browser_fixture PRIVATE crownless_persistence)
 cc_strict_warnings(road_block_browser_fixture)
 
+add_executable(road_withdraw_time_tests tests/road_withdraw_time_tests.c)
+target_link_libraries(road_withdraw_time_tests PRIVATE crownless_persistence)
+cc_strict_warnings(road_withdraw_time_tests)
+cc_large_sim_stack(road_withdraw_time_tests)
+add_test(NAME timed_road_withdrawal COMMAND road_withdraw_time_tests)
+
 add_executable(road_position_tests tests/road_position_tests.c)
 target_link_libraries(road_position_tests PRIVATE crownless_sim)
 cc_strict_warnings(road_position_tests)
