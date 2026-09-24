@@ -24,16 +24,6 @@ async function main() {
   const browser = await chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
   const results = [];
 
-  async function selectSetting(page, index) {
-    await page.locator('#canvas').focus();
-    while (await page.evaluate(() => Module.crownlessMenuFocus) !== index) {
-      const before = await page.evaluate(() => Module.crownlessMenuFocus);
-      await page.keyboard.press('ArrowDown');
-      await page.waitForFunction(value => Module.crownlessMenuFocus !== value, before);
-    }
-    await page.keyboard.press('Enter');
-  }
-
   async function validateButtons(page, label) {
     const frame = await page.evaluate(() => ({
       title: Module.crownlessTouchFrame.title,
@@ -48,6 +38,20 @@ async function main() {
         `${label}: ${button.label} fits the canvas`);
     }
     return frame;
+  }
+
+  async function setLargeSetting(page, controls, pattern, label) {
+    const setting = controls.button(pattern);
+    for (let attempt = 0; attempt < 3; ++attempt) {
+      const current = await setting.read();
+      if (current && current.label === `${label}: standard`) break;
+      await setting.tap();
+    }
+    assert.equal((await setting.read())?.label, `${label}: standard`,
+      `${label} can return to its standard value`);
+    await setting.tap();
+    await page.waitForFunction(expected => Module.crownlessTouchFrame.buttons.some(
+      button => button.label === expected), `${label}: large`, {timeout: 5000});
   }
 
   async function runCase(width, height, large) {
@@ -67,10 +71,16 @@ async function main() {
       if (large) {
         await controls.button('Settings & controls').tap();
         await page.waitForFunction(() => Module.crownlessScreen === 'settings');
-        await selectSetting(page, 0); // Body text size: standard -> large.
-        await selectSetting(page, 1); // Caption size: standard -> large.
-        await page.keyboard.press('Escape');
-        await page.waitForFunction(() => Module.crownlessScreen === 'title');
+        await setLargeSetting(page, controls, /^Body text size:/, 'Body text size');
+        await setLargeSetting(page, controls, /^Caption size:/, 'Caption size');
+        const settings = await controls.buttons();
+        assert(settings.some(button => button.label === 'Body text size: large'),
+          `${name}: touch control sets large body text`);
+        assert(settings.some(button => button.label === 'Caption size: large'),
+          `${name}: touch control sets large captions`);
+        await controls.button('Back').tap();
+        await page.waitForFunction(() => Module.crownlessScreen === 'title', undefined,
+          {timeout: 10000});
       }
       await controls.button('Play').tap();
       await page.waitForFunction(() => Module.crownlessScreen === 'playing', undefined, {timeout: 45000});
