@@ -12,7 +12,8 @@ typedef enum FrontendScreen {
     FRONTEND_JOIN_WORLD,
     FRONTEND_COMPANY,
     FRONTEND_REMOVE_MEMBER,
-    FRONTEND_INVITATION
+    FRONTEND_INVITATION,
+    FRONTEND_SETTINGS
 } FrontendScreen;
 
 typedef enum FrontendAction {
@@ -50,6 +51,20 @@ typedef enum FrontendAction {
     FRONTEND_ACTION_PLAYER_VOICE,
     FRONTEND_ACTION_READ_ALOUD,
     FRONTEND_ACTION_AMBIENT,
+    FRONTEND_ACTION_SETTINGS,
+    FRONTEND_ACTION_SETTING_BODY,
+    FRONTEND_ACTION_SETTING_CAPTIONS,
+    FRONTEND_ACTION_SETTING_MOTION,
+    FRONTEND_ACTION_SETTING_READING,
+    FRONTEND_ACTION_SETTING_HINTS,
+    FRONTEND_ACTION_SETTING_FOCUS,
+    FRONTEND_ACTION_BIND_TARGET,
+    FRONTEND_ACTION_BIND_INTERACT,
+    FRONTEND_ACTION_BIND_BOOK,
+    FRONTEND_ACTION_BIND_PROMISES,
+    FRONTEND_ACTION_BIND_CAPTURE,
+    FRONTEND_ACTION_BIND_CANCEL,
+    FRONTEND_ACTION_SETTING_DEFAULTS,
     FRONTEND_ACTION_WORLD_LIST,
     FRONTEND_ACTION_CREATE_WORLD,
     FRONTEND_ACTION_JOIN_WORLD,
@@ -94,6 +109,9 @@ typedef struct FrontendState {
     int world_page;
     FrontendAction text_field;
     FrontendScreen company_return;
+    FrontendScreen settings_return;
+    int binding_capture;
+    int pending_binding_key;
     bool deleting_company;
     int32_t campaign_index;
     char campaign_title[65];
@@ -188,17 +206,18 @@ static Rectangle FrontendPanel(FrontendScreen screen)
 {
     float width = screen == FRONTEND_TITLE || screen == FRONTEND_CAMPAIGN || screen == FRONTEND_PAUSED || screen == FRONTEND_AVATAR || screen == FRONTEND_COMPANY ||
         screen == FRONTEND_WORLDS || screen == FRONTEND_CREATE_WORLD || screen == FRONTEND_JOIN_WORLD ||
-        screen == FRONTEND_INVITATION ? 920.0f : 440.0f;
+        screen == FRONTEND_INVITATION || screen == FRONTEND_SETTINGS ? 920.0f : 440.0f;
+    float height = screen == FRONTEND_SETTINGS ? 600.0f : 556.0f;
     return (Rectangle){((float)GetScreenWidth() - width) * 0.5f,
-                       ((float)GetScreenHeight() - 556.0f) * 0.5f,
-                       width, 556.0f};
+                       ((float)GetScreenHeight() - height) * 0.5f,
+                       width, height};
 }
 
 static int FrontendItems(const FrontendState *state, FrontendItem *items)
 {
     Rectangle panel = FrontendPanel(state->screen);
     float x = panel.x + 36.0f;
-    float y = panel.y + 148.0f;
+    float y = panel.y + (state->screen == FRONTEND_SETTINGS ? 164.0f : 148.0f);
     if (state->screen == FRONTEND_INVITATION) {
         items[0] = (FrontendItem){FRONTEND_ACTION_FIELD_INVITATION, {x, y + 32, 848, 76}, "Invitation", true};
         items[1] = (FrontendItem){FRONTEND_ACTION_INVITE_COPY, {x, y + 150, 412, 46}, "Share invitation", true};
@@ -268,6 +287,23 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
             items[i] = (FrontendItem){actions[i], {x, y + (float)i * 48, 368, 40}, labels[i], true};
         return 6;
     }
+    if (state->screen == FRONTEND_SETTINGS) {
+        const FrontendAction actions[] = {
+            FRONTEND_ACTION_SETTING_BODY, FRONTEND_ACTION_SETTING_CAPTIONS,
+            FRONTEND_ACTION_SETTING_MOTION, FRONTEND_ACTION_SETTING_READING,
+            FRONTEND_ACTION_SETTING_HINTS, FRONTEND_ACTION_SETTING_FOCUS,
+            FRONTEND_ACTION_BIND_TARGET, FRONTEND_ACTION_BIND_INTERACT,
+            FRONTEND_ACTION_BIND_BOOK, FRONTEND_ACTION_BIND_PROMISES,
+            FRONTEND_ACTION_SETTING_DEFAULTS, FRONTEND_ACTION_CANCEL};
+        const char *labels[] = {
+            "Body text size", "Caption size", "Reduced motion", "Reading time",
+            "Input hints", "Focus assistance", "Next target key", "Use action key",
+            "Company Book key", "Promises key", "Restore defaults", "Back"};
+        for (int i = 0; i < 12; ++i)
+            items[i] = (FrontendItem){actions[i],
+                {panel.x + 36, y + (float)i * 31, panel.width - 72, 27}, labels[i], true};
+        return 12;
+    }
     if (state->screen == FRONTEND_CAMPAIGN) {
         items[0] = (FrontendItem){FRONTEND_ACTION_BEGIN_DEEP_WYRM,
             {panel.x + 180, y + 238, 560, 48}, "Begin in Gloamgate", !state->has_world && !state->online};
@@ -288,9 +324,14 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
             {x, y + 234.0f, 368.0f, 40.0f}, "Your traveller", true};
         items[4] = (FrontendItem){FRONTEND_ACTION_QUIT,
             {x, y + 282.0f, 368.0f, 36.0f}, "Quit game", true};
-        int count = 4;
+        int count = 5;
 #if !defined(PLATFORM_WEB)
-        count = 5;
+        items[5] = (FrontendItem){FRONTEND_ACTION_SETTINGS,
+            {x, y + 330.0f, 368.0f, 36.0f}, "Settings & controls", true};
+        count = 6;
+#else
+        items[4] = (FrontendItem){FRONTEND_ACTION_SETTINGS,
+            {x, y + 330.0f, 368.0f, 36.0f}, "Settings & controls", true};
 #endif
         if (!state->has_world && !state->online)
             items[count++] = (FrontendItem){FRONTEND_ACTION_DEEP_WYRM,
@@ -341,7 +382,7 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         if (!items[5].enabled) items[5].label = "Host can delete world";
     }
     float right = panel.x + 496.0f;
-    items[count++] = (FrontendItem){FRONTEND_ACTION_BOOK, {right, y, 388, 44}, "Company Book  B", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_BOOK, {right, y, 388, 44}, TextFormat("Company Book  %c", adventure_preferences != NULL ? adventure_preferences->key_book : 'B'), true};
     items[count++] = (FrontendItem){FRONTEND_ACTION_TEXT, {right, y + 48, 388, 40}, "Text size  T", true};
     items[count++] = (FrontendItem){FRONTEND_ACTION_HINTS, {right, y + 96, 388, 40}, "Target hints  H", true};
     items[count++] = (FrontendItem){FRONTEND_ACTION_AVATAR, {right, y + 144, 388, 40}, "Your traveller", true};
@@ -356,6 +397,8 @@ static int FrontendItems(const FrontendState *state, FrontendItem *items)
         credits_y = y + 336;
     }
     items[count++] = (FrontendItem){FRONTEND_ACTION_CREDITS, {right, credits_y, 388, 36}, "Licenses & credits", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_SETTINGS, {right, credits_y + 44, 388, 36}, "Settings & controls", true};
+    items[count++] = (FrontendItem){FRONTEND_ACTION_SETTINGS, {right, credits_y + 44, 388, 36}, "Settings & controls", true};
     return count;
 }
 
@@ -368,6 +411,7 @@ static void FrontendOpen(FrontendState *state, FrontendScreen screen)
                        state->world_load_error);
     else state->feedback[0] = '\0';
     state->text_field = FRONTEND_ACTION_NONE;
+    if (screen == FRONTEND_SETTINGS) state->binding_capture = -1;
 }
 
 #include "cc_company_ui.inc"
@@ -383,13 +427,28 @@ static void FrontendReturnFromBook(FrontendState *state, LocalState *local, Clie
 
 static FrontendAction FrontendInput(FrontendState *state)
 {
+    if (state->screen == FRONTEND_SETTINGS && state->binding_capture >= 0) {
+        if (ClientKeyPressed(KEY_ESCAPE)) {
+            state->binding_capture = -1;
+            return FRONTEND_ACTION_BIND_CANCEL;
+        }
+        for (int key = 32; key <= 126; ++key) {
+            if (!ClientKeyPressed(key) || key == KEY_TAB || key == KEY_ENTER || key == KEY_SPACE) continue;
+            if (!((key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z') ||
+                  (key >= '0' && key <= '9'))) continue;
+            state->pending_binding_key = key;
+            state->binding_capture = -1;
+            return FRONTEND_ACTION_BIND_CAPTURE;
+        }
+        return FRONTEND_ACTION_NONE;
+    }
     if (FrontendCompanyTextInput(state)) return FRONTEND_ACTION_NONE;
     if (ClientKeyPressed(KEY_ESCAPE)) {
         if (state->screen == FRONTEND_PLAYING) {
             FrontendOpen(state, FRONTEND_PAUSED);
         } else if (state->screen == FRONTEND_PAUSED) {
             return FRONTEND_ACTION_RESUME;
-        } else if (state->screen == FRONTEND_DELETE || state->screen == FRONTEND_SOUND || state->screen == FRONTEND_CAMPAIGN ||
+        } else if (state->screen == FRONTEND_DELETE || state->screen == FRONTEND_SOUND || state->screen == FRONTEND_CAMPAIGN || state->screen == FRONTEND_SETTINGS ||
             state->screen >= FRONTEND_WORLDS) {
             return FRONTEND_ACTION_CANCEL;
         } else if (state->screen == FRONTEND_AVATAR) {
@@ -399,7 +458,7 @@ static FrontendAction FrontendInput(FrontendState *state)
     }
     if (state->screen == FRONTEND_PLAYING) return FRONTEND_ACTION_NONE;
     if (state->screen == FRONTEND_PAUSED) {
-        if (ClientKeyPressed(KEY_B)) return FRONTEND_ACTION_BOOK;
+        if (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B)) return FRONTEND_ACTION_BOOK;
         if (ClientKeyPressed(KEY_T)) return FRONTEND_ACTION_TEXT;
         if (ClientKeyPressed(KEY_H)) return FRONTEND_ACTION_HINTS;
         if (ClientKeyPressed(KEY_F5)) return FRONTEND_ACTION_SAVE;
@@ -480,6 +539,57 @@ static void HandleFrontendAction(FrontendState *state, FrontendAction action,
     int32_t *selected_situation, const char *save_path, const char *session_path,
     const char *preferences_path)
 {
+    if (action == FRONTEND_ACTION_SETTINGS) {
+        state->settings_return = state->screen;
+        FrontendOpen(state, FRONTEND_SETTINGS);
+        return;
+    }
+    if (action == FRONTEND_ACTION_CANCEL && state->screen == FRONTEND_SETTINGS) {
+        FrontendOpen(state, state->settings_return);
+        return;
+    }
+    if (state->screen == FRONTEND_SETTINGS && adventure_preferences != NULL) {
+        CcClientPreferences *prefs = adventure_preferences;
+        if (action == FRONTEND_ACTION_SETTING_BODY) prefs->text_size = (prefs->text_size + 1) % 3;
+        else if (action == FRONTEND_ACTION_SETTING_CAPTIONS) prefs->caption_size = (prefs->caption_size + 1) % 3;
+        else if (action == FRONTEND_ACTION_SETTING_MOTION) prefs->reduced_motion = !prefs->reduced_motion;
+        else if (action == FRONTEND_ACTION_SETTING_READING) prefs->reading_time = (prefs->reading_time + 1) % 3;
+        else if (action == FRONTEND_ACTION_SETTING_HINTS) prefs->focus_hints = !prefs->focus_hints;
+        else if (action == FRONTEND_ACTION_SETTING_FOCUS) prefs->focus_assist = !prefs->focus_assist;
+        else if (action == FRONTEND_ACTION_BIND_TARGET) state->binding_capture = state->focus;
+        else if (action == FRONTEND_ACTION_BIND_INTERACT) state->binding_capture = state->focus;
+        else if (action == FRONTEND_ACTION_BIND_BOOK) state->binding_capture = state->focus;
+        else if (action == FRONTEND_ACTION_BIND_PROMISES) state->binding_capture = state->focus;
+        else if (action == FRONTEND_ACTION_BIND_CANCEL) {
+            (void)snprintf(state->feedback, sizeof(state->feedback), "Key change cancelled.");
+            return;
+        }
+        else if (action == FRONTEND_ACTION_BIND_CAPTURE) {
+            int key = state->pending_binding_key;
+            if (key >= 'a' && key <= 'z') key -= 'a' - 'A';
+            bool unique = CcClientBindingKeyAllowed(key) &&
+                key != prefs->key_target_next && key != prefs->key_interact &&
+                key != prefs->key_book && key != prefs->key_promises;
+            if (state->focus == 6) unique = CcClientBindingKeyAllowed(key) && key != prefs->key_interact && key != prefs->key_book && key != prefs->key_promises;
+            else if (state->focus == 7) unique = CcClientBindingKeyAllowed(key) && key != prefs->key_target_next && key != prefs->key_book && key != prefs->key_promises;
+            else if (state->focus == 8) unique = CcClientBindingKeyAllowed(key) && key != prefs->key_target_next && key != prefs->key_interact && key != prefs->key_promises;
+            else if (state->focus == 9) unique = CcClientBindingKeyAllowed(key) && key != prefs->key_target_next && key != prefs->key_interact && key != prefs->key_book;
+            if (unique && state->focus == 6) prefs->key_target_next = key;
+            else if (unique && state->focus == 7) prefs->key_interact = key;
+            else if (unique && state->focus == 8) prefs->key_book = key;
+            else if (unique && state->focus == 9) prefs->key_promises = key;
+            else (void)snprintf(state->feedback, sizeof(state->feedback),
+                "Use C, I, L, O, P, U, V, Y, or Z. A key can serve one remapped action.");
+        } else if (action == FRONTEND_ACTION_SETTING_DEFAULTS) {
+            prefs->text_size = 0; prefs->caption_size = 0; prefs->reading_time = 1;
+            prefs->reduced_motion = false; prefs->focus_hints = true; prefs->focus_assist = true;
+            prefs->key_target_next = 'E'; prefs->key_interact = 'F';
+            prefs->key_book = 'B'; prefs->key_promises = 'Q';
+        }
+        if (action >= FRONTEND_ACTION_SETTING_BODY && action <= FRONTEND_ACTION_SETTING_DEFAULTS)
+            adventure_preferences_dirty = true;
+        if (action != FRONTEND_ACTION_NONE) return;
+    }
     if (state->screen == FRONTEND_CAMPAIGN && action == FRONTEND_ACTION_CANCEL) {
         FrontendOpen(state, FRONTEND_TITLE);
         return;
@@ -737,6 +847,7 @@ static void DrawFrontend(const FrontendState *state,
     int top = (int)panel.y;
     FrontendCenteredText("CROWNLESS CARRIAGE", top + 38, 14, CC_GOLD);
     const char *title = state->screen == FRONTEND_TITLE ? "The road awaits" :
+        state->screen == FRONTEND_SETTINGS ? "Settings & controls" :
         state->screen == FRONTEND_AVATAR ? "Your traveller" :
         state->screen == FRONTEND_SOUND ? "Sound & voices" :
         state->screen == FRONTEND_CAMPAIGN ? CC_DEEP_WYRM_TITLE :
@@ -755,6 +866,7 @@ static void DrawFrontend(const FrontendState *state,
             "This removes your world and its progress. Your next Play begins a new world." :
         state->screen == FRONTEND_CAMPAIGN ? "Gloamgate, Year 202. A dragon enters its deepest age. Begin in Gloamgate." :
         state->screen == FRONTEND_TITLE ? "Choose Offline or Online, then Play. Your world is saved on this device." :
+        state->screen == FRONTEND_SETTINGS ? "Changes save on this device. Escape returns to your journey." :
         "Resume your journey, save your world, or change your settings.");
     FrontendCenteredText(title, top + 76, 28, INK);
     if (state->screen == FRONTEND_TITLE) {
@@ -798,6 +910,13 @@ static void DrawFrontend(const FrontendState *state,
             TextFormat("OFFLINE  /  DAY %d", sim->current_day),
                              top + 120, 12, MUTED);
     }
+    if (state->screen == FRONTEND_SETTINGS) {
+        DrawRectangle((int)panel.x + 20, top + 108, (int)panel.width - 40, 46, (Color){12, 10, 15, 255});
+        FrontendCenteredText("Fixed: Esc back / arrows, Enter, Space choose / Tab Ledger / F5 save / F4 motion / F6 sound",
+            top + 121, 9, MUTED);
+        FrontendCenteredText("Remap keys: C I L O P U V Y Z / hints update in scenes / reading time sets speech length",
+            top + 140, 9, MUTED);
+    }
     FrontendItem items[16];
     int count = FrontendItems(state, items);
     for (int i = 0; i < count; ++i) {
@@ -810,12 +929,13 @@ static void DrawFrontend(const FrontendState *state,
                        item.action == FRONTEND_ACTION_SAVE_AVATAR ||
                        item.action == FRONTEND_ACTION_RESUME;
         bool hover = CheckCollisionPointRec(ClientPointerPosition(), item.bounds);
-        Color accent = danger ? DANGER : selected || primary ? TEAL : CC_GOLD;
+        Color accent = danger ? DANGER : selected || primary ? TEAL :
+            state->focus == i && preferences->focus_assist ? RAYWHITE : CC_GOLD;
         DrawRectangleRounded(item.bounds, 0.12f, 4,
             Fade(hover || selected || primary ? PANEL_HOVER : PANEL,
                  item.enabled ? 1.0f : 0.45f));
         DrawRectangleRoundedLinesEx(item.bounds, 0.12f, 4,
-            i == state->focus ? 2.0f : 1.0f,
+            i == state->focus ? (preferences->focus_assist ? 3.0f : 2.0f) : 1.0f,
             Fade(accent, item.enabled ? (i == state->focus || selected ? 1.0f : 0.45f) : 0.18f));
         const char *label = item.label;
         char field_label[192];
@@ -872,8 +992,27 @@ static void DrawFrontend(const FrontendState *state,
         if (item.action == FRONTEND_ACTION_TEXT) label = TextFormat("Text size: %s  T",
             preferences->text_size == 0 ? "standard" : preferences->text_size == 1 ? "large" : "largest");
         if (item.action == FRONTEND_ACTION_HINTS) label = preferences->focus_hints ? "Target hints: shown  H" : "Target hints: focus only  H";
+        if (item.action == FRONTEND_ACTION_SETTING_BODY) label = TextFormat("Body text size: %s",
+            preferences->text_size == 0 ? "standard" : preferences->text_size == 1 ? "large" : "largest");
+        if (item.action == FRONTEND_ACTION_SETTING_CAPTIONS) label = TextFormat("Caption size: %s",
+            preferences->caption_size == 0 ? "standard" : preferences->caption_size == 1 ? "large" : "largest");
+        if (item.action == FRONTEND_ACTION_SETTING_MOTION) label = TextFormat("Reduced motion: %s",
+            preferences->reduced_motion ? "on" : "off");
+        if (item.action == FRONTEND_ACTION_SETTING_READING) label = TextFormat("Reading time: %s",
+            preferences->reading_time == 0 ? "brief" : preferences->reading_time == 1 ? "standard" : "relaxed");
+        if (item.action == FRONTEND_ACTION_SETTING_HINTS) label = TextFormat("Input hints: %s",
+            preferences->focus_hints ? "shown" : "hidden");
+        if (item.action == FRONTEND_ACTION_SETTING_FOCUS) label = TextFormat("Focus assistance: %s",
+            preferences->focus_assist ? "on" : "off");
+        if (item.action == FRONTEND_ACTION_BIND_TARGET) label = TextFormat("Next visible target: %c", preferences->key_target_next);
+        if (item.action == FRONTEND_ACTION_BIND_INTERACT) label = TextFormat("Use selected action: %c", preferences->key_interact);
+        if (item.action == FRONTEND_ACTION_BIND_BOOK) label = TextFormat("Company Book: %c", preferences->key_book);
+        if (item.action == FRONTEND_ACTION_BIND_PROMISES) label = TextFormat("Promises: %c", preferences->key_promises);
+        if (state->screen == FRONTEND_SETTINGS && state->binding_capture >= 0 &&
+            i == state->binding_capture) label = "Press a key, or Escape to cancel";
         ClientTouchAdd(item.bounds, label, item.enabled, selected);
-        int size = (primary ? 20 : 16) + preferences->text_size * 2;
+        int size = state->screen == FRONTEND_SETTINGS ? 16 + preferences->text_size * 2 :
+            (primary ? 20 : 16) + preferences->text_size * 2;
         while (size > 14 && MeasureText(label, size) > (int)item.bounds.width - 24) --size;
         DrawText(label, (int)(item.bounds.x + (item.bounds.width -
             (float)MeasureText(label, size)) * 0.5f),
@@ -885,15 +1024,19 @@ static void DrawFrontend(const FrontendState *state,
         /* Wrap long save errors inside the panel. */
         char line[64];
         size_t length = strlen(state->feedback);
+        int feedback_y = state->screen == FRONTEND_SETTINGS ? top + 534 : top + 478;
         for (size_t start = 0; start < length && start < 150U; start += 50U) {
             (void)snprintf(line, sizeof(line), "%.50s", state->feedback + start);
-            FrontendCenteredText(line, top + 478 + (int)(start / 50U) * 15, 12, CC_GOLD);
+            FrontendCenteredText(line, feedback_y + (int)(start / 50U) * 15, 12, CC_GOLD);
         }
     }
-    FrontendCenteredText(state->screen == FRONTEND_TITLE ?
+    FrontendCenteredText(state->screen == FRONTEND_SETTINGS ?
+        "UP / DOWN  Choose     ENTER / CLICK  Change     ESC  Back" :
+        state->screen == FRONTEND_TITLE ?
         "ARROWS / TAB  Choose     ENTER  Select" :
         state->screen == FRONTEND_AVATAR ? "UP / DOWN  Choose     LEFT / RIGHT  Change     ESC  Cancel" :
-        "ESC  Back     ARROWS / TAB  Choose     ENTER  Select", top + 531, 10, MUTED);
+        "ESC  Back     ARROWS / TAB  Choose     ENTER  Select",
+        state->screen == FRONTEND_SETTINGS ? top + 582 : top + 531, 10, MUTED);
 }
 
 #if defined(CC_CLIENT_SELF_TESTS)
@@ -955,6 +1098,20 @@ static int RunFrontendRegression(void)
     CcClientPreferences avatar_preferences;
     CcClientPreferencesDefault(&avatar_preferences);
     adventure_preferences = &avatar_preferences;
+    FRONTEND_ACT(FRONTEND_ACTION_SETTINGS);
+    FRONTEND_CHECK(state.screen == FRONTEND_SETTINGS && FrontendItems(&state, items) == 12);
+    FRONTEND_ACT(FRONTEND_ACTION_SETTING_BODY);
+    FRONTEND_CHECK(avatar_preferences.text_size == 1);
+    state.focus = 6;
+    FRONTEND_ACT(FRONTEND_ACTION_BIND_TARGET);
+    FRONTEND_CHECK(state.binding_capture == 6);
+    state.pending_binding_key = 'I';
+    FRONTEND_ACT(FRONTEND_ACTION_BIND_CAPTURE);
+    FRONTEND_CHECK(avatar_preferences.key_target_next == 'I');
+    FRONTEND_ACT(FRONTEND_ACTION_SETTING_DEFAULTS);
+    FRONTEND_CHECK(avatar_preferences.text_size == 0 && avatar_preferences.key_target_next == 'E');
+    FRONTEND_ACT(FRONTEND_ACTION_CANCEL);
+    FRONTEND_CHECK(state.screen == FRONTEND_TITLE);
     FRONTEND_ACT(FRONTEND_ACTION_AVATAR);
     FRONTEND_CHECK(state.screen == FRONTEND_AVATAR && state.avatar_return == FRONTEND_TITLE);
     FRONTEND_CHECK(frontend_avatar_preview.humanoid.feet[0].planted_point.y == 0.0f &&

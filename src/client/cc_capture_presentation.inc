@@ -162,6 +162,10 @@ static void CcCaptureConfigureFrontend(const CcCaptureRequest *request, Frontend
     if (request->capture_title) frontend->focus = 2;
     if (!frontend->online) {
         if (request->capture_ux && request->capture_ux_view == 21) frontend->screen = FRONTEND_CAMPAIGN;
+        else if (request->capture_ux && request->capture_ux_view == 34) {
+            frontend->screen = FRONTEND_SETTINGS;
+            frontend->binding_capture = -1;
+        }
         else if (request->capture_title) frontend->screen = FRONTEND_TITLE;
         else if (request->capture_delete) frontend->screen = FRONTEND_DELETE;
         else if (request->capture_ux && request->capture_ux_view == 10) frontend->screen = FRONTEND_SOUND;

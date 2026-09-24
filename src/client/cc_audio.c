@@ -21,7 +21,7 @@ static struct {
     char voice_path[768];
     unsigned int next[CC_SOUND_COUNT];
     double last_play[CC_SOUND_COUNT];
-    int mode, voice_percent;
+    int mode, voice_percent, reading_time;
     bool attempted, ready, focused, voice_loaded;
     CcSpeech speech;
     bool has_speech;
@@ -293,7 +293,8 @@ void CcAudioSay(const CcSpeech *speech, const char *path)
             if (audio.queue[i].speech.audio_key == speech->audio_key) return;
         QueuedSpeech *next = &audio.queue[audio.queue_count++];
         next->speech = *speech;
-        next->expires = GetTime() + (strcmp(speech->line_id, "reader.page") == 0 ? 120.0 : 30.0);
+        double reading_scale = audio.reading_time == 0 ? 0.7 : audio.reading_time == 2 ? 1.6 : 1.0;
+        next->expires = GetTime() + (strcmp(speech->line_id, "reader.page") == 0 ? 120.0 * reading_scale : 30.0);
         (void)snprintf(next->path, sizeof(next->path), "%s", path != NULL ? path : "");
         return;
     }
@@ -301,8 +302,9 @@ void CcAudioSay(const CcSpeech *speech, const char *path)
     BeginSpeech(NULL, NULL);
     audio.override = true;
     audio.override_started = GetTime();
+    double reading_scale = audio.reading_time == 0 ? 0.7 : audio.reading_time == 2 ? 1.6 : 1.0;
     audio.override_expires = GetTime() + ((speech->priority == CC_SPEECH_BACKGROUND || speech->priority == CC_SPEECH_WARNING ||
-        strcmp(speech->line_id, "player.field") == 0) ? 6.0 : 45.0);
+        strcmp(speech->line_id, "player.field") == 0) ? 6.0 : 45.0 * reading_scale);
     BeginSpeech(speech, path);
 }
 
@@ -325,6 +327,11 @@ void CcAudioSetVoiceVolume(int percent)
 {
     audio.voice_percent = percent >= 0 && percent <= 100 ? percent : 100;
     if (audio.voice_percent == 0) CcAudioClearSpeech();
+}
+
+void CcAudioSetReadingTime(int setting)
+{
+    audio.reading_time = setting < 0 ? 0 : setting > 2 ? 2 : setting;
 }
 
 void CcAudioReplaySpeech(void)

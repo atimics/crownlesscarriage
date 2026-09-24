@@ -10,6 +10,7 @@ void CcAudioShutdown(void);
 void CcAudioSetMode(int mode); /* 0: full, 1: effects, 2: muted */
 void CcAudioSetFocused(bool focused);
 void CcAudioSetVoiceVolume(int percent);
+void CcAudioSetReadingTime(int setting);
 void CcAudioSetContext(uint64_t context);
 void CcAudioSay(const CcSpeech *speech, const char *path);
 void CcAudioClearSpeech(void);

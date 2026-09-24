@@ -36,6 +36,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static CcClientPreferences *adventure_preferences;
+
 static CcCoreConversation core_conversation;
 static CcId core_conversation_speaker;
 
@@ -288,6 +290,7 @@ typedef struct LocalState {
     CcId voice_place;
     ClientView pause_return_view;
     bool request_save;
+    bool settings_requested;
     double caravan_tap_deadline;
     CcWorldStream world_stream;
     CcLocalAgent agent;
@@ -1059,6 +1062,23 @@ static void DrawTwoLineText(const char *text, int x, int y,
     if (split < length) {
         size_t next = text[split] == ' ' ? split + 1U : split;
         CcOverlayDrawText(text + next, x, y + font_size + 5, font_size, color);
+    }
+}
+
+static void DrawTwoLineCaption(const char *text, int x, int y,
+                               size_t line_capacity, int font_size, Color color,
+                               float scale)
+{
+    if (text == NULL || line_capacity < 2U) return;
+    size_t length = strlen(text);
+    size_t split = length > line_capacity ? line_capacity : length;
+    while (split > 0U && split < length && text[split] != ' ') split -= 1U;
+    if (split == 0U) split = length > line_capacity ? line_capacity : length;
+    CcOverlayDrawCaption(TextFormat("%.*s", (int)split, text), x, y, font_size, color);
+    if (split < length) {
+        size_t next = text[split] == ' ' ? split + 1U : split;
+        CcOverlayDrawCaption(text + next, x, y + (int)((float)font_size * scale) + 5,
+                             font_size, color);
     }
 }
 
@@ -6756,13 +6776,14 @@ static void DrawCharacterConversation(const CcSim *sim,
     }
     CcOverlayDrawText("\"", speech_x, (int)panel_y + 42, 24, MUTED);
     int32_t available_width = text_right - speech_x - 30;
-    size_t line_capacity = (size_t)(available_width / 9);
-    if (line_capacity < 48U) line_capacity = 48U;
+    float caption_scale = 1.0f + (adventure_preferences != NULL ? adventure_preferences->caption_size * 0.2f : 0.0f);
+    size_t line_capacity = (size_t)((float)available_width / (9.0f * caption_scale));
+    if (line_capacity < 16U) line_capacity = 16U;
     if (line_capacity > 104U) line_capacity = 104U;
-    DrawTwoLineText(has_spoken ? spoken :
+    DrawTwoLineCaption(has_spoken ? spoken :
                         "They have nothing more to ask.",
                     speech_x + 26, (int)panel_y + 48,
-                    line_capacity, 17, INK);
+                    line_capacity, 17, INK, caption_scale);
     CcOverlayDrawText("CHOOSE A REPLY BELOW", speech_x,
                       (int)(panel_y + bounds.height) - 24, 8, MUTED);
 }
@@ -9130,19 +9151,20 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                                message, message_capacity)) return;
     if (local->adventure_ui) {
         if (local->interaction.approaching &&
-            (ClientKeyPressed(KEY_Q) || ClientKeyPressed(KEY_M) || ClientKeyPressed(KEY_TAB))) {
+            (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_promises : KEY_Q) || ClientKeyPressed(KEY_M) || ClientKeyPressed(KEY_TAB))) {
             CcInteractionCancel(&local->interaction, "");
             CcLocalAgentStop(&local->agent);
         }
         if ((*view == VIEW_TRADE || *view == VIEW_CHARACTER || *view == VIEW_OVEN_COURT) &&
-            (ClientKeyPressed(KEY_B) || ClientKeyPressed(KEY_TAB))) {
+            (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || ClientKeyPressed(KEY_TAB))) {
             if (*view == VIEW_OVEN_COURT) { local->book_page = 3; local->book_offset = 0; }
             *return_view = *view;
             *view = VIEW_LEDGER;
             return;
         }
-        if (HandleOvenCourt(sim, local, view, return_view, message, message_capacity) ||
-            HandleAdventurePause(local, view, return_view) ||
+        if (HandleOvenCourt(sim, local, view, return_view, message, message_capacity)) return;
+        bool pause_handled = HandleAdventurePause(local, view, return_view);
+        if (pause_handled ||
             HandleAdventureTrade(*journal, sim, local, view, message, message_capacity) ||
             HandleAdventureBook(*journal, sim, local, view, return_view, message, message_capacity)) return;
         if (*view == VIEW_SITUATIONS && AdventureHit(AdventureClose(AdventurePromisesPanel()))) {
@@ -9160,7 +9182,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             }
             return;
         }
-        if ((ClientKeyPressed(KEY_B) || (*view == VIEW_LOCAL && AdventureHit(AdventureNavBounds(0)))) && *view != VIEW_CHARACTER) {
+        if ((ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || (*view == VIEW_LOCAL && AdventureHit(AdventureNavBounds(0)))) && *view != VIEW_CHARACTER) {
             CcInteractionCancel(&local->interaction, "");
             CcLocalAgentStop(&local->agent);
             ToggleCommandOverlay(VIEW_LEDGER, view, return_view);
@@ -9450,7 +9472,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (local->adventure_ui && *view == VIEW_LOCAL &&
-        (context_action == CONTEXT_ACTION_OPEN_TRADE || (ClientKeyPressed(KEY_F) && local->open_world_market))) {
+        (context_action == CONTEXT_ACTION_OPEN_TRADE || (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_interact : KEY_F) && local->open_world_market))) {
         local->trade_quantity = 1;
         local->trade_good = ContextCargoGood(sim);
         local->trade_mode = 0;
@@ -9698,7 +9720,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                       local->site_travel_active ||
                       local->journey_combat_active ||
                       local->journey_parley_active;
-    bool quests_requested = ClientKeyPressed(KEY_Q) ||
+    bool quests_requested = ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_promises : KEY_Q) ||
                             command_action == COMMAND_ACTION_QUESTS ||
                             context_action == CONTEXT_ACTION_OPEN_PROMISES;
     if (quests_requested && road_local && !local->open_world) {
@@ -10364,7 +10386,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 return;
             }
             if ((context_action == CONTEXT_ACTION_APPROACH_COLLECTOR ||
-                 ClientKeyPressed(KEY_F)) &&
+                 ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_interact : KEY_F)) &&
                 GridDistance(LocalPosition(local), collector) >= 1.55f) {
                 bool walking = CcLocalAgentSetExactTarget(&local->agent,
                     (Vector3){collector.x, 0.0f, collector.y}, false);
@@ -10385,7 +10407,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 }
                 return;
             }
-            if ((ClientKeyPressed(KEY_F) ||
+            if ((ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_interact : KEY_F) ||
                  context_action == CONTEXT_ACTION_PAY_COLLECTOR) &&
                 GridDistance(LocalPosition(local), collector) < 1.55f) {
                 CcCommand negotiate = {
@@ -10434,7 +10456,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         }
         Vector2 position = LocalPosition(local);
 
-        bool interact = ClientKeyPressed(KEY_F);
+        bool interact = ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_interact : KEY_F);
         if (interact && context_action == CONTEXT_ACTION_NONE) {
             const CcSituation *relief = CcSimAcceptedSituation(sim);
             if (relief != NULL &&
@@ -11778,6 +11800,11 @@ int main(int argc, char **argv)
                        "Saved world could not load. Delete it to begin again.");
     }
     CcCaptureConfigureFrontend(&capture_request, &frontend);
+    if (capture_request.capture_ux && capture_request.capture_ux_view != 24 && argc >= 6) {
+        int capture_text_size = atoi(argv[5]);
+        preferences.text_size = capture_text_size >= 0 && capture_text_size <= 2 ? capture_text_size : 0;
+        preferences.caption_size = preferences.text_size;
+    }
     if ((resuming_campaign || CcCoopClientActive()) && journal == NULL) {
         (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s",
                        frontend.world_load_failed ? frontend.world_load_error :
@@ -11855,7 +11882,7 @@ int main(int argc, char **argv)
             &capture_request, &capture_state, normal_play);
         local.adventure_ui = presentation.adventure_ui;
         if (normal_play && AdventureScene(&local)) local.course.automatic_alarm = false;
-        adventure_preferences = local.adventure_ui ? &preferences : NULL;
+        adventure_preferences = &preferences;
         CcLocalRendererSetInteractionUI(local.adventure_ui);
         ClientTouchBegin();
         const CcSettlement *touch_place = CcSimSettlement(&sim, sim.player.location_id);
@@ -11906,6 +11933,7 @@ int main(int argc, char **argv)
             if (input) CcAudioInit();
             CcAudioSetFocused(IsWindowFocused());
             CcAudioSetVoiceVolume(preferences.voice_volume);
+            CcAudioSetReadingTime(preferences.reading_time);
             CcAudioSetContext(((uint64_t)sim.world_seed << 32U) ^ sim.player.location_id);
             if (menu_frame) { CcAudioClearSpeech(); local.voice_read_page = 0; }
         }
@@ -11948,7 +11976,12 @@ int main(int argc, char **argv)
                 message, sizeof(message), "%s",
                 preferences_saved ? "Settings saved." : preferences_error);
         }
-        if (menu_frame && (change_audio || menu_action == FRONTEND_ACTION_MOTION)) {
+        bool preference_menu_change =
+            (menu_action >= FRONTEND_ACTION_SETTING_BODY &&
+             menu_action <= FRONTEND_ACTION_SETTING_DEFAULTS) ||
+            menu_action == FRONTEND_ACTION_TEXT || menu_action == FRONTEND_ACTION_HINTS ||
+            menu_action == FRONTEND_ACTION_MOTION;
+        if (menu_frame && (change_audio || preference_menu_change)) {
             (void)snprintf(frontend.feedback, sizeof(frontend.feedback), "%s", message);
         }
         CcLocalRendererSetAtmosphere(
@@ -11992,6 +12025,12 @@ int main(int argc, char **argv)
                         save_path, session_path, message, sizeof(message),
                         save_feedback, sizeof(save_feedback),
                         &save_feedback_age);
+            if (local.settings_requested) {
+                local.settings_requested = false;
+                frontend.settings_return = FRONTEND_PLAYING;
+                FrontendOpen(&frontend, FRONTEND_SETTINGS);
+                menu_frame = true;
+            }
             ClientInputClearPressed();
         }
         if (normal_play && journal != NULL) {
@@ -12098,7 +12137,8 @@ int main(int argc, char **argv)
         CcLocalCrewBeginFrame(frame_delta_time);
         BeginDrawing();
         ClearBackground(BACKGROUND);
-        CcOverlayBegin(1.0f);
+        CcOverlayBegin(1.0f + preferences.text_size * 0.18f);
+        CcOverlaySetCaptionScale(1.0f + preferences.caption_size * 0.2f);
         bool road_choice_underlay = view == VIEW_ROADS ||
                             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
                              return_view == VIEW_ROADS);
@@ -12324,7 +12364,8 @@ int main(int argc, char **argv)
             frontend.screen == FRONTEND_JOIN_WORLD ? "join" :
             frontend.screen == FRONTEND_COMPANY ? "company" :
             frontend.screen == FRONTEND_INVITATION ? "invitation" :
-            frontend.screen == FRONTEND_REMOVE_MEMBER ? "remove" : "playing", frontend.focus, (int)frontend.avatar);
+            frontend.screen == FRONTEND_REMOVE_MEMBER ? "remove" :
+            frontend.screen == FRONTEND_SETTINGS ? "settings" : "playing", frontend.focus, (int)frontend.avatar);
 #endif
         ClientTouchScene(frontend.screen != FRONTEND_PLAYING ? "menu" :
             sim.mine.phase != CC_MINE_NONE &&

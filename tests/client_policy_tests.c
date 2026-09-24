@@ -58,6 +58,10 @@ int main(void)
         preferences_path, &preferences,
         preferences_error, sizeof(preferences_error)));
     CC_CHECK(!preferences.reduced_motion);
+    CC_CHECK(preferences.caption_size == 0 && preferences.reading_time == 1 && preferences.focus_assist);
+    CC_CHECK(preferences.key_target_next == 'E' && preferences.key_interact == 'F' &&
+        preferences.key_book == 'B' && preferences.key_promises == 'Q');
+    CC_CHECK(CcClientBindingKeyAllowed('I') && !CcClientBindingKeyAllowed('W'));
     preferences.reduced_motion = true;
     preferences.audio_mode = 2;
     preferences.text_size = 2;
@@ -67,6 +71,13 @@ int main(void)
     preferences.player_voice = 12;
     preferences.read_aloud = true;
     preferences.ambient_voices = false;
+    preferences.caption_size = 2;
+    preferences.reading_time = 0;
+    preferences.focus_assist = false;
+    preferences.key_target_next = 'P';
+    preferences.key_interact = 'I';
+    preferences.key_book = 'L';
+    preferences.key_promises = 'Z';
     CC_CHECK(CcClientPreferencesSave(
         preferences_path, &preferences,
         preferences_error, sizeof(preferences_error)));
@@ -80,6 +91,11 @@ int main(void)
     CC_CHECK(preferences.avatar == 12576U);
     CC_CHECK(preferences.voice_volume == 50 && preferences.player_voice == 12 &&
         preferences.read_aloud && !preferences.ambient_voices);
+    CC_CHECK(preferences.caption_size == 2 && preferences.reading_time == 0 && !preferences.focus_assist);
+    CC_CHECK(preferences.key_target_next == 'P' && preferences.key_interact == 'I' &&
+        preferences.key_book == 'L' && preferences.key_promises == 'Z');
+    preferences.key_book = preferences.key_interact;
+    CC_CHECK(!CcClientPreferencesSave(preferences_path, &preferences, preferences_error, sizeof(preferences_error)));
     FILE *invalid_preferences = fopen(preferences_path, "wb");
     CC_CHECK(invalid_preferences != NULL);
     CC_CHECK(fputs("CROWNLESS_PREFERENCES 1\nreduced_motion 7\n",
