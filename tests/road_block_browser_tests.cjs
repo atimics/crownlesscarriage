@@ -111,6 +111,12 @@ async function main() {
     assert(returned.events.some(event => event.text.includes('refuses the fight and returns')));
     await page.waitForFunction(hash => document.body.dataset.companyHash === hash,
       returned.hash, {timeout: 30000});
+    await controls.button(/^Book(?: B)?$/).tap();
+    await page.waitForFunction(() => Module.crownlessTouchFrame?.reading?.includes(
+      'refuses the fight and returns'), undefined, {timeout: 30000});
+    await page.locator('#touch-actions').evaluate(element => {
+      element.scrollTop = element.scrollHeight;
+    });
     await page.screenshot({path: path.join(output, 'road-return-receipt.png')});
     await page.reload();
     await page.waitForFunction(() => document.body.dataset.companyReady === 'ready',
@@ -119,6 +125,18 @@ async function main() {
       returned.hash, {timeout: 30000});
     assert.equal((await api(`/api/worlds/${worldIds.blocked}/state?campaign=1`)).state.hash,
       returned.hash);
+    const returnState = await api(`/api/worlds/${worldIds.blocked}/state?campaign=1`);
+    const revisit = returnState.state.travel.find(route =>
+      route.id === blocked.journey.destination && route.available);
+    assert(revisit, 'The company can plan a second crossing of the saved road');
+    const secondDeparture = await api(`/api/worlds/${worldIds.blocked}/command`, {
+      protocol: 1, sequence: returnState.next_sequence,
+      action_revision: returnState.action_revision,
+      action: 'travel', target: revisit.id, good: 0, amount: 0
+    });
+    assert(secondDeparture.accepted);
+    assert.equal(secondDeparture.world.state.journey.route, blocked.journey.route);
+    assert.equal(secondDeparture.world.state.journey.active, true);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({claimant: 'The Ditch Parliament',
       warning: warningEvent.text, retreat: retreat.label,
