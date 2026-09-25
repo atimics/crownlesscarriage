@@ -2,8 +2,8 @@
  * interaction in cc_adventure.inc; the panel retains the inspected snapshot. */
 static Rectangle OvenCourtFooter(Rectangle panel, int32_t index)
 {
-    float width = (panel.width - 64.0f) / 2.0f;
-    return (Rectangle){panel.x + 24.0f + (float)index * (width + 16.0f),
+    float width = (panel.width - 64.0f) / 3.0f;
+    return (Rectangle){panel.x + 24.0f + (float)index * (width + 8.0f),
         panel.y + panel.height - 58.0f, width, 40.0f};
 }
 
@@ -26,13 +26,14 @@ static void DrawOvenCourt(const CcSim *sim, const LocalState *local)
             o->next_work_day), x, y, width, size - 1, MUTED);
     } else {
         y += AdventureWrap(CcOvenCourtAdvice(o), x, y, width, size + 1, INK) + 16;
-        (void)AdventureWrap("Offer goods through the Company store's Sell tab. Its Bakery tab handles support and repairs. Check quantities and payment there; the tally reserves nothing.",
+        (void)AdventureWrap("Sell wheat at the grain merchant. The bakery handles support and repairs. Check quantities and payment there; the tally reserves nothing.",
             x, y, width, size - 1, MUTED);
     }
     bool here = sim->player.location_id == o->place_id && !sim->journey.active &&
         sim->mine.phase == CC_MINE_NONE;
-    AdventureButton(OvenCourtFooter(panel, 0), "Company store  3", here, false);
-    AdventureButton(OvenCourtFooter(panel, 1), "Read note  B", true, false);
+    AdventureButton(OvenCourtFooter(panel, 0), "Grain shop  3", here, false);
+    AdventureButton(OvenCourtFooter(panel, 1), "Bakery  4", here, false);
+    AdventureButton(OvenCourtFooter(panel, 2), "Read note  B", true, false);
 }
 
 static bool HandleOvenCourt(const CcSim *sim, LocalState *local, ClientView *view,
@@ -45,20 +46,32 @@ static bool HandleOvenCourt(const CcSim *sim, LocalState *local, ClientView *vie
     }
     if (ClientKeyPressed(KEY_ONE) || AdventureHit(AdventureTab(panel, 0, 2))) local->oven_page = 0;
     if (ClientKeyPressed(KEY_TWO) || AdventureHit(AdventureTab(panel, 1, 2))) local->oven_page = 1;
-    if (AdventureHit(OvenCourtFooter(panel, 1))) {
+    if (AdventureHit(OvenCourtFooter(panel, 2))) {
         local->book_page = 3; local->book_offset = 0;
         *return_view = VIEW_OVEN_COURT; *view = VIEW_LEDGER;
     }
-    if (ClientKeyPressed(KEY_THREE) || AdventureHit(OvenCourtFooter(panel, 0))) {
+    bool grain = ClientKeyPressed(KEY_THREE) || AdventureHit(OvenCourtFooter(panel, 0));
+    bool bakery = ClientKeyPressed(KEY_FOUR) || AdventureHit(OvenCourtFooter(panel, 1));
+    if (grain || bakery) {
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+            CcSimSettlement(sim, sim->player.location_id));
+        const CcLocalShop *shop = CcLocalShopAt(profile, grain ?
+            CC_LOCAL_SHOP_GRAIN_MERCHANT : CC_LOCAL_SHOP_BAKERY);
         const CcInteractionTarget *door = CcInteractionFind(&local->interactions,
-            (CcInteractionKey){sim->player.location_id, 1U, CC_INTERACTION_DOOR});
+            (CcInteractionKey){sim->player.location_id,
+                shop != NULL ? (uint64_t)shop->building_index + 1U : 0U,
+                CC_INTERACTION_DOOR});
         if (sim->player.location_id != local->oven_observation.place_id || door == NULL ||
             !door->available || !CcInteractionStart(&local->interaction, door,
                 local->agent.position.x, local->agent.position.z)) {
-            (void)snprintf(message, capacity, "Return to the street and find an open Company store.");
+            (void)snprintf(message, capacity,
+                "Return to the street and find the open %s.",
+                grain ? "grain merchant" : "bakery");
         } else {
             *view = VIEW_LOCAL; *return_view = VIEW_LOCAL;
-            (void)snprintf(message, capacity, "Approaching the Company store. No supplies have been committed.");
+            (void)snprintf(message, capacity,
+                "Approaching the %s. No supplies have been committed.",
+                grain ? "grain merchant" : "bakery");
         }
     }
     return true;
