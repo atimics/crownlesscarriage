@@ -68,8 +68,53 @@ async function main() {
     assert.match(saved,/key_target_next 73\n/);
     await selectMenuItem(10);
     await waitForPrefs('caption_size 0', 'text_size 0', 'key_target_next 69');
-    await page.keyboard.press('Escape');
-    await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    await page.locator('#canvas').focus();
+    await page.waitForFunction(() => Module.crownlessScreen === 'settings' &&
+      document.activeElement === document.querySelector('#canvas'));
+    const beforeEscape = await page.evaluate(() => ({
+      screen: Module.crownlessScreen,
+      focus: Module.crownlessMenuFocus,
+      canvasFocused: document.activeElement === document.querySelector('#canvas'),
+      bindingCaptureActive: Module.crownlessTouchFrame?.buttons?.some(
+        button => button.label.includes('Press a key')) || false
+    }));
+    assert.equal(beforeEscape.screen, 'settings');
+    assert.equal(beforeEscape.focus, 10);
+    assert.equal(beforeEscape.canvasFocused, true);
+    assert.equal(beforeEscape.bindingCaptureActive, false);
+    await page.evaluate(() => {
+      window.__settingsEscapeKeys = [];
+      for (const name of ['keydown', 'keyup']) {
+        document.addEventListener(name, event => {
+          if (event.key === 'Escape') window.__settingsEscapeKeys.push(name);
+        }, true);
+      }
+    });
+    await page.keyboard.down('Escape');
+    await page.evaluate(() => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await page.keyboard.up('Escape');
+    try {
+      await page.waitForFunction(() => window.__settingsEscapeKeys.includes('keydown') &&
+        window.__settingsEscapeKeys.includes('keyup'), undefined, {timeout:5000});
+      await page.waitForFunction(() => Module.crownlessScreen === 'title', undefined,
+        {timeout:5000});
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        screen: Module.crownlessScreen,
+        focus: Module.crownlessMenuFocus,
+        activeElement: document.activeElement && {
+          tag: document.activeElement.tagName,
+          id: document.activeElement.id,
+          className: document.activeElement.className
+        },
+        canvasFocused: document.activeElement === document.querySelector('#canvas'),
+        bindingCaptureActive: Module.crownlessTouchFrame?.buttons?.some(
+          button => button.label.includes('Press a key')) || false,
+        keyEvents: window.__settingsEscapeKeys
+      }));
+      throw new Error(`Escape did not return from settings: ${JSON.stringify(state)}; ${error.message}`);
+    }
     await page.reload();
     await page.waitForFunction(() => window.Module && Module.crownlessScreen === 'title' && document.querySelector('#loading').hidden, undefined, {timeout:120000});
     saved = await prefs();
