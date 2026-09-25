@@ -6982,6 +6982,11 @@ static int32_t CarriagePassengerCount(const CcSim *sim)
 static bool DrawEconomicGoodIcon(Texture2D atlas, CcGood good,
                                  Rectangle destination, Color tint)
 {
+    /* The atlas has no raw stone cell yet. Show darker cut stone. */
+    if (good == CC_GOOD_RAW_STONE) {
+        good = CC_GOOD_STONE;
+        tint = ColorBrightness(tint, -0.3f);
+    }
     if (atlas.id == 0U || good < 0 || good >= CC_GOOD_COUNT ||
         atlas.width < ((int32_t)good + 1) * 32 || atlas.height < 32) {
         return false;
