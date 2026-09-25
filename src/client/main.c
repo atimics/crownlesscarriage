@@ -10395,7 +10395,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (void)snprintf(message, message_capacity, "%s", error);
             return;
         }
-        CcSim loaded_sim;
+        static CcSim loaded_sim;
         CcJournal *loaded_journal = CcJournalResume(
             save_path, &loaded_sim, error, sizeof(error));
         bool loaded = loaded_journal != NULL;
@@ -12210,7 +12210,7 @@ int main(int argc, char **argv)
 #endif
     CcCaptureConfigureRenderer(&capture_request);
 
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     CcJournal *journal = NULL;
     char startup_message[256] = "";
