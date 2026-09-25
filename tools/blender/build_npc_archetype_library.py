@@ -525,30 +525,6 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
     return points
 
 
-def build_face(spec: Archetype, collection: bpy.types.Collection,
-              center: Vector, width: float, depth: float,
-              height: float) -> None:
-    """Brow, eye, and nose massing that reads at 6-10 face pixels.
-
-    No eyeballs or carved sockets: the paint pipeline (paint_channels.py)
-    derives COLOR_0's value channel from each polygon's face normal, so a
-    brow bar that protrudes forward and tilts down over the eye line gets
-    a bright top (brow highlight) and a dark underside (eye-socket shadow)
-    for free. The nose repeats the same trick at a smaller scale.
-    """
-    front = center.y - depth
-    brow_z = center.z + height * 0.05
-    add_box(f"GEO_{spec.role}_brow", (0.0, front + depth * 0.05, brow_z),
-            (width * 1.30, depth * 0.34, height * 0.16), "skin", collection,
-            spec, "brow", rotation=(-0.34, 0.0, 0.0), bevel=0.014,
-            bevel_segments=2)
-    nose_z = center.z - height * 0.16
-    add_box(f"GEO_{spec.role}_nose", (0.0, front + depth * 0.02, nose_z),
-            (width * 0.32, depth * 0.30, height * 0.34), "skin", collection,
-            spec, "nose", rotation=(0.30, 0.0, 0.0), bevel=0.016,
-            bevel_segments=2)
-
-
 def build_beard(spec: Archetype, collection: bpy.types.Collection,
                 center: Vector, width: float, depth: float,
                 height: float) -> None:
@@ -586,7 +562,13 @@ def build_head(spec: Archetype, collection: bpy.types.Collection) -> None:
                   (width * 0.80, depth * 0.90, height * 0.48), "skin",
                   collection, spec, "jaw", subdivisions=1)
 
-    build_face(spec, collection, center, width, depth, height)
+    # No brow/eye/nose geometry here on purpose: the runtime already paints
+    # a full procedural face (brow, eyes, nose, scars, mouth) on top of this
+    # head in DrawWorldFace/CcNpcPaintFaceFeatures (cc_npc_appearance.c),
+    # scaled and anchored to match this bigger head (see
+    # NPC_ARCHETYPE_HEAD_GROWTH in actor_rendering.inc). A mesh brow/nose
+    # here only doubled up with that overlay and read as clutter, confirmed
+    # by an A/B render with and without it.
 
     for side in (-1.0, 1.0):
         add_ellipsoid(f"GEO_{spec.role}_ear_{side:+.0f}",
@@ -831,32 +813,38 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
     if "apron" in spec.equipment:
         # A shaped bib + split skirt with a stitched center fold, in place
         # of the old flat boxes that read as grey placeholder rectangles.
+        # Painted "leather" (its own dark, reliably distinct color pool at
+        # runtime, cc_npc_appearance.c) instead of "underlayer" so the apron
+        # reads as a separate layer over the tunic instead of blending into
+        # it as one flat grey mass.
         apron_y = -0.170 * mass * body_depth
-        add_panel(f"GEO_{spec.role}_apron_bib", (
+        bib = add_panel(f"GEO_{spec.role}_apron_bib", (
             (-0.130 * mass, apron_y + 0.012, 1.415),
             (0.130 * mass, apron_y + 0.012, 1.415),
             (0.205 * mass, apron_y - 0.006, 1.160),
             (0.0, apron_y - 0.016, 1.045),
             (-0.205 * mass, apron_y - 0.006, 1.160),
-        ), "underlayer", collection, spec, "apron", thickness=0.032,
+        ), "leather", collection, spec, "apron", thickness=0.032,
             edge=0.014)
+        bib["cc_value_offset"] = -0.08
         for side in (-1.0, 1.0):
             inner = side * 0.045 * mass
             outer = side * 0.205 * mass
-            add_panel(f"GEO_{spec.role}_apron_skirt_{side:+.0f}", (
+            skirt = add_panel(f"GEO_{spec.role}_apron_skirt_{side:+.0f}", (
                 (inner, apron_y - 0.006, 1.035),
                 (outer, apron_y - 0.002, 1.000),
                 (outer * 0.86, apron_y + 0.014, 0.640),
                 (inner * 0.55, apron_y + 0.010, 0.585),
-            ), "underlayer", collection, spec, "apron", thickness=0.030,
+            ), "leather", collection, spec, "apron", thickness=0.030,
                 edge=0.014)
+            skirt["cc_value_offset"] = -0.08
             add_box(f"GEO_{spec.role}_apron_hem_{side:+.0f}",
                     (side * 0.135 * mass, apron_y - 0.006, 0.605),
                     (0.150 * mass, 0.056, 0.045), "accent", collection,
                     spec, "apron", bevel=0.008)
         fold = add_box(f"GEO_{spec.role}_apron_fold",
                        (0.0, apron_y - 0.022, 0.985),
-                       (0.045 * mass, 0.020, 0.66), "underlayer", collection,
+                       (0.045 * mass, 0.020, 0.66), "leather", collection,
                        spec, "apron", bevel=0.009)
         fold["cc_value_offset"] = -0.22
 
