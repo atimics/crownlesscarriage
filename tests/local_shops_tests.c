@@ -1,62 +1,70 @@
 #include "client/cc_local_shops.h"
 
-#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 
-static void CheckTown(CcSettlementFunction function)
+#define CHECK(condition) do { \
+    if (!(condition)) { \
+        (void)fprintf(stderr, "check failed at line %d: %s\n", \
+                      __LINE__, #condition); \
+        return 1; \
+    } \
+} while (0)
+
+static int CheckTown(CcSettlementFunction function)
 {
     const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForFunction(function);
-    assert(profile != NULL);
-    assert(profile->building_count >= CC_LOCAL_SHOP_COUNT);
+    CHECK(profile != NULL);
+    CHECK(profile->building_count >= CC_LOCAL_SHOP_COUNT);
     int32_t used_buildings[CC_LOCAL_PLACE_BUILDING_CAPACITY] = {0};
     int32_t goods_seen[CC_GOOD_COUNT] = {0};
     for (int32_t kind = 0; kind < CC_LOCAL_SHOP_COUNT; ++kind) {
         const CcLocalShop *shop = CcLocalShopAt(profile, (CcLocalShopKind)kind);
-        assert(shop != NULL);
-        assert(shop->kind == (CcLocalShopKind)kind);
-        assert(shop->name != NULL && shop->name[0] != '\0');
-        assert(shop->keeper_name != NULL && shop->keeper_name[0] != '\0');
-        assert(shop->service_name != NULL && shop->service_name[0] != '\0');
-        assert(profile->building[shop->building_index].door);
-        assert(++used_buildings[shop->building_index] == 1);
-        assert(CcLocalShopForBuilding(profile, shop->building_index) == shop);
+        CHECK(shop != NULL);
+        CHECK(shop->kind == (CcLocalShopKind)kind);
+        CHECK(shop->name != NULL && shop->name[0] != '\0');
+        CHECK(shop->keeper_name != NULL && shop->keeper_name[0] != '\0');
+        CHECK(shop->service_name != NULL && shop->service_name[0] != '\0');
+        CHECK(profile->building[shop->building_index].door);
+        CHECK(++used_buildings[shop->building_index] == 1);
+        CHECK(CcLocalShopForBuilding(profile, shop->building_index) == shop);
         CcLocalLanePoint door = CcLocalShopDoor(profile, shop);
         CcLocalLanePoint approach = CcLocalShopApproach(profile, shop);
-        assert(isfinite(door.x) && isfinite(door.z));
-        assert(isfinite(approach.x) && isfinite(approach.z));
-        assert(fabsf(hypotf(approach.x - door.x, approach.z - door.z) - 1.43f) < 0.001f);
+        CHECK(isfinite(door.x) && isfinite(door.z));
+        CHECK(isfinite(approach.x) && isfinite(approach.z));
+        CHECK(fabsf(hypotf(approach.x - door.x, approach.z - door.z) - 1.43f) < 0.001f);
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             if (CcLocalShopSells(shop, (CcGood)good)) {
-                assert(++goods_seen[good] == 1);
-                assert(CcLocalShopForGood(profile, (CcGood)good) == shop);
+                CHECK(++goods_seen[good] == 1);
+                CHECK(CcLocalShopForGood(profile, (CcGood)good) == shop);
             }
         }
     }
-    assert(CcLocalShopAt(profile, CC_LOCAL_SHOP_GRAIN_MERCHANT)->building_index ==
+    CHECK(CcLocalShopAt(profile, CC_LOCAL_SHOP_GRAIN_MERCHANT)->building_index ==
            profile->primary_building);
     for (int32_t good = 0; good < CC_GOOD_ROTTEN_MEAT; ++good) {
-        assert(goods_seen[good] == 1);
+        CHECK(goods_seen[good] == 1);
     }
-    assert(goods_seen[CC_GOOD_ROTTEN_MEAT] == 0);
-    assert(goods_seen[CC_GOOD_ROTTEN_GRAIN] == 0);
-    assert(CcLocalShopForGood(profile, CC_GOOD_ROTTEN_MEAT) == NULL);
-    assert(CcLocalShopForGood(profile, CC_GOOD_ROTTEN_GRAIN) == NULL);
-    assert(CcLocalShopForBuilding(profile, -1) == NULL);
-    assert(CcLocalShopAt(profile, CC_LOCAL_SHOP_COUNT) == NULL);
+    CHECK(goods_seen[CC_GOOD_ROTTEN_MEAT] == 0);
+    CHECK(goods_seen[CC_GOOD_ROTTEN_GRAIN] == 0);
+    CHECK(CcLocalShopForGood(profile, CC_GOOD_ROTTEN_MEAT) == NULL);
+    CHECK(CcLocalShopForGood(profile, CC_GOOD_ROTTEN_GRAIN) == NULL);
+    CHECK(CcLocalShopForBuilding(profile, -1) == NULL);
+    CHECK(CcLocalShopAt(profile, CC_LOCAL_SHOP_COUNT) == NULL);
     const CcLocalShop *bakery = CcLocalShopForGood(profile, CC_GOOD_BREAD);
     const CcLocalShop *stonecutter = CcLocalShopForGood(profile, CC_GOOD_STONE);
-    assert(bakery != NULL && bakery->kind == CC_LOCAL_SHOP_BAKERY);
-    assert(stonecutter != NULL && stonecutter->kind == CC_LOCAL_SHOP_STONECUTTER);
-    assert(!CcLocalShopSells(bakery, CC_GOOD_STONE));
-    assert(!CcLocalShopSells(stonecutter, CC_GOOD_BREAD));
+    CHECK(bakery != NULL && bakery->kind == CC_LOCAL_SHOP_BAKERY);
+    CHECK(stonecutter != NULL && stonecutter->kind == CC_LOCAL_SHOP_STONECUTTER);
+    CHECK(!CcLocalShopSells(bakery, CC_GOOD_STONE));
+    CHECK(!CcLocalShopSells(stonecutter, CC_GOOD_BREAD));
+    return 0;
 }
 
 int main(void)
 {
     for (int32_t town = CC_SETTLEMENT_FARMING;
          town <= CC_SETTLEMENT_DUNGEON_TOWN; ++town) {
-        CheckTown((CcSettlementFunction)town);
+        if (CheckTown((CcSettlementFunction)town) != 0) return 1;
     }
     puts("Nine specialist shops and rotated doors in each town: passed");
     return 0;
