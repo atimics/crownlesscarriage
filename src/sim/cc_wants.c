@@ -36,14 +36,14 @@ static CcCustodyEntry *Entry(CcSim *sim, CcId id)
 }
 const CcPersonalWant *CcWantsFind(const CcSim *sim, CcId id)
 {
-    if (sim == NULL || sim->schema_version < 117U || id == 0) return NULL;
+    if (sim == NULL || sim->schema_version < 121U || id == 0) return NULL;
     for (int i = 0; i < CC_PERSONAL_WANTS; ++i)
         if (sim->wants.wants[i].id == id) return &sim->wants.wants[i];
     return NULL;
 }
 const CcBelonging *CcWantsItem(const CcSim *sim, CcId id)
 {
-    if (sim == NULL || sim->schema_version < 117U || id == 0) return NULL;
+    if (sim == NULL || sim->schema_version < 121U || id == 0) return NULL;
     for (int i = 0; i < CC_BELONGINGS; ++i)
         if (sim->wants.items[i].id == id) return &sim->wants.items[i];
     return NULL;
@@ -256,14 +256,14 @@ static void SeedBelongings(CcSim *sim)
 }
 void CcWantsInit(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 117U || sim->wants.initialized) return;
+    if (sim == NULL || sim->schema_version < 121U || sim->wants.initialized) return;
     /* The first direct question starts personal requests. Further changes
        follow the live world, with this state stored in the campaign. */
     sim->wants = (CcWantsState){.initialized = 1, .last_day = sim->current_day};
 }
 void CcWantsAdvance(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 117U || !sim->wants.initialized) return;
+    if (sim == NULL || sim->schema_version < 121U || !sim->wants.initialized) return;
     if (sim->wants.initialized == 1) return;
     bool new_day = sim->wants.last_day != sim->current_day;
     sim->wants.last_day = sim->current_day;
@@ -399,7 +399,7 @@ static CcCustodyResult Transfer(CcSim *sim, const CcBelonging *item, CcCustodyHo
 }
 bool CcWantsPlan(const CcSim *sim, const CcCommand *cmd, char *reason, size_t capacity)
 {
-    if (sim == NULL || cmd == NULL || sim->schema_version < 117U || cmd->kind != CC_COMMAND_PERSONAL_WANT ||
+    if (sim == NULL || cmd == NULL || sim->schema_version < 121U || cmd->kind != CC_COMMAND_PERSONAL_WANT ||
         (cmd->actor_id != 0 && cmd->actor_id != sim->player.id)) return Fail(reason, capacity, "Choose a current personal request.");
     if (sim->journey.active || sim->mine.phase != CC_MINE_NONE || sim->dungeon_expedition.active)
         return Fail(reason, capacity, "Meet at a town to exchange items.");
@@ -576,7 +576,7 @@ static void Offer(const CcSim *sim, CcWantOffer *o, CcCommand cmd, const char *l
 }
 int32_t CcWantsOffers(const CcSim *sim, CcId person, CcWantOffer *offers, int32_t capacity)
 {
-    if (sim == NULL || offers == NULL || capacity <= 0 || sim->schema_version < 117U) return 0;
+    if (sim == NULL || offers == NULL || capacity <= 0 || sim->schema_version < 121U) return 0;
     int count = 0;
     if (person != 0 && sim->wants.initialized == 1) {
         Offer(sim, &offers[count++], (CcCommand){.kind = CC_COMMAND_PERSONAL_WANT,
@@ -641,7 +641,7 @@ bool CcWantsRequestText(const CcSim *sim, CcId request, char *text, size_t capac
 }
 bool CcWantsPersonText(const CcSim *sim, CcId person, char *text, size_t capacity)
 {
-    if (sim == NULL || sim->schema_version < 117U) return false;
+    if (sim == NULL || sim->schema_version < 121U) return false;
     for (int i = 0; i < CC_PERSONAL_WANTS; ++i) {
         const CcPersonalWant *w = &sim->wants.wants[i];
         if (w->person_id != person || w->status != CC_WANT_ACTIVE) continue;
@@ -655,7 +655,7 @@ void CcWantsDescribe(const CcSim *sim, char *text, size_t capacity)
 {
     if (text == NULL || capacity == 0) return;
     text[0] = '\0';
-    if (sim == NULL || sim->schema_version < 117U) return;
+    if (sim == NULL || sim->schema_version < 121U) return;
     size_t used = 0;
     for (int i = 0; i < CC_PERSONAL_WANTS && used + 1 < capacity; ++i) {
         const CcPersonalWant *w = &sim->wants.wants[i];
@@ -683,7 +683,7 @@ void CcWantsDescribe(const CcSim *sim, char *text, size_t capacity)
 }
 bool CcWantsValidate(const CcSim *sim)
 {
-    if (sim->schema_version < 117U) return true;
+    if (sim->schema_version < 121U) return true;
     if ((sim->wants.initialized != 1 && sim->wants.initialized != 2) || sim->wants.last_day < 1 || sim->wants.last_day > sim->current_day) return false;
     int carried = 0;
     for (int i = 0; i < CC_BELONGINGS; ++i) {

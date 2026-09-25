@@ -101,7 +101,7 @@ static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
         *capacity = INT64_MAX;
         return true;
     }
-    if (sim->schema_version >= 117U && holder.kind == CC_CUSTODY_CHARACTER) {
+    if (sim->schema_version >= 121U && holder.kind == CC_CUSTODY_CHARACTER) {
         const CcCharacter *person = CcSimCharacter(sim, holder.id);
         if (person == NULL) return false;
         *location = (CcCustodyLocation){.place_id = person->current_settlement_id};

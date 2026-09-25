@@ -22,7 +22,7 @@ static CcCapturePresentation CcCapturePresentationFor(
     };
 #if defined(CC_CLIENT_SELF_TESTS)
     result.adventure_ui |= request->capture_shop || request->capture_ux || request->capture_road_fork ||
-        request->capture_road_carriage ||
+        request->capture_road_carriage || request->capture_requests ||
         request->capture_road || request->capture_parley ||
         request->capture_mine_road || request->capture_mine_road_reverse;
     result.navigation |= request->capture_ux;
@@ -142,7 +142,8 @@ static void CcCaptureSelectStart(const CcCaptureRequest *request, int32_t *selec
 {
     if (request->capture_dragon_hoard_map) *selected = CC_MAP_DRAGON_HOARD;
     else if (request->capture_map_case) *selected = CC_MAP_GLOAMGATE_NIGHT_ROAD;
-    *view = request->capture_board ? VIEW_SITUATIONS : request->capture_character ? VIEW_CHARACTER :
+    *view = request->capture_board ? VIEW_SITUATIONS : request->capture_requests ? VIEW_LEDGER :
+        request->capture_character ? VIEW_CHARACTER :
         request->capture_encounter ? VIEW_ENCOUNTER : request->capture_underroad ? VIEW_DUNGEON :
         request->capture_dragon_cave ? VIEW_DRAGON_CAVE : request->capture_road_fork ? VIEW_ROADS :
         (request->capture_map_case || request->capture_dragon_hoard_map) ? VIEW_MAP :

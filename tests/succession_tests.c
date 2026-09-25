@@ -1,4 +1,5 @@
 #include "sim/cc_occupations.h"
+#include "sim/cc_wants.h"
 #include "sim/cc_mine.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_census.h"
@@ -188,6 +189,8 @@ static void CheckSuccessionSaves(void)
             }
         }
         if (version < 117U) CcCensusInit(&sim);
+        if (version < 121U)
+            sim.wants = (CcWantsState){.initialized = 1, .last_day = sim.current_day};
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }

@@ -100,7 +100,7 @@ static int RunCoreLanguageRegression(const char *model_path)
         feedback, sizeof(feedback), &feedback_age);
     ClientInputClearPressed();
     MODEL_CHECK(core_conversation.round_phase == 1U, "A further Chat starts another pair.");
-    queued_key_press[KEY_TWO] = true;
+    queued_key_press[KEY_THREE] = true;
     HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
         (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, "", "", message, sizeof(message),
         feedback, sizeof(feedback), &feedback_age);

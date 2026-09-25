@@ -22,7 +22,9 @@ for rule in data['rules']:
     for variant, template in enumerate(rule['outputs']):
         args = [sys.argv[1], str(kinds[rule['kind']]), '80', str(variant), source]
         output = subprocess.check_output(args, text=True).rstrip('\n')
-        assert output == template.format(*fields), (rule['id'], output)
+        expected = template.format(*fields)
+        expected = expected[0].upper() + expected[1:]
+        assert output == expected, (rule['id'], output, expected)
         packet = json.loads(subprocess.check_output([*args, '--packet'], text=True))
         assert packet['rule'] == rule['id']
         for field in packet['fields']:

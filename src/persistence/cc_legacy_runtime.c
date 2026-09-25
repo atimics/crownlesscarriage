@@ -799,6 +799,6 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version < 113U) CcScrivenInit(sim);
     if (legacy_version < 115U) CcCrownCalendarInit(sim);
-    if (legacy_version < 117U) CcWantsInit(sim);
+    if (legacy_version < 121U) CcWantsInit(sim);
     return true;
 }

@@ -3,6 +3,7 @@ typedef struct CcCaptureRequest {
     bool capture_ux;
     int32_t capture_ux_view;
     bool capture_board;
+    bool capture_requests;
     bool capture_world;
     bool capture_opening;
     bool capture_interior;
@@ -93,6 +94,9 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
     request->capture_ux_view = request->capture_ux ? atoi(argv[2]) : 0;
     if (request->capture_ux && (request->capture_ux_view < 0 || request->capture_ux_view > 35)) return false;
     request->capture_board = argc >= 2 && strcmp(argv[1], "--capture-board") == 0;
+    /* Opens the Company Book directly on the Requests page (book_page 5),
+       the same place personal item requests and belongings live. */
+    request->capture_requests = argc >= 2 && strcmp(argv[1], "--capture-requests") == 0;
     request->capture_world = argc >= 2 && strcmp(argv[1], "--capture-world") == 0;
     request->capture_opening = argc >= 2 &&
         strcmp(argv[1], "--capture-opening") == 0;
@@ -455,7 +459,7 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
     request->capture = argc >= 2 &&
                    (strcmp(argv[1], "--capture") == 0 || request->capture_mine_yard || request->capture_mine_level || request->capture_mine_road || request->capture_mine_road_reverse || request->capture_ux || request->capture_title ||
                     request->capture_menu || request->capture_delete || request->capture_world ||
-                    request->capture_board ||
+                    request->capture_board || request->capture_requests ||
                     request->capture_opening ||
                     request->capture_interior || request->capture_shop || request->capture_navigation || request->capture_limbs ||
                     request->capture_walk_cycle || request->capture_defense ||

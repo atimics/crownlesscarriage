@@ -19,9 +19,9 @@ EXPECTED_HASHES = {
     },
     # Schema 121 adds procedural personal item requests and belongings.
     121: {
-        1: "0",
-        2: "0",
-        3: "0",
+        1: "11390053274053792359",
+        2: "1918738345993467953",
+        3: "9398023883865324237",
     },
 }
 

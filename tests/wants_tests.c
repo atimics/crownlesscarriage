@@ -5,7 +5,7 @@
 #include <sqlite3.h>
 #include <string.h>
 
-/* Procedural personal item quests (schema 119), design: docs/personal-requests.md.
+/* Procedural personal item quests (schema 121), design: docs/personal-requests.md.
    These tests drive src/sim/cc_wants.c and cc_wants_codec.c directly and through
    the public command dispatch, without depending on the shape the random world
    generator happens to produce today. Every scenario first isolates the whole
@@ -623,21 +623,21 @@ static void TestSaveLoadRoundTrip(void)
     (void)remove(path);
 }
 
-/* A save written by schema 118 (before personal requests existed) loads
+/* A save written by schema 120 (before personal requests existed) loads
    cleanly: the upgrade starts the feature in its unseeded state, and the
    saved wants table stays empty until the player actually asks. */
-static void TestLegacySchema118Load(void)
+static void TestLegacySchema120Load(void)
 {
     CcSimInit(&sim, 555000111U);
-    sim.schema_version = 118U;
+    CcTestStampLegacyGoods(&sim, 120U);
     uint64_t legacy_hash = CcSimHash(&sim);
-    /* Below schema 119 the wants payload is not part of the canonical state:
+    /* Below schema 121 the wants payload is not part of the canonical state:
        mutating it does not move the hash. */
     sim.wants.wants[0] = (CcPersonalWant){.id = 999, .person_id = 999,
         .kind = CC_WANT_MEAL, .status = CC_WANT_ACTIVE, .revision = 1};
     CC_CHECK(CcSimHash(&sim) == legacy_hash);
     sim.wants.wants[0] = (CcPersonalWant){0};
-    const char *path = "wants-legacy-118.ccsave";
+    const char *path = "wants-legacy-120.ccsave";
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
     sqlite3 *database = NULL;
     CC_CHECK(sqlite3_open(path, &database) == SQLITE_OK);
@@ -670,6 +670,6 @@ int main(void)
     TestRequestLifecycleCooldownAndCleanup();
     TestWantsCodecRoundTripAndGuards();
     TestSaveLoadRoundTrip();
-    TestLegacySchema118Load();
+    TestLegacySchema120Load();
     return 0;
 }

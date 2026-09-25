@@ -696,7 +696,7 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
         const CcEvent *note = CcOvenCourtNote(sim, i);
         if (note != NULL) PinEvent(set, note->id);
     }
-    if (sim->schema_version >= 117U) {
+    if (sim->schema_version >= 121U) {
         for (int i = 0; i < CC_PERSONAL_WANTS; ++i) {
             const CcPersonalWant *want = &sim->wants.wants[i];
             if (want->known_day > 0 && want->status == CC_WANT_ACTIVE)
@@ -769,7 +769,7 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
 static void RedirectEventReference(CcSim *sim, CcId removed_id,
                                    CcId replacement_id)
 {
-    if (sim->schema_version >= 117U) {
+    if (sim->schema_version >= 121U) {
         for (int i = 0; i < CC_PERSONAL_WANTS; ++i) {
             CcPersonalWant *w = &sim->wants.wants[i];
             if (w->cause_event_id == removed_id) w->cause_event_id = replacement_id;
@@ -2731,7 +2731,7 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
             total += sim->goblin_politics.factions[i].coins + sim->goblin_politics.factions[i].carried_coins;
         }
     }
-    if (sim->schema_version >= 117U)
+    if (sim->schema_version >= 121U)
         for (int i = 0; i < CC_PERSONAL_WANTS; ++i) total += sim->wants.wants[i].escrow;
     if (sim->schema_version >= 86U) total += sim->archive_recruitment.purse;
     if (sim->schema_version >= 92U) total += sim->archive_convoy.purse;
@@ -2771,7 +2771,7 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                 total += entry->quantity;
         }
     }
-    if (sim->schema_version >= 117U)
+    if (sim->schema_version >= 121U)
         for (int i = 0; i < CC_BELONGINGS; ++i) {
             const CcBelonging *item = &sim->wants.items[i];
             if (item->id == 0) continue;
@@ -20964,7 +20964,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > (sim->schema_version >= 117U ? CC_EVENT_BELONGING_REPAIRED :
+                event->kind > (sim->schema_version >= 121U ? CC_EVENT_BELONGING_REPAIRED :
                     sim->schema_version >= 102U ?
                     CC_EVENT_BODY_LOOTED :
                     sim->schema_version >= 100U ?
