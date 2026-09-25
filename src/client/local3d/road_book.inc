@@ -2969,6 +2969,12 @@ static void DrawInteriorServiceMark(const CcLocalPlaceProfile *profile,
                             (Vector3){0.10f, 0.80f, 0.05f}, accent);
                 }
                 break;
+            case CC_LOCAL_SHOP_MINE_SUPPLIER:
+                DrawBox((Vector3){x - 0.30f, 1.33f, z},
+                        (Vector3){0.44f, 0.32f, 0.05f}, accent);
+                DrawBox((Vector3){x + 0.20f, 1.55f, z},
+                        (Vector3){0.55f, 0.48f, 0.05f}, accent);
+                break;
             default:
                 DrawBox((Vector3){x, 1.48f, z},
                         (Vector3){0.96f, 0.58f, 0.05f}, accent);
