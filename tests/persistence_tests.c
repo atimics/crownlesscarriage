@@ -1783,6 +1783,15 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
                 CC_CHECK(restored.settlements[settlement]
                              .reserve_target[good] > 0);
+            } else if (good == CC_GOOD_RAW_STONE) {
+                bool mine = restored.settlements[settlement].function ==
+                    CC_SETTLEMENT_MINING;
+                CC_CHECK(restored.settlements[settlement].stock[good] ==
+                         (mine ? 24 : 0));
+                CC_CHECK(restored.settlements[settlement].reserve_target[good] ==
+                         (mine ? 8 : 0));
+                CC_CHECK(restored.settlements[settlement].production[good] ==
+                         (mine ? 6 : 0));
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
                 CC_CHECK(restored.settlements[settlement]
@@ -1869,6 +1878,10 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
                 CC_CHECK(restored.settlements[settlement]
                              .reserve_target[good] > 0);
+            } else if (good == CC_GOOD_RAW_STONE) {
+                CC_CHECK(restored.settlements[settlement].stock[good] ==
+                         (restored.settlements[settlement].function ==
+                          CC_SETTLEMENT_MINING ? 24 : 0));
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
             }
@@ -3015,6 +3028,7 @@ static void CheckSchema41Upgrade(void)
     CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
     legacy->schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(legacy);
+    CcSimInitializeSupplyEconomy(legacy);
     /* The new active-state clock starts at the migration date. */
     for (int32_t i = 0; i < legacy->character_count; ++i) {
         CC_CHECK(restored->characters[i].detail_active);
