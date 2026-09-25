@@ -2938,11 +2938,47 @@ static Color InteriorWallColor(const CcLocalPlaceProfile *profile,
 }
 
 static void DrawInteriorServiceMark(const CcLocalPlaceProfile *profile,
-                                    Color accent)
+                                    const CcLocalShop *shop, Color accent)
 {
     if (profile == NULL) return;
     const float z = 0.586f;
     const float x = 6.55f;
+    if (shop != NULL) {
+        switch (shop->kind) {
+            case CC_LOCAL_SHOP_BAKERY:
+                for (int32_t loaf = -1; loaf <= 1; ++loaf) {
+                    DrawSmallSphere((Vector3){x + (float)loaf * 0.36f,
+                                               1.48f, z}, 0.17f, accent);
+                }
+                break;
+            case CC_LOCAL_SHOP_STONECUTTER:
+                DrawBox((Vector3){x - 0.27f, 1.38f, z},
+                        (Vector3){0.48f, 0.35f, 0.05f}, accent);
+                DrawBox((Vector3){x + 0.26f, 1.58f, z},
+                        (Vector3){0.48f, 0.35f, 0.05f}, accent);
+                break;
+            case CC_LOCAL_SHOP_SMITH:
+                DrawBox((Vector3){x, 1.51f, z},
+                        (Vector3){1.05f, 0.20f, 0.05f}, accent);
+                DrawBox((Vector3){x, 1.25f, z},
+                        (Vector3){0.22f, 0.44f, 0.05f}, accent);
+                break;
+            case CC_LOCAL_SHOP_GRAIN_MERCHANT:
+                for (int32_t stalk = -1; stalk <= 1; ++stalk) {
+                    DrawBox((Vector3){x + (float)stalk * 0.28f, 1.48f, z},
+                            (Vector3){0.10f, 0.80f, 0.05f}, accent);
+                }
+                break;
+            default:
+                DrawBox((Vector3){x, 1.48f, z},
+                        (Vector3){0.96f, 0.58f, 0.05f}, accent);
+                DrawBox((Vector3){x, 1.48f, z + 0.012f},
+                        (Vector3){0.58f, 0.31f, 0.06f},
+                        ShadeColor(accent, 0.72f));
+                break;
+        }
+        return;
+    }
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
             for (int32_t stalk = -1; stalk <= 1; ++stalk) {
@@ -3119,7 +3155,7 @@ void CcLocalDrawShopInterior3D(const CcSim *sim, const CcLocalAgent *agent,
             ShadeColor(wall, 0.66f));
     DrawBox((Vector3){6.55f, 2.21f, 0.535f},
             (Vector3){2.24f, 0.10f, 0.065f}, identity);
-    DrawInteriorServiceMark(profile, identity);
+    DrawInteriorServiceMark(profile, shop, identity);
     DrawBox((Vector3){MARKET_COUNTER_FOOTPRINT.x +
                       MARKET_COUNTER_FOOTPRINT.width * 0.5f,
                       0.46f,
