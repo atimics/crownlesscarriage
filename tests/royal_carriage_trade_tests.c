@@ -137,7 +137,7 @@ static void ConfigureCapacityWaitScenario(CcSim *sim)
 
 static void CheckSeedTenLongRun(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(774553914));
     CcSimAdvanceDays(&sim, 365 * 120);
     char error[256];
@@ -297,7 +297,7 @@ int main(void)
     CheckAbandonedDelivery();
     CheckSeedTenLongRun();
     CheckChangedDestination();
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0xc4111a9e));
     CC_CHECK(sim.royal_carriage_count == sim.kingdom_count);
     for (int32_t i = 0; i < sim.kingdom_count; ++i) {
@@ -336,7 +336,7 @@ int main(void)
     CC_CHECK(!CcSimRoyalCarriageCanUseRoute(
         &sim, sim.kingdoms[0].id, sim.routes[6].id));
 
-    CcSim permit;
+    static CcSim permit;
     CcSimInit(&permit, UINT32_C(0xc4111a9e));
     ClearTradeNeeds(&permit);
     SetRelation(&permit, 1, 2, CC_DIPLOMACY_PEACE);
@@ -417,8 +417,9 @@ int main(void)
     CC_CHECK(sim.player.location_id == player_location);
     CC_CHECK(sim.carriage.mode == player_mode);
 
-    CcSim delivering = sim;
-    CcSim forged = delivering;
+    static CcSim delivering, forged;
+    delivering = sim;
+    forged = delivering;
     for (int32_t i = 0; i < forged.shipment_count; ++i) {
         if (forged.shipments[i].id == shipment_id) {
             forged.shipments[i].quantity =
@@ -464,7 +465,7 @@ int main(void)
     (void)remove(path);
     uint64_t blocked_hash = CcSimHash(&sim);
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
-    CcSim restored;
+    static CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == blocked_hash);
     carriage = CcSimRoyalCarriage(&restored, owner_id);
@@ -475,7 +476,8 @@ int main(void)
     CC_CHECK(restored.royal_route_slots_used[shipment_route_slot] ==
              sim.royal_route_slots_used[shipment_route_slot]);
 
-    CcSim expired = restored;
+    static CcSim expired;
+    expired = restored;
     CcRoyalCarriage *expired_carriage =
         &expired.royal_carriages[2];
     int32_t release_stock = expired.settlements[2].stock[CC_GOOD_IRON];
@@ -490,7 +492,8 @@ int main(void)
              release_stock + cargo_quantity);
     CC_CHECK(CcSimValidate(&expired, error, sizeof(error)));
 
-    CcSim continued = sim;
+    static CcSim continued;
+    continued = sim;
     SetFactionSupport(&restored, 1, CC_FACTION_CROWN, 0);
     SetFactionSupport(&restored, 1, CC_FACTION_GUILD, 0);
     SetRelation(&restored, 1, 2, CC_DIPLOMACY_ALLIANCE);
@@ -515,7 +518,7 @@ int main(void)
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
     CC_CHECK(remove(path) == 0);
 
-    CcSim capacity_wait;
+    static CcSim capacity_wait;
     ConfigureCapacityWaitScenario(&capacity_wait);
     CcId capacity_carriage_id = capacity_wait.royal_carriages[2].id;
     CcId capacity_shipment_id = capacity_wait.shipments[0].id;
@@ -537,7 +540,7 @@ int main(void)
     (void)remove(capacity_path);
     CC_CHECK(CcSaveWrite(
         capacity_path, &capacity_wait, error, sizeof(error)));
-    CcSim restored_capacity_wait;
+    static CcSim restored_capacity_wait;
     CC_CHECK(CcSaveRead(
         capacity_path, &restored_capacity_wait, error, sizeof(error)));
     capacity_carriage = CcSimRoyalCarriage(
@@ -550,7 +553,8 @@ int main(void)
              CcSimHash(&capacity_wait));
     CC_CHECK(remove(capacity_path) == 0);
 
-    CcSim held_capacity = restored_capacity_wait;
+    static CcSim held_capacity;
+    held_capacity = restored_capacity_wait;
     int32_t blocked_events = CountRoyalBlockedEvents(
         &held_capacity, capacity_carriage_id);
     for (int32_t day = 0; day < 35; ++day) {
@@ -574,7 +578,8 @@ int main(void)
                  &held_capacity, capacity_carriage_id) == blocked_events);
     CC_CHECK(CcSimValidate(&held_capacity, error, sizeof(error)));
 
-    CcSim priority = restored_capacity_wait;
+    static CcSim priority;
+    priority = restored_capacity_wait;
     priority.current_day = 6;
     priority.royal_trade_week = 0;
     priority.royal_route_slots_used[3] = 3;
@@ -607,7 +612,7 @@ int main(void)
     CC_CHECK(CcSimValidate(&priority, error, sizeof(error)));
 
     for (uint32_t schema = 35U; schema <= 37U; ++schema) {
-        CcSim legacy;
+        static CcSim legacy;
         CcSimInit(&legacy, UINT32_C(0x35ca771a));
         legacy.schema_version = schema;
         legacy.generator_version = 25U;
@@ -620,7 +625,7 @@ int main(void)
         (void)remove(legacy_path);
         CC_CHECK(CcSaveWrite(legacy_path, &legacy, error, sizeof(error)));
         MakeLegacyRoyalDatabase(legacy_path);
-        CcSim upgraded;
+        static CcSim upgraded;
         CC_CHECK(CcSaveRead(legacy_path, &upgraded, error, sizeof(error)));
         CC_CHECK(upgraded.schema_version == CC_SIM_SCHEMA_VERSION);
         CC_CHECK(upgraded.generator_version == CC_GENERATOR_VERSION);
@@ -630,7 +635,7 @@ int main(void)
                  CcCensusIssuedIdCount(&upgraded.census));
         CC_CHECK(CcSimValidate(&upgraded, error, sizeof(error)));
         CC_CHECK(CcSaveWrite(legacy_path, &upgraded, error, sizeof(error)));
-        CcSim again;
+        static CcSim again;
         CC_CHECK(CcSaveRead(legacy_path, &again, error, sizeof(error)));
         CC_CHECK(CcSimHash(&again) == CcSimHash(&upgraded));
         CC_CHECK(remove(legacy_path) == 0);
