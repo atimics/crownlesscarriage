@@ -359,6 +359,92 @@ static void TestSilverwickRoadPlan(void)
     CcLocalBindPlace(NULL);
 }
 
+static void TestAuthoredTownRoutes(void)
+{
+    static CcSim sim;
+    static const CcSettlementFunction towns[] = {
+        CC_SETTLEMENT_FORTRESS, CC_SETTLEMENT_CAPITAL,
+        CC_SETTLEMENT_DUNGEON_TOWN,
+    };
+    static const uint32_t seeds[] = {
+        UINT32_C(0xc0a71a9e), UINT32_C(0x12345678),
+    };
+    CcLocalBindOpenWorld(NULL);
+    for (int32_t seed = 0; seed < 2; ++seed) {
+        CcSimInit(&sim, seeds[seed]);
+        for (int32_t town = 0; town < 3; ++town) {
+            const CcLocalPlaceProfile *profile =
+                CcLocalPlaceProfileForFunction(towns[town]);
+            CC_CHECK(profile->lane_count >= 8);
+            for (int32_t place = 0; place < sim.settlement_count; ++place) {
+                if (sim.settlements[place].function == towns[town]) {
+                    sim.player.location_id = sim.settlements[place].id;
+                    break;
+                }
+            }
+            CcLocalBindPlace(&sim);
+            for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
+                if (lane == 2) continue; /* The parked carriage occupies the bay. */
+                const CcLocalLane *path = &profile->lane[lane];
+                CcLocalLanePoint previous = CcLocalLaneSample(path, 0.0f);
+                for (int32_t sample = 1; sample <= 160; ++sample) {
+                    CcLocalLanePoint point = CcLocalLaneSample(path,
+                        (float)sample / 160.0f);
+                    Vector3 start = {previous.x,
+                        CcLocalTerrainHeightAt(previous.x, previous.z), previous.z};
+                    Vector3 end = {point.x,
+                        CcLocalTerrainHeightAt(point.x, point.z), point.z};
+                    Vector3 corrected, normal;
+                    if (CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
+                        start, end, 0.24f, &corrected, &normal)) {
+                        fprintf(stderr, "town %d lane %d blocked at %.2f %.2f\n",
+                            towns[town], lane, point.x, point.z);
+                        CC_CHECK(false);
+                    }
+                    CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET,
+                        point.x, point.z) != CC_SOUND_STEP_GRASS);
+                    previous = point;
+                }
+            }
+            Vector2 arrival[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+            int32_t count = CcLocalTownCarriagePath(true, arrival,
+                CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+            CC_CHECK(count > 20);
+            CC_CHECK(hypotf(arrival[0].x - CC_LOCAL_TOWN_GATE_X,
+                arrival[0].y - CC_LOCAL_TOWN_GATE_Z) < 0.001f);
+            CC_CHECK(hypotf(arrival[count - 1].x - CC_LOCAL_CARRIAGE_X,
+                arrival[count - 1].y - CC_LOCAL_CARRIAGE_Z) < 0.001f);
+            for (int32_t i = 1; i < count; ++i) {
+                float run = hypotf(arrival[i].x - arrival[i - 1].x,
+                                   arrival[i].y - arrival[i - 1].y);
+                float rise = fabsf(CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y) -
+                    CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y));
+                CC_CHECK(run > 0.0f && run < 2.0f);
+                if (rise / run > 0.16f) {
+                    fprintf(stderr, "town %d cart grade %.3f at %.2f %.2f\n",
+                        towns[town], rise / run, arrival[i].x, arrival[i].y);
+                    CC_CHECK(false);
+                }
+                if (i >= count - 16) continue;
+                Vector3 start = {arrival[i - 1].x,
+                    CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y),
+                    arrival[i - 1].y};
+                Vector3 end = {arrival[i].x,
+                    CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y),
+                    arrival[i].y};
+                Vector3 corrected, normal;
+                if (CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
+                    start, end, 1.25f, &corrected, &normal)) {
+                    fprintf(stderr, "town %d cart blocked at %.2f %.2f\n",
+                        towns[town], arrival[i].x, arrival[i].y);
+                    CC_CHECK(false);
+                }
+            }
+        }
+    }
+    CcLocalBindPlace(NULL);
+}
+
 int main(void)
 {
     if (TestSeededTerrain() != 0) return 1;
@@ -369,5 +455,6 @@ int main(void)
     TestCurvedVillageRoads();
     TestGloamgateMarketRoutes();
     TestSilverwickRoadPlan();
+    TestAuthoredTownRoutes();
     return 0;
 }
