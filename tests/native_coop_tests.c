@@ -44,6 +44,7 @@ int main(int argc, char **argv)
         CcClientSession session;
         CC_CHECK(CcClientSessionRead(path, &session, error, sizeof(error)));
         CC_CHECK(session.position_x == 6.25f && session.position_z == 2.75f);
+        CC_CHECK(session.shop_building_index == 3);
         CC_CHECK(CcCoopClientAppearance() == 4096U);
         CC_CHECK(sim->player.cargo[CC_GOOD_BREAD] == 2);
     } else {
@@ -76,6 +77,7 @@ int main(int argc, char **argv)
         CcClientSession session = {.version = CC_CLIENT_SESSION_VERSION, .world_seed = sim->world_seed,
             .location_id = sim->player.location_id, .scene = CC_CLIENT_SESSION_MARKET,
             .coordinate_space = CC_CLIENT_SESSION_LEGACY_LOCAL, .position_x = 6.25f, .position_z = 2.75f,
+            .shop_building_index = 3,
             .athletics = {.level = {1, 1, 1}}};
         (void)snprintf(path, sizeof(path), "%s.shared-%s.session", argv[2], argv[3]);
         CC_CHECK(CcClientSessionWrite(path, &session, error, sizeof(error)));
