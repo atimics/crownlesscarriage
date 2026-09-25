@@ -193,6 +193,7 @@ static EconomicCargoAsset economic_cargo_assets[CC_GOOD_COUNT] = {
     [CC_GOOD_STONE] = {
         .path = "assets/exports/glb/economy_cargo_stone_v01.glb",
         .label = "stone cargo"},
+    [CC_GOOD_RAW_STONE] = {.label = "raw stone cargo"},
     [CC_GOOD_PAPER] = {
         .path = "assets/exports/glb/economy_cargo_paper_v01.glb",
         .label = "paper cargo"},
@@ -1085,6 +1086,7 @@ static void LoadEconomicCargoAssets(void)
 {
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         EconomicCargoAsset *asset = &economic_cargo_assets[good];
+        if (asset->path == NULL) continue;
         char resolved[1024];
         if (!ResolveAssetPath(asset->path, resolved, sizeof(resolved))) {
             TraceLog(LOG_WARNING, "ASSET: %s was not found", asset->label);

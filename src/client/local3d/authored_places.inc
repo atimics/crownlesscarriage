@@ -3991,6 +3991,9 @@ static void DrawSilverwickBuildingLife(const CcSettlement *place,
                        0.88f + (float)(item / 3) * 0.26f, shelf_z};
         if (good == CC_GOOD_BREAD) {
             DrawScenerySphere(at, 0.22f, WORLD_CROP_LIGHT);
+        } else if (good == CC_GOOD_RAW_STONE) {
+            DrawBox(at, (Vector3){0.42f, 0.28f, 0.33f},
+                    item % 2 == 0 ? WORLD_STONE_SHADOW : WORLD_STONE);
         } else {
             DrawBox(at, (Vector3){0.52f, 0.22f, 0.36f},
                     good == CC_GOOD_IRON ? WORLD_METAL_LIGHT : WORLD_WOOD_LIGHT);
@@ -4019,6 +4022,7 @@ static Color ShopSignColor(CcLocalShopKind kind)
         case CC_LOCAL_SHOP_CLOTHIER: return WORLD_TEAL;
         case CC_LOCAL_SHOP_STONECUTTER: return WORLD_STONE;
         case CC_LOCAL_SHOP_STATIONER: return CC_VISUAL_PALETTE.parchment.light;
+        case CC_LOCAL_SHOP_MINE_SUPPLIER: return WORLD_STONE_LIGHT;
         case CC_LOCAL_SHOP_COUNT: return WORLD_WOOD;
     }
     return WORLD_WOOD;
@@ -4087,6 +4091,12 @@ static void DrawSpecialistShopFront(const CcLocalPlaceProfile *profile,
             DrawBox((Vector3){door_x, sign_y, icon_z},
                     (Vector3){0.32f, 0.34f, 0.045f}, WORLD_EARTH_LIGHT);
             break;
+        case CC_LOCAL_SHOP_MINE_SUPPLIER:
+            DrawBox((Vector3){door_x - 0.13f, sign_y - 0.07f, icon_z},
+                    (Vector3){0.27f, 0.19f, 0.055f}, WORLD_STONE_SHADOW);
+            DrawBox((Vector3){door_x + 0.13f, sign_y + 0.08f, icon_z},
+                    (Vector3){0.30f, 0.23f, 0.055f}, WORLD_STONE);
+            break;
         case CC_LOCAL_SHOP_COUNT: break;
     }
     if (burnt) return;
@@ -4107,6 +4117,14 @@ static void DrawSpecialistShopFront(const CcLocalPlaceProfile *profile,
                 (Vector3){0.75f, 0.56f, 0.44f}, WORLD_STONE_SHADOW);
         DrawBox((Vector3){display_x + 0.20f, 0.69f, front + 0.20f},
                 (Vector3){0.36f, 0.26f, 0.37f}, WORLD_STONE);
+    } else if (shop->kind == CC_LOCAL_SHOP_MINE_SUPPLIER) {
+        for (int32_t rock = -1; rock <= 1; ++rock) {
+            DrawBox((Vector3){display_x + (float)rock * 0.24f,
+                               0.22f + (rock == 0 ? 0.09f : 0.0f),
+                               front + 0.20f},
+                    (Vector3){0.32f, rock == 0 ? 0.40f : 0.26f, 0.35f},
+                    rock == 0 ? WORLD_STONE_SHADOW : WORLD_STONE);
+        }
     } else {
         DrawBox((Vector3){display_x, 0.36f, front + 0.16f},
                 (Vector3){0.68f, 0.72f, 0.42f}, ShopSignColor(shop->kind));
