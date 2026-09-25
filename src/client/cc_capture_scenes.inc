@@ -167,8 +167,125 @@ static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
     });
 }
 
+/* The gate-voice capture rides the real roads, as crownless_return_digest
+   does: Thornford to Silverwick, a wait, and back to the chosen town. */
+static bool CaptureGateStep(CcSim *sim, CcCommandKind kind, CcId target)
+{
+    char error[192];
+    CcCommand command = {.kind = kind, .target_id = target};
+    return CcSimApply(sim, &command, error, sizeof(error));
+}
+
+static bool CaptureGateRideLeg(CcSim *sim, CcId destination)
+{
+    if (!CaptureGateStep(sim, CC_COMMAND_TRAVEL, destination)) return false;
+    sim->journey.ambush_pending = false;
+    sim->pony_company.encounter = -1;
+    for (int32_t step = 0; step < 200000 && sim->journey.active; ++step) {
+        bool ok = true;
+        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
+            ok = CaptureGateStep(sim, CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
+                CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP, 0U);
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
+            const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
+            ok = false;
+            if (site != NULL) {
+                ok = CaptureGateStep(sim, CC_COMMAND_PASS_ROAD_SITE, site->id);
+            } else {
+                CcRoadLegPreview previews[3];
+                int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
+                for (int32_t i = 0; i < count && !ok; ++i)
+                    if (previews[i].direction == sim->journey.road_direction &&
+                        previews[i].segment_id != CC_PILOT_ROAD_MILL_SEGMENT_ID)
+                        ok = CaptureGateStep(sim, CC_COMMAND_CHOOSE_ROAD_LEG,
+                                             previews[i].decision_token);
+            }
+        } else if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
+            ok = CaptureGateStep(sim, CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE, 0U) ||
+                CaptureGateStep(sim, CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT, 0U);
+        } else {
+            ok = false;
+        }
+        if (!ok) return false;
+    }
+    return !sim->journey.active && sim->player.location_id == destination;
+}
+
+static int32_t CaptureGateTownSlot(const CcSim *sim, const char *name)
+{
+    for (int32_t i = 0; i < sim->settlement_count; ++i)
+        if (strcmp(sim->settlements[i].name, name) == 0) return i;
+    return -1;
+}
+
+/* Ride town to town along the road graph (fewest legs, lower route first). */
+static bool CaptureGateRide(CcSim *sim, CcId to)
+{
+    for (int32_t guard = 0; guard < CC_MAX_SETTLEMENTS &&
+         sim->player.location_id != to; ++guard) {
+        CcId previous[CC_MAX_SETTLEMENTS] = {0};
+        bool seen[CC_MAX_SETTLEMENTS] = {false};
+        CcId queue[CC_MAX_SETTLEMENTS];
+        int32_t head = 0, tail = 0;
+        CcId from = sim->player.location_id;
+        queue[tail++] = from;
+        for (int32_t i = 0; i < sim->settlement_count; ++i)
+            if (sim->settlements[i].id == from) seen[i] = true;
+        while (head < tail) {
+            CcId at = queue[head++];
+            for (int32_t r = 0; r < sim->route_count; ++r) {
+                CcId next = sim->routes[r].from_id == at ? sim->routes[r].to_id :
+                    sim->routes[r].to_id == at ? sim->routes[r].from_id : 0U;
+                for (int32_t i = 0; next != 0U && i < sim->settlement_count; ++i) {
+                    if (sim->settlements[i].id != next || seen[i]) continue;
+                    seen[i] = true;
+                    previous[i] = at;
+                    queue[tail++] = next;
+                }
+            }
+        }
+        /* Walk back from the goal to the first leg out of here. */
+        CcId step = to;
+        for (int32_t hops = 0; hops <= CC_MAX_SETTLEMENTS; ++hops) {
+            CcId back = 0U;
+            for (int32_t i = 0; i < sim->settlement_count; ++i)
+                if (sim->settlements[i].id == step) back = previous[i];
+            if (back == 0U) return false;
+            if (back == from) break;
+            step = back;
+        }
+        if (!CaptureGateRideLeg(sim, step)) return false;
+    }
+    return sim->player.location_id == to;
+}
+
+static bool CaptureGateReturn(const CcCaptureRequest *request, CcSim *sim)
+{
+    CcSimInit(sim, request->capture_gate_seed);
+    int32_t home = CaptureGateTownSlot(sim, "Thornford");
+    int32_t away = CaptureGateTownSlot(sim, "Silverwick");
+    if (home < 0 || away < 0 || request->capture_town_index >= sim->settlement_count)
+        return false;
+    sim->player.location_id = sim->settlements[home].id;
+    sim->carriage.location_id = sim->settlements[home].id;
+    CcId town = sim->settlements[request->capture_town_index].id;
+    CcId outward = town == sim->settlements[away].id ?
+        sim->settlements[home].id : sim->settlements[away].id;
+    if (!CaptureGateRide(sim, outward)) return false;
+    CcSimAdvanceDays(sim, request->capture_gate_days);
+    if (!CaptureGateRide(sim, town)) return false;
+    CcLocalTerrainSetSeed(sim->world_seed);
+    return true;
+}
+
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
+    if (request->capture_gate_voice && !CaptureGateReturn(request, sim)) {
+        (void)fprintf(stderr, "The gate-voice ride did not reach the town.\n");
+        return false;
+    }
     if (request->capture_ux && request->capture_ux_view >= 21 && request->capture_ux_view <= 24) {
         char path[1024], error[256];
         if (!ResolveClientAssetPath(CC_DEEP_WYRM_ASSET, path, sizeof(path))) return false;
@@ -763,6 +880,20 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
             CcLocalAgentUpdate(&scene->local->agent, 1.0f / 60.0f, false);
             if (!scene->local->agent.grounded && scene->local->agent.position.y > 0.65f) break;
         }
+    }
+    if (request->capture_gate_voice) {
+        BeginGateVoice(NULL, scene->sim, scene->local, false);
+        if (!scene->local->gate_voice_open) {
+            (void)fprintf(stderr, "Nobody at the gate has news of a change.\n");
+            return false;
+        }
+        for (int32_t turn = 0; turn < request->capture_gate_turns; ++turn) {
+            if (!scene->local->gate_voice.more ||
+                !CcGateVoiceNext(scene->sim, &scene->local->gate_voice)) break;
+            GateVoiceSpeak(NULL, scene->sim, scene->local, false);
+        }
+        (void)printf("gate voice: %s: %s\n", scene->local->gate_voice.speaker,
+                     scene->local->gate_voice.line);
     }
     return true;
 }

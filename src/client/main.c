@@ -28,6 +28,7 @@
 #include "story/cc_story.h"
 #include "story/cc_core_conversation.h"
 #include "story/cc_core_participant.h"
+#include "story/cc_gate_voice.h"
 #include "world/cc_world.h"
 
 #include "raylib.h"
@@ -368,6 +369,9 @@ typedef struct LocalState {
        this town stay. Built once when the carriage parks (FinishTownArrival
        State), on the update path; draw code only reads it. */
     CcReturnSceneCues return_scene;
+    /* The Return: the resident at the gate and what they have said. */
+    bool gate_voice_open;
+    CcGateVoice gate_voice;
     float travel_time_blend;
     bool travel_fast_forward;
     bool travel_pointer_down;
@@ -1431,6 +1435,7 @@ static void ResetLocalState(LocalState *local)
     local->conversation_position = (Vector3){0};
     local->conversation_name[0] = '\0';
     local->conversation_line[0] = '\0';
+    local->gate_voice_open = false;
     local->conversation_report_response = false;
     local->conversation_oven_response = false;
     local->conversation_want_person = 0;
@@ -7708,6 +7713,7 @@ static bool ApplyHorseCare(CcJournal *journal, CcSim *sim,
 
 static void DrawAdventureCourtNotes(const CcSim *sim, const LocalState *local);
 #include "client/cc_adventure.inc"
+#include "client/cc_gate_voice_ui.inc"
 #include "client/cc_oven_court.inc"
 #include "client/cc_mine_view.inc"
 #include "client/cc_world_actions.inc"
@@ -9877,6 +9883,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         } else HandleMineInput(*journal,sim,local,local_target,delta_time,message,message_capacity);
         return;
     }
+    if (HandleGateVoiceInput(*journal, sim, local, *view)) return;
     if (HandleCaravanRecovery(local, view, return_view, GetTime(),
                                message, message_capacity)) return;
     if (local->adventure_ui) {
@@ -10848,6 +10855,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (HandleTownArrivalAction(
                     sim, local, selected, context_action, enter_pressed,
                     message, message_capacity)) {
+                BeginGateVoice(*journal, sim, local, true);
+                /* The voice replaces the parked-carriage note. */
+                if (local->gate_voice_open) message[0] = '\0';
                 return;
             }
             if (RoadBookArrivalInProgress(local)) return;
@@ -10856,6 +10866,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (convoy_update == CONVOY_UPDATE_PARKED) {
                 FinishTownArrivalState(
                     sim, local, selected, message, message_capacity);
+                BeginGateVoice(*journal, sim, local, true);
+                if (local->gate_voice_open) message[0] = '\0';
                 return;
             }
             /* Step the world before the road-only work below. The creature
@@ -13252,7 +13264,9 @@ int main(int argc, char **argv)
                     DrawLocalMovementReticle(&local, local_bounds);
                 }
                 DrawLocalHeader(&sim, &local, view, view == VIEW_CHARACTER);
-                DrawLocalPanel(&sim, &local);
+                /* The gate voice replaces the panel while it speaks. */
+                if (view == VIEW_LOCAL && local.gate_voice_open) DrawGateVoice(&local);
+                else DrawLocalPanel(&sim, &local);
             }
         }
         if (view == VIEW_LOCAL || view == VIEW_ROADS) {
@@ -13269,7 +13283,7 @@ int main(int argc, char **argv)
             !LocalCombatActive(&local) &&
             (view == VIEW_ROADS || message_age < (local.adventure_ui ? 7.0f : 2.2f)) &&
             message[0] != '\0' &&
-            !local.journey_travel_active) {
+            !local.journey_travel_active && !local.gate_voice_open) {
             if (local.adventure_ui) DrawAdventureFeedback(message);
             else {
             const char *toast = TextFormat("%.48s", message);

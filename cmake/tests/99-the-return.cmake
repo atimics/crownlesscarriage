@@ -3,3 +3,9 @@ target_link_libraries(return_tests PRIVATE crownless_persistence crownless_local
 cc_strict_warnings(return_tests)
 cc_large_sim_stack(return_tests)
 add_test(NAME the_return_digest COMMAND return_tests)
+
+add_executable(gate_voice_tests tests/gate_voice_tests.c)
+target_link_libraries(gate_voice_tests PRIVATE crownless_persistence crownless_story)
+cc_strict_warnings(gate_voice_tests)
+cc_large_sim_stack(gate_voice_tests)
+add_test(NAME the_return_gate_voice COMMAND gate_voice_tests)
