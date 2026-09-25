@@ -707,8 +707,45 @@ static AdventureQuote AdventureTradeQuote(const CcSim *sim, const LocalState *lo
     } else if (local->trade_mode == 2 &&
         shop->kind != CC_LOCAL_SHOP_GRAIN_MERCHANT) {
         reason = "Bring the promise to the grain merchant.";
+    } else if ((local->trade_mode == 0 &&
+                LocalShopSupplySource(shop, local->trade_good)) ||
+               (local->trade_mode == 1 &&
+                LocalShopSupplyBuyer(shop, local->trade_good))) {
+        CcSupplyOffer offer = CcSimSupplyOffer(sim, local->trade_good);
+        int32_t amount = local->trade_quantity;
+        bool source = local->trade_mode == 0;
+        quote.command.kind = CC_COMMAND_TRADE_SUPPLY;
+        quote.command.target_id = place->id;
+        quote.command.amount = source ? amount : -amount;
+        quote.total = (CcMoney)amount * (source ?
+            offer.source_unit_price : offer.delivery_unit_price);
+        if (source) {
+            CcPlayerCompany loaded = sim->player;
+            loaded.cargo[local->trade_good] += amount;
+            if (offer.source_available < amount)
+                reason = "Choose a smaller load from this supplier.";
+            else if (CcPlayerCargoUsed(&loaded) > loaded.cargo_capacity)
+                reason = "Make room in the carriage or choose a smaller load.";
+            else if (sim->player.coins < quote.total)
+                reason = "Choose a load your purse can cover.";
+        } else {
+            bool promised = promise != NULL &&
+                promise->good == local->trade_good &&
+                (promise->kind == CC_SITUATION_RELIEF_DELIVERY ||
+                 promise->kind == CC_SITUATION_BLACK_MARKET_DELIVERY);
+            if (promised)
+                reason = "This load belongs to your promise. Deliver it first.";
+            else if (!offer.ready)
+                reason = "This workshop cannot take an order today.";
+            else if (amount > offer.remaining)
+                reason = "Choose a smaller load to match the current order.";
+            else if (sim->player.cargo[local->trade_good] < amount)
+                reason = "Bring the full load to this workshop.";
+        }
     } else if (local->trade_mode != 2 &&
-        !CcLocalShopSells(shop, local->trade_good) &&
+        !(local->trade_mode == 0 ?
+          CcLocalShopSells(shop, local->trade_good) :
+          CcLocalShopBuys(shop, local->trade_good)) &&
         !(local->trade_mode == 1 &&
           LocalShopHandlesSpoiledCargo(shop, local->trade_good))) {
         reason = "This shop trades different goods.";
@@ -732,7 +769,8 @@ static AdventureQuote AdventureTradeQuote(const CcSim *sim, const LocalState *lo
         }
         CcGood good = quote.command.good;
         quote.command.amount = local->trade_mode == 0 ? amount : -amount;
-        int32_t unit = local->trade_mode == 0 ? place->price[good] : place->price[good] * 3 / 4;
+        int32_t unit = local->trade_mode == 0 ? place->price[good] :
+            CcSimTradeResalePrice(sim, place, good);
         if (unit < 1) unit = 1;
         quote.total = (CcMoney)amount * unit;
         if (reason[0] == '\0' && local->trade_mode == 0) {
@@ -763,7 +801,8 @@ static Rectangle AdventureGoodBounds(Rectangle panel, int32_t good)
 static bool AdventureShopGoodVisible(const CcSim *sim,
     const CcLocalShop *shop, int mode, CcGood good)
 {
-    return CcLocalShopSells(shop, good) ||
+    return (mode == 0 && CcLocalShopSells(shop, good)) ||
+        (mode == 1 && CcLocalShopBuys(shop, good)) ||
         (mode == 1 && LocalShopHandlesSpoiledCargo(shop, good) &&
          sim->player.cargo[good] > 0);
 }
@@ -986,14 +1025,34 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
         local->trade_presented_shop_building_index = local->shop_building_index;
     }
     CcMoney displayed_total = local->trade_confirmed ? local->trade_presented_total : quote.total;
+    bool supply_source = quote.command.kind == CC_COMMAND_TRADE_SUPPLY &&
+        local->trade_mode == 0;
+    bool supply_buyer = quote.command.kind == CC_COMMAND_TRADE_SUPPLY &&
+        local->trade_mode == 1;
+    CcSupplyOffer supply_offer = supply_source || supply_buyer ?
+        CcSimSupplyOffer(sim, quote.command.good) : (CcSupplyOffer){0};
+    char supply_detail[192] = "";
+    if (supply_source) {
+        (void)snprintf(supply_detail, sizeof(supply_detail),
+            "%s pays %d crowns per unit. Buy here for %d; carriage margin %d per unit.",
+            quote.command.good == CC_GOOD_WHEAT ? "Bakery" : "Stonecutter",
+            supply_offer.delivery_unit_price, supply_offer.source_unit_price,
+            supply_offer.delivery_unit_price - supply_offer.source_unit_price);
+    } else if (supply_buyer) {
+        (void)snprintf(supply_detail, sizeof(supply_detail),
+            "%d units currently wanted. %s supplies each unit for %d crowns; this workshop pays %d.",
+            supply_offer.remaining,
+            quote.command.good == CC_GOOD_WHEAT ? "Grain merchant" : "Silverwick mine supplier",
+            supply_offer.source_unit_price, supply_offer.delivery_unit_price);
+    }
     AdventureShopTitle(panel, shop, shop->service_name);
     const char *modes[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
     ClientTouchHeading(shop->name,
-        TextFormat("%s. %s %d %s. %s: %" PRId64 " crowns. Purse: %" PRId64 ". %s",
+        TextFormat("%s. %s %d %s. %s: %" PRId64 " crowns. Purse: %" PRId64 ". %s %s",
             shop->service_name,
             modes[local->trade_mode], abs(quote.command.amount), CcGoodName(quote.command.good),
             local->trade_mode == 0 ? "Total cost" : "Sale value", displayed_total,
-            sim->player.coins, quote.reason));
+            sim->player.coins, supply_detail, quote.reason));
     for (int i = 0; i < 6; ++i)
         if (AdventureShopModeAvailable(shop, i))
             AdventureButton(AdventureShopTab(panel, shop, i), modes[i], true,
@@ -1055,10 +1114,14 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
             (int)panel.y + (readable_canvas ? 269 : 244), AdventureTextSize(14), TEAL);
     }
     AdventureButton(AdventureConfirmBounds(panel), TextFormat("%s  Enter", modes[local->trade_mode]), quote.available, false);
-    CcOverlayDrawText(TextFormat("Shop %d  |  Carriage %d",
-        place->stock[quote.command.good], sim->player.cargo[quote.command.good]),
+    CcOverlayDrawText(supply_buyer ?
+        TextFormat("Wanted %d  |  Carriage %d",
+            supply_offer.remaining, sim->player.cargo[quote.command.good]) :
+        TextFormat("Shop %d  |  Carriage %d",
+            place->stock[quote.command.good], sim->player.cargo[quote.command.good]),
         x, (int)panel.y + (readable_canvas ? 390 : 278), AdventureTextSize(readable_canvas ? 15 : 12), TEAL);
-    (void)AdventureWrap(quote.reason, x, (int)panel.y + (readable_canvas ? 415 : 360),
+    (void)AdventureWrap(quote.reason[0] != '\0' ? quote.reason : supply_detail,
+        x, (int)panel.y + (readable_canvas ? 415 : 360),
         summary_width, AdventureTextSize(readable_canvas ? 15 : 13), MUTED);
     DrawLine((int)panel.x + 24, (int)(panel.y + panel.height) - (readable_canvas ? 106 : 89),
         (int)(panel.x + panel.width) - 24,
@@ -1090,9 +1153,8 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
              ClientKeyPressed(KEY_ONE + AdventureShopTabIndex(shop, i)))) {
             local->trade_mode = i; changed = true;
             if (i == 0 || i == 1) {
-                if (!CcLocalShopSells(shop, local->trade_good) &&
-                    !(i == 1 && LocalShopHandlesSpoiledCargo(shop,
-                        local->trade_good)))
+                if (!AdventureShopGoodVisible(sim, shop, i,
+                        local->trade_good))
                     local->trade_good = LocalShopFirstGood(shop);
             }
         }
