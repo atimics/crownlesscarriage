@@ -28,8 +28,7 @@ bool CcSharedClockValid(const CcSharedClock *clock)
 bool CcSharedClockAddCompany(CcSharedClock *clock, uint64_t company_id)
 {
     if (!CcSharedClockValid(clock) || company_id == 0 ||
-        clock->company_count >= CC_SHARED_CLOCK_MAX_COMPANIES ||
-        clock->world_second != 0) return false;
+        clock->company_count >= CC_SHARED_CLOCK_MAX_COMPANIES) return false;
     int32_t slot = 0;
     while (slot < clock->company_count &&
            clock->companies[slot].company_id < company_id) ++slot;

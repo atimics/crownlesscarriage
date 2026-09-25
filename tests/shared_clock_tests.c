@@ -72,6 +72,10 @@ int main(void)
     step = CcSharedClockTick(&crossing, 100);
     CC_CHECK(step.advanced_seconds == 10 && step.completed_ids[0] == 3);
     CC_CHECK(crossing.world_second == 10);
+    CC_CHECK(CcSharedClockAddCompany(&crossing, 2));
+    CC_CHECK(crossing.companies[0].company_id == 2);
+    CC_CHECK(crossing.companies[1].company_id == 3);
+    CC_CHECK(CcSharedClockAdvance(&crossing).waiting_count == 2);
     crossing.world_second = INT64_MAX - 5;
     CC_CHECK(!CcSharedClockBook(&crossing, 3, CC_SHARED_ACTIVITY_WAIT, 6));
     CC_CHECK(CcSharedClockBook(&crossing, 3, CC_SHARED_ACTIVITY_WAIT, 5));
