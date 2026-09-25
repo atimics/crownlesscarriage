@@ -1,4 +1,5 @@
 #include "persistence/cc_save.h"
+#include "sim/cc_census.h"
 #include "sim/cc_sim.h"
 
 #include <stdio.h>
@@ -102,6 +103,7 @@ int main(int argc, char **argv)
         sim->horse_team[0].pregnant_by_id = stallion.id;
         sim->horse_team[0].pregnancy_days_remaining = 20;
     }
+    CcCensusReconcile(sim);
     char error[192] = "";
     CcHorseCarePreview care = {0};
     if (!CcSimHorseCarePreview(sim, &care) || care.available ||

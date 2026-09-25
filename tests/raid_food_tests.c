@@ -1,5 +1,6 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
 #include "test_support.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -45,6 +46,7 @@ int main(void)
     CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-52-generator-25-raid.ccsave",
         &legacy, error, sizeof(error)));
     legacy.schema_version = 52U;
+    legacy.next_entity_serial -= CcCensusIssuedIdCount(&legacy.census);
     CcMoney legacy_coins = legacy.hoard_raiders.carried_treasure;
     CcSimAdvanceDays(&legacy, 1);
     CC_CHECK(legacy.settlements[0].hunger == 80 - (int32_t)legacy_coins / 2);

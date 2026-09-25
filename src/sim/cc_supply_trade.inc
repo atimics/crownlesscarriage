@@ -3,7 +3,7 @@
 int32_t CcSimTradeResalePrice(const CcSim *sim, const CcSettlement *town, CcGood good)
 {
     if (sim == NULL || town == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
-    if (sim->schema_version >= 117U &&
+    if (sim->schema_version >= 119U &&
         (good == CC_GOOD_WHEAT || good == CC_GOOD_RAW_STONE)) return 2;
     return MaximumI32(1, town->price[good] * 3 / 4);
 }
@@ -26,7 +26,7 @@ void CcSimInitializeSupplyEconomy(CcSim *sim)
 CcSupplyOffer CcSimSupplyOfferAt(const CcSim *sim, CcId town_id, CcGood good)
 {
     CcSupplyOffer offer = {0};
-    if (sim == NULL || sim->schema_version < 117U ||
+    if (sim == NULL || sim->schema_version < 119U ||
         (good != CC_GOOD_WHEAT && good != CC_GOOD_RAW_STONE)) return offer;
     offer.source_unit_price = 3;
     offer.delivery_unit_price = good == CC_GOOD_WHEAT ? 5 : 6;

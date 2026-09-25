@@ -4,6 +4,7 @@
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
 #include "sim/cc_oven_court.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
@@ -29,6 +30,9 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 #include <string.h>
 
 
@@ -4905,7 +4909,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeWoodEconomy(sim);
     CcSimInitializeStoneEconomy(sim);
     CcSimInitializePaperEconomy(sim);
-    if (sim->schema_version >= 117U) CcSimInitializeSupplyEconomy(sim);
+    if (sim->schema_version >= 119U) CcSimInitializeSupplyEconomy(sim);
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         SeedSettlementServices(&sim->settlements[i]);
     }
@@ -5039,6 +5043,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeOccupations(sim);
     CcSimInitializeUnderroadNetwork(sim);
     CcScrivenInit(sim);
+    CcCensusInit(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -6660,27 +6665,40 @@ static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
         parent_id, 1, text)->id;
 }
 
-static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
-                            const char *speaker)
+static void ExchangeGatheredGossip(CcSim *sim, CcId carrier_id, CcId place_id,
+                                   const char *speaker,
+                                   uint32_t *town_story_masks,
+                                   CcGossipCarrier *known_carrier)
 {
     if (sim->schema_version < 44U) return;
     int32_t place = SettlementSlotById(sim, place_id);
     if (place < 0 || (sim->schema_version < 55U &&
         CcSettlementIsAbandoned(&sim->settlements[place]))) return;
-    GatherGossip(sim);
-    CcGossipCarrier *carrier = GossipCarrierFor(sim, carrier_id);
+    CcGossipCarrier *carrier = known_carrier != NULL ?
+        known_carrier : GossipCarrierFor(sim, carrier_id);
     if (carrier == NULL) return;
     /* Event sharing keeps the cast stable throughout this exchange. */
     const CcCharacter *carrier_character = sim->schema_version >= 46U ?
         CcSimCharacter(sim, carrier_id) : NULL;
     uint32_t town = UINT32_C(1) << (uint32_t)place;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+    uint32_t differences = town_story_masks != NULL ?
+        carrier->stories ^ town_story_masks[place] : UINT32_MAX;
+    while (differences != 0U) {
+#ifdef _MSC_VER
+        unsigned long slot;
+        _BitScanForward(&slot, differences);
+        int32_t i = (int32_t)slot;
+#else
+        int32_t i = (int32_t)__builtin_ctz(differences);
+#endif
+        uint32_t bit = UINT32_C(1) << (uint32_t)i;
+        differences &= differences - 1U;
         CcGossip *story = &sim->gossip[i];
         if (story->event_id == 0U) continue;
-        uint32_t bit = UINT32_C(1) << (uint32_t)i;
         if ((carrier->stories & bit) != 0U &&
             (story->settlement_mask & town) == 0U) {
             story->settlement_mask |= town;
+            if (town_story_masks != NULL) town_story_masks[place] |= bit;
             story->local[place] = RetellGossip(sim, story, carrier->versions[i],
                 carrier_character, carrier_id);
             if (sim->schema_version < 46U || CcIdKind(carrier_id) != CC_ENTITY_CHARACTER)
@@ -6709,15 +6727,90 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
     }
 }
 
+static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
+                           const char *speaker)
+{
+    if (sim->schema_version < 44U) return;
+    int32_t place = SettlementSlotById(sim, place_id);
+    if (place < 0 || (sim->schema_version < 55U &&
+        CcSettlementIsAbandoned(&sim->settlements[place]))) return;
+    GatherGossip(sim);
+    ExchangeGatheredGossip(sim, carrier_id, place_id, speaker, NULL, NULL);
+}
+
+#define CC_GOSSIP_LOOKUP_CAP 1024U
+_Static_assert(CC_MAX_GOSSIP_CARRIERS < CC_GOSSIP_LOOKUP_CAP,
+               "gossip lookup needs a free slot");
+_Static_assert(CC_MAX_GOSSIP_CARRIERS <= INT16_MAX,
+               "gossip carrier slots need a wider type");
+_Static_assert(CC_MAX_GOSSIP == 32,
+               "gossip differences use a 32-bit mask");
+
+static uint32_t GossipLookupSlot(CcId id)
+{
+    return (uint32_t)((id ^ (id >> 32U)) * UINT64_C(0x9e3779b97f4a7c15)) &
+        (CC_GOSSIP_LOOKUP_CAP - 1U);
+}
+
 void CcSimRefreshCharacterGossip(CcSim *sim)
 {
     if (sim == NULL || sim->schema_version < 46U) return;
+    /* Earlier journals gathered gossip for each resident in turn. Keep that
+       cursor order while replaying a world saved before this faster scan. */
+    if (sim->schema_version < 118U) {
+        for (int32_t i = 0; i < sim->character_count; ++i) {
+            const CcCharacter *person = &sim->characters[i];
+            if (!CcSimCharacterIsActive(sim, person) ||
+                person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+                CcCharacterAgeYears(sim, person) < 16) continue;
+            ExchangeGossip(sim, person->id, person->current_settlement_id,
+                           person->name);
+        }
+        return;
+    }
+    bool gathered = false;
+    uint32_t town_story_masks[CC_MAX_SETTLEMENTS] = {0};
+    int16_t carrier_slots[CC_GOSSIP_LOOKUP_CAP];
+    for (uint32_t slot = 0; slot < CC_GOSSIP_LOOKUP_CAP; ++slot)
+        carrier_slots[slot] = -1;
+    for (int32_t slot = 0; slot < CcSimGossipCarrierCapacity(sim); ++slot) {
+        CcId id = sim->gossip_carriers[slot].id;
+        if (id == 0U) continue;
+        uint32_t bucket = GossipLookupSlot(id);
+        while (carrier_slots[bucket] >= 0)
+            bucket = (bucket + 1U) & (CC_GOSSIP_LOOKUP_CAP - 1U);
+        carrier_slots[bucket] = (int16_t)slot;
+    }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *person = &sim->characters[i];
         if (!CcSimCharacterIsActive(sim, person)) continue;
         if (person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
             CcCharacterAgeYears(sim, person) < 16) continue;
-        ExchangeGossip(sim, person->id, person->current_settlement_id, person->name);
+        int32_t place = SettlementSlotById(sim, person->current_settlement_id);
+        if (place < 0 || (sim->schema_version < 55U &&
+            CcSettlementIsAbandoned(&sim->settlements[place]))) continue;
+        if (!gathered) {
+            GatherGossip(sim);
+            for (int32_t story = 0; story < CC_MAX_GOSSIP; ++story) {
+                if (sim->gossip[story].event_id == 0U) continue;
+                uint32_t bit = UINT32_C(1) << (uint32_t)story;
+                for (int32_t town = 0; town < sim->settlement_count; ++town)
+                    if ((sim->gossip[story].settlement_mask &
+                         (UINT32_C(1) << (uint32_t)town)) != 0U)
+                        town_story_masks[town] |= bit;
+            }
+            gathered = true;
+        }
+        uint32_t bucket = GossipLookupSlot(person->id);
+        while (carrier_slots[bucket] >= 0 &&
+               sim->gossip_carriers[carrier_slots[bucket]].id != person->id)
+            bucket = (bucket + 1U) & (CC_GOSSIP_LOOKUP_CAP - 1U);
+        CcGossipCarrier *carrier = carrier_slots[bucket] >= 0 ?
+            &sim->gossip_carriers[carrier_slots[bucket]] : NULL;
+        if (carrier != NULL && carrier->stories == town_story_masks[place])
+            continue;
+        ExchangeGatheredGossip(sim, person->id, person->current_settlement_id,
+                               person->name, town_story_masks, carrier);
     }
 }
 
@@ -11760,7 +11853,10 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
         CcSimSettlement(sim, settlement_id) == NULL) return NULL;
     character = &sim->characters[sim->character_count++];
     *character = (CcCharacter){0};
-    character->id = NextId(sim, CC_ENTITY_CHARACTER);
+    character->id = CcCensusClaimResident(sim, settlement_id);
+    bool claimed_resident = character->id != 0U;
+    if (character->id == 0U)
+        character->id = NextId(sim, CC_ENTITY_CHARACTER);
     character->detail_active = sim->schema_version >= 101U &&
         CcSimActiveCharacterCount(sim) < CC_MAX_CHARACTERS;
     character->last_active_day = character->detail_active ? sim->current_day : 0;
@@ -11779,6 +11875,19 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
     InitializeCharacterLife(
         sim, character, 0U, 0,
         16 + (int32_t)(MixCharacterSeed(character->appearance_seed) % 58U));
+    if (claimed_resident) {
+        const CcCensusResident *resident =
+            CcCensusResidentById(sim, character->id);
+        if (resident != NULL) {
+            character->birth_day = resident->birth_day;
+            int64_t natural_death = (int64_t)character->birth_day +
+                CharacterNaturalLifeDays(character->appearance_seed, 0);
+            if (natural_death <= sim->current_day)
+                natural_death = (int64_t)sim->current_day + 365;
+            character->death_day = natural_death > CC_SIM_MAX_DAY ?
+                CC_SIM_MAX_DAY : (int32_t)natural_death;
+        }
+    }
     character->player_disposition = 0;
     character->stress = activity == CC_CHARACTER_ACTIVITY_SEEKING_AID ?
         68 : 28;
@@ -16733,14 +16842,76 @@ static void AdvanceArchiveRecruitTraining(CcSim *sim)
         0, o->person_id, o->trainer_id, o->person_id, 0, o->labor_days, text);
 }
 
-void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
+typedef struct CcCensusSources {
+    int32_t settlement_count;
+    CcId settlement_ids[CC_MAX_SETTLEMENTS];
+    int32_t populations[CC_MAX_SETTLEMENTS];
+    int32_t named_count;
+    CcId named_ids[CC_MAX_CHARACTER_RECORDS];
+    CcId named_homes[CC_MAX_CHARACTER_RECORDS];
+    int32_t named_birth_days[CC_MAX_CHARACTER_RECORDS];
+} CcCensusSources;
+
+static void CaptureCensusSources(const CcSim *sim, CcCensusSources *sources)
+{
+    memset(sources, 0, sizeof(*sources));
+    sources->settlement_count = sim->settlement_count;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        sources->settlement_ids[i] = sim->settlements[i].id;
+        sources->populations[i] = sim->settlements[i].population;
+    }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *character = &sim->characters[i];
+        if (character->birth_day > sim->current_day ||
+            character->death_day <= sim->current_day) continue;
+        int32_t slot = sources->named_count++;
+        sources->named_ids[slot] = character->id;
+        sources->named_homes[slot] = character->home_settlement_id;
+        sources->named_birth_days[slot] = character->birth_day;
+    }
+}
+
+typedef struct CcGossipRefreshInputs {
+    CcId story_ids[CC_MAX_GOSSIP];
+    uint32_t story_towns[CC_MAX_GOSSIP];
+    int32_t eligible_count;
+    CcId eligible_ids[CC_MAX_CHARACTER_RECORDS];
+    CcId eligible_towns[CC_MAX_CHARACTER_RECORDS];
+} CcGossipRefreshInputs;
+
+static void CaptureGossipRefreshInputs(const CcSim *sim,
+                                       CcGossipRefreshInputs *inputs)
+{
+    memset(inputs, 0, sizeof(*inputs));
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        inputs->story_ids[i] = sim->gossip[i].event_id;
+        inputs->story_towns[i] = sim->gossip[i].settlement_mask;
+    }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (!CcSimCharacterIsActive(sim, person) ||
+            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+            CcCharacterAgeYears(sim, person) < 16) continue;
+        int32_t slot = inputs->eligible_count++;
+        inputs->eligible_ids[slot] = person->id;
+        inputs->eligible_towns[slot] = person->current_settlement_id;
+    }
+}
+
+static void AdvanceDaysInternal(CcSim *sim, int32_t days,
     CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
-    CcRoadProductionAccounting *sites)
+    CcRoadProductionAccounting *sites, CcSimDayObserver observer, void *context)
 {
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
         days > CC_SIM_MAX_DAY - sim->current_day) return;
     int32_t next_situation_expiry = NextSituationExpiryDay(sim);
+    CcGossipRefreshInputs previous_gossip_inputs;
+    bool have_gossip_inputs = false;
+    bool gossip_followup_due = false;
+    CcCensusSources census_before, census_after;
+    if (sim->schema_version >= 117U)
+        CaptureCensusSources(sim, &census_before);
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
@@ -16762,7 +16933,25 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         if (sim->schema_version >= 94U) CcSimAdvanceWarParties(sim);
         if (sim->schema_version >= 85U) (void)CcSimAppointArchiveRecruit(sim);
         HearLocalGossip(sim);
-        CcSimRefreshCharacterGossip(sim);
+        if (sim->schema_version >= 46U) {
+            CcGossipRefreshInputs current_gossip_inputs;
+            CaptureGossipRefreshInputs(sim, &current_gossip_inputs);
+            if (!have_gossip_inputs || gossip_followup_due ||
+                memcmp(&current_gossip_inputs, &previous_gossip_inputs,
+                       sizeof(current_gossip_inputs)) != 0) {
+                gossip_followup_due = false;
+                CcSimRefreshCharacterGossip(sim);
+                CaptureGossipRefreshInputs(sim, &previous_gossip_inputs);
+                if (memcmp(current_gossip_inputs.story_ids,
+                           previous_gossip_inputs.story_ids,
+                           sizeof(current_gossip_inputs.story_ids)) != 0 ||
+                    memcmp(current_gossip_inputs.story_towns,
+                           previous_gossip_inputs.story_towns,
+                           sizeof(current_gossip_inputs.story_towns)) != 0)
+                    gossip_followup_due = true;
+                have_gossip_inputs = true;
+            }
+        }
         if (!sim->journey.active) {
             ExchangeGossip(sim, sim->player.id, sim->player.location_id,
                             "Your fellow travelers");
@@ -16828,7 +17017,28 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         DeliverDelayedEchoIfReady(sim);
         AdvanceGoblinPolitics(sim);
         CcScrivenAdvance(sim);
+        if (sim->schema_version >= 117U) {
+            CaptureCensusSources(sim, &census_after);
+            if (memcmp(&census_before, &census_after,
+                       sizeof(census_before)) != 0)
+                CcCensusReconcile(sim);
+            census_before = census_after;
+        }
+        if (observer != NULL) observer(sim, context);
     }
+}
+
+void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
+    CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
+    CcRoadProductionAccounting *sites)
+{
+    AdvanceDaysInternal(sim, days, accounting, smithy, sites, NULL, NULL);
+}
+
+void CcSimAdvanceDaysObserved(CcSim *sim, int32_t days,
+    CcNutritionAccounting *accounting, CcSimDayObserver observer, void *context)
+{
+    AdvanceDaysInternal(sim, days, accounting, NULL, NULL, observer, context);
 }
 
 static const CcSituation *MineEvidenceSituation(const CcSim *sim,
@@ -20371,7 +20581,10 @@ bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_
             sim,cargo_before,event != NULL ? event->id : 0U);
     }
     if (ok && sim->schema_version >= 75U) ReconcileGoblinFactions(sim);
-    if (ok) CcSimPeopleEnterSettlement(sim);
+    if (ok) {
+        CcSimPeopleEnterSettlement(sim);
+        CcCensusReconcile(sim);
+    }
     return ok;
 }
 
@@ -22803,6 +23016,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 }
             }
         }
+    }
+    if (!CcCensusValidate(sim)) {
+        SetError(error, error_capacity, "The resident census or homes are invalid.");
+        return false;
     }
     return true;
 }

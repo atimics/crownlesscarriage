@@ -1,5 +1,6 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_scriven.h"
+#include "sim/cc_census.h"
 #include "sim/cc_occupations.h"
 #include "persistence/cc_journal_internal.h"
 #include "persistence/cc_legacy_runtime_internal.h"
@@ -1539,7 +1540,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " report_recipient_id INTEGER NOT NULL,report_event_id INTEGER NOT NULL,report_day INTEGER NOT NULL,"
         " report_quantity INTEGER NOT NULL,report_good INTEGER NOT NULL,report_kind INTEGER NOT NULL,"
         " reported_encounter_outcome INTEGER NOT NULL);";
-    return Execute(database, "CREATE TABLE IF NOT EXISTS scriven_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
+    return Execute(database, "CREATE TABLE IF NOT EXISTS resident_census (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS scriven_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS crown_calendar_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
@@ -3658,6 +3660,7 @@ invalid:
 #include "persistence/cc_save_custody.inc"
 #include "persistence/cc_save_notices.inc"
 #include "persistence/cc_save_scriven.inc"
+#include "persistence/cc_save_census.inc"
 #include "persistence/cc_save_mine.inc"
 #include "persistence/cc_save_goblin_politics.inc"
 
@@ -3725,6 +3728,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveCustody(database, sim, error, error_capacity) &&
         SaveNotices(database, sim, error, error_capacity) &&
         SaveScriven(database, sim, error, error_capacity) &&
+        SaveCensus(database, sim, error, error_capacity) &&
         SaveCrownCalendar(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
@@ -6484,6 +6488,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadCustody(database, sim, error, error_capacity) &&
               ReadNotices(database, sim, error, error_capacity) &&
               ReadScriven(database, sim, error, error_capacity) &&
+              ReadCensus(database, sim, error, error_capacity) &&
               ReadCrownCalendar(database, sim, error, error_capacity) &&
               ReadGoblinPolitics(database, sim, error, error_capacity) &&
               ReadMine(database, sim, error, error_capacity);
@@ -6515,6 +6520,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     uint32_t stored_schema_version = sim->schema_version;
     uint32_t stored_generator_version = sim->generator_version;
     if (!CcSaveUpgradeLegacyRuntime(sim, error, error_capacity)) return false;
+    if (stored_schema_version < 117U) CcCensusInit(sim);
     if (stored_schema_version < 79U) CcSimInitializeOccupations(sim);
     if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
     if (stored_schema_version < 40U) CcPoniesInit(sim);
@@ -7127,16 +7133,23 @@ bool CcJournalFlush(CcJournal *journal, CcSim *sim,
         SetError(error, error_capacity, "");
         return true;
     }
-    CcSim durable_base = journal->pending_runtime_base;
+    CcSim *durable_base = malloc(sizeof(*durable_base));
+    if (durable_base == NULL) {
+        SetError(error, error_capacity, "Could not allocate journal state.");
+        return false;
+    }
+    *durable_base = journal->pending_runtime_base;
     int32_t ticks = journal->pending_runtime_ticks;
     journal->pending_runtime_ticks = 0;
     if (!AppendJournalOperation(journal,
                                 CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS,
-                                NULL, ticks, &durable_base, sim,
+                                NULL, ticks, durable_base, sim,
                                 error, error_capacity)) {
-        *sim = durable_base;
+        *sim = *durable_base;
+        free(durable_base);
         return false;
     }
+    free(durable_base);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -7158,12 +7171,24 @@ bool CcJournalApply(CcJournal *journal, CcSim *sim,
         return false;
     }
     if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
-    CcSim candidate = *sim;
-    if (!CcSimApply(&candidate, command, error, error_capacity)) return false;
+    CcSim *candidate = malloc(sizeof(*candidate));
+    if (candidate == NULL) {
+        SetError(error, error_capacity, "Could not allocate journal state.");
+        return false;
+    }
+    *candidate = *sim;
+    if (!CcSimApply(candidate, command, error, error_capacity)) {
+        free(candidate);
+        return false;
+    }
     if (!AppendJournalOperation(journal, CC_JOURNAL_OPERATION_COMMAND,
-                                command, 0, sim, &candidate,
-                                error, error_capacity)) return false;
-    *sim = candidate;
+                                command, 0, sim, candidate,
+                                error, error_capacity)) {
+        free(candidate);
+        return false;
+    }
+    *sim = *candidate;
+    free(candidate);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -7180,12 +7205,21 @@ bool CcJournalAdvanceDays(CcJournal *journal, CcSim *sim, int32_t days,
         return false;
     }
     if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
-    CcSim candidate = *sim;
-    CcSimAdvanceDays(&candidate, days);
+    CcSim *candidate = malloc(sizeof(*candidate));
+    if (candidate == NULL) {
+        SetError(error, error_capacity, "Could not allocate journal state.");
+        return false;
+    }
+    *candidate = *sim;
+    CcSimAdvanceDays(candidate, days);
     if (!AppendJournalOperation(journal, CC_JOURNAL_OPERATION_ADVANCE_DAYS,
-                                NULL, days, sim, &candidate,
-                                error, error_capacity)) return false;
-    *sim = candidate;
+                                NULL, days, sim, candidate,
+                                error, error_capacity)) {
+        free(candidate);
+        return false;
+    }
+    *sim = *candidate;
+    free(candidate);
     SetError(error, error_capacity, "");
     return true;
 }

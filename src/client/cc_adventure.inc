@@ -1783,7 +1783,8 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local,
     }
     char town_status[128];
     if (place != NULL &&
-        (CcSettlementIsAbandoned(place) || place->hunger >= 40) &&
+        view == VIEW_LOCAL && !local->market_interior &&
+        !local->road_choice_active &&
         local->site_kind == CC_LOCAL_SITE_NONE && !local->journey_travel_active &&
         !local->site_travel_active) {
         CcLocalTownStatus(sim, place->id, town_status, sizeof(town_status));

@@ -25,7 +25,7 @@ static const CcGoodDefinition GOOD_DEFINITIONS[CC_GOOD_COUNT] = {
 
 int32_t CcGoodCountForSchema(uint32_t schema_version)
 {
-    if (schema_version >= 117U) return CC_GOOD_COUNT;
+    if (schema_version >= 119U) return CC_GOOD_COUNT;
     if (schema_version >= 33U) return 14;
     if (schema_version >= 27U) return 11;
     if (schema_version >= 9U) return CC_LEGACY_GOOD_COUNT;

@@ -123,7 +123,7 @@ int32_t CcEconomyEffectiveProduction(const CcSim *sim,
                                    int32_t index, CcGood good)
 {
     if (CcSettlementIsAbandoned(settlement)) return 0;
-    if (good == CC_GOOD_RAW_STONE && sim->schema_version < 117U) return 0;
+    if (good == CC_GOOD_RAW_STONE && sim->schema_version < 119U) return 0;
     bool legacy_food_economy = sim->schema_version < 29U;
     int32_t production = settlement->production[good];
     CcGood staple = legacy_food_economy ? CC_GOOD_BREAD : CC_GOOD_WHEAT;

@@ -1,4 +1,5 @@
 #include "sim/cc_identity_internal.h"
+#include "sim/cc_census.h"
 
 #include <stdio.h>
 
@@ -13,7 +14,8 @@ static void SetError(char *error, size_t capacity, const char *message)
      CC_MAX_ROAD_SITES + CC_MAX_TREASURES + CC_MAX_FACTIONS + CC_MAX_SHIPMENTS + \
      CC_MAX_COURIERS + CC_MAX_BANDITS + CC_MAX_MONSTERS + CC_MAX_DUNGEONS + \
      CC_MAX_SITUATIONS + CC_MAX_FRONTS + CC_MAX_QUEST_OUTCOMES + \
-     CC_MAX_CHARACTER_RECORDS + CC_MAX_EVENTS + \
+     CC_MAX_CHARACTER_RECORDS + CC_CENSUS_PERSON_CAP + \
+     CC_CENSUS_DISTRICT_CAP + CC_MAX_EVENTS + \
      CC_CARRIAGE_HORSE_COUNT + \
      CC_MAX_STABLE_HORSES + CC_MAX_KINGDOMS + 4)
 
@@ -125,9 +127,17 @@ bool CcIdentityValidate(const CcSim *sim,
         for (int32_t i = 0; i < sim->quest_outcome_count; ++i)
             TRACK_ID(sim->quest_outcomes[i].id, CC_ENTITY_QUEST_OUTCOME);
     }
+    if (sim->schema_version >= 114U) {
+        for (int32_t i = 0; i < sim->census.district_count; ++i)
+            TRACK_ID(sim->census.districts[i].id, CC_ENTITY_DISTRICT);
+        for (int32_t i = 0; i < sim->census.resident_count; ++i)
+            TRACK_ID(sim->census.residents[i].id, CC_ENTITY_CHARACTER);
+    }
     if (sim->schema_version >= 17U) {
         for (int32_t i = 0; i < sim->character_count; ++i)
-            TRACK_ID(sim->characters[i].id, CC_ENTITY_CHARACTER);
+            if (sim->schema_version < 114U ||
+                CcCensusResidentById(sim, sim->characters[i].id) == NULL)
+                TRACK_ID(sim->characters[i].id, CC_ENTITY_CHARACTER);
     }
     for (int32_t i = 0; i < sim->event_count; ++i) {
         const CcEvent *event = CcSimRecentEvent(sim, i);
@@ -161,4 +171,3 @@ bool CcIdentityValidate(const CcSim *sim,
     }
     return true;
 }
-

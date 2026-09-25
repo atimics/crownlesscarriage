@@ -692,7 +692,7 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
-    if (legacy_version < 117U) CcSimInitializeSupplyEconomy(sim);
+    if (legacy_version < 119U) CcSimInitializeSupplyEconomy(sim);
     if (legacy_version < 109U) UpgradeReliefLoading(sim);
     if (legacy_version < 99U) CcCustodyInit(&sim->custody);
     if (legacy_version < 101U) {

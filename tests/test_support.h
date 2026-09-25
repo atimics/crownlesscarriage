@@ -18,13 +18,27 @@
 
 /* Pin the complete pre-calendar state of shipped migrations independently of
    the new saved pages. Current-schema round trips are tested separately. */
+static inline uint64_t CcTestBeforeCensusHash(const CcSim *sim)
+{
+    CcSim *legacy = malloc(sizeof(*legacy));
+    CC_CHECK(legacy != NULL);
+    *legacy = *sim;
+    uint64_t census_issued = (uint64_t)legacy->census.district_count;
+    for (int32_t i = 0; i < legacy->census.resident_count; ++i)
+        if (!legacy->census.residents[i].rich_identity) ++census_issued;
+    legacy->next_entity_serial -= census_issued;
+    uint64_t hash = CcSimHash(legacy);
+    free(legacy);
+    return hash;
+}
+
 static inline uint64_t CcTestBeforeCalendarHash(const CcSim *sim)
 {
     CcSim *legacy = malloc(sizeof(*legacy));
     CC_CHECK(legacy != NULL);
     *legacy = *sim;
     legacy->schema_version = 112U;
-    uint64_t hash = CcSimHash(legacy);
+    uint64_t hash = CcTestBeforeCensusHash(legacy);
     free(legacy);
     return hash;
 }
