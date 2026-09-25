@@ -98,6 +98,7 @@ void CcScrivenFreeze(CcSim *sim, CcId id)
         const CcSettlement *town = CcSimSettlement(sim, t->maker_settlement_id);
         fresh.school_id = town != NULL ? town->kingdom_id : 0;
         sim->scriven.books[i] = fresh;
+        if (sim->schema_version >= 115U) sim->crown_calendar.book_editions[i] = 0;
         return;
     }
 }
@@ -110,11 +111,14 @@ void CcScrivenRebind(CcSim *sim, const int32_t slots[4], CcId new_id)
     combined.condition = 100;
     memset(combined.notes, 0, sizeof(combined.notes));
     CcId dragon = 0; int latest = 0;
+    uint64_t crown_edition = 0;
     for (int i = 0; i < 4; ++i) {
         const CcScrivenBook *old = &sim->scriven.books[slots[i]];
         for (int j = 0; j < 2; ++j)
             if (old->notes[j].day > latest) { latest = old->notes[j].day; dragon = old->notes[j].dragon_id; }
         if (old->almanac_id > combined.almanac_id) combined.almanac_id = old->almanac_id;
+        if (sim->schema_version >= 115U && sim->crown_calendar.book_editions[slots[i]] > crown_edition)
+            crown_edition = sim->crown_calendar.book_editions[slots[i]];
     }
     for (int i = 0; i < 4; ++i) {
         const CcScrivenBook *old = &sim->scriven.books[slots[i]];
@@ -123,11 +127,15 @@ void CcScrivenRebind(CcSim *sim, const int32_t slots[4], CcId new_id)
             const CcScrivenNote *n = &old->notes[j];
             CcScrivenNote *kept = &combined.notes[j];
             if (n->kind == 0 || (j < 2 && n->dragon_id != dragon)) continue;
-            if (kept->kind == 0 || (j == 1 ? n->day < kept->day : n->day > kept->day)) *kept = *n;
+            if (kept->kind == 0 || (j == 1 || (j == 0 && sim->schema_version >= 115U) ? n->day < kept->day : n->day > kept->day)) *kept = *n;
         }
     }
     for (int i = 0; i < 4; ++i) sim->scriven.books[slots[i]] = (CcScrivenBook){0};
     sim->scriven.books[slots[0]] = combined;
+    if (sim->schema_version >= 115U) {
+        for (int i = 0; i < 4; ++i) sim->crown_calendar.book_editions[slots[i]] = 0;
+        sim->crown_calendar.book_editions[slots[0]] = crown_edition;
+    }
     /* Empty legacy margins receive an honest snapshot at the time of rebinding. */
     if (combined.source_id == 0) {
         sim->scriven.books[slots[0]] = (CcScrivenBook){0};
@@ -212,10 +220,16 @@ static CcTreasure *LocalBook(CcSim *sim, CcId town_id)
         if (!CcArchiveVolumeIsLive(t) || t->owner_id != town_id || t->location_id != town_id ||
             CcScrivenReserved(sim, t->id) || CcSimArchiveConvoyHoldsBook(sim, t->id)) continue;
         CcScrivenFreeze(sim, t->id);
+        const CcScrivenBook *book = Book(sim, t->id);
+        if (sim->schema_version >= 115U && book != NULL &&
+            ((book->notes[0].kind != 0 && book->notes[0].dragon_id != sim->dragon.id) ||
+             (book->notes[1].kind != 0 && book->notes[1].dragon_id != sim->dragon.id))) continue;
         return t;
     }
     return NewBook(sim, CcSimSettlementMutable(sim, town_id));
 }
+#include "sim/cc_crown_calendar.inc"
+
 static void Observe(CcSim *sim, CcScrivenBook *b, CcId author, CcId place)
 {
     if (b == NULL || place != sim->dragon.lair_settlement_id || sim->dragon.slain) return;
@@ -227,6 +241,8 @@ static void Observe(CcSim *sim, CcScrivenBook *b, CcId author, CcId place)
             .place_id = place, .source_book_id = b->id, .day = sim->current_day, .kind = kind};
         (void)snprintf(n->text, sizeof(n->text), "Day %d: %.31s was seen as %s at the lair.",
             n->day, sim->dragon.name, kind == CC_SCRIVEN_NOTE_DEEP ? "a Deep Wyrm" : "a Crowned Dragon");
+        CrownRecord(sim, n);
+        if (author == sim->player.id) CrownRead(sim, b);
     }
     /* A visible porter tally supports context, rather than supplying a secret date. */
     if (b->notes[2].kind == 0) {
@@ -255,6 +271,7 @@ void CcScrivenInit(CcSim *sim)
     sim->scriven.meeting_year = CcCalendar(sim->current_day).year - 1;
     for (int i = 0; i < CC_MAX_SETTLEMENTS; ++i) sim->scriven.last_hosted[i] = -1;
     for (int i = 0; i < sim->treasure_count; ++i) CcScrivenFreeze(sim, sim->treasures[i].id);
+    CcCrownCalendarInit(sim);
     (void)snprintf(sim->scriven.report, sizeof(sim->scriven.report),
         "Scrivendays fall on Quill 1-7. Scribes carry their tomes to compare dates and plan expeditions.");
 }
@@ -378,6 +395,9 @@ static void Travel(CcSim *sim, CcScrivenDelegate *d)
             if (home_slot >= 0 && d->edition_id != 0 &&
                 d->edition_id <= (uint64_t)sim->scriven.editions)
                 sim->scriven.local[home_slot] = sim->scriven.almanacs[d->edition_id - 1];
+            uint64_t crown_edition = CrownEdition(sim, Book(sim, d->book_id));
+            if (home_slot >= 0 && crown_edition > 0 && crown_edition <= (uint64_t)sim->crown_calendar.editions)
+                sim->crown_calendar.local[home_slot] = sim->crown_calendar.almanacs[crown_edition - 1];
             d->phase = CC_SCRIVEN_FINISHED; ++sim->scriven.returns;
         } else {
             d->phase = CC_SCRIVEN_ATTENDING; p->activity = CC_CHARACTER_ACTIVITY_PREPARING;
@@ -408,7 +428,7 @@ static void Travel(CcSim *sim, CcScrivenDelegate *d)
     if (b != NULL && b->condition > 1) --b->condition;
 }
 /* Only passages physically at the hearing enter this calculation. */
-static bool Hearing(CcSim *sim)
+static bool DeepHearing(CcSim *sim)
 {
     CcScrivenState *s = &sim->scriven;
     CcScrivenFinding f = {0};
@@ -495,6 +515,7 @@ static bool Hearing(CcSim *sim)
         CcScrivenDelegate *d = &s->delegates[i];
         CcScrivenBook *b = Book(sim, d->book_id);
         if (d->phase == CC_SCRIVEN_ATTENDING && b != NULL && host_town != NULL &&
+            (sim->schema_version < 115U || CrownAttends(sim, d)) &&
             b->almanac_id != (uint64_t)s->editions && host_town->stock[CC_GOOD_PAPER] > 0) {
             --host_town->stock[CC_GOOD_PAPER];
             b->almanac_id = (uint64_t)s->editions;
@@ -504,6 +525,20 @@ static bool Hearing(CcSim *sim)
     (void)snprintf(s->report, sizeof(s->report), "The scribes adopt day %d as an estimate. Their cited range is days %d-%d. %d schools sign the almanac.",
         f.proposed_day, f.earliest_day, f.latest_day, f.schools);
     return true;
+}
+static bool Hearing(CcSim *sim)
+{
+    bool deep = DeepHearing(sim);
+    if (sim->schema_version < 115U) return deep;
+    bool crown = CrownHearing(sim);
+    if (!crown && !deep)
+        (void)snprintf(sim->scriven.report, sizeof(sim->scriven.report),
+            "Bring two independent Crowned Dragon sightings and scribes from two schools to date the Crown Age. Deep Wyrm epochs need evidence from before and after the change.");
+    else if (deep && !crown)
+        (void)snprintf(sim->scriven.report, sizeof(sim->scriven.report),
+            "The Deep Wyrm Epoch is dated to day %d, within days %d-%d. The Crown Age keeps its first sighting date.",
+            sim->scriven.finding.proposed_day, sim->scriven.finding.earliest_day, sim->scriven.finding.latest_day);
+    return deep || crown;
 }
 void CcScrivenAdvance(CcSim *sim)
 {
@@ -595,6 +630,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         if (s->status != 2 || here != s->host_id || sim->current_day < s->opens_day || sim->current_day > s->closes_day)
             return Fail(error, capacity, "Visit the host during Quill 1-7 to attend the hearing.");
         (void)Hearing(sim);
+        CrownCarryFromHearing(sim);
         /* The company carries a written edition in an actual tome. */
         CcSettlement *host_town = CcSimSettlementMutable(sim, here);
         if (s->finding.agreed_day > 0 && host_town != NULL) {
@@ -602,6 +638,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
                 CcScrivenBook *held = &s->books[i];
                 const CcTreasure *owned = CcSimTreasure(sim, held->id);
                 if (owned != NULL && !owned->destroyed && (owned->owner_id == sim->player.id || held->borrower_id == sim->player.id) &&
+                    (sim->schema_version < 115U || CcScrivenBookAccessible(sim, held->id, here)) &&
                     held->almanac_id != (uint64_t)s->editions && host_town->stock[CC_GOOD_PAPER] > 0) {
                     --host_town->stock[CC_GOOD_PAPER]; held->almanac_id = (uint64_t)s->editions;
                     s->company = s->finding; break;
@@ -613,6 +650,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         if (!accessible) return Fail(error, capacity, "Bring the source tome to a town with paper, wheat, and tools.");
         CcSettlement *town = CcSimSettlementMutable(sim, here);
         CcScrivenBook source = *b;
+        uint64_t crown_edition = CrownEdition(sim, b);
         if (CcPlayerCargoUsed(&sim->player) >= sim->player.cargo_capacity || town == NULL || sim->player.coins < 2 || town->market_coins > CC_SIM_MAX_MONEY - 2)
             return Fail(error, capacity, "Copying needs two crowns and one free cargo space.");
         CcTreasure *copy = NewBook(sim, town);
@@ -621,6 +659,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
         CcScrivenBook *copy_book = Book(sim, copy_id);
         *copy_book = source; copy_book->id = copy_id; copy_book->edition_day = sim->current_day;
         copy_book->borrower_id = 0; copy_book->return_place_id = 0; copy_book->loan_due_day = 0; copy_book->condition = 100;
+        if (sim->schema_version >= 115U) sim->crown_calendar.book_editions[copy_book - s->books] = crown_edition;
         copy->owner_id = sim->player.id; ++sim->player.treasure_cargo_slots;
         sim->player.coins -= 2; town->market_coins += 2;
         CcSimAdvanceDays(sim, 1);
@@ -635,11 +674,13 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
             const CcTreasure *owned = CcSimTreasure(sim, held->id);
             if (owned != NULL && !owned->destroyed && held->almanac_id > 0 &&
                 (owned->owner_id == sim->player.id || held->borrower_id == sim->player.id) &&
+                (sim->schema_version < 115U || CcScrivenBookAccessible(sim, held->id, here)) &&
                 s->almanacs[held->almanac_id - 1].agreed_day == s->company.agreed_day) carrying = true;
         }
-        if (town < 0 || s->company.agreed_day == 0 || !carrying)
+        bool crown_delivered = CrownDeliver(sim, town);
+        if (!crown_delivered && (town < 0 || s->company.agreed_day == 0 || !carrying))
             return Fail(error, capacity, "Attend a hearing or read a local almanac before carrying its findings onward.");
-        s->local[town] = s->company;
+        if (carrying && s->company.agreed_day > 0) s->local[town] = s->company;
         (void)snprintf(s->report, sizeof(s->report), "The local scribes receive the company's cited almanac and adopt its proposed date.");
         break;
     }
@@ -691,6 +732,7 @@ bool CcScrivenApply(CcSim *sim, const CcCommand *command, char *error, size_t ca
     }
     if (command->amount == CC_SCRIVEN_READ && b != NULL && b->almanac_id > 0)
         s->company = s->almanacs[b->almanac_id - 1];
+    if (command->amount == CC_SCRIVEN_READ) CrownRead(sim, b);
     (void)snprintf(s->player_report, sizeof(s->player_report), "%s", s->report);
     if (error != NULL && capacity > 0) error[0] = '\0';
     return true;
@@ -703,6 +745,29 @@ void CcScrivenDescribe(const CcSim *sim, char *text, size_t capacity)
     const CcSettlement *host = CcSimSettlement(sim, sim->scriven.host_id);
     int here = TownSlot(sim, sim->player.location_id);
     bool heard = here >= 0 && sim->scriven.notice_arrives[here] > 0 && sim->scriven.notice_arrives[here] <= sim->current_day;
+    if (sim->schema_version >= 115U) {
+        const CcCrownCalendar *c = &sim->crown_calendar;
+        const CcScrivenFinding *crown = &c->company;
+        const CcScrivenNote *seen = &c->company_sighting;
+        bool provisional = seen->kind != 0 && (crown->agreed_day == 0 ||
+            (seen->dragon_id == crown->dragon_id ? seen->day < crown->proposed_day : seen->day > crown->proposed_day));
+        int start = provisional ? seen->day : crown->agreed_day > 0 ? crown->proposed_day : 0;
+        CcCalendarDate sky = CcCalendar(sim->current_day);
+        (void)snprintf(date, sizeof(date), "%d %s | Year of the %s", sky.day_of_sign,
+            CcZodiacName(sky.sign), CcZodiacName(sky.year_sign));
+        char age[192], epoch[192] = "";
+        if (start > 0)
+            (void)snprintf(age, sizeof(age), "Crown Age year %d. First sighting: day %d. %s",
+                (sim->current_day - start) / CC_SOLAR_DAYS + 1, start,
+                provisional ? "Scribes will compare the date at Scrivendays." : "Date agreed in the carried almanac.");
+        else (void)snprintf(age, sizeof(age), "The Crown Age awaits a dated sighting in a received tome.");
+        if (f->agreed_day > 0)
+            (void)snprintf(epoch, sizeof(epoch), "\nDeep Wyrm Epoch year %d. Estimated start: day %d; range %d-%d.",
+                (sim->current_day - f->proposed_day) / CC_SOLAR_DAYS + 1, f->proposed_day, f->earliest_day, f->latest_day);
+        (void)snprintf(text, capacity, "%s\n%s%s\nScrivendays: Quill 1-7. Host: %s.", date, age, epoch,
+            heard && host != NULL ? host->name : "awaiting a local notice");
+        return;
+    }
     if (f->agreed_day > 0)
         (void)snprintf(text, capacity, "%s\nAge year %d by the carried almanac. Proposed start: day %d; supported range %d-%d.\nScrivendays: Quill 1-7. Host: %s.",
             date, CcCalendar(sim->current_day - f->proposed_day).year + 1, f->proposed_day, f->earliest_day, f->latest_day, heard && host != NULL ? host->name : "awaiting a local notice");
@@ -727,6 +792,38 @@ static bool FindingValid(const CcSim *sim, const CcScrivenFinding *f)
         if (f->signers[i] != 0 && CcIdKind(f->signers[i]) != CC_ENTITY_CHARACTER) return false;
     return true;
 }
+static bool CrownNoteValid(const CcSim *sim, const CcScrivenNote *n)
+{
+    if (!TextValid(n->text, sizeof(n->text))) return false;
+    if (n->kind == 0) return n->dragon_id == 0 && n->day == 0;
+    return n->kind == CC_SCRIVEN_NOTE_CROWNED && n->day > 0 && n->day <= sim->current_day &&
+        CcIdKind(n->dragon_id) == CC_ENTITY_DRAGON && CcIdKind(n->source_book_id) == CC_ENTITY_TREASURE &&
+        (n->author_id == sim->player.id || CcIdKind(n->author_id) == CC_ENTITY_CHARACTER) &&
+        CcSimSettlement(sim, n->place_id) != NULL && n->value == 0;
+}
+static bool CrownFindingValid(const CcSim *sim, const CcScrivenFinding *f)
+{
+    return FindingValid(sim, f) && (f->agreed_day == 0 ||
+        (f->earliest_day == f->proposed_day && f->latest_day == f->proposed_day && f->book_ids[0] != f->book_ids[1]));
+}
+static bool CrownValid(const CcSim *sim)
+{
+    if (sim->schema_version < 115U) return true;
+    const CcCrownCalendar *c = &sim->crown_calendar;
+    if (c->sighting_count < 0 || c->sighting_count > CC_SCRIVEN_AGES || c->editions < 0 || c->editions > 32 ||
+        !CrownNoteValid(sim, &c->company_sighting) || !CrownFindingValid(sim, &c->company)) return false;
+    for (int i = 0; i < CC_SCRIVEN_AGES; ++i) {
+        if (!CrownNoteValid(sim, &c->sightings[i]) || (i < c->sighting_count && c->sightings[i].kind == 0)) return false;
+        for (int j = 0; j < i && i < c->sighting_count; ++j)
+            if (c->sightings[i].dragon_id == c->sightings[j].dragon_id) return false;
+    }
+    for (int i = 0; i < 32; ++i)
+        if (!CrownFindingValid(sim, &c->almanacs[i]) || (i < c->editions && c->almanacs[i].agreed_day == 0)) return false;
+    for (int i = 0; i < 6; ++i) if (!CrownFindingValid(sim, &c->local[i])) return false;
+    for (int i = 0; i < CC_SCRIVEN_BOOKS; ++i)
+        if (c->book_editions[i] > (uint64_t)c->editions || (c->book_editions[i] > 0 && sim->scriven.books[i].id == 0)) return false;
+    return true;
+}
 bool CcScrivenValidate(const CcSim *sim)
 {
     if (sim == NULL) return false;
@@ -736,6 +833,7 @@ bool CcScrivenValidate(const CcSim *sim)
         sim->character_count < 0 || sim->character_count > CC_MAX_CHARACTER_RECORDS ||
         sim->kingdom_count < 0 || sim->kingdom_count > CC_MAX_KINGDOMS ||
         sim->route_count < 0 || sim->route_count > CC_MAX_ROUTES) return false;
+    if (!CrownValid(sim)) return false;
     const CcScrivenState *s = &sim->scriven;
     if (s->status < 0 || s->status > 4 || s->age_count < 0 || s->age_count > CC_SCRIVEN_AGES ||
         s->meeting_year < -1 || s->meeting_year > CcCalendar(sim->current_day).year ||

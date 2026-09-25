@@ -76,6 +76,34 @@ static void CultService(CcSim *sim, CcCultSpecies species, CcMoney amount)
     }
 }
 
+static int32_t HumanCultPopulation(const CcSim *sim)
+{
+    const CcSettlement *home = CcSimSettlement(sim, sim->goblins.lair_settlement_id);
+    if (sim->schema_version < 114U) return home != NULL ? home->population : 0;
+    int32_t population = 0;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        const CcSettlement *town = &sim->settlements[i];
+        if (!CcSettlementIsAbandoned(town))
+            population += MinimumI32(town->population, 120 - population);
+    }
+    return population;
+}
+
+static CcSettlement *HumanCultGathering(CcSim *sim)
+{
+    CcSettlement *home = CcSimSettlementMutable(sim, sim->goblins.lair_settlement_id);
+    if (sim->schema_version < 114U || (home != NULL && !CcSettlementIsAbandoned(home)))
+        return home;
+    /* The surviving congregations take turns hosting after the founding
+       town falls. Membership remains a subset of the living population. */
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        int32_t slot = (sim->current_day / 28 + i) % sim->settlement_count;
+        CcSettlement *town = &sim->settlements[slot];
+        if (!CcSettlementIsAbandoned(town)) return town;
+    }
+    return NULL;
+}
+
 static void ReconcileGoblinFactions(CcSim *sim)
 {
     CcGoblinPolitics *p = &sim->goblin_politics;
@@ -94,9 +122,8 @@ static void ReconcileGoblinFactions(CcSim *sim)
         p->factions[chosen].members += gain ? 1 : -1;
         total += gain ? 1 : -1;
     }
-    const CcSettlement *home = CcSimSettlement(sim, sim->goblins.lair_settlement_id);
     for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species) {
-        int32_t population = species == CC_CULT_GOBLIN ? sim->goblins.members : home != NULL ? home->population : 0;
+        int32_t population = species == CC_CULT_GOBLIN ? sim->goblins.members : HumanCultPopulation(sim);
         int32_t excess = CcSimCultMembers(sim, (CcCultSpecies)species) - population;
         for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT && excess > 0; ++rank) {
             int32_t lost = MinimumI32(excess, sim->dragon_cult.ranks[species][rank]);
@@ -135,6 +162,23 @@ static CcMoney GoblinCargoValue(const CcGoblinFaction *f)
     return f->carried_coins + (CcMoney)f->carried_gold * 40 + (CcMoney)f->carried_gems * 70;
 }
 
+static void CreditCultRestitution(CcSim *sim, CcMoney coins)
+{
+    CcDragon *dragon = &sim->dragon;
+    if (sim->schema_version < 114U || coins <= 0 || dragon->slain ||
+        dragon->theft_actor_id != sim->hoard_raiders.id) return;
+    /* Coins brought back to the hoard also settle its missing coin claim.
+       The physical transfer has already happened at the caller. */
+    dragon->stolen_outstanding -= MinimumI64(coins, dragon->stolen_outstanding);
+    if (dragon->stolen_outstanding == 0) {
+        dragon->memory_integrity = MaximumI32(dragon->memory_integrity, 75);
+        dragon->theft_actor_id = 0;
+        dragon->retaliation_target_id = 0;
+        dragon->omen_event_id = 0;
+        dragon->omen_days_remaining = 0;
+    }
+}
+
 static void StoreGoblinRaid(CcSim *sim)
 {
     CcGoblinSociety *g = &sim->goblins;
@@ -153,9 +197,35 @@ static void AdvanceGoblinPorter(CcSim *sim, int32_t color)
     CcDungeon *dungeon = DungeonMutable(sim, f->dungeon_id);
     if (dungeon == NULL || f->members <= 0) return;
     bool alive = !sim->dragon.slain && sim->dragon.life_stage != CC_DRAGON_STAGE_EGG;
-    if (!alive && f->target_room == 19) f->target_room = f->lair_room;
+    bool revival = sim->schema_version >= 114U && sim->dragon.slain &&
+        sim->dragon.afterdeath_days >= 100 * 365 && sim->dragon_cult.devotion >= 50;
+    if (!alive && !revival && f->target_room == 19) f->target_room = f->lair_room;
     if (f->porter_room != f->target_room) {
         f->porter_room = GoblinNextRoom(dungeon, f->porter_room, f->target_room);
+        return;
+    }
+    if (f->porter_room == 19 && revival) {
+        CcDragonCult *cult = &sim->dragon_cult;
+        CcMoney coins = MinimumI64(f->carried_coins,
+            cult->offering_coins < 120 ? 120 - cult->offering_coins : 0);
+        int32_t need = MaximumI32(0, 2 - cult->offering_stock[CC_GOOD_GOLD] -
+            cult->offering_stock[CC_GOOD_GEMS]);
+        int32_t gold = MinimumI32(f->carried_gold, need);
+        int32_t gems = MinimumI32(f->carried_gems, need - gold);
+        cult->offering_coins += coins; f->carried_coins -= coins;
+        cult->offering_stock[CC_GOOD_GOLD] += gold; f->carried_gold -= gold;
+        cult->offering_stock[CC_GOOD_GEMS] += gems; f->carried_gems -= gems;
+        CcMoney value = coins + (CcMoney)gold * 40 + (CcMoney)gems * 70;
+        if (value > 0) {
+            CultService(sim, CC_CULT_GOBLIN, value);
+            char text[CC_EVENT_TEXT_CAPACITY];
+            (void)snprintf(text, sizeof(text),
+                "%s porters bring %" PRId64 " crowns and %d relics through the Underroad to the ash-vault.",
+                CcGoblinColorName(color), coins, gold + gems);
+            (void)PushEvent(sim, CC_EVENT_GOBLIN_TRIBUTE_DELIVERED, sim->goblins.id,
+                sim->dragon.lair_settlement_id, f->journey_event_id, (int32_t)value, text);
+        }
+        f->target_room = f->lair_room;
         return;
     }
     if (f->porter_room == 19 && GoblinCargoValue(f) > 0 && alive) {
@@ -164,6 +234,7 @@ static void AdvanceGoblinPorter(CcSim *sim, int32_t color)
         int32_t gems = MinimumI32(f->carried_gems, CC_SIM_MAX_UNITS - sim->dragon.hoard_goods[CC_GOOD_GEMS]);
         CcMoney value = coins + (CcMoney)gold * 40 + (CcMoney)gems * 70;
         sim->dragon.hoard += coins; sim->dragon.hoard_goods[CC_GOOD_GOLD] += gold;
+        CreditCultRestitution(sim, coins);
         sim->dragon.hoard_goods[CC_GOOD_GEMS] += gems;
         f->carried_coins -= coins; f->carried_gold -= gold; f->carried_gems -= gems;
         if (value > 0) {
@@ -189,6 +260,31 @@ static void AdvanceGoblinPorter(CcSim *sim, int32_t color)
         f->coins += coins; f->carried_coins -= coins;
         f->gold += gold; f->carried_gold -= gold;
         f->gems += gems; f->carried_gems -= gems;
+        if (revival) {
+            CcDragonCult *cult = &sim->dragon_cult;
+            int32_t capacity = MaximumI32(1, f->members / 4);
+            coins = MinimumI64(f->coins, MinimumI64(capacity * 10,
+                cult->offering_coins < 120 ? 120 - cult->offering_coins : 0));
+            int32_t need = MaximumI32(0, 2 - cult->offering_stock[CC_GOOD_GOLD] -
+                cult->offering_stock[CC_GOOD_GEMS]);
+            gold = MinimumI32(f->gold, MinimumI32(capacity, need));
+            gems = MinimumI32(f->gems, MinimumI32(capacity - gold, need - gold));
+            if (coins > 0 || gold > 0 || gems > 0) {
+                f->coins -= coins; f->carried_coins += coins;
+                f->gold -= gold; f->carried_gold += gold;
+                f->gems -= gems; f->carried_gems += gems;
+                f->target_room = 19;
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                    "%s porters carry clan gifts towards the ash-vault of %s.",
+                    CcGoblinColorName(color), sim->dragon.name);
+                CcEvent *event = PushEvent(sim, CC_EVENT_GOBLIN_TRIBUTE_DEPARTED,
+                    sim->goblins.id, sim->dragon.lair_settlement_id, 0U,
+                    (int32_t)GoblinCargoValue(f), text);
+                f->journey_event_id = event->id;
+                return;
+            }
+        }
         if (alive && (f->coins > 0 || f->gold > 0 || f->gems > 0)) {
             int32_t capacity = MaximumI32(1, f->members / 4);
             coins = MinimumI64(f->coins, capacity * 10);
@@ -267,20 +363,53 @@ static void AdvanceGoblinPolitics(CcSim *sim)
     if (sim->current_day % 28 == 0) {
         CcDragonCult *cult = &sim->dragon_cult;
         int32_t humans = CcSimCultMembers(sim, CC_CULT_HUMAN);
-        const CcSettlement *home = CcSimSettlement(sim, sim->goblins.lair_settlement_id);
-        if (cult->devotion >= 50 && home != NULL && !CcSettlementIsAbandoned(home)) {
-            if (humans < MinimumI32(60, home->population)) cult->ranks[CC_CULT_HUMAN][0] += 1;
+        CcSettlement *home = HumanCultGathering(sim);
+        bool inhabited = home != NULL && !CcSettlementIsAbandoned(home);
+        if (cult->devotion >= 50 && (inhabited || sim->schema_version >= 114U)) {
+            int32_t limit = MinimumI32(60, HumanCultPopulation(sim));
+            if (inhabited && humans < limit &&
+                (sim->schema_version < 114U || CcEconomyNutritionRations(home->stock, CC_NUTRITION_CIVILIAN) > 0)) {
+                if (sim->schema_version >= 114U)
+                    (void)CcNutritionConsume(home->stock, CC_NUTRITION_CIVILIAN, CC_NUTRITION_PER_RATION);
+                cult->ranks[CC_CULT_HUMAN][0] += 1;
+            }
             if (CcSimCultMembers(sim, CC_CULT_GOBLIN) < sim->goblins.members / 2)
                 cult->ranks[CC_CULT_GOBLIN][0] += 1;
         }
-        CcSettlement *town = CcSimSettlementMutable(sim, sim->goblins.lair_settlement_id);
+        CcSettlement *town = home;
         if (town != NULL && !CcSettlementIsAbandoned(town) && humans > 0) {
             CcMoney gift = MinimumI64(town->market_coins, MaximumI32(1, humans / 4));
             CcMoney *chest = sim->dragon.slain ? &cult->offering_coins : &sim->dragon.hoard;
+            if (sim->schema_version >= 114U) {
+                /* Keep the market's working purse and stop collecting once
+                   the revival has its required coin. */
+                gift = MinimumI64(gift, town->market_coins > 100 ? town->market_coins - 100 : 0);
+                if (sim->dragon.slain)
+                    gift = MinimumI64(gift, *chest < 120 ? 120 - *chest : 0);
+            }
             gift = MinimumI64(gift, CC_SIM_MAX_MONEY - *chest);
             town->market_coins -= gift;
             *chest += gift;
+            CreditCultRestitution(sim, gift);
             CultService(sim, CC_CULT_HUMAN, gift);
+        }
+        if (sim->schema_version >= 114U && sim->goblins.cohesion >= 25) {
+            /* Lair smiths turn recovered iron or wood into one needed item
+               of each kind per gathering. Inputs leave the same stores. */
+            int32_t *stock = sim->goblins.lair_stock;
+            for (int32_t good = CC_GOOD_TOOLS; good <= CC_GOOD_WEAPONS; ++good) {
+                int32_t need = good == CC_GOOD_TOOLS ? 2 : 3;
+                if (stock[good] >= need) continue;
+                int32_t iron = good == CC_GOOD_TOOLS ? 2 : 3;
+                int32_t wood = good == CC_GOOD_TOOLS ? 4 : 5;
+                if (stock[CC_GOOD_IRON] >= iron) {
+                    stock[CC_GOOD_IRON] -= iron;
+                    stock[good] += 1;
+                } else if (stock[CC_GOOD_WOOD] >= wood) {
+                    stock[CC_GOOD_WOOD] -= wood;
+                    stock[good] += 1;
+                }
+            }
         }
     }
 }
@@ -350,14 +479,13 @@ static bool ValidateGoblinPolitics(const CcSim *sim)
         total += f->members;
     }
     if (total != sim->goblins.members) return false;
-    const CcSettlement *home = CcSimSettlement(sim, sim->goblins.lair_settlement_id);
     for (int32_t species = 0; species < CC_CULT_SPECIES_COUNT; ++species) {
         for (int32_t rank = 0; rank < CC_CULT_RANK_COUNT; ++rank) {
             if (sim->dragon_cult.ranks[species][rank] < 0 ||
                 sim->dragon_cult.ranks[species][rank] > 120) return false;
         }
         int32_t members = CcSimCultMembers(sim, (CcCultSpecies)species);
-        int32_t population = species == CC_CULT_GOBLIN ? sim->goblins.members : home != NULL ? home->population : 0;
+        int32_t population = species == CC_CULT_GOBLIN ? sim->goblins.members : HumanCultPopulation(sim);
         if (members > population || members > 120 || sim->dragon_cult.service[species] < 0 ||
             sim->dragon_cult.service[species] > CC_SIM_MAX_MONEY) return false;
     }

@@ -184,6 +184,7 @@ static void TestBodyText(void)
 #include "abandoned_town_captures.inc"
 
 #include "ground_town_camera_tests.inc"
+#include "site_creature_camera_tests.inc"
 #include "town_sky_tests.inc"
 
 int main(int argc, char **argv)
@@ -199,6 +200,7 @@ int main(int argc, char **argv)
     TestCarriageWorldTargets();
     TestCarriagePlantedInterpolation();
     TestGroundTownCameras();
+    TestDragonRoostCameraFraming();
     TestCameraContinuity();
     TestStableVisibility();
     TestBuildingRevealTiming();
@@ -227,6 +229,10 @@ int main(int argc, char **argv)
             TestTownSkyGraphics();
         } else if (strcmp(argv[1], "--carriage-graphics") == 0) {
             TestCarriageDrawReadOnly();
+            TestForkDrawReadOnly();
+            TestEncounterDrawReadOnly();
+            TestSiteDrawReadOnly();
+            TestConvoyDrawReadOnly();
         } else if (strcmp(argv[1], "--graphics") == 0) {
             TestBodyText();
             TestTravelForestCameraTurn();

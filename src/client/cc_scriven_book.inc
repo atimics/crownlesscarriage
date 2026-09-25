@@ -1,4 +1,5 @@
 /* Company Book calendar: all dates and passages come from the simulation. */
+static int ScrivenPages(const CcSim *sim) { return sim->schema_version >= 115U ? 9 : 8; }
 static Rectangle ScrivenButtonBounds(Rectangle panel, int index)
 {
     float width = (panel.width - 64.0f) / 2.0f;
@@ -15,7 +16,7 @@ static int ScrivenNextBook(const CcSim *sim, int after)
 }
 static const CcScrivenBook *ScrivenSelectedBook(const CcSim *sim, const LocalState *local)
 {
-    int slot = (local->book_offset - 1) / 8;
+    int slot = (local->book_offset - 1) / ScrivenPages(sim);
     if (local->book_offset <= 0 || slot >= CC_SCRIVEN_BOOKS) return NULL;
     const CcScrivenBook *book = &sim->scriven.books[slot];
     return CcScrivenBookAccessible(sim, book->id, sim->player.location_id) ? book : NULL;
@@ -39,20 +40,29 @@ static void DrawAdventureCalendar(const CcSim *sim, const LocalState *local)
             (void)snprintf(terms, sizeof(terms), "Loan from %s. Return this tome by day %d. Edition day %d; condition %d/100.",
                 owner != NULL ? owner->name : "the town", book->loan_due_day, book->edition_day, book->condition);
         y += AdventureWrap(terms, x, y, width, size - 2, MUTED) + 12;
-        int passage = (local->book_offset - 1) % 8;
+        int passage = (local->book_offset - 1) % ScrivenPages(sim);
         if (passage < 3) (void)AdventureWrap(book->passages[passage], x, y, width, size, INK);
         else if (passage < 7) {
             const CcScrivenNote *note = &book->notes[passage - 3];
             (void)AdventureWrap(note->kind != 0 ? note->text : "This margin is ready for a dated field note.", x, y, width, size, INK);
-        } else if (book->almanac_id > 0) {
-            const CcScrivenFinding *f = &sim->scriven.almanacs[book->almanac_id - 1];
-            char finding[240];
-            (void)snprintf(finding, sizeof(finding), "Almanac, agreed day %d: age begins on proposed day %d. Evidence places it between days %d and %d. %d schools signed.",
-                f->agreed_day, f->proposed_day, f->earliest_day, f->latest_day, f->schools);
-            y += AdventureWrap(finding, x, y, width, size, INK) + 10;
-            y += AdventureWrap(f->citations[0], x, y, width, size - 2, TEAL) + 8;
-            (void)AdventureWrap(f->citations[1], x, y, width, size - 2, TEAL);
-        } else (void)AdventureWrap("Bring this tome to Scrivendays to receive a cited almanac.", x, y, width, size, MUTED);
+        } else {
+            bool crown = sim->schema_version >= 115U && passage == 7;
+            uint64_t edition = crown ? sim->crown_calendar.book_editions[book - sim->scriven.books] : book->almanac_id;
+            if (edition > 0) {
+                const CcScrivenFinding *f = crown ? &sim->crown_calendar.almanacs[edition - 1] : &sim->scriven.almanacs[edition - 1];
+                char finding[240];
+                if (crown)
+                    (void)snprintf(finding, sizeof(finding), "Crown Age: first sighting on day %d. %d schools agreed on day %d. The cited accounts set the calendar's start.",
+                        f->proposed_day, f->schools, f->agreed_day);
+                else
+                    (void)snprintf(finding, sizeof(finding), "Deep Wyrm Epoch: estimated start on day %d, within days %d-%d. %d schools agreed on day %d.",
+                        f->proposed_day, f->earliest_day, f->latest_day, f->schools, f->agreed_day);
+                y += AdventureWrap(finding, x, y, width, size, INK) + 10;
+                y += AdventureWrap(f->citations[0], x, y, width, size - 2, TEAL) + 8;
+                (void)AdventureWrap(f->citations[1], x, y, width, size - 2, TEAL);
+            } else (void)AdventureWrap(crown ? "Bring Crowned Dragon sightings to Scrivendays to date a Crown Age." :
+                "Bring before-and-after sightings to Scrivendays to date a Deep Wyrm Epoch.", x, y, width, size, MUTED);
+        }
         const char *labels[6] = {"Next tome", "Next passage", book->borrower_id == sim->player.id ? "Return tome" : t != NULL && t->owner_id == sim->player.id ? "Company tome" : "Borrow tome",
             "Copy: 2 crowns", "Record lair sighting", "Commission tome"};
         for (int i = 0; i < 6; ++i) AdventureButton(ScrivenButtonBounds(panel, i), labels[i],
@@ -88,12 +98,13 @@ static void HandleAdventureCalendar(CcJournal *journal, CcSim *sim, LocalState *
     CcCommand action = {.kind = CC_COMMAND_SCRIVEN, .target_id = book != NULL ? book->id : 0};
     if (book != NULL) {
         if (clicked == 0) {
-            int next = ScrivenNextBook(sim, (local->book_offset - 1) / 8);
-            local->book_offset = next < 0 ? 0 : next * 8 + 1;
+            int next = ScrivenNextBook(sim, (local->book_offset - 1) / ScrivenPages(sim));
+            local->book_offset = next < 0 ? 0 : next * ScrivenPages(sim) + 1;
             if (next >= 0) { action.amount = CC_SCRIVEN_READ; action.target_id = sim->scriven.books[next].id; }
         } else if (clicked == 1) {
-            int base = (local->book_offset - 1) / 8 * 8;
-            local->book_offset = base + local->book_offset % 8 + 1;
+            int pages = ScrivenPages(sim);
+            int base = (local->book_offset - 1) / pages * pages;
+            local->book_offset = base + local->book_offset % pages + 1;
         } else if (clicked == 2) {
             const CcTreasure *t = CcSimTreasure(sim, book->id);
             if (t != NULL && t->owner_id != sim->player.id)
@@ -105,7 +116,7 @@ static void HandleAdventureCalendar(CcJournal *journal, CcSim *sim, LocalState *
     } else {
         if (clicked == 0) {
             int next = ScrivenNextBook(sim, -1);
-            local->book_offset = next < 0 ? 0 : next * 8 + 1;
+            local->book_offset = next < 0 ? 0 : next * ScrivenPages(sim) + 1;
             action.amount = next < 0 ? CC_SCRIVEN_COMMISSION : CC_SCRIVEN_READ;
             action.target_id = next < 0 ? 0 : sim->scriven.books[next].id;
         } else if (clicked == 1) action.amount = CC_SCRIVEN_SKY;

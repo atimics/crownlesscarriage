@@ -3,7 +3,7 @@ static bool SaveCensus(sqlite3 *database, const CcSim *sim,
 {
     if (!Execute(database, "DELETE FROM resident_census;", error, capacity))
         return false;
-    if (sim->schema_version < 114U) return true;
+    if (sim->schema_version < 117U) return true;
     size_t length = CcCensusEncodedSize(&sim->census);
     uint8_t *bytes = length > 0U ? malloc(length) : NULL;
     if (bytes == NULL ||
@@ -30,7 +30,7 @@ static bool SaveCensus(sqlite3 *database, const CcSim *sim,
 static bool ReadCensus(sqlite3 *database, CcSim *sim,
                        char *error, size_t capacity)
 {
-    if (sim->schema_version < 114U) return true;
+    if (sim->schema_version < 117U) return true;
     sqlite3_stmt *statement = NULL;
     if (!Prepare(database,
                  "SELECT id,payload FROM resident_census ORDER BY id;",

@@ -126,7 +126,7 @@ static CcCensusResident *AddResident(CcSim *sim, CcId id, int32_t birth_day,
 
 void CcCensusInit(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 114U) return;
+    if (sim == NULL || sim->schema_version < 117U) return;
     CcCensus *census = &sim->census;
     *census = (CcCensus){0};
     for (int32_t town = 0; town < sim->settlement_count; ++town) {
@@ -192,7 +192,7 @@ void CcCensusInit(CcSim *sim)
 
 CcId CcCensusClaimResident(CcSim *sim, CcId settlement_id)
 {
-    if (sim == NULL || sim->schema_version < 114U ||
+    if (sim == NULL || sim->schema_version < 117U ||
         sim->census.district_count == 0) return 0U;
     for (int32_t i = 0; i < sim->census.resident_count; ++i) {
         CcCensusResident *person = &sim->census.residents[i];
@@ -234,7 +234,7 @@ int32_t CcCensusDistrictPopulation(const CcSim *sim, CcId district_id)
 
 void CcCensusReconcile(CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 114U ||
+    if (sim == NULL || sim->schema_version < 117U ||
         sim->census.district_count == 0) return;
     CcCensus *census = &sim->census;
     for (int32_t i = 0; i < census->resident_count; ++i) {
@@ -313,7 +313,7 @@ void CcCensusReconcile(CcSim *sim)
 
 bool CcCensusValidate(const CcSim *sim)
 {
-    if (sim == NULL || sim->schema_version < 114U) return sim != NULL;
+    if (sim == NULL || sim->schema_version < 117U) return sim != NULL;
     const CcCensus *census = &sim->census;
     if (sim->settlement_count < 1 ||
         sim->settlement_count > CC_MAX_SETTLEMENTS ||

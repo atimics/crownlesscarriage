@@ -24,4 +24,8 @@ void CcScrivenDescribe(const CcSim *sim, char *text, size_t capacity);
 uint64_t CcScrivenHash(const CcScrivenState *state);
 size_t CcScrivenEncode(const CcScrivenState *state, uint8_t *bytes, size_t capacity);
 bool CcScrivenDecode(CcScrivenState *state, const uint8_t *bytes, size_t length);
+void CcCrownCalendarInit(CcSim *sim);
+uint64_t CcCrownCalendarHash(const CcCrownCalendar *state);
+size_t CcCrownCalendarEncode(const CcCrownCalendar *state, uint8_t *bytes, size_t capacity);
+bool CcCrownCalendarDecode(CcCrownCalendar *state, const uint8_t *bytes, size_t length);
 #endif
