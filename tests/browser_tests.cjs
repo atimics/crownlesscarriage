@@ -717,9 +717,12 @@ async function main() {
       await controls.button('Play').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'playing');
       assert.equal((await mobile.evaluate(() => window.touchTaps)).length, 1);
-      const nearby = (await controls.buttons()).filter(button => button.y >= 590);
+      // Nine town shops page through four cards, so paging arrows sit beside them.
+      const paging = /^(More objects|Previous objects)$/;
+      const nearby = (await controls.buttons()).filter(button =>
+        button.y >= 590 && !paging.test(button.label));
       assert.equal(nearby.length, 4, JSON.stringify(await controls.buttons()));
-      assert((await controls.buttons()).every(button => !/More objects|Previous objects|Fast forward|Press on/.test(button.label)));
+      assert((await controls.buttons()).every(button => !/Fast forward|Press on/.test(button.label)));
       const firstTownAction = await mobile.evaluate(() => {
         const panel = document.querySelector('#touch-actions');
         const action = panel.querySelector('.touch-buttons button');

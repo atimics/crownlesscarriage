@@ -4763,9 +4763,18 @@ static ContextActionSet BuildContextActions(
                 if (reason[0] == '\0')
                     (void)snprintf(reason, sizeof(reason), "%s", option_reason);
             }
+            int32_t road_slot = set.count;
             AddDetailedContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD,
                 "Choose a road", "", passable ? "OPEN THE DEPARTURE ROAD" :
                 reason, passable, false);
+            /* An empty town has nine shop doors. Keep the way out on the
+               first page of cards. */
+            if (set.count > road_slot) {
+                ContextAction road = set.items[road_slot];
+                for (int32_t i = road_slot; i > 0; --i)
+                    set.items[i] = set.items[i - 1];
+                set.items[0] = road;
+            }
         }
         if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         if (local->world_cards_presented && (local->interaction.approaching ||

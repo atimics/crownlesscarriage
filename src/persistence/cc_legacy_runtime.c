@@ -702,8 +702,8 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
             if (road_site->output_good == CC_GOOD_RAW_STONE)
                 road_site->output_good = CC_GOOD_COUNT;
         }
+        CcSimInitializeSupplyEconomy(sim);
     }
-    if (legacy_version < 119U) CcSimInitializeSupplyEconomy(sim);
     if (legacy_version < 109U) UpgradeReliefLoading(sim);
     if (legacy_version < 99U) CcCustodyInit(&sim->custody);
     if (legacy_version < 101U) {
