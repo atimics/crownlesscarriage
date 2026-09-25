@@ -4768,26 +4768,34 @@ static ContextActionSet BuildContextActions(
                 "Choose a road", "", passable ? "OPEN THE DEPARTURE ROAD" :
                 reason, passable, false);
             /* An empty town has nine shop doors. Keep the way out on the
-               first page of cards. */
+               first page, after any relief step. */
             if (set.count > road_slot) {
+                int32_t first_target = 0;
+                while (first_target < road_slot &&
+                       set.items[first_target].kind != CONTEXT_ACTION_WORLD_TARGET)
+                    ++first_target;
                 ContextAction road = set.items[road_slot];
-                for (int32_t i = road_slot; i > 0; --i)
+                for (int32_t i = road_slot; i > first_target; --i)
                     set.items[i] = set.items[i - 1];
-                set.items[0] = road;
+                set.items[first_target] = road;
             }
         }
         if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         if (local->world_cards_presented && (local->interaction.approaching ||
             GridDistance(LocalPosition(local), local->presented_card_origin) <= 3.0f)) {
             ContextActionSet steady = {0};
-            bool care_present = false;
+            /* Stable care and the road out keep a slot on the first page,
+               so a blocked reason stays visible beside the shop doors. */
+            int pinned = 0;
             for (int i = 0; i < set.count; ++i)
-                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES)
-                    care_present = true;
+                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES ||
+                    set.items[i].kind == CONTEXT_ACTION_CHOOSE_ROAD)
+                    ++pinned;
             /* Keep the current relief step visible while nearby town cards change. */
             for (int pass = 0; pass < 4; ++pass) {
                 int count = pass == 1 ? local->presented_target_count : set.count;
-                int limit = pass < 2 && care_present ? 3 : 4;
+                int limit = pass < 2 ? 4 - pinned : 4;
+                if (limit < 1) limit = 1;
                 for (int i = 0; i < count && steady.count < limit; ++i) {
                     int candidate = i;
                     if (pass == 1) {
@@ -4811,7 +4819,8 @@ static ContextActionSet BuildContextActions(
                         AdventurePriorityRank(sim, local,
                             CcInteractionFind(&local->interactions,
                                               action->target)) == 0) continue;
-                    if (pass == 2 && action->kind != CONTEXT_ACTION_CARE_HORSES)
+                    if (pass == 2 && action->kind != CONTEXT_ACTION_CARE_HORSES &&
+                        action->kind != CONTEXT_ACTION_CHOOSE_ROAD)
                         continue;
                     bool included = false;
                     for (int j = 0; j < steady.count; ++j)
@@ -4837,6 +4846,18 @@ static ContextActionSet BuildContextActions(
                     ContextAction care = set.items[i];
                     for (int j = i; j > 3; --j) set.items[j] = set.items[j - 1];
                     set.items[3] = care;
+                    break;
+                }
+            /* Nine shop doors must not push the carriage off the first
+               page. Put it just before stable care when care is shown. */
+            int slot = set.items[3].kind == CONTEXT_ACTION_CARE_HORSES ? 2 : 3;
+            for (int i = slot + 1; i < set.count; ++i)
+                if (set.items[i].kind == CONTEXT_ACTION_WORLD_TARGET &&
+                    set.items[i].target.kind == CC_INTERACTION_CARRIAGE) {
+                    /* Swap, so stable care and earlier cards keep their slots. */
+                    ContextAction carriage = set.items[i];
+                    set.items[i] = set.items[slot];
+                    set.items[slot] = carriage;
                     break;
                 }
         }
@@ -5925,8 +5946,6 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
     int32_t shown = ContextCardCount(&actions, first);
     if (actions.count > shown) {
         Rectangle previous = ContextPageBounds(false), next = ContextPageBounds(true);
-        ClientTouchAdd(previous, "Previous objects", true, false);
-        ClientTouchAdd(next, "More objects", true, false);
         DrawPanel(previous, PANEL_DEEP); DrawPanel(next, PANEL_DEEP);
         CcOverlayDrawText("<", (int)previous.x + 16, (int)previous.y + 22, 18, CC_GOLD);
         CcOverlayDrawText(">", (int)next.x + 16, (int)next.y + 22, 18, CC_GOLD);
@@ -6038,6 +6057,12 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
             draw_detail(detail, (int)bounds.x + 10, (int)bounds.y + 56,
                 detail_size, action->enabled ? MUTED : Fade(MUTED, 0.46f));
         }
+    }
+    /* Cards come first in the touch list, so their order stays steady
+       when paging arrows appear or disappear. */
+    if (actions.count > shown) {
+        ClientTouchAdd(ContextPageBounds(false), "Previous objects", true, false);
+        ClientTouchAdd(ContextPageBounds(true), "More objects", true, false);
     }
 }
 

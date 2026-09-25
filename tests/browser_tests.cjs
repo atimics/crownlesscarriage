@@ -831,7 +831,9 @@ async function main() {
               navigation.z-previous.z) < 0.25) stillIntervals++;
           else stillIntervals = 0;
           if (taps === 0) {
-            const firstCard = (await controls.buttons())[0];
+            // Paging arrows come before the cards in the touch frame.
+            const firstCard = (await controls.buttons()).find(button =>
+              !/^(Previous objects|More objects)$/.test(button.label));
             assert.equal(firstCard.label, action,
               `Crate ${crate} relief action must stay first as nearby town cards change: ` +
               JSON.stringify(await controls.buttons()));

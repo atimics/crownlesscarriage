@@ -190,6 +190,7 @@ static int RunWorldCardRegression(void)
             "The market handoff stays next and stable care stays visible.");
         float last_distance = -1;
         for (int32_t i = 2; i < 3; ++i) {
+            if (cards.items[i].target.kind == CC_INTERACTION_CARRIAGE) continue;
             const CcInteractionTarget *target = CcInteractionFind(&local.interactions, cards.items[i].target);
             CARD_CHECK(target != NULL, "Each card must keep its world identity.");
             float distance = GridDistance(LocalPosition(&local), (Vector2){target->approach_x, target->approach_z});
@@ -205,7 +206,15 @@ static int RunWorldCardRegression(void)
         CARD_CHECK(cards.items[0].target.kind == CC_INTERACTION_DOOR,
             "The market hall stays in the ordinary town tray.");
         last_distance = -1;
+        bool carriage_on_first_page = false;
+        for (int32_t i = 0; i < 4; ++i)
+            if (cards.items[i].target.kind == CC_INTERACTION_CARRIAGE)
+                carriage_on_first_page = true;
+        CARD_CHECK(carriage_on_first_page,
+            "Nine shop doors must not push the parked carriage off the first page.");
         for (int32_t i = 1; i < 3; ++i) {
+            /* The carriage is pinned beside stable care, not sorted by distance. */
+            if (cards.items[i].target.kind == CC_INTERACTION_CARRIAGE) continue;
             const CcInteractionTarget *target = CcInteractionFind(
                 &local.interactions, cards.items[i].target);
             CARD_CHECK(target != NULL, "Each ordinary card must keep its world identity.");
