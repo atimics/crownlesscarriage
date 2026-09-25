@@ -649,7 +649,7 @@ async function main() {
           detailsOpen: panel.querySelector('details').open,
           actionCount: actions.querySelectorAll('button').length,
           actionsNested: [...actions.querySelectorAll('button')].every(button => button.parentElement === actions),
-          disabled: actions.querySelectorAll('button')[1].disabled
+          disabled: actions.querySelectorAll('button')[1].getAttribute('aria-disabled') === 'true'
         };
         stage.classList.add('expanded');
         const expanded = changed.getBoundingClientRect();
@@ -1089,10 +1089,19 @@ async function main() {
       await controls.button('Deliver promise Oren — Company clerk').tap();
       await mobile.waitForFunction(() => Module.crownlessTouchFrame?.scene === 'trade',
         undefined, {timeout:30000});
-      assert.match(await controls.reading(), /Deliver promise: 8 Bread/);
+      const deliveryReading = await controls.reading();
+      assert.match(deliveryReading, /Deliver promise: 8 Bread/);
+      const saleValue = deliveryReading.match(/Sale value (\d+) crowns/);
+      const promiseReward = deliveryReading.match(/Promise reward \+(\d+) crowns/);
+      assert(saleValue && promiseReward,
+        `The delivery quote names its sale value and reward: ${deliveryReading}`);
       await mobile.screenshot({path:path.join(output, 'mobile-relief-delivery-before.png')});
-      await mobile.locator('#touch-actions button')
-        .filter({hasText:/^Deliver promise\s+Enter$/}).tap();
+      const deliveryAction = mobile.getByRole('button', {name:
+        `Deliver 8 Bread. Sale value: ${saleValue[1]} crowns. Promise reward: ${promiseReward[1]} crowns.`,
+        exact:true});
+      assert.equal(await deliveryAction.count(), 1,
+        'The delivery action names the full saved quote');
+      await deliveryAction.tap();
       await mobile.waitForFunction(() => Module.crownlessTouchFrame?.reading.includes(
         'Delivery complete. Sold 8 Bread.'), undefined, {timeout:10000});
       assert.match(await controls.reading(), /Cargo 0\/12/);

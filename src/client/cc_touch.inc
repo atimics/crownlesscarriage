@@ -3,7 +3,7 @@
 #define CLIENT_TOUCH_BUTTONS 96
 typedef struct ClientTouchButton {
     Rectangle bounds;
-    char label[128];
+    char label[384];
     bool enabled;
     bool active;
 } ClientTouchButton;
