@@ -1182,14 +1182,14 @@ static int RunAdventureInputRegression(void)
         choice_local.conversation_character_id = giver->id;
         ContextActionSet choices = BuildContextActions(
             &choice_sim, &choice_local, VIEW_CHARACTER, opening, opening);
-        if (choices.count != 2 ||
-            choices.items[0].kind != CONTEXT_ACTION_LISTEN_CHARACTER ||
-            strcmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 0,
-                &choices.items[0], label, sizeof(label)),
-                "1 What do they need?") != 0 ||
-            choices.items[1].kind != CONTEXT_ACTION_CLOSE_VIEW ||
-            strncmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 1,
-                &choices.items[1], label, sizeof(label)), "2 ", 2) != 0)
+        if (choices.count != 3 ||
+            choices.items[1].kind != CONTEXT_ACTION_LISTEN_CHARACTER ||
+            strcmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 1,
+                &choices.items[1], label, sizeof(label)),
+                "2 What do they need?") != 0 ||
+            choices.items[2].kind != CONTEXT_ACTION_CLOSE_VIEW ||
+            strncmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 2,
+                &choices.items[2], label, sizeof(label)), "3 ", 2) != 0)
             return ClientRegressionFailure(
                 "Opening semantic choices must publish their real number keys.");
         CcCommand listen = {.kind = CC_COMMAND_CHARACTER_RESPONSE,
@@ -1210,14 +1210,14 @@ static int RunAdventureInputRegression(void)
         }
         choices = BuildContextActions(
             &choice_sim, &choice_local, VIEW_CHARACTER, opening, opening);
-        if (choices.count != 2 ||
-            choices.items[0].kind != CONTEXT_ACTION_PLEDGE_CHARACTER ||
-            strcmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 0,
-                &choices.items[0], label, sizeof(label)),
-                "1 I'll take the job.") != 0 ||
-            choices.items[1].kind != CONTEXT_ACTION_CLOSE_VIEW ||
-            strncmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 1,
-                &choices.items[1], label, sizeof(label)), "2 ", 2) != 0)
+        if (choices.count != 3 ||
+            choices.items[1].kind != CONTEXT_ACTION_PLEDGE_CHARACTER ||
+            strcmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 1,
+                &choices.items[1], label, sizeof(label)),
+                "2 I'll take the job.") != 0 ||
+            choices.items[2].kind != CONTEXT_ACTION_CLOSE_VIEW ||
+            strncmp(ContextTouchActionLabel(&choice_local, VIEW_CHARACTER, 2,
+                &choices.items[2], label, sizeof(label)), "3 ", 2) != 0)
             return ClientRegressionFailure(
                 "Promise choices must announce the same numbered actions as the canvas.");
         CcCommand pledge = listen;
