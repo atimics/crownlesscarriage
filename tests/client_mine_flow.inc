@@ -96,35 +96,24 @@ static int RunMineInputRegression(void)
         frame.mine.phase=CC_MINE_LEVEL;
         frame.mine.x=25;
         frame.mine.y=16;
-        frame.mine.pack[CC_GOOD_BREAD]=2;
         ClientTouchBegin();
         ClientTouchHeading("Old town","Old actions");
         ClientTouchAdd((Rectangle){0,0,1,1},"Old action",true,false);
         ClientTouchRecordText("Old town cargo");
         MineBeginTouchFrame(&frame);
-        char offer[256];
-        (void)snprintf(offer,sizeof(offer),
-            "Offer 2 Bread (%d carried) for 1 Gold (%d in load). Pack %d/8 -> %d/8. Entry ration spent; 2 Bread must remain.",
-            CcMinePackGood(&frame,CC_GOOD_BREAD),
-            CcMineSourceGood(&frame,CC_GOOD_GOLD),CcMinePackUsed(&frame),
-            CcMinePackUsed(&frame)-1);
-        MineSetTouchDetail(&frame,offer);
-        ClientTouchAdd((Rectangle){0,0,1,1},"Bargain / B",true,false);
+        MineSetTouchDetail(&frame,CcMineAction(&frame));
+        ClientTouchAdd((Rectangle){0,0,1,1},"Inspect / E",true,false);
         ClientTouchAdd((Rectangle){0,0,1,1},"Contest / C",true,false);
         ClientTouchAdd(MineNavigationControl(0),"Save F5",true,false);
         ClientTouchAdd(MineNavigationControl(1),"Menu Esc",true,false);
-        ClientTouchRecordText("Pack 2/8");
         MINE_CHECK(touch_count==4 && strcmp(touch_title,"The Underroad")==0 &&
-            strstr(touch_detail,"Lower passage")!=NULL &&
-            strstr(touch_detail,"Offer 2 Bread (2 carried) for 1 Gold (3 in load)")!=NULL &&
-            strstr(touch_detail,"2 Bread must remain")!=NULL &&
-            strcmp(touch_buttons[0].label,"Bargain / B")==0 &&
+            strstr(touch_detail,"Goblin haulers: inspect or contest")!=NULL &&
+            strcmp(touch_buttons[0].label,"Inspect / E")==0 &&
             strcmp(touch_buttons[1].label,"Contest / C")==0 &&
             strcmp(touch_buttons[2].label,"Save F5")==0 &&
             strcmp(touch_buttons[3].label,"Menu Esc")==0 &&
-            strstr(touch_reading,"Pack 2/8")!=NULL &&
             strstr(touch_reading,"Old town")==NULL,
-            "A mine semantic frame must replace stale actions with its current offer, quantities, and controls.");
+            "The mine touch frame must show the current action and combat choice.");
     }
     {
         /* The input path receives pixels from both mouse and browser touch
@@ -306,6 +295,9 @@ static int RunMineInputRegression(void)
         MINE_CHECK(yard_camera.projection==CAMERA_PERSPECTIVE &&
             yard_span>=12.0f && yard_span<=20.0f && yard_camera.fovy<=48.0f,
             "The yard camera must keep people, cargo and interaction targets at a readable scale.");
+        MINE_CHECK(yard_camera.target.x==(float)picked.mine.x &&
+            yard_camera.target.z==(float)picked.mine.y,
+            "The entrance camera must follow the hero through the yard.");
         pick_local.mine_target_x=26; pick_local.mine_target_y=5;
         pick_local.mine_intent_target=MINE_INTENT_SURVEY;
         pick_local.mine_intent_revision=picked.mine.revision;
@@ -318,12 +310,11 @@ static int RunMineInputRegression(void)
         camera_sim.mine.phase=CC_MINE_LEVEL;
         camera_sim.mine.x=5;camera_sim.mine.y=4;
         Camera3D camera=CcLocalMineCamera(&camera_sim,facing);
-        const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
         MINE_CHECK(camera.projection==CAMERA_PERSPECTIVE &&
-            camera.position.x==5 && camera.position.z==4 &&
-            camera.target.x-camera.position.x==(float)dx[facing] &&
-            camera.target.z-camera.position.z==(float)dy[facing] &&
-            camera.target.y==camera.position.y,"First-person camera must follow the saved tile and local cardinal facing.");
+            camera.position.x==5.0f && camera.position.z==4.0f &&
+            camera.target.y<camera.position.y &&
+            camera.fovy>=60.0f && camera.fovy<=75.0f,
+            "The tunnel camera must frame an authored first-person chamber view.");
     }
     static LocalState repeated;
     repeated=local;
@@ -446,161 +437,19 @@ static int RunMineInputRegression(void)
     client_test_pointer_active=true;client_test_pointer=(Vector2){button.x+button.width/2,button.y+button.height/2};
     queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD,"Clicking the branch must open the yard.");
-    {
-        CcSim inventory=sim;
-        for(int32_t good=0;good<12;++good) inventory.player.cargo[good]=good+1;
-        for(int32_t good=0;good<8;++good) inventory.mine.pack[good]=1;
-        int32_t inventory_rows=MineGoodsRows(inventory.mine.pack);
-        if(MineGoodsRows(inventory.player.cargo)>inventory_rows)
-            inventory_rows=MineGoodsRows(inventory.player.cargo);
-        Rectangle populated=MineViewportForContent(1040,620,false,inventory_rows);
-        Rectangle one_row=MineViewportForContent(1040,620,false,1);
-        MINE_CHECK((float)(104+inventory_rows*11)<=populated.y,
-            "Several goods must fit above the mine viewport.");
-        MINE_CHECK(one_row.y<populated.y&&one_row.height>populated.height,
-            "A short manifest must return useful height to the mine scene.");
-        MINE_CHECK(MineViewportForSize(844,390).height>0,
-            "The mine view must retain positive height below its inventory.");
-        Rectangle collapsed=MineViewportForContent(844,390,false,12);
-        Rectangle expanded=MineViewportForContent(844,390,true,12);
-        MINE_CHECK(collapsed.height>=120.0f&&expanded.height==collapsed.height&&
-            expanded.width+300.0f<=collapsed.width,
-            "The short inventory keeps a clear central scene beside both goods panes.");
-        MINE_CHECK(!CheckCollisionPointRec((Vector2){80.0f,150.0f},expanded)&&
-            CheckCollisionPointRec((Vector2){422.0f,150.0f},expanded),
-            "Expanded goods panes must stay outside the live central pick bounds.");
-        for(int32_t good=0;good<CC_GOOD_COUNT;++good) {
-            char line[64];
-            (void)snprintf(line,sizeof(line),"%s %d",CcGoodName((CcGood)good),999);
-            MINE_CHECK(CcOverlayMeasureText(line,10)<=390/2-22,
-                "Mine goods must fit inside a narrow portrait inventory column.");
-        }
-    }
-    Rectangle mine_control=MineSelectionControl(1);
-    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
-    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
-    MINE_CHECK(local.mine_good==CC_GOOD_IRON,"The next-good button must select the next good.");
-    mine_control=MineSelectionControl(0);
-    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
-    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
-    MINE_CHECK(local.mine_good==CC_GOOD_BREAD,"The previous-good button must restore the selected good.");
-    mine_control=MineSelectionControl(3);
-    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
-    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
-    MINE_CHECK(local.mine_quantity==2,"The more button must select two goods.");
-    mine_control=MineControl(1);
-    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
-    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
-    MINE_CHECK(CcMinePackUsed(&sim)==2 && sim.mine.pack[CC_GOOD_BREAD]==2,
-        "P must pack the selected amount from the carriage.");
-    mine_control=MineSelectionControl(2);
-    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
-    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
-    mine_control=MineControl(2);
-    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
-    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
-    MINE_CHECK(CcMinePackUsed(&sim)==1 && sim.player.cargo[CC_GOOD_BREAD]==1,
-        "U must unload the selected amount to the nearby carriage.");
-    mine_control=MineControl(1);
-    client_test_pointer_active=true;client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,mine_control.y+mine_control.height/2};
-    queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;MINE_INPUT();client_test_pointer_active=false;
-    MINE_CHECK(CcMinePackUsed(&sim)==2 && strstr(message,"carriage to pack")!=NULL,
-        "Packing must leave a clear transfer receipt.");
-    {
-        static CcSim tracked_input;
-        static LocalState tracked_local;
-        tracked_input=sim;
-        tracked_local=local;
-        tracked_input.mine.source_released=true;
-        tracked_input.mine.encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
-        CcCustodyEntry *tracked_gold=NULL;
-        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i)
-            if(tracked_input.custody.entries[i].id==
-               tracked_input.mine.gold_source_entry_id)
-                tracked_gold=&tracked_input.custody.entries[i];
-        MINE_CHECK(tracked_gold!=NULL&&tracked_gold->active&&tracked_gold->quantity==3,
-            "The tracked input fixture must find the finite mine Gold root.");
-        tracked_gold->holder=(CcCustodyHolder){CC_CUSTODY_MINE_PACK,
-            tracked_input.player.id};
-        tracked_gold->revision+=1;
-        tracked_gold->last_event_id=(uint64_t)tracked_input.mine.revision+1U;
-        MINE_CHECK(CcSimValidate(&tracked_input,error,sizeof(error)),
-            "The tracked input fixture must carry mine Gold in the pack.");
-        tracked_local.mine_good=CC_GOOD_GOLD;
-        tracked_local.mine_quantity=1;
-        const char *tracked_path="mine-tracked-input.ccsave";
-        (void)remove(tracked_path);
-        CcJournal *tracked_journal=CcJournalStart(tracked_path,&tracked_input,
-            error,sizeof(error));
-        MINE_CHECK(tracked_journal!=NULL,
-            "The tracked transfer input fixture must open its journal.");
-
-        Rectangle unload=MineControl(2);
-        client_test_pointer_active=true;
-        client_test_pointer=(Vector2){unload.x+unload.width/2,
-            unload.y+unload.height/2};
-        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
-        HandleMineInput(tracked_journal,&tracked_input,&tracked_local,
-            (RenderTexture2D){0},.2f,message,sizeof(message));
-        client_test_pointer_active=false;
-        ClientInputClearPressed();
-        int32_t player_tracked=0,pack_tracked=0,total_tracked=0;
-        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i) {
-            const CcCustodyEntry *entry=&tracked_input.custody.entries[i];
-            if(!entry->active||entry->good!=CC_GOOD_GOLD||
-               !CcSimMineEntryTracked(&tracked_input,entry)) continue;
-            total_tracked+=(int32_t)entry->quantity;
-            if(entry->holder.kind==CC_CUSTODY_PLAYER&&
-               entry->holder.id==tracked_input.player.id)
-                player_tracked+=(int32_t)entry->quantity;
-            if(entry->holder.kind==CC_CUSTODY_MINE_PACK&&
-               entry->holder.id==tracked_input.player.id)
-                pack_tracked+=(int32_t)entry->quantity;
-        }
-        MINE_CHECK(tracked_input.player.cargo[CC_GOOD_GOLD]==1&&
-            CcMinePackGood(&tracked_input,CC_GOOD_GOLD)==2&&
-            player_tracked==1&&pack_tracked==2&&total_tracked==3,
-            "Pointer Unload must move tracked mine Gold from pack custody to the company.");
-
-        queued_key_press[KEY_P]=true;
-        HandleMineInput(tracked_journal,&tracked_input,&tracked_local,
-            (RenderTexture2D){0},.2f,message,sizeof(message));
-        ClientInputClearPressed();
-        player_tracked=0;pack_tracked=0;total_tracked=0;
-        for(int32_t i=0;i<CcCustodyEffectiveCapacity(&tracked_input.custody);++i) {
-            const CcCustodyEntry *entry=&tracked_input.custody.entries[i];
-            if(!entry->active||entry->good!=CC_GOOD_GOLD||
-               !CcSimMineEntryTracked(&tracked_input,entry)) continue;
-            total_tracked+=(int32_t)entry->quantity;
-            if(entry->holder.kind==CC_CUSTODY_PLAYER&&
-               entry->holder.id==tracked_input.player.id)
-                player_tracked+=(int32_t)entry->quantity;
-            if(entry->holder.kind==CC_CUSTODY_MINE_PACK&&
-               entry->holder.id==tracked_input.player.id)
-                pack_tracked+=(int32_t)entry->quantity;
-        }
-        MINE_CHECK(tracked_input.player.cargo[CC_GOOD_GOLD]==0&&
-            CcMinePackGood(&tracked_input,CC_GOOD_GOLD)==3&&
-            player_tracked==0&&pack_tracked==3&&total_tracked==3,
-            "Keyboard Pack must return tracked mine Gold to the pack with conserved custody.");
-        MINE_CHECK(CcJournalClose(&tracked_journal,&tracked_input,error,sizeof(error)),
-            "The tracked transfer input journal must close cleanly.");
-        (void)remove(tracked_path);
-    }
+    Rectangle mine_view=MineViewportForSize(1040,620);
+    Rectangle short_view=MineViewportForSize(844,390);
+    MINE_CHECK(mine_view.y<=100.0f && mine_view.height>=400.0f &&
+        short_view.height>=200.0f && short_view.width==844.0f,
+        "The mine scene must occupy the space freed by the packing panel.");
     for(int i=0;i<13;++i) MINE_KEY(KEY_W);
     MINE_CHECK(sim.mine.y==4,"W must walk to the entrance.");
-    {
-        uint64_t remote_hash=CcSimHash(&sim);
-        MINE_KEY(KEY_P);
-        MINE_CHECK(CcSimHash(&sim)==remote_hash && strstr(message,"Pack supplies beside the carriage")!=NULL &&
-            strstr(message,"moved") == NULL,"A failed remote transfer must preserve its error instead of a receipt.");
-    }
     MINE_KEY(KEY_W);
-    MINE_CHECK(sim.mine.phase==CC_MINE_LEVEL && local.mine_facing==1,
-        "Forward at the mouth must enter first person facing into the level.");
-    MINE_CHECK(strstr(message,"1 Bread spent")!=NULL &&
-        strstr(message,"Light 18")!=NULL,
-        "Mine entry must state its Bread cost and starting light.");
+    MINE_CHECK(sim.mine.phase==CC_MINE_LEVEL,
+        "Walking through the mouth must enter the level in the same view.");
+    MINE_CHECK(strstr(message,"Entered the mine. Light 18.")!=NULL &&
+        CcMinePackUsed(&sim)==0,
+        "Mine entry must work with an empty pack and show the starting light.");
     {
         CcSim input=sim;
         LocalState input_local;
@@ -672,7 +521,7 @@ static int RunMineInputRegression(void)
         MINE_CHECK(MineTargetBounds(&input,MINE_INTENT_SURVEY,&reread_box,
             &reread_x,&reread_y)&&reread_x==26&&reread_y==4,
             "The inspected records must remain a named pointer target.");
-        queued_key_press[KEY_E]=true;
+        queued_key_press[KEY_F]=true;
         HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
         ClientInputClearPressed();
         MINE_CHECK(CcSimHash(&input)==reread_hash&&
@@ -694,13 +543,12 @@ static int RunMineInputRegression(void)
         MINE_CHECK(input_local.mine_target_x<0&&input.mine.x==stale_x&&input.mine.y==stale_y,
             "A changed revision must cancel queued pointer input before it moves.");
         input.mine.x=25; input.mine.y=16;
-        input.mine.pack[CC_GOOD_BREAD]=2;
         input.mine.encounter_outcome=CC_MINE_ENCOUNTER_OPEN;
         input.mine.contest_active=false;
         input.mine.source_released=false;
         MineRememberVisible(&input,&input_local);
         uint64_t held_contact=CcSimHash(&input);
-        mine_control=MineControl(2);
+        Rectangle mine_control=MineControl(2);
         client_test_pointer_active=true;
         client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
                                       mine_control.y+mine_control.height/2};
@@ -709,7 +557,7 @@ static int RunMineInputRegression(void)
         client_test_pointer_active=false;
         ClientInputClearPressed();
         MINE_CHECK(CcSimHash(&input)==held_contact,
-            "Break contact must stay disabled before a contest starts.");
+            "The combat break control must stay inactive during exploration.");
         queued_key_press[KEY_C]=true;
         HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
         ClientInputClearPressed();
@@ -722,6 +570,11 @@ static int RunMineInputRegression(void)
             "C must stage the saved hauler group at the saved mine approach.");
         Camera3D fight_camera=CcLocalMineCombatCamera(
             &input_local.agent,&input_local.course,input_local.mine_facing);
+        float fight_dx=fight_camera.position.x-input_local.agent.position.x;
+        float fight_dy=fight_camera.position.y-input_local.agent.position.y;
+        float fight_dz=fight_camera.position.z-input_local.agent.position.z;
+        MINE_CHECK(fight_dx*fight_dx+fight_dy*fight_dy+fight_dz*fight_dz>9.0f,
+            "The mine contest must use a third-person combat camera.");
         for(int32_t raider=0;raider<CC_LOCAL_RAIDER_COUNT;++raider) {
             const CcLocalAgent *body=&input_local.course.raiders[raider];
             Vector2 head=GetWorldToScreenEx((Vector3){body->position.x,
@@ -731,6 +584,33 @@ static int RunMineInputRegression(void)
             MINE_CHECK(head.y>=0&&head.y<320&&feet.y>=0&&feet.y<320,
                 "The contest camera must keep each hauler's head and feet in frame.");
         }
+        {
+            const CcLocalAgent *hauler=&input_local.course.raiders[1];
+            RenderTexture2D combat_surface={.texture={.width=630,.height=320}};
+            Vector2 body=GetWorldToScreenEx((Vector3){hauler->position.x,
+                hauler->position.y+.8f,hauler->position.z},fight_camera,630,320);
+            client_test_pointer_active=true;
+            client_test_pointer=body;
+            queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
+            HandleMineInput(input_journal,&input,&input_local,combat_surface,
+                            0.0f,message,sizeof(message));
+            client_test_pointer_active=false;
+            ClientInputClearPressed();
+            MINE_CHECK(input_local.agent.combat.target_index==1 &&
+                (strstr(message,"Attacking Hauler 2")!=NULL ||
+                 strstr(message,"Focused: Hauler 2")!=NULL),
+                "Clicking a hauler must select and attack it like town combat.");
+        }
+        queued_key_press[KEY_X]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,
+                        message,sizeof(message));
+        ClientInputClearPressed();
+        MINE_CHECK(input_local.agent.humanoid.guard_requested,
+            "X must raise the same combat guard used in town.");
+        queued_key_press[KEY_X]=true;
+        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,
+                        message,sizeof(message));
+        ClientInputClearPressed();
         queued_key_press[KEY_SPACE]=true;
         HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
         ClientInputClearPressed();
@@ -774,64 +654,8 @@ static int RunMineInputRegression(void)
         HandleMineInput(input_journal,&input,&input_local,surface,.2f,message,sizeof(message));
         client_test_pointer_active=false;
         ClientInputClearPressed();
-        BoundingBox ended_bounds; int32_t ended_x=0,ended_y=0;
-        MINE_CHECK(input.mine.encounter_outcome==CC_MINE_ENCOUNTER_BARGAINED&&
-            CcMinePackGood(&input,CC_GOOD_BREAD)==0&&
-            CcMinePackGood(&input,CC_GOOD_GOLD)==1&&
-            !MineTargetBounds(&input,MINE_INTENT_HAULERS,&ended_bounds,
-                              &ended_x,&ended_y),
-            "The bargain pointer must settle the offer and remove the hungry-hauler target.");
-        input.mine.encounter_outcome=CC_MINE_ENCOUNTER_CONTESTED;
-        input.mine.source_released=true;
-        input_local.mine_good=CC_GOOD_GOLD;
-        input_local.mine_quantity=1;
-        mine_control=MineControl(0);
-        client_test_pointer_active=true;
-        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
-                                      mine_control.y+mine_control.height/2};
-        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
-        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
-        client_test_pointer_active=false;
-        ClientInputClearPressed();
         MINE_CHECK(strstr(message,"Hauler load")!=NULL,
-            "The settled contest must expose a visible inspect action.");
-        int32_t gold_before_take=CcMinePackGood(&input,CC_GOOD_GOLD);
-        mine_control=MineControl(1);
-        client_test_pointer_active=true;
-        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
-                                      mine_control.y+mine_control.height/2};
-        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
-        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
-        client_test_pointer_active=false;
-        ClientInputClearPressed();
-        MINE_CHECK(CcMinePackGood(&input,CC_GOOD_GOLD)==gold_before_take+1&&
-            strstr(message,"Took 1 Raw Gold")!=NULL,
-            "The visible take button must transfer the selected finite load.");
-        input.mine.x=input.mine.cache_x;
-        input.mine.y=input.mine.cache_y;
-        int32_t cache_before=CcMineCacheGood(&input,CC_GOOD_GOLD);
-        mine_control=MineControl(0);
-        client_test_pointer_active=true;
-        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
-                                      mine_control.y+mine_control.height/2};
-        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
-        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
-        client_test_pointer_active=false;
-        ClientInputClearPressed();
-        MINE_CHECK(CcMineCacheGood(&input,CC_GOOD_GOLD)==cache_before+1&&
-            strstr(message,"Cached 1 Raw Gold")!=NULL,
-            "The Rope Store button must cache the selected carried load.");
-        mine_control=MineControl(1);
-        client_test_pointer_active=true;
-        client_test_pointer=(Vector2){mine_control.x+mine_control.width/2,
-                                      mine_control.y+mine_control.height/2};
-        queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
-        HandleMineInput(input_journal,&input,&input_local,surface,0.0f,message,sizeof(message));
-        client_test_pointer_active=false;
-        ClientInputClearPressed();
-        MINE_CHECK(CcMineCacheGood(&input,CC_GOOD_GOLD)==cache_before&&
-            strstr(message,"Recovered 1 Raw Gold")!=NULL,
-            "The Rope Store button must recover the selected finite load.");
+            "The haulers retain a simple inspect action after combat.");
         MINE_CHECK(CcJournalClose(&input_journal,&input,error,sizeof(error)),"Pointer mine journal must close.");
         (void)remove(input_path);
 #undef INPUT_POINTER
@@ -866,15 +690,11 @@ static int RunMineInputRegression(void)
         "Closing the mine pause menu must restore the same visit.");
     MINE_KEY(KEY_F5);
     MINE_CHECK(CcSaveRead(path,&restored,error,sizeof(error)) && CcSimHash(&sim)==CcSimHash(&restored),"F5 must save the underground position.");
-    MINE_KEY(KEY_W);MINE_CHECK(sim.mine.x==6,"Forward must follow east facing.");
-    uint64_t turn_hash=CcSimHash(&sim);
-    MINE_KEY(KEY_D);
-    MINE_CHECK(local.mine_facing==2 && CcSimHash(&sim)==turn_hash,"Turning must not move, spend light or revise the sim.");
-    MINE_KEY(KEY_W);MINE_CHECK(sim.mine.y==5,"Forward after turning must follow south.");
-    MINE_KEY(KEY_S);MINE_CHECK(sim.mine.y==4,"Back must move opposite facing.");
-    MINE_KEY(KEY_A);
-    MINE_KEY(KEY_S);MINE_CHECK(sim.mine.x==5,"Back while east-facing must return west.");
-    MINE_KEY(KEY_A);MINE_KEY(KEY_W);
+    MINE_KEY(KEY_D);MINE_CHECK(sim.mine.x==6,"D must walk east in the level.");
+    MINE_KEY(KEY_S);MINE_CHECK(sim.mine.y==5,"S must walk south in the level.");
+    MINE_KEY(KEY_W);MINE_CHECK(sim.mine.y==4,"W must walk north in the level.");
+    MINE_KEY(KEY_A);MINE_CHECK(sim.mine.x==5,"A must walk west in the level.");
+    MINE_KEY(KEY_W);
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD && sim.mine.y==4,
         "Forward into the north exit must return outside without re-entering.");
     for(int i=0;i<13;++i) MINE_KEY(KEY_S);
@@ -917,7 +737,7 @@ static int RunMineInputRegression(void)
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD &&
         CcSimHash(&sim)==carriage_approach_hash,
         "The carriage target must preserve the active visit and road anchor.");
-    MINE_CHECK(strstr(message,"Choose Pack, Unload, or Board")!=NULL,
+    MINE_CHECK(strstr(message,"Board to return to the road")!=NULL,
         "The carriage target must open its transfer choices.");
     MINE_KEY(KEY_S);
     MINE_CHECK(sim.mine.phase==CC_MINE_YARD && MineAtCarriage(&sim),
