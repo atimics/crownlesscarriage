@@ -31,6 +31,9 @@ def main() -> int:
         for view in ('front', 'interior', 'trade'):
             flag = '--capture-shop' if view == 'trade' else f'--capture-shop-{view}'
             scenes.append((f'rosespire-{name}-{view}', [flag, '4', good]))
+    for view in ('front', 'interior', 'trade'):
+        flag = '--capture-shop' if view == 'trade' else f'--capture-shop-{view}'
+        scenes.append((f'silverwick-mine-supplier-{view}', [flag, '3', '14']))
     try:
         for name, arguments in scenes:
             image = output / f'{name}.png'
