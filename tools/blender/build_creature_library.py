@@ -1040,21 +1040,22 @@ def add_pony_eye(spec: CreatureSpec, collection: bpy.types.Collection,
 def add_pony_bridle(spec: CreatureSpec, collection: bpy.types.Collection,
                     head: Vector) -> None:
     """A simple, readable headstall: a single strap down the nose bridge,
-    exactly on the centerline between the eyes, with a buckle top and
-    bottom. Nothing sits off-center: on this chibi head the eyes are wide
-    enough, and the 1.18x face exaggeration spreads x offsets further
-    still, that even a strap kept visibly outside the eye before scaling
-    reads as passing over it after scaling and from a near-front camera.
-    Staying on x=0 the whole way down is what actually keeps it off the
-    eyes, not how wide a margin it is given off-center."""
+    exactly on the centerline between the eyes. Nothing sits off-center:
+    on this chibi head the eyes are wide enough, and the 1.18x face
+    exaggeration spreads x offsets further still, that even a strap kept
+    visibly outside the eye before scaling reads as passing over it after
+    scaling and from a near-front camera. Staying on x=0 the whole way
+    down is what actually keeps it off the eyes, not how wide a margin it
+    is given off-center.
+
+    No buckle accents: two small metal spheres here read as glitchy dark
+    blobs on the cheeks/nose at this resolution rather than hardware, so
+    the strap is left plain. It is the only face-mounted tack; the collar
+    and saddle pad already carry the metal accents."""
     brow_center = head + Vector((0.0, -0.03, 0.30))
     nose_center = head + Vector((0.0, -0.535, -0.075))
     add_segment("PONY_BridleBridge", brow_center, nose_center, 0.020, 0.020,
                 "leather", collection, spec, "bridle", sides=6)
-    add_ellipsoid("PONY_BridleBrowBuckle", brow_center, (0.026, 0.022, 0.026),
-                  "metal", collection, spec, "bridle", subdivisions=1)
-    add_ellipsoid("PONY_BridleNoseBuckle", nose_center, (0.022, 0.020, 0.022),
-                  "metal", collection, spec, "bridle", subdivisions=1)
 
 
 def add_pony_collar(spec: CreatureSpec,
@@ -1176,17 +1177,19 @@ def build_quadruped(spec: CreatureSpec,
                           (side * 0.30, 0.48, body_z - 0.10),
                           (0.26, 0.36, 0.30), "skin", collection, spec,
                           "barrel", subdivisions=1)
-        # A dark ridge along the spine ahead of the tail, in the eye slot
-        # rather than skin, so the croup separates from the rest of the
-        # back by value (not only by shape) even from a straight-on rear
-        # camera where shading alone is flat. A box sitting proud of the
+        # A thin fold line along the spine ahead of the tail, in the hide
+        # slot -- one step darker than the skin coat, not a flat black
+        # stripe -- so the croup separates from the rest of the back by
+        # value (not only by shape) even from a straight-on rear camera
+        # where shading alone is flat. A sliver sitting just proud of the
         # rump's own top surface (body_z+0.36 at most) reads reliably the
         # same way the saddle pad does; an ellipsoid embedded at barrel
         # height was buried inside the much larger rump/chest masses and
-        # never reached the visible surface.
-        add_box("PONY_CroupRidge", (0.0, 0.32, body_z + 0.40),
-                (0.11, 0.34, 0.09), "eye", collection, spec, "barrel",
-                bevel=0.02)
+        # never reached the visible surface. Kept narrow and low on purpose:
+        # a bigger box in a dark slot read as a solid black bar, not a fold.
+        add_box("PONY_CroupRidge", (0.0, 0.32, body_z + 0.39),
+                (0.05, 0.30, 0.05), "hide", collection, spec, "barrel",
+                bevel=0.015)
         add_ellipsoid("PONY_RoundShoulder", (0.0, -0.38, body_z + 0.12),
                       (0.47, 0.40, 0.45), "skin", collection, spec,
                       "chest", subdivisions=2)
@@ -1214,26 +1217,30 @@ def build_quadruped(spec: CreatureSpec,
                     radius, radius * 0.82,
                     "secondary" if sheep else "skin", collection, spec,
                     f"upper_leg_{name}")
-        # Hind cannons and hocks sit in the eye slot (a guaranteed-dark
-        # value regardless of viewing angle) so the hind leg reads as a
-        # visibly separate, darker limb under the body from any camera,
-        # not just where the shading model happens to catch a surface.
-        # The fore legs keep the lighter hide tone.
-        lower_leg_semantic = "eye" if (pony and hind_leg) else \
-            "hide" if pony else "secondary"
         add_segment(f"CREATURE_LowerLeg_{name.upper()}", knee, hoof,
                     radius * 0.78, radius * 0.58,
-                    lower_leg_semantic, collection,
+                    "hide" if pony else "secondary", collection,
                     spec, f"lower_leg_{name}")
         if pony and hind_leg:
             # The hock: a joint mass right where the gaskin turns into the
             # cannon, so the hind leg reads as a bent, working limb instead
-            # of a single straight taper under the rump.
+            # of a single straight taper under the rump. Same hide tone as
+            # the rest of the lower leg -- the joint should read by shape,
+            # not by turning the whole limb a different, darker color.
             add_ellipsoid(f"PONY_Hock_{name.upper()}",
                           knee + Vector((0.0, direction * 0.02, -0.015)),
                           (radius * 1.05, radius * 0.95, radius * 0.85),
-                          "eye", collection, spec, f"lower_leg_{name}",
+                          "hide", collection, spec, f"lower_leg_{name}",
                           subdivisions=1)
+        if pony:
+            # A short leather sock over the bottom quarter of every leg,
+            # front and hind alike, matching the hoof below it. Slightly
+            # wider than the lower leg's own taper at that point so it
+            # wraps visibly instead of sitting buried inside it.
+            sock_top = knee + (hoof - knee) * 0.76
+            add_segment(f"PONY_Sock_{name.upper()}", sock_top, hoof,
+                        radius * 0.72, radius * 0.66, "leather", collection,
+                        spec, f"lower_leg_{name}", sides=8)
         hoof_size = ((0.12, 0.16, 0.09) if sheep else
                      (0.18, 0.23, 0.12) if cow else
                      (0.17, 0.20, 0.12))
@@ -1245,7 +1252,7 @@ def build_quadruped(spec: CreatureSpec,
             add_ellipsoid(
                 f"PONY_HoofFeather_{name.upper()}",
                 hoof + Vector((0.0, 0.0, 0.10)),
-                (0.13, 0.14, 0.13), lower_leg_semantic, collection, spec,
+                (0.13, 0.14, 0.13), "hide", collection, spec,
                 f"lower_leg_{name}")
 
     if sheep:
