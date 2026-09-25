@@ -1580,8 +1580,113 @@ static int RunAdventureTownRoutesRegression(void)
 
 /* Counter fixtures cover money limits and a load whose journey has completed.
    The journey and journal suites cover how that arrival state is produced. */
+static int RunAdventureShopFilterRegression(void)
+{
+    static CcSim sim;
+    static LocalState local, restored;
+    char error[192] = "", message[256] = "";
+    const char *path = "shop-session-test.state";
+    (void)remove(path);
+    CcSimInit(&sim, 42U);
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    const CcSettlement *town = CcSimSettlement(&sim, sim.player.location_id);
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(town);
+    const CcLocalShop *bakery = CcLocalShopAt(profile, CC_LOCAL_SHOP_BAKERY);
+    const CcLocalShop *stonecutter = CcLocalShopAt(profile, CC_LOCAL_SHOP_STONECUTTER);
+#define SHOP_CHECK(condition, text) do { if (!(condition)) { (void)remove(path); return ClientRegressionFailure(text); } } while (0)
+    SHOP_CHECK(bakery != NULL && stonecutter != NULL,
+        "The starting town needs bakery and stonecutter shop doors.");
+    local.market_interior = true;
+    local.shop_building_index = bakery->building_index;
+    RepositionHero(&local, (Vector2){2.05f, 5.35f}, true);
+    local.trade_good = CC_GOOD_BREAD;
+    local.trade_quantity = 1;
+    sim.player.coins = 1000;
+    uint64_t before = CcSimHash(&sim);
+    SHOP_CHECK(CcLocalShopSells(LocalActiveShop(&sim, &local), CC_GOOD_BREAD) &&
+        !CcLocalShopSells(LocalActiveShop(&sim, &local), CC_GOOD_STONE),
+        "The bakery lists bread and excludes stone.");
+    local.trade_good = CC_GOOD_STONE;
+    SHOP_CHECK(!AdventureTradeQuote(&sim, &local).available,
+        "A stale stone choice cannot trade at the bakery.");
+    local.trade_good = CC_GOOD_BREAD;
+    AdventureQuote bread = AdventureTradeQuote(&sim, &local);
+    SHOP_CHECK(bread.available, "The bakery quotes its own bread stock.");
+    RenderTexture2D texture = {.texture = {.width = 960, .height = 540}};
+    BuildAdventureTargets(&sim, &local, texture, (Rectangle){0, 0, 960, 540});
+    for (int32_t i = 0; i < local.interactions.count; ++i)
+        if (local.interactions.targets[i].key.kind == CC_INTERACTION_STOCK)
+            SHOP_CHECK(local.interactions.targets[i].amount == CC_GOOD_BREAD,
+                "Bakery shelf hotspots expose only bread.");
+    local.trade_quote_presented = true;
+    local.trade_presented_command = bread.command;
+    local.trade_presented_total = bread.total;
+    local.trade_presented_shop_building_index = bakery->building_index;
+    local.shop_building_index = stonecutter->building_index;
+    local.trade_good = CC_GOOD_STONE;
+    SHOP_CHECK(CcLocalShopSells(LocalActiveShop(&sim, &local), CC_GOOD_STONE) &&
+        !CcLocalShopSells(LocalActiveShop(&sim, &local), CC_GOOD_BREAD),
+        "The stonecutter lists stone and excludes bread.");
+    SHOP_CHECK(AdventureTradeQuote(&sim, &local).available,
+        "The stonecutter quotes its own stone stock.");
+    ClientView view = VIEW_TRADE;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message,
+        sizeof(message));
+    ClientInputClearPressed();
+    SHOP_CHECK(CcSimHash(&sim) == before &&
+        strstr(local.receipt, "quote changed") != NULL,
+        "A bakery quote cannot be confirmed at the stonecutter.");
+    local.trade_quote_presented = false;
+    local.trade_good = CC_GOOD_BREAD;
+    SHOP_CHECK(!AdventureTradeQuote(&sim, &local).available,
+        "A stale bread choice cannot trade at the stonecutter.");
+    local.trade_good = CC_GOOD_STONE;
+    BuildAdventureTargets(&sim, &local, texture, (Rectangle){0, 0, 960, 540});
+    for (int32_t i = 0; i < local.interactions.count; ++i)
+        if (local.interactions.targets[i].key.kind == CC_INTERACTION_STOCK)
+            SHOP_CHECK(local.interactions.targets[i].amount == CC_GOOD_STONE,
+                "Stonecutter shelf hotspots expose only stone.");
+    SHOP_CHECK(SaveLocalSession(path, &sim, &local, error, sizeof(error)),
+        "The stonecutter interior should save its shop context.");
+    ResetLocalState(&restored);
+    SHOP_CHECK(RestoreLocalSession(path, &sim, &restored) &&
+        restored.market_interior &&
+        restored.shop_building_index == stonecutter->building_index,
+        "Reload restores the stonecutter instead of the old hall.");
+    restored.trade_good = CC_GOOD_BREAD;
+    restored.trade_quantity = 1;
+    SHOP_CHECK(!AdventureTradeQuote(&sim, &restored).available,
+        "Reload keeps bread outside the stonecutter's offers.");
+    CcInteractionTarget exit = {.key = {sim.player.location_id, 1U,
+        CC_INTERACTION_EXIT}};
+    ClientView back = VIEW_LOCAL;
+    int32_t selected = 0;
+    AdventureActivate(&sim, &restored, &exit, &view, &back, &selected);
+    CcLocalLanePoint approach = CcLocalShopApproach(profile, stonecutter);
+    SHOP_CHECK(!restored.market_interior && restored.shop_building_index == -1 &&
+        GridDistance(LocalPosition(&restored),
+            (Vector2){approach.x, approach.z}) < 0.25f,
+        "Leaving the stonecutter returns to its own door.");
+    local.shop_building_index = bakery->building_index;
+    AdventureActivate(&sim, &local, &exit, &view, &back, &selected);
+    approach = CcLocalShopApproach(profile, bakery);
+    SHOP_CHECK(GridDistance(LocalPosition(&local),
+        (Vector2){approach.x, approach.z}) < 0.25f,
+        "Leaving the bakery returns to the bakery door.");
+    SHOP_CHECK(CcSimHash(&sim) == before,
+        "Browsing shops, saving and leaving preserve simulation time and stock.");
+    (void)remove(path);
+#undef SHOP_CHECK
+    return 0;
+}
+
 static int RunAdventureTradeTermsRegression(void)
 {
+    int shop_result = RunAdventureShopFilterRegression();
+    if (shop_result != 0) return shop_result;
     static CcSim sim;
     static LocalState local;
     char error[192] = "", message[256] = "";
