@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "grammar_sha256": "d8630abd6ba13d21fe25d17f3ab6d37626cd5519c6177c56906524b4d7c431e5",
-  "event_count": 139,
-  "rule_count": 158,
+  "grammar_sha256": "47fd1809e8d1f73e9185c72dac4a9414dc8b58936db6a6cc751aa66ea40092a5",
+  "event_count": 144,
+  "rule_count": 164,
   "events": [
     {
       "kind": "HARVEST_FAILED",
@@ -1132,6 +1132,47 @@
       "value": 138,
       "rules": [
         "body_looted_source_0"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "WANT_CREATED",
+      "value": 139,
+      "rules": [
+        "want_created_158"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "WANT_FULFILLED",
+      "value": 140,
+      "rules": [
+        "want_fulfilled_159"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "WANT_CLOSED",
+      "value": 141,
+      "rules": [
+        "want_closed_160"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "BELONGING_MOVED",
+      "value": 142,
+      "rules": [
+        "belonging_moved_161",
+        "belonging_moved_162"
+      ],
+      "status": "field_rules"
+    },
+    {
+      "kind": "BELONGING_REPAIRED",
+      "value": 143,
+      "rules": [
+        "belonging_repaired_163"
       ],
       "status": "field_rules"
     }

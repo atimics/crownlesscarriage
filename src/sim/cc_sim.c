@@ -1,3 +1,4 @@
+#include "sim/cc_wants.h"
 #include "sim/cc_scriven.h"
 #include "sim/cc_sim_custody.h"
 #include "sim/cc_archive_staff.h"
@@ -695,6 +696,14 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
         const CcEvent *note = CcOvenCourtNote(sim, i);
         if (note != NULL) PinEvent(set, note->id);
     }
+    if (sim->schema_version >= 117U) {
+        for (int i = 0; i < CC_PERSONAL_WANTS; ++i) {
+            PinEvent(set, sim->wants.wants[i].cause_event_id);
+            PinEvent(set, sim->wants.wants[i].outcome_event_id);
+        }
+        for (int i = 0; i < CC_BELONGINGS; ++i)
+            PinEvent(set, sim->wants.items[i].cause_event_id);
+    }
     PinEvent(set, incoming_parent);
     PinEvent(set, sim->journey.parent_event_id);
     if (sim->schema_version >= 106U) {
@@ -761,6 +770,17 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
 static void RedirectEventReference(CcSim *sim, CcId removed_id,
                                    CcId replacement_id)
 {
+    if (sim->schema_version >= 117U) {
+        for (int i = 0; i < CC_PERSONAL_WANTS; ++i) {
+            CcPersonalWant *w = &sim->wants.wants[i];
+            if (w->cause_event_id == removed_id) w->cause_event_id = replacement_id;
+            if (w->outcome_event_id == removed_id) w->outcome_event_id = replacement_id;
+        }
+        for (int i = 0; i < CC_BELONGINGS; ++i)
+            if (sim->wants.items[i].cause_event_id == removed_id)
+                sim->wants.items[i].cause_event_id = replacement_id;
+    }
+
     if (sim->schema_version >= 44U) {
         for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
             if (sim->gossip[i].heard_event_id == removed_id) {
@@ -1336,6 +1356,11 @@ const char *CcEventKindName(CcEventKind kind)
             return "CROWN ROAD WORKS";
         case CC_EVENT_ROYAL_ROAD_SKIRMISH: return "ROAD SKIRMISH";
         case CC_EVENT_BODY_LOOTED: return "PURSE LIFTED";
+        case CC_EVENT_WANT_CREATED: return "PERSONAL REQUEST";
+        case CC_EVENT_WANT_FULFILLED: return "ITEM RECEIVED";
+        case CC_EVENT_WANT_CLOSED: return "REQUEST ENDED";
+        case CC_EVENT_BELONGING_MOVED: return "BELONGING";
+        case CC_EVENT_BELONGING_REPAIRED: return "ITEM REPAIRED";
         case CC_EVENT_ROAD_SITE_PRODUCTION: return "ROAD WORKS";
         case CC_EVENT_NOTICE_POSTED: return "NOTICE";
         case CC_EVENT_KIND_COUNT: break;
@@ -2707,6 +2732,8 @@ CcMoney CcSimTrackedGold(const CcSim *sim)
             total += sim->goblin_politics.factions[i].coins + sim->goblin_politics.factions[i].carried_coins;
         }
     }
+    if (sim->schema_version >= 117U)
+        for (int i = 0; i < CC_PERSONAL_WANTS; ++i) total += sim->wants.wants[i].escrow;
     if (sim->schema_version >= 86U) total += sim->archive_recruitment.purse;
     if (sim->schema_version >= 92U) total += sim->archive_convoy.purse;
     if (sim->schema_version >= 111U) {
@@ -2745,6 +2772,13 @@ int32_t CcSimTrackedGood(const CcSim *sim, CcGood good)
                 total += entry->quantity;
         }
     }
+    if (sim->schema_version >= 117U)
+        for (int i = 0; i < CC_BELONGINGS; ++i) {
+            const CcBelonging *item = &sim->wants.items[i];
+            if (item->id == 0) continue;
+            if (good == CC_GOOD_TOOLS) ++total;
+            if (good == CC_GOOD_IRON) total += item->repair_iron;
+        }
     if (sim->schema_version >= 92U && good == CC_GOOD_WHEAT) total += sim->archive_convoy.wheat;
     if (sim->schema_version >= 86U) {
         if (good == CC_GOOD_WHEAT) total += sim->archive_recruitment.wheat + sim->archive_recruitment.travel_wheat;
@@ -5043,6 +5077,8 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeOccupations(sim);
     CcSimInitializeUnderroadNetwork(sim);
     CcScrivenInit(sim);
+    CcWantsInit(sim);
+    CcWantsAdvance(sim);
     CcCensusInit(sim);
 }
 
@@ -17017,6 +17053,7 @@ static void AdvanceDaysInternal(CcSim *sim, int32_t days,
         DeliverDelayedEchoIfReady(sim);
         AdvanceGoblinPolitics(sim);
         CcScrivenAdvance(sim);
+        CcWantsAdvance(sim);
         if (sim->schema_version >= 117U) {
             CaptureCensusSources(sim, &census_after);
             if (memcmp(&census_before, &census_after,
@@ -20278,6 +20315,7 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         command->kind == CC_COMMAND_ASSIGN_HORSE ||
         command->kind == CC_COMMAND_CARE_HORSES ||
         command->kind == CC_COMMAND_SCRIVEN ||
+        command->kind == CC_COMMAND_PERSONAL_WANT ||
         command->kind == CC_COMMAND_GOBLIN_TRADE ||
         command->kind == CC_COMMAND_GOBLIN_WARN ||
         command->kind == CC_COMMAND_GOBLIN_INTERCEPT ||
@@ -20444,6 +20482,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
             return ApplyBreedHorses(sim, command, error, error_capacity);
         case CC_COMMAND_ASSIGN_HORSE:
             return ApplyAssignHorse(sim, command, error, error_capacity);
+        case CC_COMMAND_PERSONAL_WANT:
+            return CcWantsApply(sim, command, error, error_capacity);
         case CC_COMMAND_SCRIVEN:
             return CcScrivenApply(sim, command, error, error_capacity);
         case CC_COMMAND_CARE_HORSES:
@@ -20585,6 +20625,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_
         CcSimPeopleEnterSettlement(sim);
         CcCensusReconcile(sim);
     }
+    if (ok) CcWantsAdvance(sim);
     /* A recovered legacy overload allowance is a one-time relief valve. It
        stays reserved for the pending pack merge while a mine visit is
        still open (the pack has not merged into cargo yet, so cargo alone
@@ -20636,6 +20677,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
 {
     if (sim == NULL) {
         SetError(error, error_capacity, "Simulation is missing.");
+        return false;
+    }
+    if (!CcWantsValidate(sim)) {
+        SetError(error, error_capacity, "Personal requests or belongings are invalid.");
         return false;
     }
     if (!CcScrivenValidate(sim)) {
@@ -20922,7 +20967,8 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 !ValidBoundedText(event->text, sizeof(event->text)) ||
                 event->day < 1 || event->day > sim->current_day ||
                 event->kind < CC_EVENT_HARVEST_FAILED ||
-                event->kind > (sim->schema_version >= 102U ?
+                event->kind > (sim->schema_version >= 117U ? CC_EVENT_BELONGING_REPAIRED :
+                    sim->schema_version >= 102U ?
                     CC_EVENT_BODY_LOOTED :
                     sim->schema_version >= 100U ?
                     CC_EVENT_ROYAL_ROAD_SKIRMISH :

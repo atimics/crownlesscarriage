@@ -1285,7 +1285,7 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
 
 static Rectangle AdventureBookPageBounds(Rectangle panel, int32_t page)
 {
-    return AdventureTab(panel,page,5);
+    return AdventureTab(panel,page,6);
 }
 
 static bool AdventureBookCompact(Rectangle panel)
@@ -1309,8 +1309,9 @@ static void DrawAdventureBookHead(Rectangle panel, const char *page_name,
         compact ? "People" : "People  2",
         compact ? "Mine" : "Mine notes  3",
         compact ? "Court" : "Court  4",
-        compact ? "Dates" : "Calendar  5"};
-    for (int32_t page=0;page<5;++page)
+        compact ? "Dates" : "Calendar  5",
+        compact ? "Wants" : "Requests  6"};
+    for (int32_t page=0;page<6;++page)
         AdventureButton(AdventureBookPageBounds(panel,page),pages[page],true,
             page==active_page);
     ClientTouchRecordText(page_name);
@@ -1483,9 +1484,11 @@ static void DrawAdventureMineNotes(const CcSim *sim, const LocalState *local)
 }
 
 #include "client/cc_scriven_book.inc"
+#include "client/cc_wants_book.inc"
 
 static void DrawAdventureBook(const CcSim *sim, const LocalState *local)
 {
+    if (local->book_page == 5) { DrawAdventureWants(sim, local); return; }
     if (local->book_page == 4) { DrawAdventureCalendar(sim, local); return; }
     if (local->book_page == 1) { DrawAdventurePeople(sim, local); return; }
     if (local->book_page == 2) { DrawAdventureMineNotes(sim,local); return; }
@@ -1499,7 +1502,7 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
-    for (int32_t page=0;page<5;++page) {
+    for (int32_t page=0;page<6;++page) {
         if (AdventureHit(AdventureBookPageBounds(panel,page))) {
             local->book_page=page;
             local->book_offset=0;
@@ -1513,10 +1516,10 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         (ClientKeyPressed(KEY_DOWN) || AdventureHit(AdventureBookMineStepBounds(panel,1)))) {
         if (local->book_offset < 2) local->book_offset+=1;
     } else if (ClientKeyPressed(KEY_LEFT)) {
-        local->book_page=(local->book_page+4)%5;
+        local->book_page=(local->book_page+5)%6;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_RIGHT)) {
-        local->book_page=(local->book_page+1)%5;
+        local->book_page=(local->book_page+1)%6;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_ONE)) {
         local->book_page = 0;
@@ -1528,6 +1531,8 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         local->book_page = 2;
         local->book_offset=0;
     }
+    if (ClientKeyPressed(KEY_SIX)) { local->book_page = 5; local->book_offset = 0; }
+    if (local->book_page == 5) HandleAdventureWants(journal, sim, local, message, message_capacity);
     if (ClientKeyPressed(KEY_FIVE)) { local->book_page = 4; local->book_offset = 0; }
     if (local->book_page == 4) HandleAdventureCalendar(journal, sim, local, message, message_capacity);
     if (ClientKeyPressed(KEY_FOUR)) { local->book_page = 3; local->book_offset = 0; }

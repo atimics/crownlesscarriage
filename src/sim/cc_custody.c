@@ -112,7 +112,7 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
             entry->source_id >= entry->id || entry->holder.id == 0 ||
             entry->holder.kind < CC_CUSTODY_STORE || entry->holder.kind > CC_CUSTODY_MINE_PACK ||
             entry->kind < CC_CUSTODY_GOODS ||
-            entry->kind > CC_CUSTODY_CONTAINER || entry->condition < 0 ||
+            entry->kind > CC_CUSTODY_BELONGING || entry->condition < 0 ||
             entry->condition > 100 || entry->capacity < 0 ||
             (entry->kind != CC_CUSTODY_CONTAINER && entry->capacity != 0)) return false;
         for (int j = 0; j < i; ++j)
@@ -121,7 +121,7 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
             if (entry->good < 0 || entry->good >= rules->good_count || entry->reference_id != 0)
                 return false;
         } else if (entry->good != 0) return false;
-        bool named = entry->kind == CC_CUSTODY_TREASURE || entry->kind == CC_CUSTODY_DOCUMENT;
+        bool named = entry->kind == CC_CUSTODY_TREASURE || entry->kind == CC_CUSTODY_DOCUMENT || entry->kind == CC_CUSTODY_BELONGING;
         if (named != (entry->reference_id != 0)) return false;
         if (!entry->active) {
             if (entry->quantity != 0) return false;
@@ -131,10 +131,10 @@ bool CcCustodyValidate(const CcCustodyState *state, const CcCustodyRules *rules)
             (entry->kind >= CC_CUSTODY_TREASURE && entry->quantity != 1)) return false;
         if (named && (rules->reference_valid == NULL ||
             !rules->reference_valid(rules->context, entry->kind, entry->reference_id))) return false;
-        if (entry->kind == CC_CUSTODY_TREASURE) {
+        if (entry->kind == CC_CUSTODY_TREASURE || entry->kind == CC_CUSTODY_BELONGING) {
             for (int j = 0; j < i; ++j) {
                 const CcCustodyEntry *other = &state->entries[j];
-                if (other->active && other->kind == CC_CUSTODY_TREASURE &&
+                if (other->active && other->kind == entry->kind &&
                     other->reference_id == entry->reference_id) return false;
             }
         }
@@ -213,11 +213,12 @@ CcCustodyResult CcCustodyPlanTransfer(const CcCustodyState *state,
     const CcCustodyEntry *entry = CcCustodyFind(state, transfer->entry_id);
     if (entry == NULL || entry->revision != transfer->revision ||
         entry->revision == UINT64_MAX) return CC_CUSTODY_STALE;
-    if (entry->kind < CC_CUSTODY_GOODS || entry->kind > CC_CUSTODY_CONTAINER ||
+    if (entry->kind < CC_CUSTODY_GOODS || entry->kind > CC_CUSTODY_BELONGING ||
         entry->revision == 0 || entry->owner_id == 0 ||
         entry->condition < 0 || entry->condition > 100 ||
         (entry->kind >= CC_CUSTODY_TREASURE && entry->quantity != 1) ||
-        ((entry->kind == CC_CUSTODY_TREASURE || entry->kind == CC_CUSTODY_DOCUMENT) &&
+        ((entry->kind == CC_CUSTODY_TREASURE || entry->kind == CC_CUSTODY_DOCUMENT ||
+          entry->kind == CC_CUSTODY_BELONGING) &&
          entry->reference_id == 0) ||
         transfer->quantity > entry->quantity ||
         SameHolder(entry->holder, transfer->destination)) return CC_CUSTODY_INVALID;

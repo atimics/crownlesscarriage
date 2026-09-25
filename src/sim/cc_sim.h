@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "sim/cc_custody.h"
 #include "sim/cc_scriven_types.h"
+#include "sim/cc_wants_types.h"
 
 #define CC_MAX_KINGDOMS 3
 #define CC_MAX_SETTLEMENTS 6
@@ -114,7 +115,9 @@ typedef enum CcEntityKind {
     CC_ENTITY_ROYAL_CARRIAGE = 23,
     CC_ENTITY_MINE_SOURCE = 24,
     CC_ENTITY_MINE_CACHE = 25,
-    CC_ENTITY_DISTRICT = 26
+    CC_ENTITY_DISTRICT = 26,
+    CC_ENTITY_PERSONAL_WANT = 27,
+    CC_ENTITY_BELONGING = 28
 } CcEntityKind;
 
 /* Every living resident has one row. Rich CcCharacter detail uses this same ID. */
@@ -387,6 +390,11 @@ typedef enum CcEventKind {
     CC_EVENT_ROYAL_ROAD_SKIRMISH = 137,
     /* Schema 102: a fallen person's purse is lifted (#406). */
     CC_EVENT_BODY_LOOTED = 138,
+    CC_EVENT_WANT_CREATED = 139,
+    CC_EVENT_WANT_FULFILLED = 140,
+    CC_EVENT_WANT_CLOSED = 141,
+    CC_EVENT_BELONGING_MOVED = 142,
+    CC_EVENT_BELONGING_REPAIRED = 143,
     CC_EVENT_KIND_COUNT
 } CcEventKind;
 
@@ -711,6 +719,7 @@ typedef enum CcCommandKind {
     CC_COMMAND_CARE_HORSES = 81,
     CC_COMMAND_SCRIVEN = 82,
     CC_COMMAND_TRADE_SUPPLY = 83,
+    CC_COMMAND_PERSONAL_WANT = 84,
     CC_COMMAND_COUNT
 } CcCommandKind;
 
@@ -2304,6 +2313,7 @@ typedef struct CcSim {
     CcNoticeBoard notice_board;
     CcScrivenState scriven;
     CcCrownCalendar crown_calendar;
+    CcWantsState wants;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;

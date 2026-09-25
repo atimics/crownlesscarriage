@@ -1,3 +1,4 @@
+#include "sim/cc_wants.h"
 #include "sim/cc_scriven.h"
 #include "persistence/cc_starting_campaign.h"
 #include "client/cc_audio.h"
@@ -249,7 +250,8 @@ typedef enum ContextActionKind {
     CONTEXT_ACTION_STOW_RELIEF_CRATE,
     CONTEXT_ACTION_APPROACH_RELIEF_CRATES,
     CONTEXT_ACTION_APPROACH_RELIEF_CARRIAGE,
-    CONTEXT_ACTION_OVEN_QUESTION
+    CONTEXT_ACTION_OVEN_QUESTION,
+    CONTEXT_ACTION_PERSONAL_WANT
 } ContextActionKind;
 
 typedef struct ContextAction {
@@ -257,6 +259,7 @@ typedef struct ContextAction {
     CcGood good;
     int32_t amount;
     CcInteractionKey target;
+    CcCommand command;
     char label[64];
     char key_hint[16];
     char detail[48];
@@ -300,7 +303,8 @@ typedef struct LocalState {
     int32_t road_carriage_progress_milli;
     uint64_t conversation_object;
     char conversation_name[64];
-    char conversation_line[192];
+    char conversation_line[384];
+    CcId conversation_want_person;
     bool conversation_report_response;
     bool conversation_oven_response;
     CcId conversation_oven_event;
@@ -1422,6 +1426,7 @@ static void ResetLocalState(LocalState *local)
     local->conversation_line[0] = '\0';
     local->conversation_report_response = false;
     local->conversation_oven_response = false;
+    local->conversation_want_person = 0;
     CcCoreConversationReset(&core_conversation);
     core_conversation_speaker = 0U;
     local->trade_quantity = 1;
@@ -4652,6 +4657,18 @@ static bool FirstDeliveryComplete(const CcSim *sim)
     return sim != NULL && sim->player.reputation > 0;
 }
 
+static void AddPersonalWantActions(ContextActionSet *set, const CcSim *sim, CcId person)
+{
+    CcWantOffer offers[4];
+    int count = CcWantsOffers(sim, person, offers, 4);
+    for (int i = 0; i < count; ++i) {
+        int before = set->count;
+        AddDetailedContextAction(set, CONTEXT_ACTION_PERSONAL_WANT, offers[i].label,
+            TextFormat("%d", set->count + 1), offers[i].detail, offers[i].ready, false);
+        if (set->count > before) set->items[before].command = offers[i].command;
+    }
+}
+
 static ContextActionSet BuildContextActions(
     const CcSim *sim, const LocalState *local, ClientView view,
     int32_t selected, int32_t selected_situation)
@@ -4868,6 +4885,7 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
+        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         if (CcOvenCourtCanDiscuss(sim, local->conversation_character_id))
             AddDetailedContextAction(&set, CONTEXT_ACTION_OVEN_QUESTION,
                 "What do the ovens need?", TextFormat("%d", set.count + 1),
@@ -5103,6 +5121,7 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (view == VIEW_CHARACTER) {
+        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         const CcSituation *situation = CcSimSituation(
             sim, local->conversation_situation_id);
         const CcCharacter *character = CcSimCharacter(
@@ -7187,6 +7206,12 @@ static bool ClientConversationSpeech(const CcSim *sim, const LocalState *local,
 {
     const CcSituation *situation = CcSimSituation(sim, local->conversation_situation_id);
     const CcCharacter *person = CcSimCharacter(sim, local->conversation_character_id);
+    if (person != NULL && local->conversation_want_person == person->id &&
+        local->conversation_line[0] != '\0') {
+        return CcSpeechCompose(speech, "personal.want.response", person->id,
+            person->name, CcSpeechCharacterVoice(sim, person),
+            local->conversation_line, CC_SPEECH_PLAIN, CC_SPEECH_CONVERSATION, 0);
+    }
     if (local->conversation_oven_response && person != NULL &&
         local->conversation_line[0] != '\0') {
         return CcSpeechCompose(speech, "oven.court.response", person->id,
@@ -7539,6 +7564,14 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
             sim->player.coins,
             promise_before != 0U && CcSimAcceptedSituation(sim) == NULL ?
                 " Promise settled." : "");
+        return true;
+    }
+    if (command.kind == CC_COMMAND_PERSONAL_WANT) {
+        if (command.amount == CC_WANT_LEARN)
+            (void)CcWantsRequestText(sim, command.target_id, message, message_capacity);
+        else (void)snprintf(message, message_capacity, "%s",
+            command.amount == CC_WANT_TAKE ? "The item is in your satchel." :
+            command.amount == CC_WANT_LEAVE ? "The town stores hold the item." : "The handover is complete. Your company book is updated.");
         return true;
     }
     const char *confirmation = "Done.";
@@ -10188,9 +10221,30 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (*view == VIEW_CHARACTER) {
         ContextActionSet replies=BuildContextActions(
             sim,local,VIEW_CHARACTER,*selected,*selected_situation);
-        for (int32_t i=0;i<replies.count;++i)
-            if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE+i))
-                context_action=replies.items[i].kind;
+        for (int32_t i=0;i<replies.count && i<9;++i)
+            if (replies.items[i].enabled && ClientKeyPressed(KEY_ONE+i)) {
+                pressed_action = replies.items[i];
+                context_action = pressed_action.kind;
+            }
+        if (context_action == CONTEXT_ACTION_PERSONAL_WANT) {
+            if (ApplyCommand(*journal, sim, pressed_action.command, message, message_capacity)) {
+                local->conversation_report_response = false;
+                local->conversation_oven_response = false;
+    local->conversation_want_person = 0;
+                local->conversation_want_person = local->conversation_character_id;
+                if (pressed_action.command.amount == CC_WANT_LEARN)
+                    (void)CcWantsRequestText(sim, pressed_action.command.target_id, message, message_capacity);
+                const char *reply = pressed_action.command.amount == CC_WANT_LEARN ? message :
+                    pressed_action.command.amount == CC_WANT_TAKE ? "Take care of it. The request is in your company book." :
+                    "Thank you. This will help.";
+                (void)snprintf(local->conversation_line, sizeof(local->conversation_line), "%s", reply);
+                CcAudioClearSpeech();
+                CcSpeech answer;
+                if (ClientConversationSpeech(sim, local, &answer)) ClientSaySpeech(&answer);
+            }
+            return;
+        }
+        if (context_action != CONTEXT_ACTION_NONE) local->conversation_want_person = 0;
         if (context_action == CONTEXT_ACTION_OVEN_QUESTION) {
             if (ApplyCommand(*journal, sim,
                 (CcCommand){.kind = CC_COMMAND_OBSERVE_OVEN_COURT,
@@ -10262,6 +10316,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 !core_conversation.pending && core_conversation.round_phase == 0U) {
                 local->conversation_report_response = false;
     local->conversation_oven_response = false;
+    local->conversation_want_person = 0;
                 (void)ApplyCommand(*journal, sim, (CcCommand){.kind = CC_COMMAND_EXCHANGE_GOSSIP,
                     .target_id = local->conversation_character_id}, message, message_capacity);
                 if (local->conversation_gossip_slot < 0)
@@ -10346,6 +10401,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                              message, message_capacity)) {
                 local->conversation_report_response = false;
     local->conversation_oven_response = false;
+    local->conversation_want_person = 0;
                 if (voiced_reply) ClientSaySpeech(&player_reply);
                 const CcSituation *updated = CcSimSituation(
                     sim, local->conversation_situation_id);
@@ -11934,6 +11990,11 @@ static void ReadCompanyPage(const CcSim *sim, const LocalState *local)
             ++shown;
         }
         if (shown == 0) ClientReadSpeech(sim, "No one you know has been named yet.", 0);
+    } else if (local->book_page == 5) {
+        WantBookCard card;
+        (void)WantBookCards(sim, local->book_offset, &card);
+        ClientReadSpeech(sim, card.title, 0);
+        ClientReadSpeech(sim, card.text, 0);
     } else if (local->book_page == 4) {
         CcScrivenDescribe(sim, words, sizeof(words));
         ClientReadSpeech(sim, words, 0);

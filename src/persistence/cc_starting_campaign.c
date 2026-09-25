@@ -1,3 +1,4 @@
+#include "sim/cc_wants.h"
 #include "persistence/cc_starting_campaign.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_census.h"
@@ -56,6 +57,7 @@ bool CcStartingCampaignDeepWyrm(CcSim *sim, const char *path,
         (void)snprintf(error, capacity, "The campaign needs room for its prophecy book.");
         goto done;
     }
+    CcWantsAdvance(world);
     if (!CcSimValidate(world, error, capacity)) goto done;
     *sim = *world;
     loaded = true;
