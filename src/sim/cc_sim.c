@@ -16821,10 +16821,10 @@ static void AdvanceDaysInternal(CcSim *sim, int32_t days,
     CcGossipRefreshInputs previous_gossip_inputs;
     bool have_gossip_inputs = false;
     bool gossip_followup_due = false;
+    CcCensusSources census_before, census_after;
+    if (sim->schema_version >= 114U)
+        CaptureCensusSources(sim, &census_before);
     for (int32_t day = 0; day < days; ++day) {
-        CcCensusSources census_before, census_after;
-        if (sim->schema_version >= 114U)
-            CaptureCensusSources(sim, &census_before);
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         if (sim->schema_version >= 85U && sim->archive_staff.active) {
@@ -16934,6 +16934,7 @@ static void AdvanceDaysInternal(CcSim *sim, int32_t days,
             if (memcmp(&census_before, &census_after,
                        sizeof(census_before)) != 0)
                 CcCensusReconcile(sim);
+            census_before = census_after;
         }
         if (observer != NULL) observer(sim, context);
     }
