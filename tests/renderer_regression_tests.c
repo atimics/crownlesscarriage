@@ -184,6 +184,7 @@ static void TestBodyText(void)
 #include "abandoned_town_captures.inc"
 
 #include "ground_town_camera_tests.inc"
+#include "site_creature_camera_tests.inc"
 #include "town_sky_tests.inc"
 
 int main(int argc, char **argv)
@@ -199,6 +200,7 @@ int main(int argc, char **argv)
     TestCarriageWorldTargets();
     TestCarriagePlantedInterpolation();
     TestGroundTownCameras();
+    TestDragonRoostCameraFraming();
     TestCameraContinuity();
     TestStableVisibility();
     TestBuildingRevealTiming();
