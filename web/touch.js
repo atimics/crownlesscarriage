@@ -32,6 +32,16 @@
   reading.className = 'touch-reading';
   sceneDetails.append(sceneSummary, reading);
   semantic.append(heading, detail, actions, sceneDetails);
+  window.addEventListener('keydown', event => {
+    if (event.key !== 'Tab' || !semantic.contains(document.activeElement)) return;
+    const buttons = [...actions.querySelectorAll('button'), sceneSummary];
+    const index = buttons.indexOf(document.activeElement);
+    const next = index + (event.shiftKey ? -1 : 1);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (next < 0 || next >= buttons.length) canvas.focus();
+    else buttons[next].focus();
+  }, true);
   for (const type of ['keydown', 'keyup', 'keypress']) {
     semantic.addEventListener(type, event => event.stopPropagation());
   }
@@ -57,9 +67,11 @@
       const key = `${button.label}:${index}`;
       action.dataset.touchKey = key;
       action.textContent = button.label;
-      action.disabled = !button.enabled;
+      action.disabled = false;
+      action.setAttribute('aria-disabled', button.enabled ? 'false' : 'true');
       action.setAttribute('aria-pressed', button.active ? 'true' : 'false');
       action.onclick = () => {
+        if (!button.enabled) return;
         const timing = Module.crownlessDiagnostics?.beginAction(index, frame);
         const activate = attempt => {
           const current = Module.crownlessTouchFrame;

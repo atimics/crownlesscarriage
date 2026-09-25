@@ -46,7 +46,7 @@ static Camera3D KeepHeroInsideStreetFrame(Camera3D camera, Vector3 hero,
         return camera;
     }
     int32_t art_width = (int32_t)lroundf(
-        (float)art_height * ((float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT));
+        (float)art_height * ((float)CcArtWidth() / (float)CcArtHeight()));
 
     float safe_left = fmaxf((float)art_width * 0.195f,
                             (float)art_width * safe_area.x);
@@ -174,7 +174,7 @@ static CameraProjectedVolume CameraProjectVolume(Camera3D camera,
     if (camera.projection == CAMERA_PERSPECTIVE && depth > 0.05f) {
         float vertical_scale = 1.0f /
             (depth * tanf(camera.fovy * DEG2RAD * 0.5f));
-        float horizontal_scale = vertical_scale / (((float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT));
+        float horizontal_scale = vertical_scale / (((float)CcArtWidth() / (float)CcArtHeight()));
         x = Vector3DotProduct(from_camera, right) * horizontal_scale;
         y = Vector3DotProduct(from_camera, screen_up) * vertical_scale;
         projected_half_width *= horizontal_scale;
@@ -247,7 +247,7 @@ static CameraProjectedVolume CameraProjectBox(Camera3D camera,
     if (camera.projection == CAMERA_PERSPECTIVE && depth > 0.05f) {
         float vertical_scale = 1.0f /
             (depth * tanf(camera.fovy * DEG2RAD * 0.5f));
-        float horizontal_scale = vertical_scale / (((float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT));
+        float horizontal_scale = vertical_scale / (((float)CcArtWidth() / (float)CcArtHeight()));
         x = Vector3DotProduct(from_camera, right) * horizontal_scale;
         y = Vector3DotProduct(from_camera, screen_up) * vertical_scale;
         projected_half_width *= horizontal_scale;
@@ -442,7 +442,7 @@ static float CombatCameraBuildingOcclusionScore(
 {
     if (art_height <= 0) return 0.0f;
     int32_t art_width = (int32_t)lroundf(
-        (float)art_height * ((float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT));
+        (float)art_height * ((float)CcArtWidth() / (float)CcArtHeight()));
     float score = 0.0f;
     for (int32_t building = 0;
          building < ActiveWorldBuildingCount(); ++building) {
@@ -658,9 +658,9 @@ Camera3D CcLocalCameraClearSightlinesInternal(Camera3D camera,
 
         // Keep two people readable when a clear angle turns along their line.
         Vector2 first_screen = GetWorldToScreenEx(first_subject, option,
-            CC_LOCAL_ART_WIDTH, CC_LOCAL_ART_HEIGHT);
+            CcArtWidth(), CcArtHeight());
         Vector2 second_screen = GetWorldToScreenEx(second_subject, option,
-            CC_LOCAL_ART_WIDTH, CC_LOCAL_ART_HEIGHT);
+            CcArtWidth(), CcArtHeight());
         float pair_overlap = Vector3Distance(first_subject, second_subject) > 0.65f ?
             1.0f - SmoothStep01(fabsf(first_screen.x - second_screen.x) / 52.0f) : 0.0f;
         float cost = tree_occlusion * 12.0f + course_clutter * 1.80f +
@@ -988,7 +988,7 @@ static Camera3D GroundStreetFrameHero(Camera3D camera, Vector3 hero,
                                       int32_t art_height, Rectangle safe_area)
 {
     if (art_height <= 0) return camera;
-    const float aspect = (float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT;
+    const float aspect = (float)CcArtWidth() / (float)CcArtHeight();
     const int32_t art_width = (int32_t)lroundf((float)art_height * aspect);
     const float left = fmaxf(0.195f, safe_area.x) * (float)art_width;
     const float right_edge = fminf(0.805f, safe_area.x + safe_area.width) * (float)art_width;
@@ -1158,7 +1158,7 @@ static Camera3D FixedCameraRigFrameHero(FixedCameraRig *rig,
 {
     if (rig == NULL || art_height <= 0) return camera;
     int32_t art_width = (int32_t)lroundf(
-        (float)art_height * ((float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT));
+        (float)art_height * ((float)CcArtWidth() / (float)CcArtHeight()));
 
     if (advance && rig->framing_duration > 0.0f) {
         rig->framing_elapsed = fminf(
@@ -1569,7 +1569,7 @@ static void CombatCameraLockComposition(Camera3D base,
 
             if (art_height > 0) {
                 int32_t art_width = (int32_t)lroundf(
-                    (float)art_height * ((float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT));
+                    (float)art_height * ((float)CcArtWidth() / (float)CcArtHeight()));
                 Vector2 player_head = GetWorldToScreenEx(
                     Vector3Add(player->position,
                                (Vector3){0.0f, 1.80f, 0.0f}),
@@ -1637,7 +1637,7 @@ static bool CombatCameraSubjectsNeedReframe(const CcLocalAgent *player,
         return true;
     }
     int32_t art_width = (int32_t)lroundf(
-        (float)art_height * ((float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT));
+        (float)art_height * ((float)CcArtWidth() / (float)CcArtHeight()));
     Camera3D camera = PerspectiveCameraComposed(
         combat_camera_rig.locked_target,
         combat_camera_rig.locked_offset,

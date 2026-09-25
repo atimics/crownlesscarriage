@@ -236,8 +236,15 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->id); HASH_VALUE(item->route_id);
             HASH_VALUE(item->home_settlement_id);
             hash = HashString(hash, item->name);
-            HASH_VALUE(item->kind); HASH_VALUE(item->input_good);
-            HASH_VALUE(item->output_good); HASH_VALUE(item->progress_milli);
+            /* Before schema 119 the "no good" sentinel was 14, the old
+               goods count. Hash it that way so recorded hashes still match. */
+            bool legacy_goods = sim->schema_version < 119U;
+            HASH_VALUE(item->kind);
+            HASH_VALUE(legacy_goods && item->input_good == CC_GOOD_COUNT ?
+                CC_GOOD_RAW_STONE : item->input_good);
+            HASH_VALUE(legacy_goods && item->output_good == CC_GOOD_COUNT ?
+                CC_GOOD_RAW_STONE : item->output_good);
+            HASH_VALUE(item->progress_milli);
             HASH_VALUE(item->side); HASH_VALUE(item->spur_length);
             HASH_VALUE(item->condition); HASH_VALUE(item->blocker);
             HASH_VALUE(item->accessible);

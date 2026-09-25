@@ -649,9 +649,10 @@ static bool AdventureHit(Rectangle bounds)
     return ClientMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(ClientPointerPosition(), bounds);
 }
 
-static void AdventureButton(Rectangle bounds, const char *label, bool enabled, bool active)
+static void AdventureButtonWithTouchLabel(Rectangle bounds, const char *label,
+    const char *touch_label, bool enabled, bool active)
 {
-    ClientTouchAdd(bounds, label, enabled, active);
+    ClientTouchAdd(bounds, touch_label, enabled, active);
     bool hover = CheckCollisionPointRec(ClientPointerPosition(), bounds);
     DrawRectangleRounded(bounds, 0.12f, 4, active || (hover && enabled) ? PANEL_HOVER : PANEL_DEEP);
     DrawRectangleRoundedLinesEx(bounds, 0.12f, 4, active ? 2.0f : 1.0f,
@@ -659,6 +660,11 @@ static void AdventureButton(Rectangle bounds, const char *label, bool enabled, b
     int size = AdventureTextSize(14);
     while (size > 12 && CcOverlayMeasureText(label, size) > (int)bounds.width - 24) --size;
     CcOverlayDrawText(label, (int)bounds.x + 12, (int)bounds.y + 12, size, enabled ? INK : MUTED);
+}
+
+static void AdventureButton(Rectangle bounds, const char *label, bool enabled, bool active)
+{
+    AdventureButtonWithTouchLabel(bounds, label, label, enabled, active);
 }
 
 static Rectangle AdventureTab(Rectangle panel, int index, int count)
@@ -788,6 +794,25 @@ static AdventureQuote AdventureTradeQuote(const CcSim *sim, const LocalState *lo
     (void)snprintf(quote.reason, sizeof(quote.reason), "%s", local->trade_confirmed ?
         "Trade complete. Choose another good or quantity for your next trade." : reason);
     return quote;
+}
+
+static void AdventureTradeConfirmTouchLabel(const AdventureQuote *quote,
+    int mode, char *label, size_t capacity)
+{
+    const char *verb = mode == 0 ? "Buy" : mode == 1 ? "Sell" : "Deliver";
+    const char *amount_name = mode == 0 ? "Total cost" : "Sale value";
+    int written = mode == 2 ?
+        snprintf(label, capacity, "%s %d %s. Sale value: %" PRId64
+            " crowns. Promise reward: %" PRId64 " crowns.",
+            verb, abs(quote->command.amount),
+            CcGoodName(quote->command.good), quote->total, quote->reward) :
+        snprintf(label, capacity, "%s %d %s. %s: %" PRId64
+            " crowns.", verb, abs(quote->command.amount),
+            CcGoodName(quote->command.good), amount_name, quote->total);
+    if (written < 0 || (size_t)written >= capacity) return;
+    if (!quote->available && quote->reason[0] != '\0')
+        (void)snprintf(label + written, capacity - (size_t)written,
+            " %s", quote->reason);
 }
 
 static Rectangle AdventureGoodBounds(Rectangle panel, int32_t good)
@@ -1113,7 +1138,12 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
         CcOverlayDrawText(TextFormat("Promise reward +%" PRId64 " crowns", quote.reward), x,
             (int)panel.y + (readable_canvas ? 269 : 244), AdventureTextSize(14), TEAL);
     }
-    AdventureButton(AdventureConfirmBounds(panel), TextFormat("%s  Enter", modes[local->trade_mode]), quote.available, false);
+    char confirm_touch_label[384];
+    AdventureTradeConfirmTouchLabel(&quote, local->trade_mode,
+        confirm_touch_label, sizeof(confirm_touch_label));
+    AdventureButtonWithTouchLabel(AdventureConfirmBounds(panel),
+        TextFormat("%s  Enter", modes[local->trade_mode]),
+        confirm_touch_label, quote.available, false);
     CcOverlayDrawText(supply_buyer ?
         TextFormat("Wanted %d  |  Carriage %d",
             supply_offer.remaining, sim->player.cargo[quote.command.good]) :

@@ -1,0 +1,25 @@
+{
+  "seed": "0x3235a7ed",
+  "schema": 113, "generator": 25,
+  "resident_total": 12323, "character_records": 97,
+  "active_character_records": 97,
+  "sim_bytes": 656024, "character_bytes": 952,
+  "settlements": [
+    {"name": "Thornford", "population": 1463, "named_home_records": 12, "main_buildings": 8, "compound_structures": 9, "profile_scale": 0.583333, "world_radius": 38.0, "civilian_rations_per_week": 5},
+    {"name": "Gloamgate", "population": 2282, "named_home_records": 18, "main_buildings": 10, "compound_structures": 12, "profile_scale": 0.650000, "world_radius": 42.0, "civilian_rations_per_week": 7},
+    {"name": "Alderwatch", "population": 1606, "named_home_records": 13, "main_buildings": 9, "compound_structures": 12, "profile_scale": 0.650000, "world_radius": 42.0, "civilian_rations_per_week": 6},
+    {"name": "Silverwick", "population": 2281, "named_home_records": 18, "main_buildings": 11, "compound_structures": 10, "profile_scale": 0.650000, "world_radius": 42.0, "civilian_rations_per_week": 7},
+    {"name": "Rosespire", "population": 3233, "named_home_records": 24, "main_buildings": 12, "compound_structures": 11, "profile_scale": 0.716667, "world_radius": 46.0, "civilian_rations_per_week": 8},
+    {"name": "Hollowbarrow", "population": 1458, "named_home_records": 12, "main_buildings": 7, "compound_structures": 9, "profile_scale": 0.583333, "world_radius": 38.0, "civilian_rations_per_week": 5}
+  ],
+  "routes": [
+    {"from": "Thornford", "to": "Gloamgate", "days": 2, "full_world_units": 261.356, "journey_world_units": 204.556, "derived_road_house_route_miles": 43},
+    {"from": "Gloamgate", "to": "Alderwatch", "days": 2, "full_world_units": 238.014, "journey_world_units": 180.414, "derived_road_house_route_miles": 44},
+    {"from": "Alderwatch", "to": "Silverwick", "days": 2, "full_world_units": 120.160, "journey_world_units": 62.560, "derived_road_house_route_miles": 45},
+    {"from": "Silverwick", "to": "Rosespire", "days": 3, "full_world_units": 280.958, "journey_world_units": 222.558, "derived_road_house_route_miles": 61},
+    {"from": "Rosespire", "to": "Hollowbarrow", "days": 3, "full_world_units": 343.246, "journey_world_units": 285.647, "derived_road_house_route_miles": 62},
+    {"from": "Hollowbarrow", "to": "Gloamgate", "days": 3, "full_world_units": 222.619, "journey_world_units": 165.820, "derived_road_house_route_miles": 66},
+    {"from": "Gloamgate", "to": "Silverwick", "days": 4, "full_world_units": 316.703, "journey_world_units": 259.103, "derived_road_house_route_miles": 79},
+    {"from": "Alderwatch", "to": "Rosespire", "days": 3, "full_world_units": 237.962, "journey_world_units": 179.562, "derived_road_house_route_miles": 64}
+  ]
+}

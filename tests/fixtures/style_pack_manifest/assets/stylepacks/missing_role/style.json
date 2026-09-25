@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "missing_role",
+  "version": "0.0.1",
+  "shaders": {
+    "world_vertex": "../../shaders/world_lit.vs",
+    "world_fragment": "../../shaders/world_lit.fs",
+    "skinned_vertex": "../../shaders/world_lit_skinned.vs",
+    "painted_environment_fragment": "../../shaders/painted_environment.fs",
+    "tree_foliage_fragment": "../../shaders/tree_foliage.fs",
+    "hero_fragment": "../../shaders/hero_pixel.fs",
+    "grade_fragment": "../../shaders/style_grade.fs"
+  },
+  "render_target": {
+    "width": 630,
+    "height": 320,
+    "upscale_filter": "point"
+  },
+  "post_chain": [
+    {
+      "name": "grade",
+      "shader": "../../shaders/style_grade.fs",
+      "inputs": [
+        "scene_color"
+      ],
+      "cache": "per_frame"
+    }
+  ]
+}

@@ -43,7 +43,7 @@ async function main() {
         buttons: [...panel.querySelectorAll('.touch-buttons button')].map(button => {
           const box = button.getBoundingClientRect();
           return {label: button.textContent.trim(), width: box.width, height: box.height,
-            enabled: !button.disabled};
+            enabled: button.getAttribute('aria-disabled') !== 'true'};
         })
       };
     });
@@ -120,7 +120,7 @@ async function main() {
     const quote = await reading.textContent();
     assert.match(quote, /Total cost 8 crowns/);
 
-    await tap(/^Buy\s+Enter$/, 'trade confirmation');
+    await tap(/^Buy 2 Bread\. Total cost: 8 crowns\.$/, 'trade confirmation');
     await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Bought 2 Bread'),
       undefined, {timeout: 20000});
     let receipt = await reading.textContent();

@@ -150,22 +150,41 @@ static void DrawDragonWing(Vector3 root, Vector3 joint, Vector3 tip, Vector3 bac
         Vector3Lerp(back, root, 0.72f),
     };
     fingers[1].y -= 0.12f * scale;
+    /* The membrane used to be a set of flat double-sided triangles: a
+       single plane that vanished edge-on. Fold each panel out of the
+       wing's own plane (alternating sides, like a paper fan) so the
+       membrane keeps real volume between the finger struts and stays
+       readable from the side, not just face-on. */
+    Vector3 wing_normal = Vector3CrossProduct(
+        Vector3Subtract(tip, root), Vector3Subtract(back, root));
+    float wing_normal_length = Vector3Length(wing_normal);
+    wing_normal = wing_normal_length > 0.0001f ?
+        Vector3Scale(wing_normal, 1.0f / wing_normal_length) :
+        (Vector3){0.0f, 1.0f, 0.0f};
+    float fold_depth = (weathered ? 0.11f : 0.17f) * scale;
     Color membrane = BlendColor(palette->accent, palette->secondary, 0.28f);
     for (int32_t panel = 0; panel < 3; ++panel) {
         Vector3 scallop = Vector3Lerp(fingers[panel], fingers[panel + 1], 0.5f);
         scallop = Vector3Lerp(scallop, joint, weathered ? 0.38f : 0.20f);
+        float fold_sign = (panel % 2 == 0) ? 1.0f : -1.0f;
+        scallop = Vector3Add(scallop,
+            Vector3Scale(wing_normal, fold_depth * fold_sign));
         Color shade = ShadeColor(membrane, 1.0f - (float)panel * 0.08f);
         DrawDoubleSidedTriangle(joint, fingers[panel], scallop, shade);
         DrawDoubleSidedTriangle(joint, scallop, fingers[panel + 1], shade);
-        DrawCylinderEx(joint, fingers[panel], 0.036f * scale, 0.010f * scale,
+        DrawCylinderEx(joint, fingers[panel], 0.052f * scale, 0.014f * scale,
                        6, palette->hide);
     }
-    DrawDoubleSidedTriangle(root, joint, fingers[3], membrane);
-    DrawCylinderEx(root, joint, 0.10f * scale, 0.056f * scale, 7, palette->skin);
-    DrawCylinderEx(joint, tip, 0.058f * scale, 0.016f * scale, 6, palette->skin);
+    Vector3 root_fold = Vector3Lerp(joint, fingers[3], 0.42f);
+    root_fold = Vector3Add(root_fold,
+        Vector3Scale(wing_normal, -fold_depth * 0.6f));
+    DrawDoubleSidedTriangle(root, joint, root_fold, membrane);
+    DrawDoubleSidedTriangle(root, root_fold, fingers[3], membrane);
+    DrawCylinderEx(root, joint, 0.125f * scale, 0.062f * scale, 7, palette->skin);
+    DrawCylinderEx(joint, tip, 0.062f * scale, 0.018f * scale, 6, palette->skin);
     Vector3 thumb = Vector3Add(joint, Vector3Scale(Vector3Normalize(
         Vector3Subtract(joint, root)), 0.20f * scale));
-    DrawCylinderEx(joint, thumb, 0.055f * scale, 0.0f, 6, palette->horn);
+    DrawCylinderEx(joint, thumb, 0.058f * scale, 0.0f, 6, palette->horn);
 }
 
 static void DrawDragonMane(Vector3 head, Vector3 radii, float yaw, Color hair)
@@ -204,15 +223,15 @@ static void DrawDragonFace(Vector3 head, Vector3 radii, float yaw, float scale,
     DrawCreatureEllipsoid(muzzle,
         (Vector3){radii.x * 0.80f, radii.y * 0.57f, radii.z * 0.65f}, yaw,
         BlendColor(palette->skin, palette->hide, 0.45f));
-    Vector3 jaw = LocalPoint(head, 0.0f, -radii.y * 0.63f, radii.z * 0.66f, yaw);
+    Vector3 jaw = LocalPoint(head, 0.0f, -radii.y * 0.66f, radii.z * 0.68f, yaw);
     DrawCreatureEllipsoid(jaw,
-        (Vector3){radii.x * 0.76f, radii.y * 0.23f, radii.z * 0.65f}, yaw, palette->hide);
+        (Vector3){radii.x * 0.80f, radii.y * 0.32f, radii.z * 0.68f}, yaw, palette->hide);
     Color dark = {15, 23, 22, 255};
     for (int32_t side = -1; side <= 1; side += 2) {
         float sign = (float)side;
         Vector3 eye = LocalPoint(head, sign * radii.x * 0.78f,
                                  radii.y * 0.25f, radii.z * 0.61f, yaw);
-        float eye_size = radii.x * (young ? 0.24f : 0.22f);
+        float eye_size = radii.x * (young ? 0.28f : 0.26f);
         DrawCreatureEllipsoid(eye, (Vector3){eye_size, eye_size * 1.08f, eye_size * 0.62f},
                                yaw + sign * 0.62f, dark);
         Vector3 iris = LocalPoint(eye, sign * eye_size * 0.24f, 0.0f, eye_size * 0.44f, yaw);

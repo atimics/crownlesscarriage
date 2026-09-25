@@ -130,7 +130,13 @@ if(CC_BUILD_CLIENT)
     add_test(NAME deterministic_npc_population COMMAND npc_appearance_tests)
 
     add_executable(visual_palette_tests tests/visual_palette_tests.c)
-    target_link_libraries(visual_palette_tests PRIVATE raylib)
+    # The CC_STYLE_* macros this test reads now resolve through the runtime
+    # g_cc_active_palette global (see cc_visual_style.h and cc_style_pack.c)
+    # instead of a compile-time constant, so this needs the renderer
+    # library that defines it.
+    target_link_libraries(visual_palette_tests PRIVATE
+        crownless_local_renderer raylib
+    )
     target_include_directories(visual_palette_tests PRIVATE src)
     cc_strict_warnings(visual_palette_tests)
     add_test(NAME perceptual_visual_palette COMMAND visual_palette_tests)
@@ -177,6 +183,15 @@ if(CC_BUILD_CLIENT)
     target_link_libraries(town_shop_routes_tests PRIVATE crownless_local_renderer)
     cc_strict_warnings(town_shop_routes_tests)
     add_test(NAME town_shop_walks COMMAND town_shop_routes_tests)
+
+    add_executable(style_pack_manifest_tests tests/style_pack_manifest_tests.c)
+    target_link_libraries(style_pack_manifest_tests PRIVATE
+        crownless_local_renderer raylib
+    )
+    target_compile_definitions(style_pack_manifest_tests PRIVATE
+        CC_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+    cc_strict_warnings(style_pack_manifest_tests)
+    add_test(NAME style_pack_manifest_loading COMMAND style_pack_manifest_tests)
 
 endif()
 
