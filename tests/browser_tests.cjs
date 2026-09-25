@@ -742,19 +742,19 @@ async function main() {
       assert.equal(await mobile.locator('#touch-actions details').getAttribute('open'), '');
       let visibleChoices = (await controls.buttons()).map(button => button.label);
       assert(visibleChoices.some(label => /^1 What do they need\?/.test(label)), JSON.stringify(visibleChoices));
-      assert(visibleChoices.some(label => /^2 Not now\./.test(label)), JSON.stringify(visibleChoices));
+      assert(visibleChoices.some(label => /^3 Not now\./.test(label)), JSON.stringify(visibleChoices));
       let firstChoice = mobile.locator('#touch-actions button').filter({hasText: /^1 What do they need\?/});
       await firstChoice.focus();
       await mobile.keyboard.press('Enter');
       await controls.button(/^1 I'll take the job\./).waitFor();
       visibleChoices = (await controls.buttons()).map(button => button.label);
       assert(visibleChoices.some(label => /^1 I'll take the job\./.test(label)), JSON.stringify(visibleChoices));
-      assert(visibleChoices.some(label => /^2 Not now\./.test(label)), JSON.stringify(visibleChoices));
+      assert(visibleChoices.some(label => /^3 Not now\./.test(label)), JSON.stringify(visibleChoices));
       firstChoice = mobile.locator('#touch-actions button').filter({hasText: /^1 I'll take the job\./});
       await firstChoice.focus();
       await mobile.keyboard.press('Enter');
-      await controls.button(/^1 Not now\./).waitFor();
-      await mobile.locator('#touch-actions button').filter({hasText: /^1 Not now\./}).focus();
+      await controls.button(/^2 Not now\./).waitFor();
+      await mobile.locator('#touch-actions button').filter({hasText: /^2 Not now\./}).focus();
       await mobile.keyboard.press('Enter');
       await controls.button('Talk Mara Venn').waitFor();
       const oldControl = await controls.button('Menu').read();
@@ -777,8 +777,8 @@ async function main() {
       await controls.button('Book').waitFor();
       await mobile.waitForFunction(() => Module.crownlessTouchFrame.title !== 'Company Book');
       await mobile.waitForTimeout(300);
-      if (await controls.button(/^1 Not now\./).read())
-        await controls.button(/^1 Not now\./).tap();
+      if (await controls.button(/^\d+ Not now\./).read())
+        await controls.button(/^\d+ Not now\./).tap();
       const openingCampaignId = await mobile.evaluate(() => Module.crownlessCampaignId);
       async function tapRelief(name) {
         await mobile.locator('#touch-actions .touch-buttons button')
@@ -799,8 +799,8 @@ async function main() {
             finish();
             return;
           }
-          if (await controls.button(/^1 Not now\./).read()) {
-            await controls.button(/^1 Not now\./).tap();
+          if (await controls.button(/^\d+ Not now\./).read()) {
+            await controls.button(/^\d+ Not now\./).tap();
             await mobile.waitForTimeout(300);
           }
           if (await controls.button(arrival).read()) {
@@ -1050,8 +1050,8 @@ async function main() {
             } else if (names.includes('Travel')) {
               if (await controls.button('Travel').clickIfVisible())
                 await mobile.waitForTimeout(300);
-            } else if (names.includes('1 Not now.')) {
-              await controls.button('1 Not now.').tap();
+            } else if (names.some(name => /^\d+ Not now\./.test(name))) {
+              await controls.button(/^\d+ Not now\./).tap();
             } else {
               await mobile.waitForTimeout(1000);
             }
