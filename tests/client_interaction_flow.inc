@@ -132,8 +132,14 @@ static int RunDeliveryHandoffRegression(void)
     sim.carriage.location_id = promise->target_id;
     sim.resolved_journey_situation_id = promise->id;
     Vector2 position = LocalPosition(&local);
-    CcInteractionTarget *door = AdventureTarget(&local, &sim, CC_INTERACTION_DOOR, 1,
-        "Market hall", "Deliver promise", (Vector3){0}, 1, 2, 1,
+    const CcLocalPlaceProfile *delivery_profile = CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(&sim, promise->target_id));
+    const CcLocalShop *delivery_shop = CcLocalShopAt(delivery_profile,
+        CC_LOCAL_SHOP_GRAIN_MERCHANT);
+    if (delivery_shop == NULL) return ClientRegressionFailure("The destination needs a grain merchant.");
+    CcInteractionTarget *door = AdventureTarget(&local, &sim, CC_INTERACTION_DOOR,
+        (uint64_t)delivery_shop->building_index + 1U,
+        "Grain merchant", "Deliver promise", (Vector3){0}, 1, 2, 1,
         (Vector2){position.x + 30, position.y}, 1);
     CcInteractionTarget *person = AdventureTarget(&local, &sim, CC_INTERACTION_PERSON, 2,
         "Neighbour", "Talk", (Vector3){0}, 1, 2, 1, position, 1);
@@ -1255,7 +1261,8 @@ static int RunAdventureInputRegression(void)
 #define UX_CHECK(condition, text) do { if (!(condition)) { (void)CcJournalClose(&journal, &sim, error, sizeof(error)); (void)remove(path); return ClientRegressionFailure(text); } } while (0)
 #define UX_KEY(key) do { if (view == VIEW_TRADE) { \
     AdventureQuote shown = AdventureTradeQuote(&sim, &local); local.trade_quote_presented = true; \
-    local.trade_presented_command = shown.command; local.trade_presented_total = shown.total; local.trade_presented_reward = shown.reward; } \
+    local.trade_presented_command = shown.command; local.trade_presented_total = shown.total; local.trade_presented_reward = shown.reward; \
+    local.trade_presented_shop_building_index = local.shop_building_index; } \
     queued_key_press[key] = true; \
     HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local, \
         (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "", message, sizeof(message), \
@@ -1328,10 +1335,19 @@ static int RunAdventureInputRegression(void)
     UX_KEY(KEY_ESCAPE);
     local.course.alarm_active = false;
     local.course.automatic_alarm = false;
+    const CcLocalPlaceProfile *shop_profile = CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(&sim, sim.player.location_id));
+    const CcLocalShop *bakery_shop = CcLocalShopAt(shop_profile,
+        CC_LOCAL_SHOP_BAKERY);
+    UX_CHECK(bakery_shop != NULL, "The town needs a bakery door.");
     target->key.kind = CC_INTERACTION_DOOR;
-    target->approach_x = CC_LOCAL_MARKET_X;
-    target->approach_z = CC_LOCAL_MARKET_Z + 0.6f;
+    target->key.object = (uint64_t)bakery_shop->building_index + 1U;
+    CcLocalLanePoint bakery_approach = CcLocalShopApproach(shop_profile, bakery_shop);
+    target->approach_x = bakery_approach.x;
+    target->approach_z = bakery_approach.z;
     target->radius = 1.1f;
+    RepositionHero(&local, (Vector2){bakery_approach.x,
+        bakery_approach.z + 1.6f}, false);
     local.interaction.focus = target->key;
     UX_KEY(KEY_F);
     for (int frame = 0; frame < 1800 && !local.market_interior && local.interaction.approaching; ++frame) {
@@ -1346,6 +1362,7 @@ static int RunAdventureInputRegression(void)
     }
     UX_CHECK(local.market_interior && view == VIEW_LOCAL, "Walking to the door must finish by entering its interior.");
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (!CcLocalShopSells(bakery_shop, (CcGood)good)) continue;
         Vector3 bay = CcLocalWarehouseGoodPosition((CcGood)good);
         CcLocalAgent shopper;
         CcLocalAgentInit(&shopper, (Vector2){4.5f, 4.2f}, true);
@@ -1381,6 +1398,7 @@ static int RunAdventureInputRegression(void)
     local.trade_presented_command = quote.command;
     local.trade_presented_total = quote.total + 1;
     local.trade_presented_reward = quote.reward;
+    local.trade_presented_shop_building_index = local.shop_building_index;
     queued_key_press[KEY_ENTER] = true;
     (void)HandleAdventureTrade(journal, &sim, &local, &view, message, sizeof(message));
     ClientInputClearPressed();
@@ -1569,6 +1587,10 @@ static int RunAdventureTradeTermsRegression(void)
     char error[192] = "", message[256] = "";
     CcSimInit(&sim, 42U);
     memset(&local, 0, sizeof(local));
+    local.market_interior = true;
+    local.shop_building_index = CcLocalShopAt(CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(&sim, sim.player.location_id)),
+        CC_LOCAL_SHOP_BAKERY)->building_index;
     local.trade_good = CC_GOOD_FOOD;
     local.trade_quantity = 1;
 #define TERMS_CHECK(condition, text) do { if (!(condition)) return ClientRegressionFailure(text); } while (0)
@@ -1598,6 +1620,8 @@ static int RunAdventureTradeTermsRegression(void)
     sim.player.location_id = promise->target_id;
     sim.carriage.location_id = promise->target_id;
     place = CcSimSettlementMutable(&sim, promise->target_id);
+    local.shop_building_index = CcLocalShopAt(CcLocalPlaceProfileForSettlement(place),
+        CC_LOCAL_SHOP_GRAIN_MERCHANT)->building_index;
     local.trade_mode = 2;
     quote = AdventureTradeQuote(&sim, &local);
     TERMS_CHECK(!quote.available && strstr(quote.reason, "another town") != NULL,
@@ -1623,6 +1647,7 @@ static int RunAdventureTradeTermsRegression(void)
     local.trade_presented_total = quote.total;
     local.trade_presented_reward = quote.reward;
     local.trade_presented_promise_id = quote.promise_id;
+    local.trade_presented_shop_building_index = local.shop_building_index;
     ClientView view = VIEW_TRADE;
     coins = sim.player.coins;
     CcId id = promise->id;
@@ -1644,6 +1669,10 @@ static int RunAdventureTradeTermsRegression(void)
     memset(sim.player.cargo, 0, sizeof(sim.player.cargo));
     sim.player.cargo[CC_GOOD_WHEAT] = 12;
     memset(&local, 0, sizeof(local));
+    local.market_interior = true;
+    local.shop_building_index = CcLocalShopAt(CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(&sim, sim.player.location_id)),
+        CC_LOCAL_SHOP_BAKERY)->building_index;
     local.trade_mode = 3;
     CcBakerySupportPlan bakery = CcSimBakerySupportPlan(&sim, sim.player.location_id);
     TERMS_CHECK(bakery.ready, "The bakery fixture must have a ready offer.");
@@ -1664,6 +1693,9 @@ static int RunAdventureTradeTermsRegression(void)
     TERMS_CHECK(CcSimBakerySupportPlan(&sim, sim.player.location_id).remembered,
         "The receiving contact must remember the confirmed support.");
     local.trade_mode = 4;
+    local.shop_building_index = CcLocalShopAt(CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(&sim, sim.player.location_id)),
+        CC_LOCAL_SHOP_GRAIN_MERCHANT)->building_index;
     sim.player.coins = 400;
     local.trade_presented_command = (CcCommand){.kind = CC_COMMAND_FUND_GRAIN_SUPPLY,
         .target_id = sim.player.location_id};

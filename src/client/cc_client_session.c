@@ -544,6 +544,8 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         }
         if (version_one) loaded.opening_step = 2U;
     }
+    if (version < 10U && loaded.scene == CC_CLIENT_SESSION_MARKET)
+        loaded.shop_building_index = 2;
     if (version < 8U && scene > CC_CLIENT_SESSION_DRAGON_SITE) current_payload = false;
     bool valid = current_payload || version_five_payload || version_four ?
         CcClientSessionValidate(&loaded) : ClientSessionValidateBase(&loaded);
