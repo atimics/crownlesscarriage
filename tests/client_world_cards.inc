@@ -171,6 +171,7 @@ static int RunWorldCardRegression(void)
             CcSimSettlement(&sim, sim.player.location_id));
         for (int32_t shop_kind = 0; shop_kind < CC_LOCAL_SHOP_COUNT; ++shop_kind) {
             const CcLocalShop *shop = CcLocalShopAt(shop_profile, (CcLocalShopKind)shop_kind);
+            if (shop == NULL) continue;
             bool listed = false;
             for (int32_t i = 0; i < cards.count; ++i)
                 if (cards.items[i].target.kind == CC_INTERACTION_DOOR &&
