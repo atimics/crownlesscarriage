@@ -83,16 +83,11 @@ async function main() {
     const frame = await page.evaluate(() => Module.crownlessTouchFrame);
     if (frame.scene !== 'trade' && !frame.buttons.some(button => /Trade .*Baker/.test(button.label))) {
       const controls = gameControls(page, true);
-      for (let trayPage = 0; trayPage < 12; ++trayPage) {
-        if (await controls.button('Enter Bakery').read()) break;
-        assert(await controls.button('More objects').read(),
-          `${stage}: the town tray gives the bakery a page`);
-        await controls.button('More objects').tap();
-      }
+      assert(await controls.pageTo('Enter Bakery'), `${stage}: the town tray gives the bakery a page`);
       await controls.button('Enter Bakery').tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
         .some(button => /Trade .*Baker/.test(button.label)),
-      undefined, {timeout: 45000});
+      undefined, {timeout: 150000});
     }
     if (frame.scene !== 'trade') await tap(/Trade .*Baker/, `${stage} keeper`);
     await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',

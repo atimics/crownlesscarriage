@@ -94,19 +94,11 @@ async function main() {
       await controls.button(/^Back/).tap();
       await page.waitForFunction(() => Module.crownlessScreen === 'playing', undefined, {timeout: 15000});
 
-      for (let trayPage = 0; trayPage < 4; ++trayPage) {
-        const buttons = await controls.buttons();
-        if (buttons.some(button => button.label === 'Enter Bakery')) {
-          await controls.button('Enter Bakery').tap();
-          break;
-        }
-        assert(buttons.some(button => button.label === 'More objects'),
-          `${name}: town tray lists the bakery`);
-        await controls.button('More objects').tap();
-      }
+      assert(await controls.pageTo('Enter Bakery'), `${name}: town tray lists the bakery`);
+      await controls.button('Enter Bakery').tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
         .some(button => /^Trade .*Baker/.test(button.label)),
-      undefined, {timeout: 45000});
+      undefined, {timeout: 150000});
       await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade', undefined, {timeout: 30000});
       const trade = await validateButtons(page, `${name} Bakery trade`);

@@ -41,6 +41,20 @@ function gameControls(page, touch = false) {
     return {click, tap: click, clickIfVisible, waitFor, read,
       isDisabled: async () => !(await read()).enabled};
   }
-  return {button, buttons, reading: () => page.evaluate(() => Module.crownlessTouchFrame.reading)};
+  // Page the context tray until a card appears. Wait for each redraw before
+  // reading: a slow renderer can still show the previous page, and reading it
+  // again would tap past the card or off the last page.
+  async function pageTo(name, maxPages = 12) {
+    for (let attempt = 0; attempt < maxPages; ++attempt) {
+      if (await button(name).read()) return true;
+      if (!(await button('More objects').read())) return false;
+      const revision = await page.evaluate(() => Module.crownlessTouchFrame.revision);
+      await button('More objects').tap();
+      await page.waitForFunction(previous =>
+        Module.crownlessTouchFrame.revision !== previous, revision, {timeout: 15000});
+    }
+    return Boolean(await button(name).read());
+  }
+  return {button, buttons, pageTo, reading: () => page.evaluate(() => Module.crownlessTouchFrame.reading)};
 }
 module.exports = {gameControls};

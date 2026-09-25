@@ -51,29 +51,15 @@ async function main() {
     }
   }
 
-  async function chooseBakery(controls, page) {
-    for (let attempt = 0; attempt < 4; ++attempt) {
-      const buttons = await controls.buttons();
-      if (buttons.some(button => button.label === 'Enter Bakery')) {
-        await controls.button('Enter Bakery').tap();
-        return;
-      }
-      assert(buttons.some(button => button.label === 'More objects'),
-        'The town tray must give a page to the bakery');
-      const before = await page.evaluate(() => Module.crownlessTouchFrame.revision);
-      await controls.button('More objects').tap();
-      // Read the next page only after the tray has redrawn; a slow renderer can
-      // still show the old page, and a second tap would skip past the bakery.
-      await page.waitForFunction(revision =>
-        Module.crownlessTouchFrame.revision !== revision, before, {timeout: 15000});
-    }
-    assert.fail('The town tray must list the bakery');
+  async function chooseBakery(controls) {
+    assert(await controls.pageTo('Enter Bakery'), 'The town tray must list the bakery');
+    await controls.button('Enter Bakery').tap();
   }
 
   async function enterTrade(page) {
     const controls = gameControls(page, true);
     if (await page.evaluate(() => Module.crownlessTouchFrame.scene !== 'trade')) {
-      if (!await controls.button(/^Trade .*Baker/).read()) await chooseBakery(controls, page);
+      if (!await controls.button(/^Trade .*Baker/).read()) await chooseBakery(controls);
       await waitForBakeryCounter(page);
       await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
@@ -100,7 +86,7 @@ async function main() {
 
     await fs.mkdir(path.join(output, name), {recursive: true});
     await page.screenshot({path: path.join(output, name, 'town.png')});
-    await chooseBakery(controls, page);
+    await chooseBakery(controls);
     await waitForBakeryCounter(page);
     const arrival = await page.evaluate(() => Module.crownlessLocalNavigation);
     assert(Math.hypot(arrival.x - start.x, arrival.z - start.z) > 2,
