@@ -6658,27 +6658,34 @@ static void HearGossip(CcSim *sim, CcGossip *story, CcId place_id,
         parent_id, 1, text)->id;
 }
 
-static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
-                            const char *speaker)
+static void ExchangeGatheredGossip(CcSim *sim, CcId carrier_id, CcId place_id,
+                                   const char *speaker,
+                                   uint32_t *town_story_masks,
+                                   CcGossipCarrier *known_carrier)
 {
     if (sim->schema_version < 44U) return;
     int32_t place = SettlementSlotById(sim, place_id);
     if (place < 0 || (sim->schema_version < 55U &&
         CcSettlementIsAbandoned(&sim->settlements[place]))) return;
-    GatherGossip(sim);
-    CcGossipCarrier *carrier = GossipCarrierFor(sim, carrier_id);
+    CcGossipCarrier *carrier = known_carrier != NULL ?
+        known_carrier : GossipCarrierFor(sim, carrier_id);
     if (carrier == NULL) return;
     /* Event sharing keeps the cast stable throughout this exchange. */
     const CcCharacter *carrier_character = sim->schema_version >= 46U ?
         CcSimCharacter(sim, carrier_id) : NULL;
     uint32_t town = UINT32_C(1) << (uint32_t)place;
-    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+    uint32_t differences = town_story_masks != NULL ?
+        carrier->stories ^ town_story_masks[place] : UINT32_MAX;
+    while (differences != 0U) {
+        int32_t i = (int32_t)__builtin_ctz(differences);
+        uint32_t bit = UINT32_C(1) << (uint32_t)i;
+        differences &= differences - 1U;
         CcGossip *story = &sim->gossip[i];
         if (story->event_id == 0U) continue;
-        uint32_t bit = UINT32_C(1) << (uint32_t)i;
         if ((carrier->stories & bit) != 0U &&
             (story->settlement_mask & town) == 0U) {
             story->settlement_mask |= town;
+            if (town_story_masks != NULL) town_story_masks[place] |= bit;
             story->local[place] = RetellGossip(sim, story, carrier->versions[i],
                 carrier_character, carrier_id);
             if (sim->schema_version < 46U || CcIdKind(carrier_id) != CC_ENTITY_CHARACTER)
@@ -6707,15 +6714,77 @@ static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
     }
 }
 
+static void ExchangeGossip(CcSim *sim, CcId carrier_id, CcId place_id,
+                           const char *speaker)
+{
+    if (sim->schema_version < 44U) return;
+    int32_t place = SettlementSlotById(sim, place_id);
+    if (place < 0 || (sim->schema_version < 55U &&
+        CcSettlementIsAbandoned(&sim->settlements[place]))) return;
+    GatherGossip(sim);
+    ExchangeGatheredGossip(sim, carrier_id, place_id, speaker, NULL, NULL);
+}
+
+#define CC_GOSSIP_LOOKUP_CAP 1024U
+_Static_assert(CC_MAX_GOSSIP_CARRIERS < CC_GOSSIP_LOOKUP_CAP,
+               "gossip lookup needs a free slot");
+_Static_assert(CC_MAX_GOSSIP_CARRIERS <= INT16_MAX,
+               "gossip carrier slots need a wider type");
+_Static_assert(CC_MAX_GOSSIP == 32,
+               "gossip differences use a 32-bit mask");
+
+static uint32_t GossipLookupSlot(CcId id)
+{
+    return (uint32_t)((id ^ (id >> 32U)) * UINT64_C(0x9e3779b97f4a7c15)) &
+        (CC_GOSSIP_LOOKUP_CAP - 1U);
+}
+
 void CcSimRefreshCharacterGossip(CcSim *sim)
 {
     if (sim == NULL || sim->schema_version < 46U) return;
+    bool gathered = false;
+    uint32_t town_story_masks[CC_MAX_SETTLEMENTS] = {0};
+    int16_t carrier_slots[CC_GOSSIP_LOOKUP_CAP];
+    for (uint32_t slot = 0; slot < CC_GOSSIP_LOOKUP_CAP; ++slot)
+        carrier_slots[slot] = -1;
+    for (int32_t slot = 0; slot < CcSimGossipCarrierCapacity(sim); ++slot) {
+        CcId id = sim->gossip_carriers[slot].id;
+        if (id == 0U) continue;
+        uint32_t bucket = GossipLookupSlot(id);
+        while (carrier_slots[bucket] >= 0)
+            bucket = (bucket + 1U) & (CC_GOSSIP_LOOKUP_CAP - 1U);
+        carrier_slots[bucket] = (int16_t)slot;
+    }
     for (int32_t i = 0; i < sim->character_count; ++i) {
         const CcCharacter *person = &sim->characters[i];
         if (!CcSimCharacterIsActive(sim, person)) continue;
         if (person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
             CcCharacterAgeYears(sim, person) < 16) continue;
-        ExchangeGossip(sim, person->id, person->current_settlement_id, person->name);
+        int32_t place = SettlementSlotById(sim, person->current_settlement_id);
+        if (place < 0 || (sim->schema_version < 55U &&
+            CcSettlementIsAbandoned(&sim->settlements[place]))) continue;
+        if (!gathered) {
+            GatherGossip(sim);
+            for (int32_t story = 0; story < CC_MAX_GOSSIP; ++story) {
+                if (sim->gossip[story].event_id == 0U) continue;
+                uint32_t bit = UINT32_C(1) << (uint32_t)story;
+                for (int32_t town = 0; town < sim->settlement_count; ++town)
+                    if ((sim->gossip[story].settlement_mask &
+                         (UINT32_C(1) << (uint32_t)town)) != 0U)
+                        town_story_masks[town] |= bit;
+            }
+            gathered = true;
+        }
+        uint32_t bucket = GossipLookupSlot(person->id);
+        while (carrier_slots[bucket] >= 0 &&
+               sim->gossip_carriers[carrier_slots[bucket]].id != person->id)
+            bucket = (bucket + 1U) & (CC_GOSSIP_LOOKUP_CAP - 1U);
+        CcGossipCarrier *carrier = carrier_slots[bucket] >= 0 ?
+            &sim->gossip_carriers[carrier_slots[bucket]] : NULL;
+        if (carrier != NULL && carrier->stories == town_story_masks[place])
+            continue;
+        ExchangeGatheredGossip(sim, person->id, person->current_settlement_id,
+                               person->name, town_story_masks, carrier);
     }
 }
 
