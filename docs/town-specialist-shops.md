@@ -27,10 +27,9 @@ or spoiled grain to the grain merchant for the existing sale and disposal terms.
 
 Wheat and raw stone cost 3 crowns per unit at their source. A bakery pays 5
 crowns for wheat, giving 2 crowns per delivered unit. A stonecutter pays 6
-crowns for raw stone, giving 3 crowns per delivered unit. Each buyer has a
-shared daily order for up to eight units. Available town funds and storage set
-the current order size. Delivered wheat becomes bread in that town's stock;
-delivered raw stone becomes cut stone.
+crowns for raw stone, giving 3 crowns per delivered unit. Each buyer's order
+follows the town's current need, funds, and storage. Delivered wheat becomes
+bread in that town's stock; delivered raw stone becomes cut stone.
 
 Each town has its own streets around these shops.
 
