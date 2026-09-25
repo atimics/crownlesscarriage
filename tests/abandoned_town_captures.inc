@@ -35,7 +35,7 @@ static void TestAbandonedTownGraphics(const char *prefix)
         BeginDrawing();
         ClearBackground(BLACK);
         CcLocalDrawStreet3D(&sim, &hero, &course, false, NULL, 2.0f,
-                           target, (Rectangle){0, 0, 1280, 720});
+                           target, (Rectangle){0, 0, 1280, 720}, NULL);
         char status[128];
         CcLocalTownStatus(&sim, town->id, status, sizeof(status));
         DrawRectangle(0, 0, 1280, 60, (Color){20, 18, 25, 255});

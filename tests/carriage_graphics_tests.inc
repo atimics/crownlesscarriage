@@ -231,17 +231,33 @@ static void TestConvoyDrawReadOnly(void)
     CcLocalCreatureGaitsAdvanceInternal(1);
     CreatureGaitCache before[CREATURE_GAIT_SLOT_COUNT];
     memcpy(before, creature_gaits, sizeof(before));
+    /* The Return, milestone 2: an active arrival-shot cue must be pure to
+       draw. Stage every cue at once so each of DrawReturnArrivalStaging's
+       branches runs, and check that neither the sim nor the cues moved. */
+    CcReturnSceneCues cues = {
+        .active = true, .fire = true, .new_ruler = true,
+        .empty_market = true, .empty_market_goods_mask = 3U,
+        .hunger = true, .bandit_camp = true, .service_lost = true,
+        .service_lost_kind = CC_SERVICE_MARKET,
+    };
+    CcReturnSceneCues cues_before = cues;
+    uint64_t sim_hash_before = CcSimHash(&sim);
     RenderTexture2D target = LoadRenderTexture(320, 180);
     for (int draw = 0; draw < 2; ++draw) {
         BeginDrawing();
         CcLocalDrawStreet3D(&sim, &agent, &course, false, &convoy, 1.0f,
-                           target, (Rectangle){0, 0, 320, 180});
+                           target, (Rectangle){0, 0, 320, 180}, &cues);
         EndDrawing();
     }
     CheckRoadSceneDrawReadOnly(before,
         "drawing the town-street convoy changed pony gait state");
+    if (CcSimHash(&sim) != sim_hash_before)
+        RequireRenderer(false, "drawing return-scene staging changed the sim");
+    if (memcmp(&cues, &cues_before, sizeof(cues)) != 0)
+        RequireRenderer(false, "drawing return-scene staging changed its own cues");
     UnloadRenderTexture(target);
     CcLocalBindPlace(NULL);
     memset(creature_gaits, 0, sizeof(creature_gaits));
-    puts("PASS repeated town-street convoy DRAW: no gait/controller mutation");
+    puts("PASS repeated town-street convoy DRAW: no gait/controller/sim mutation, "
+         "return-scene cues staged read-only");
 }

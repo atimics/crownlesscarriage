@@ -1550,6 +1550,107 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
     }
 }
 
+/* The Return, milestone 2 (docs/design/the-return.md): stage the arrival
+   shot's cues. `cues` is built once on the update path (FinishTownArrival
+   State in main.c) from the digest's top unknown changes; this function
+   only ever reads it -- no sim access, no state of its own, so drawing it
+   twice from the same cues leaves nothing changed. Fire, the hungry crowd
+   and the kingdom's colour already read live settlement state everywhere
+   else in this file; this only adds the one new, additive prop each cue
+   still needs, near the shared gate every town's arrival passes through. */
+static void DrawReturnArrivalStaging(const CcSim *sim, const CcSettlement *place,
+                                     const CcReturnSceneCues *cues,
+                                     Vector3 focus, float clock)
+{
+    if (cues == NULL || !cues->active || place == NULL || sim == NULL) return;
+    /* Every town's carriage crosses the same physical approach (the shared
+       arrival_path in SetConvoyTownPose, main.c); only the authored camera
+       that watches it differs per profile. So each prop is placed a few
+       strides from `focus` -- the arrival camera's own gaze point -- rather
+       than at a fixed world coordinate that would only line up for one
+       town. Offsets spread the props to both sides of the road so they
+       read as roadside dressing, not a wall in the company's path. */
+    float fx = focus.x, fz = focus.z;
+    if (cues->fire) {
+        /* Smoke at the gate, only for the arrival where the digest says
+           the fire is new news -- never a standing plume over old damage
+           (see the note in town_sky.inc's TownSkyPalette). */
+        Vector3 base = TerrainWorldPoint(fx + 1.0f, fz + 10.0f);
+        for (int32_t puff = 0; puff < 3; ++puff) {
+            float rise = fmodf(clock * 0.20f + (float)puff * 0.34f, 1.0f);
+            DrawScenerySphere(
+                (Vector3){base.x, base.y + 3.6f + rise * 1.6f, base.z},
+                0.30f + rise * 0.22f,
+                Fade((Color){126, 126, 128, 255}, 0.60f * (1.0f - rise)));
+        }
+    }
+    if (cues->new_ruler) {
+        /* A second, unweathered banner beside the road: a fresh ruler or a
+           fresh kingdom, either way a cloth that has not seen a season yet.
+           CcHeraldryForKingdom already reads KingdomColor3D's colours. */
+        float x = fx + 2.0f, z = fz + 5.4f;
+        CcHeraldryStyle fresh = CcHeraldryForKingdom(sim, place->kingdom_id);
+        fresh.wear = 0;
+        DrawHeraldryBanner3D(fresh,
+            (Vector3){x, CcLocalTerrainHeightAt(x, z), z}, 20.0f, 0.55f, clock);
+    }
+    if (cues->service_lost) {
+        /* A shuttered booth by the road: boards nailed across a doorway,
+           the same treatment an abandoned town's fronts get. */
+        float x = fx + 3.2f, z = fz + 5.4f;
+        float y = CcLocalTerrainHeightAt(x, z);
+        DrawBox((Vector3){x, y + 0.60f, z},
+                (Vector3){1.15f, 1.20f, 0.85f}, WORLD_WOOD_SHADOW);
+        for (int32_t board = 0; board < 3; ++board) {
+            DrawTiltedBox(
+                (Vector3){x, y + 0.42f + (float)board * 0.34f, z + 0.44f},
+                (Vector3){1.30f, 0.16f, 0.05f}, (Vector3){0.0f, 0.0f, 1.0f},
+                (board & 1) == 0 ? 9.0f : -9.0f, WORLD_INK);
+        }
+    }
+    if (cues->empty_market) {
+        /* A bare roadside stall: goods_mask already told us the market has
+           nothing to sell, so the table by the road carries nothing. */
+        float x = fx + 4.4f, z = fz + 5.4f;
+        float y = CcLocalTerrainHeightAt(x, z);
+        for (int32_t leg = 0; leg < 4; ++leg) {
+            float lx = x + ((leg & 1) ? 0.60f : -0.60f);
+            float lz = z + ((leg & 2) ? 0.30f : -0.30f);
+            DrawBox((Vector3){lx, y + 0.27f, lz},
+                    (Vector3){0.10f, 0.54f, 0.10f}, WORLD_WOOD_SHADOW);
+        }
+        DrawBox((Vector3){x, y + 0.56f, z},
+                (Vector3){1.55f, 0.10f, 0.85f}, WORLD_WOOD);
+    }
+    if (cues->hunger) {
+        /* One more hungry figure, this one waiting right by the road,
+           rather than only further in with the rest of the street. */
+        float x = fx + 3.2f, z = fz + 6.6f;
+        DrawVisibleNpcFigure3D(
+            TerrainWorldPoint(x, z), 0.88f, 2.10f,
+            UINT32_C(0x72747e05), CC_NPC_ROLE_REFUGEE, WORLD_DANGER,
+            clock * 0.55f, CC_TRAVERSAL_IDLE, focus);
+    }
+    if (cues->bandit_camp) {
+        /* Tents and a smoke column on the horizon beyond the walls: a camp
+           the company did not have to fight to see. */
+        Vector3 ridge = TerrainWorldPoint(fx + 6.0f, fz + 22.0f);
+        DrawTiltedBox((Vector3){ridge.x - 1.1f, ridge.y + 0.55f, ridge.z},
+                      (Vector3){1.35f, 1.05f, 1.05f}, (Vector3){0.0f, 1.0f, 0.0f},
+                      18.0f, (Color){96, 78, 54, 255});
+        DrawTiltedBox((Vector3){ridge.x + 1.3f, ridge.y + 0.48f, ridge.z + 0.6f},
+                      (Vector3){1.10f, 0.92f, 0.92f}, (Vector3){0.0f, 1.0f, 0.0f},
+                      -12.0f, (Color){84, 68, 47, 255});
+        for (int32_t puff = 0; puff < 3; ++puff) {
+            float rise = fmodf(clock * 0.28f + (float)puff * 0.33f, 1.0f);
+            DrawScenerySphere(
+                (Vector3){ridge.x + 0.2f, ridge.y + 1.10f + rise * 1.6f, ridge.z + 0.1f},
+                0.24f + rise * 0.20f,
+                Fade((Color){150, 150, 150, 255}, 0.55f * (1.0f - rise)));
+        }
+    }
+}
+
 static bool TerrainPointInRectangle(float x, float z, Rectangle rectangle)
 {
     return x >= rectangle.x && x <= rectangle.x + rectangle.width &&

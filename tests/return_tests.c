@@ -1,3 +1,4 @@
+#include "client/cc_local_place.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_return.h"
 #include "sim/cc_sim.h"
@@ -318,6 +319,79 @@ static void CheckRouteScenario(void)
     CC_CHECK(CcSimHash(&sim) == hash);
 }
 
+/* The Return, milestone 2 (docs/design/the-return.md): the digest's top
+   unknown changes map to the arrival shot's staged cues. Pure and
+   deterministic -- CcReturnSceneCuesBuild only reads the digest. */
+static void CheckSceneCuesMapping(void)
+{
+    CcReturnDigest gloamgate, thornford;
+    RunReturn(&sim, 4U, 365, &gloamgate, &thornford);
+
+    CcReturnSceneCues gloamgate_cues, gloamgate_cues_again;
+    CcReturnSceneCuesBuild(&gloamgate, &gloamgate_cues);
+    CcReturnSceneCuesBuild(&gloamgate, &gloamgate_cues_again);
+    CC_CHECK(memcmp(&gloamgate_cues, &gloamgate_cues_again,
+                    sizeof(gloamgate_cues)) == 0);
+    /* Seed 4 after 365 days: fire, hunger, and the lost market are
+       Gloamgate's top three unknown changes (docs/design/the-return.md's
+       own worked example). */
+    CC_CHECK(gloamgate_cues.active);
+    CC_CHECK(gloamgate_cues.fire && gloamgate_cues.hunger &&
+             gloamgate_cues.service_lost);
+    CC_CHECK(!gloamgate_cues.new_ruler && !gloamgate_cues.empty_market &&
+             !gloamgate_cues.bandit_camp);
+    CC_CHECK(gloamgate_cues.service_lost_kind == (int32_t)CC_SERVICE_MARKET);
+
+    CcReturnSceneCues thornford_cues;
+    CcReturnSceneCuesBuild(&thornford, &thornford_cues);
+    CC_CHECK(thornford_cues.active && thornford_cues.empty_market);
+    CC_CHECK(!thornford_cues.fire && !thornford_cues.hunger &&
+             !thornford_cues.service_lost && !thornford_cues.new_ruler &&
+             !thornford_cues.bandit_camp);
+
+    /* A first-visit digest stages nothing: there is no "before" to be a
+       surprise against. */
+    CcReturnDigest first_visit = {.first_visit = true};
+    CcReturnSceneCues none = {0};
+    CcReturnSceneCuesBuild(&first_visit, &none);
+    CC_CHECK(!none.active);
+
+    /* Only the top three UNKNOWN changes are ever staged, in the digest's
+       own rank order. A change the company was already told about is
+       skipped and does not use up one of the three slots, so the fourth
+       UNKNOWN change here (service lost) never gets a prop. */
+    CcReturnDigest synthetic = {0};
+    synthetic.change_count = 5;
+    synthetic.changes[0] = (CcReturnChange){
+        .kind = CC_RETURN_CHANGE_FIRE, .knowledge = CC_RETURN_UNKNOWN};
+    synthetic.changes[1] = (CcReturnChange){
+        .kind = CC_RETURN_CHANGE_HUNGER, .knowledge = CC_RETURN_TOLD};
+    synthetic.changes[2] = (CcReturnChange){
+        .kind = CC_RETURN_CHANGE_NEW_RULER, .knowledge = CC_RETURN_UNKNOWN};
+    synthetic.changes[3] = (CcReturnChange){
+        .kind = CC_RETURN_CHANGE_BANDIT_CAMP, .knowledge = CC_RETURN_UNKNOWN};
+    synthetic.changes[4] = (CcReturnChange){
+        .kind = CC_RETURN_CHANGE_SERVICE_LOST, .knowledge = CC_RETURN_UNKNOWN,
+        .detail = CC_SERVICE_INN};
+    CcReturnSceneCues synthetic_cues;
+    CcReturnSceneCuesBuild(&synthetic, &synthetic_cues);
+    CC_CHECK(synthetic_cues.active);
+    CC_CHECK(synthetic_cues.fire);
+    CC_CHECK(!synthetic_cues.hunger);
+    CC_CHECK(synthetic_cues.new_ruler);
+    CC_CHECK(synthetic_cues.bandit_camp);
+    CC_CHECK(!synthetic_cues.service_lost);
+
+    /* A new kingdom stages the same "fresh banner" cue as a new ruler. */
+    CcReturnDigest kingdom_change = {0};
+    kingdom_change.change_count = 1;
+    kingdom_change.changes[0] = (CcReturnChange){
+        .kind = CC_RETURN_CHANGE_NEW_KINGDOM, .knowledge = CC_RETURN_UNKNOWN};
+    CcReturnSceneCues kingdom_cues;
+    CcReturnSceneCuesBuild(&kingdom_change, &kingdom_cues);
+    CC_CHECK(kingdom_cues.active && kingdom_cues.new_ruler);
+}
+
 int main(void)
 {
     CheckCaptureAndRecord();
@@ -325,6 +399,7 @@ int main(void)
     CheckHeardNewsRanksLower();
     CheckCodecAndSave();
     CheckRouteScenario();
+    CheckSceneCuesMapping();
     (void)printf("return tests passed\n");
     return 0;
 }

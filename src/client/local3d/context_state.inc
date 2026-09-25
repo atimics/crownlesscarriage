@@ -129,6 +129,10 @@ static Color ShadeColor(Color color, float scale);
 static Color BlendColor(Color from, Color to, float amount);
 static void DrawHeraldryBanner3D(CcHeraldryStyle style, Vector3 base,
                                  float yaw_degrees, float scale, float clock);
+static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
+                                   float yaw, uint32_t seed, CcNpcRole role,
+                                   Color accent, float phase,
+                                   CcTraversalMode mode, Vector3 focus);
 typedef struct WorldLabel {
     Vector3 point;
     const char *text;

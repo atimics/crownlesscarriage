@@ -54,6 +54,13 @@ typedef struct CcCaptureRequest {
     float capture_town_x;
     float capture_town_z;
     float capture_town_arrival_progress;
+    /* The Return, milestone 2: --capture-return SEED DAYS TOWN PNG rides
+       the region and stages TOWN's arrival digest, like the review tool
+       (tools/return_digest.c) but rendered. */
+    bool capture_return;
+    uint32_t capture_return_seed;
+    int32_t capture_return_days;
+    const char * capture_return_town;
     bool capture_dragon_cave;
     bool capture_mine_yard;
     bool capture_mine_menu;
@@ -307,6 +314,34 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         request->capture_town_index = (int32_t)parsed_index;
         request->capture_town_arrival_progress = parsed_progress;
     }
+    request->capture_return = argc >= 2 &&
+        strcmp(argv[1], "--capture-return") == 0;
+    request->capture_return_seed = 1U;
+    request->capture_return_days = 0;
+    request->capture_return_town = NULL;
+    if (request->capture_return) {
+        if (argc != 6) {
+            (void)fprintf(
+                stderr,
+                "capture return requires a seed, days away, a town name, "
+                "and a frame path.\n");
+            return false;
+        }
+        char *seed_end = NULL;
+        char *days_end = NULL;
+        request->capture_return_seed =
+            (uint32_t)strtoul(argv[2], &seed_end, 10);
+        long days = strtol(argv[3], &days_end, 10);
+        if (seed_end == argv[2] || *seed_end != '\0' ||
+            days_end == argv[3] || *days_end != '\0' ||
+            days < 0 || days > 3650) {
+            (void)fprintf(stderr,
+                          "capture return days must be from 0 to 3650.\n");
+            return false;
+        }
+        request->capture_return_days = (int32_t)days;
+        request->capture_return_town = argv[4];
+    }
     request->capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
     request->capture_mine_yard = argc >= 2 && strcmp(argv[1],"--capture-mine-yard") == 0;
@@ -474,7 +509,7 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
                     request->capture_travel || request->capture_route_sight || request->capture_road ||
                     request->capture_parley ||
                     request->capture_aftermath || request->capture_golden || request->capture_town ||
-                    request->capture_town_arrival ||
+                    request->capture_town_arrival || request->capture_return ||
                     request->capture_dragon_cave || request->capture_underroad ||
                     request->capture_atmosphere || request->capture_face ||
                     request->capture_room || request->capture_npc_review || request->capture_heraldry ||
@@ -486,6 +521,7 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
                                request->capture_face ? argv[3] :
                                request->capture_atmosphere ? argv[3] :
                                request->capture_town_arrival ? argv[4] :
+                               request->capture_return ? argv[5] :
                                request->capture_town ? (argc >= 6 ? argv[5] : argv[3]) :
                                request->capture_npc_review ? argv[3] :
                                request->capture_route_sight ? argv[3] :

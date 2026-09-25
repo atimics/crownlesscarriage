@@ -2,6 +2,7 @@
 #define CROWNLESS_LOCAL3D_H
 
 #include "client/cc_npc_appearance.h"
+#include "client/cc_local_place.h"
 #include "client/cc_local_shops.h"
 #include "client/cc_local_viewport.h"
 #include "client/cc_soundscape.h"
@@ -678,7 +679,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
                          bool conversation,
                          const CcLocalConvoyState *convoy, float clock,
-                         RenderTexture2D target, Rectangle destination);
+                         RenderTexture2D target, Rectangle destination,
+                         const CcReturnSceneCues *return_scene);
 void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             const CcWorldStream *stream,
                             const CcLocalAgent *agent,

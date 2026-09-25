@@ -1,6 +1,7 @@
 #ifndef CROWNLESS_LOCAL_PLACE_H
 #define CROWNLESS_LOCAL_PLACE_H
 
+#include "sim/cc_return.h"
 #include "sim/cc_sim.h"
 
 #include <stdbool.h>
@@ -188,6 +189,33 @@ static inline CcLocalLanePoint CcLocalOvenCourtAnchor(const CcLocalPlaceProfile 
 }
 
 CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress);
+
+/* The Return, milestone 2 (docs/design/the-return.md): which of the
+   digest's top unknown changes the arrival shot should stage, and the one
+   detail each needs to pick its prop. Built once, on the update path, from
+   CcReturnDigestBuild's output (CcReturnSceneCuesBuild is pure) -- draw
+   code only ever reads a CcReturnSceneCues it was handed, it never builds
+   one itself. Knowledge the company was already told or witnessed is left
+   for the gate voice (milestone 3), not staged here. */
+typedef struct CcReturnSceneCues {
+    bool active;        /* at least one cue below is set */
+    bool fire;
+    bool new_ruler;      /* CC_RETURN_CHANGE_NEW_RULER or _NEW_KINGDOM */
+    bool empty_market;
+    uint32_t empty_market_goods_mask;
+    bool hunger;
+    bool bandit_camp;
+    bool service_lost;
+    int32_t service_lost_kind; /* a CcService, or -1 */
+} CcReturnSceneCues;
+
+void CcReturnSceneCuesBuild(const CcReturnDigest *digest, CcReturnSceneCues *cues);
+/* One short, plain sentence for the header when the arrival shot already
+   stages a change -- the "fewer panels" direction (milestone 2, step 4):
+   the scene carries the news, so the header keeps a journal line instead
+   of the full condition keyword list. Empty when no cue is active. */
+void CcReturnSceneJournalLine(const CcReturnSceneCues *cues, char *text,
+                              size_t capacity);
 
 /* Read-only town presence shared by scene rendering and interaction. */
 const CcBanditGroup *CcLocalTownOccupier(const CcSim *sim, CcId town);

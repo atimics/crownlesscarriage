@@ -928,6 +928,78 @@ uint32_t CcLocalPlaceTerrainSeed(uint32_t world_seed,
     return seed != 0U ? seed : profile->terrain_salt;
 }
 
+/* The Return, milestone 2: pick the arrival shot's staged cues from the
+   digest's top unknown changes (up to three, in rank order). A change
+   outside the six staged kinds still occupies one of the three slots --
+   the doc calls for "the top unknown changes", not the top three that
+   happen to be stageable -- it is simply left to the header line and, in
+   full, to the gate voice. Pure: reads the digest, writes only `cues`. */
+void CcReturnSceneCuesBuild(const CcReturnDigest *digest, CcReturnSceneCues *cues)
+{
+    if (cues == NULL) return;
+    *cues = (CcReturnSceneCues){.service_lost_kind = -1};
+    if (digest == NULL || digest->first_visit) return;
+    int32_t taken = 0;
+    for (int32_t i = 0; i < digest->change_count && taken < 3; ++i) {
+        const CcReturnChange *change = &digest->changes[i];
+        if (change->knowledge != CC_RETURN_UNKNOWN) continue;
+        ++taken;
+        switch (change->kind) {
+        case CC_RETURN_CHANGE_FIRE:
+            cues->fire = true;
+            break;
+        case CC_RETURN_CHANGE_NEW_RULER:
+        case CC_RETURN_CHANGE_NEW_KINGDOM:
+            cues->new_ruler = true;
+            break;
+        case CC_RETURN_CHANGE_STALL_EMPTY:
+            cues->empty_market = true;
+            cues->empty_market_goods_mask = change->goods_mask;
+            break;
+        case CC_RETURN_CHANGE_HUNGER:
+            cues->hunger = true;
+            break;
+        case CC_RETURN_CHANGE_BANDIT_CAMP:
+            cues->bandit_camp = true;
+            break;
+        case CC_RETURN_CHANGE_SERVICE_LOST:
+            cues->service_lost = true;
+            cues->service_lost_kind = change->detail;
+            break;
+        default:
+            break;
+        }
+    }
+    cues->active = cues->fire || cues->new_ruler || cues->empty_market ||
+        cues->hunger || cues->bandit_camp || cues->service_lost;
+}
+
+void CcReturnSceneJournalLine(const CcReturnSceneCues *cues, char *text,
+                              size_t capacity)
+{
+    if (text == NULL || capacity == 0U) return;
+    text[0] = '\0';
+    if (cues == NULL || !cues->active) return;
+    /* One line, picked by the digest's own priority order (fire outweighs
+       everything else it ranks; docs/design/the-return.md), not a list --
+       the scene is already staging the rest of the top three. */
+    if (cues->fire) {
+        (void)snprintf(text, capacity, "The town still smells of smoke.");
+    } else if (cues->new_ruler) {
+        (void)snprintf(text, capacity, "A new banner flies over the gate.");
+    } else if (cues->service_lost) {
+        (void)snprintf(text, capacity, "The %s has closed.",
+                       CcServiceName((CcServiceKind)cues->service_lost_kind));
+    } else if (cues->bandit_camp) {
+        (void)snprintf(text, capacity,
+                       "Campfire smoke rises past the walls.");
+    } else if (cues->hunger) {
+        (void)snprintf(text, capacity, "Thin, hungry faces line the road.");
+    } else if (cues->empty_market) {
+        (void)snprintf(text, capacity, "The market stalls stand empty.");
+    }
+}
+
 void CcLocalTownConditionText(uint32_t conditions, char *text, size_t capacity)
 {
     if (text == NULL || capacity == 0U) return;

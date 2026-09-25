@@ -152,7 +152,7 @@ static void CaptureTownSkies(const char *directory)
                 (void)CcLocalStreetCameraInternal(&hero,(float)frame/60.0f,true,320);
             uint64_t hash=CcSimHash(&sim);
             BeginDrawing(); ClearBackground(BLACK);
-            CcLocalDrawStreet3D(&sim,&hero,&course,false,NULL,3.0f,target,(Rectangle){0,0,1260,640});
+            CcLocalDrawStreet3D(&sim,&hero,&course,false,NULL,3.0f,target,(Rectangle){0,0,1260,640},NULL);
             DrawRectangle(0,640,1280,120,(Color){16,17,25,255});
             DrawText(TextFormat("%s / %s",sim.settlements[town].name,moods[mood]),20,658,24,RAYWHITE);
             DrawText("Native sky/backdrop review - staged scene, not a playthrough",20,696,16,GRAY);
