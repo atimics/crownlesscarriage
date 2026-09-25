@@ -8,6 +8,7 @@
 #include "client/cc_client_session.h"
 #include "client/cc_local3d.h"
 #include "client/cc_local_place.h"
+#include "client/cc_local_shops.h"
 #include "client/cc_music_player.h"
 #include "client/cc_overlay.h"
 #include "client/cc_road_book.h"
@@ -317,6 +318,7 @@ typedef struct LocalState {
     CcMoney trade_presented_total;
     CcMoney trade_presented_reward;
     CcCommand trade_presented_command;
+    int32_t trade_presented_shop_building_index;
     char receipt[256];
     uint32_t receipt_serial;
     double voice_ambient_after, voice_effort_after;
@@ -364,6 +366,7 @@ typedef struct LocalState {
     float site_travel_progress;
     float fork_turn_progress;
     bool market_interior;
+    int32_t shop_building_index;
     bool site_travel_active;
     bool site_returning;
     bool road_choice_active;
@@ -1308,6 +1311,60 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
 static void RepositionHero(LocalState *local, Vector2 position,
                            bool market_interior);
 
+static const CcLocalShop *LocalActiveShop(const CcSim *sim,
+    const LocalState *local)
+{
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(sim, sim->player.location_id));
+    if (profile == NULL) return NULL;
+    int32_t index = local->open_world_market ? profile->primary_building :
+        local->shop_building_index;
+    return (local->market_interior || local->open_world_market) ?
+        CcLocalShopForBuilding(profile, index) : NULL;
+}
+
+static bool LocalShopGoodAvailable(const CcSim *sim,
+    const LocalState *local, CcGood good)
+{
+    const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
+    return town != NULL && !CcSettlementIsAbandoned(town) &&
+        CcLocalShopSells(LocalActiveShop(sim, local), good);
+}
+
+static CcGood LocalShopFirstGood(const CcLocalShop *shop)
+{
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+        if (CcLocalShopSells(shop, (CcGood)good)) return (CcGood)good;
+    return CC_GOOD_FOOD;
+}
+
+static CcGood LocalShopNextGood(const CcLocalShop *shop, CcGood current,
+    int direction)
+{
+    for (int32_t step = 1; step <= CC_GOOD_COUNT; ++step) {
+        int32_t good = ((int32_t)current + direction * step +
+            CC_GOOD_COUNT * 2) % CC_GOOD_COUNT;
+        if (CcLocalShopSells(shop, (CcGood)good)) return (CcGood)good;
+    }
+    return current;
+}
+
+static const CcLocalShop *LocalShopNearPosition(const CcLocalPlaceProfile *profile,
+    Vector2 position, float radius)
+{
+    if (profile == NULL) return NULL;
+    const CcLocalShop *nearest = NULL;
+    float best = radius;
+    for (int32_t building = 0; building < profile->building_count; ++building) {
+        const CcLocalShop *shop = CcLocalShopForBuilding(profile, building);
+        if (shop == NULL) continue;
+        CcLocalLanePoint point = CcLocalShopApproach(profile, shop);
+        float distance = GridDistance(position, (Vector2){point.x, point.z});
+        if (distance < best) { best = distance; nearest = shop; }
+    }
+    return nearest;
+}
+
 static const Vector3 *LocalConversationFocus(const LocalState *local, ClientView view)
 {
     return local->adventure_ui && view == VIEW_CHARACTER ?
@@ -1346,6 +1403,7 @@ static void ResetLocalState(LocalState *local)
     local->trade_mode = 0;
     local->trade_confirmed = false;
     local->trade_quote_presented = false;
+    local->trade_presented_shop_building_index = -1;
     local->book_offset = 0;
     local->book_page = 0;
     local->carriage_tab = CARRIAGE_OVERVIEW;
@@ -1362,6 +1420,7 @@ static void ResetLocalState(LocalState *local)
     local->conversation_situation_id = 0U;
     local->opening_step = CC_LOCAL_OPENING_COMPLETE;
     local->market_interior = false;
+    local->shop_building_index = -1;
     local->open_world_market = false;
     local->site_kind = CC_LOCAL_SITE_NONE;
     local->site_travel_progress = 0.0f;
@@ -2385,7 +2444,9 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .opening_step = (uint32_t)local->opening_step,
         .site_travel_progress = local->site_travel_progress,
         .site_travel_active = local->site_travel_active,
-        .site_returning = local->site_returning
+        .site_returning = local->site_returning,
+        .shop_building_index = local->market_interior ?
+            local->shop_building_index : 0
     };
     CaptureAthleticProfile(&session.athletics, &local->agent.athletics);
     CaptureRoadEncounter(&session.road_encounter, local);
@@ -2699,6 +2760,13 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     RepositionHero(local,
                    (Vector2){session.position_x, session.position_z}, market);
     local->market_interior = market;
+    if (market) {
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+            CcSimSettlement(sim, sim->player.location_id));
+        local->shop_building_index = CcLocalShopForBuilding(profile,
+            session.shop_building_index) != NULL ? session.shop_building_index :
+            profile->primary_building;
+    }
     local->site_kind = site;
     if (site != CC_LOCAL_SITE_NONE) {
         CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_ROAD);
