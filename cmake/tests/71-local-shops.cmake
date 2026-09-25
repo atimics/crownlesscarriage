@@ -1,0 +1,7 @@
+add_executable(local_shops_tests tests/local_shops_tests.c)
+target_link_libraries(local_shops_tests PRIVATE crownless_local_place crownless_sim)
+if(NOT MSVC)
+    target_link_libraries(local_shops_tests PRIVATE m)
+endif()
+cc_strict_warnings(local_shops_tests)
+add_test(NAME town_specialist_shops COMMAND local_shops_tests)

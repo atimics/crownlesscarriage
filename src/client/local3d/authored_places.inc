@@ -3730,19 +3730,18 @@ static void DrawThornfordStores(const CcSettlement *place,
 {
     if (burnt && (conditions & CC_TOWN_REBUILDING) == 0U) return;
     Rectangle pad = building->footprint;
-    if (index == 0 || index == 2 || index == 6) {
+    if (index == 2) {
         int32_t sacks = place->stock[CC_GOOD_WHEAT] / 4;
         if (sacks > 8) sacks = 8;
         for (int32_t sack = 0; sack < sacks; ++sack) {
             float x = pad.x + 0.6f + (float)(sack % 2) * 0.58f;
             float z = pad.y + pad.height * 0.56f + (float)(sack / 2) * 0.64f;
-            if (index == 6) { x = pad.x + 0.6f + (float)sack * 0.54f; z = pad.y + pad.height - 0.30f; }
             DrawCylinder((Vector3){x, 0.52f, z}, 0.24f, 0.31f, 0.68f, 7,
                          BlendColor(WORLD_CROP_LIGHT, CC_VISUAL_PALETTE.parchment.light, 0.42f));
             DrawBox((Vector3){x, 1.16f, z}, (Vector3){0.18f, 0.09f, 0.18f}, WORLD_WOOD);
         }
     }
-    if (index == 5 || ((conditions & CC_TOWN_REBUILDING) != 0U && index == 2)) {
+    if (index == 0 || ((conditions & CC_TOWN_REBUILDING) != 0U && index == 2)) {
         int32_t planks = place->stock[CC_GOOD_WOOD] / 3;
         if (planks > 9) planks = 9;
         for (int32_t plank = 0; plank < planks; ++plank) {
@@ -3752,6 +3751,8 @@ static void DrawThornfordStores(const CcSettlement *place,
                     (Vector3){1.32f, 0.19f, 0.22f},
                     ShadeColor(WORLD_WOOD_LIGHT, plank % 2 == 0 ? 1.06f : 0.84f));
         }
+    }
+    if (index == 5) {
         int32_t crates = place->stock[CC_GOOD_TOOLS] / 3;
         if (crates > 3) crates = 3;
         for (int32_t crate = 0; crate < crates; ++crate) {
@@ -3761,6 +3762,19 @@ static void DrawThornfordStores(const CcSettlement *place,
             DrawBox(center, (Vector3){0.69f, 0.11f, 0.65f}, WORLD_WOOD_SHADOW);
         }
     }
+}
+
+static CcGood ShopDisplayGood(const CcLocalShop *shop,
+                              const CcSettlement *place)
+{
+    if (shop == NULL || place == NULL) return CC_GOOD_COUNT;
+    CcGood first = CC_GOOD_COUNT;
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (!CcLocalShopSells(shop, (CcGood)good)) continue;
+        if (first == CC_GOOD_COUNT) first = (CcGood)good;
+        if (place->stock[good] > 0) return (CcGood)good;
+    }
+    return first;
 }
 
 static void DrawThornfordBuildingLife(const WorldBuilding *building,
@@ -3830,6 +3844,7 @@ static void DrawThornfordBuildingLife(const WorldBuilding *building,
 }
 
 static void DrawGloamgateShopLife(const CcSettlement *place,
+                                   const CcLocalPlaceProfile *profile,
                                    const WorldBuilding *building, int32_t index,
                                    bool burnt, uint32_t conditions)
 {
@@ -3869,11 +3884,9 @@ static void DrawGloamgateShopLife(const CcSettlement *place,
         }
     }
     if (burnt && (conditions & CC_TOWN_REBUILDING) == 0U) return;
-    CcGood good = index == 6 ? CC_GOOD_BREAD :
-                  index == 2 ? CC_GOOD_WHEAT :
-                  index == 1 ? CC_GOOD_PAPER :
-                  index == 0 || index == 4 || index == 8 ? CC_GOOD_WOOL :
-                  index == 5 ? CC_GOOD_TOOLS : CC_GOOD_WOOD;
+    const CcLocalShop *shop = CcLocalShopForBuilding(profile, index);
+    CcGood good = ShopDisplayGood(shop, place);
+    if (good == CC_GOOD_COUNT) return;
     int32_t stock = place->stock[good] / 5;
     if (stock > 6) stock = 6;
     for (int32_t item = 0; item < stock; ++item) {
@@ -3898,7 +3911,7 @@ static void DrawGloamgateShopLife(const CcSettlement *place,
                     (Vector3){0.035f, 0.02f, 0.55f}, WORLD_TEAL);
         }
     }
-    if (!burnt && stock > 0 && (index == 0 || index == 4 || index == 8)) {
+    if (!burnt && stock > 0 && index == 8) {
         for (int32_t cloth = 0; cloth < 3; ++cloth) {
             DrawBox((Vector3){pad.x + pad.width - 0.45f - (float)cloth * 0.52f, 1.65f, front},
                     (Vector3){0.43f, 1.3f, 0.08f},
@@ -3912,6 +3925,7 @@ static void DrawGloamgateShopLife(const CcSettlement *place,
 }
 
 static void DrawSilverwickBuildingLife(const CcSettlement *place,
+                                       const CcLocalPlaceProfile *profile,
                                        const WorldBuilding *building,
                                        int32_t index, bool burnt,
                                        uint32_t conditions)
@@ -3961,8 +3975,8 @@ static void DrawSilverwickBuildingLife(const CcSettlement *place,
         }
     }
     if (burnt || building->style == CC_LOCAL_BUILDING_WORKER_ROW || index == 2) return;
-    CcGood good = index == 6 ? CC_GOOD_BREAD :
-                  index == 4 || index == 8 ? CC_GOOD_TOOLS : CC_GOOD_IRON;
+    CcGood good = ShopDisplayGood(CcLocalShopForBuilding(profile, index), place);
+    if (good == CC_GOOD_COUNT) return;
     int32_t count = place->stock[good] / 4;
     if (count > 6) count = 6;
     float shelf_z = pad.y + pad.height * 0.88f;
@@ -3991,6 +4005,114 @@ static void RotateBuildingPlot(Rectangle footprint, float degrees)
     rlTranslatef(x, 0.0f, z);
     rlRotatef(degrees, 0.0f, 1.0f, 0.0f);
     rlTranslatef(-x, 0.0f, -z);
+}
+
+static Color ShopSignColor(CcLocalShopKind kind)
+{
+    switch (kind) {
+        case CC_LOCAL_SHOP_BAKERY: return WORLD_CROP_LIGHT;
+        case CC_LOCAL_SHOP_BUTCHER: return WORLD_DANGER;
+        case CC_LOCAL_SHOP_GRAIN_MERCHANT: return WORLD_CROP;
+        case CC_LOCAL_SHOP_SMITH: return WORLD_METAL_LIGHT;
+        case CC_LOCAL_SHOP_JEWELER: return WORLD_GOLD;
+        case CC_LOCAL_SHOP_TIMBER_MERCHANT: return WORLD_WOOD_LIGHT;
+        case CC_LOCAL_SHOP_CLOTHIER: return WORLD_TEAL;
+        case CC_LOCAL_SHOP_STONECUTTER: return WORLD_STONE;
+        case CC_LOCAL_SHOP_STATIONER: return CC_VISUAL_PALETTE.parchment.light;
+        case CC_LOCAL_SHOP_COUNT: return WORLD_WOOD;
+    }
+    return WORLD_WOOD;
+}
+
+static void DrawSpecialistShopFront(const CcLocalPlaceProfile *profile,
+                                    const WorldBuilding *building,
+                                    int32_t index, bool burnt)
+{
+    const CcLocalShop *shop = CcLocalShopForBuilding(profile, index);
+    if (shop == NULL || building == NULL) return;
+    Rectangle pad = building->footprint;
+    float door_x = pad.x + pad.width * 0.5f;
+    if (profile->function == CC_SETTLEMENT_DUNGEON_TOWN) {
+        door_x += pad.width * ((index & 1) != 0 ? 0.16f : -0.16f);
+    }
+    float front = pad.y + pad.height;
+    float sign_y = fminf(building->height * 0.72f, 3.45f);
+    Color accent = burnt ? WORLD_METAL_SHADOW : ShopSignColor(shop->kind);
+    /* The painted board sits over the actual door on every building family. */
+    DrawBox((Vector3){door_x, sign_y, front + 0.16f},
+            (Vector3){1.62f, 0.58f, 0.16f}, WORLD_WOOD_SHADOW);
+    DrawBox((Vector3){door_x, sign_y, front + 0.255f},
+            (Vector3){1.42f, 0.42f, 0.035f}, accent);
+    float icon_z = front + 0.285f;
+    switch (shop->kind) {
+        case CC_LOCAL_SHOP_BAKERY:
+            DrawSmallSphere((Vector3){door_x, sign_y, icon_z}, 0.18f,
+                            WORLD_EARTH_LIGHT);
+            break;
+        case CC_LOCAL_SHOP_BUTCHER:
+            DrawBox((Vector3){door_x, sign_y, icon_z},
+                    (Vector3){0.48f, 0.20f, 0.045f}, WORLD_INK);
+            break;
+        case CC_LOCAL_SHOP_GRAIN_MERCHANT:
+            for (int32_t stalk = -1; stalk <= 1; ++stalk) {
+                DrawBox((Vector3){door_x + (float)stalk * 0.14f, sign_y, icon_z},
+                        (Vector3){0.04f, 0.33f, 0.045f}, WORLD_EARTH_LIGHT);
+            }
+            break;
+        case CC_LOCAL_SHOP_SMITH:
+            DrawBox((Vector3){door_x, sign_y, icon_z},
+                    (Vector3){0.48f, 0.12f, 0.05f}, WORLD_INK);
+            DrawBox((Vector3){door_x, sign_y - 0.10f, icon_z},
+                    (Vector3){0.14f, 0.25f, 0.05f}, WORLD_INK);
+            break;
+        case CC_LOCAL_SHOP_JEWELER:
+            DrawSmallSphere((Vector3){door_x, sign_y, icon_z}, 0.17f,
+                            WORLD_VIOLET);
+            break;
+        case CC_LOCAL_SHOP_TIMBER_MERCHANT:
+            for (int32_t log = -1; log <= 1; ++log) {
+                DrawBox((Vector3){door_x, sign_y + (float)log * 0.10f, icon_z},
+                        (Vector3){0.46f, 0.065f, 0.045f}, WORLD_WOOD_SHADOW);
+            }
+            break;
+        case CC_LOCAL_SHOP_CLOTHIER:
+            DrawBox((Vector3){door_x, sign_y, icon_z},
+                    (Vector3){0.36f, 0.31f, 0.045f}, WORLD_VIOLET);
+            break;
+        case CC_LOCAL_SHOP_STONECUTTER:
+            DrawBox((Vector3){door_x, sign_y, icon_z},
+                    (Vector3){0.39f, 0.30f, 0.055f}, WORLD_STONE_SHADOW);
+            break;
+        case CC_LOCAL_SHOP_STATIONER:
+            DrawBox((Vector3){door_x, sign_y, icon_z},
+                    (Vector3){0.32f, 0.34f, 0.045f}, WORLD_EARTH_LIGHT);
+            break;
+        case CC_LOCAL_SHOP_COUNT: break;
+    }
+    if (burnt) return;
+    /* A small goods display sits beside the doorway and leaves the step free. */
+    float display_x = door_x + (door_x < pad.x + pad.width * 0.5f ? 1.60f : -1.60f);
+    if (display_x < pad.x + 0.35f) display_x = pad.x + 0.35f;
+    if (display_x > pad.x + pad.width - 0.35f) display_x = pad.x + pad.width - 0.35f;
+    if (shop->kind == CC_LOCAL_SHOP_BAKERY) {
+        DrawBox((Vector3){display_x, 0.63f, front + 0.16f},
+                (Vector3){0.94f, 0.10f, 0.42f}, WORLD_WOOD);
+        for (int32_t loaf = -1; loaf <= 1; ++loaf) {
+            DrawSmallSphere((Vector3){display_x + (float)loaf * 0.27f,
+                                       0.80f, front + 0.16f},
+                            0.15f, WORLD_CROP_LIGHT);
+        }
+    } else if (shop->kind == CC_LOCAL_SHOP_STONECUTTER) {
+        DrawBox((Vector3){display_x, 0.28f, front + 0.20f},
+                (Vector3){0.75f, 0.56f, 0.44f}, WORLD_STONE_SHADOW);
+        DrawBox((Vector3){display_x + 0.20f, 0.69f, front + 0.20f},
+                (Vector3){0.36f, 0.26f, 0.37f}, WORLD_STONE);
+    } else {
+        DrawBox((Vector3){display_x, 0.36f, front + 0.16f},
+                (Vector3){0.68f, 0.72f, 0.42f}, ShopSignColor(shop->kind));
+        DrawBox((Vector3){display_x, 0.74f, front + 0.16f},
+                (Vector3){0.74f, 0.10f, 0.48f}, WORLD_WOOD_SHADOW);
+    }
 }
 
 static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
@@ -4050,11 +4172,12 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
                                       place->last_fire_day > 0 && i < 8 && fire_rank[i] <= 4, i);
         }
         if (market) {
-            DrawGloamgateShopLife(place, &building, i, burnt, conditions);
+            DrawGloamgateShopLife(place, profile, &building, i, burnt, conditions);
         }
         if (mining) {
-            DrawSilverwickBuildingLife(place, &building, i, burnt, conditions);
+            DrawSilverwickBuildingLife(place, profile, &building, i, burnt, conditions);
         }
+        DrawSpecialistShopFront(profile, &building, i, burnt);
         if (reveal > 0.05f) {
             DrawBuildingRevealCap(
                 building.footprint.x, building.footprint.y,
