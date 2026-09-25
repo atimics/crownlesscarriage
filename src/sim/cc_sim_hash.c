@@ -60,7 +60,7 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->mine.return_speed); HASH_VALUE(sim->mine.light);
         HASH_VALUE(sim->mine.steps); HASH_VALUE(sim->mine.seen);
         HASH_VALUE(sim->mine.bar_open); HASH_VALUE(sim->mine.surveyed);
-        for (int32_t good=0;good<CC_GOOD_COUNT;++good) HASH_VALUE(sim->mine.pack[good]);
+        for (int32_t good=0;good<CcGoodCountForSchema(sim->schema_version);++good) HASH_VALUE(sim->mine.pack[good]);
         if (sim->schema_version >= 103U) {
             HASH_VALUE(sim->mine.source_id); HASH_VALUE(sim->mine.source_owner_id);
             HASH_VALUE(sim->mine.cache_id); HASH_VALUE(sim->mine.cache_owner_id);
@@ -220,6 +220,12 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 34U) {
             HASH_VALUE(item->paper_tool_wear);
         }
+        if (sim->schema_version >= 117U) {
+            for (int order = 0; order < 2; ++order) {
+                HASH_VALUE(item->supply_order_day[order]);
+                HASH_VALUE(item->supply_order_filled[order]);
+            }
+        }
         HASH_VALUE(sim->last_shortage_level[i]);
     }
     for (int32_t i = 0; i < sim->route_count; ++i) {
@@ -240,7 +246,7 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->condition); HASH_VALUE(item->blocker);
             HASH_VALUE(item->accessible);
             if (sim->schema_version >= 64U) {
-                for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) HASH_VALUE(item->stock[good]);
+                for (int32_t good = 0; good < CcGoodCountForSchema(sim->schema_version); ++good) HASH_VALUE(item->stock[good]);
             }
         }
     }
@@ -1156,7 +1162,7 @@ uint64_t CcSimHash(const CcSim *sim)
     }
     if (sim->schema_version >= 75U) {
         HASH_VALUE(sim->dragon_cult.offering_coins);
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = 0; good < CcGoodCountForSchema(sim->schema_version); ++good) {
             HASH_VALUE(sim->dragon_cult.offering_stock[good]);
         }
         const CcGoblinPolitics *p = &sim->goblin_politics;

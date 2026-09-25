@@ -13,7 +13,7 @@ static bool SaveMine(sqlite3 *database, const CcSim *sim, char *error, size_t er
     bool ok=StepDone(database,statement,error,error_capacity);
     sqlite3_finalize(statement);
     if (!ok || !Prepare(database,"INSERT INTO mine_pack VALUES(?,?);",&statement,error,error_capacity)) return false;
-    for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
+    for (int32_t good=0;good<CcGoodCountForSchema(sim->schema_version);++good) {
         BindInt(statement,1,good); BindInt(statement,2,m->pack[good]);
         if (!StepDone(database,statement,error,error_capacity) || !ResetStatement(database,statement,error,error_capacity)) {
             sqlite3_finalize(statement); return false;
@@ -73,11 +73,11 @@ static bool ReadMine(sqlite3 *database, CcSim *sim, char *error, size_t error_ca
     if (!Prepare(database,"SELECT good,quantity FROM mine_pack ORDER BY good;",&statement,error,error_capacity)) return false;
     int32_t count=0;
     while (sqlite3_step(statement)==SQLITE_ROW) {
-        if (count>=CC_GOOD_COUNT || sqlite3_column_int(statement,0)!=count) break;
+        if (count>=CcGoodCountForSchema(sim->schema_version) || sqlite3_column_int(statement,0)!=count) break;
         m->pack[count++]=sqlite3_column_int(statement,1);
     }
     sqlite3_finalize(statement);
-    if (count != CC_GOOD_COUNT) {SetError(error,error_capacity,"Mine pack is incomplete."); return false;}
+    if (count != CcGoodCountForSchema(sim->schema_version)) {SetError(error,error_capacity,"Mine pack is incomplete."); return false;}
     if (sim->schema_version < 103U) return true;
     if (!Prepare(database,"SELECT source_id,source_owner_id,cache_id,cache_owner_id,source_x,source_y,cache_x,cache_y,source_released,bypass_route_seen,contest_active,encounter_outcome,player_injury FROM mine_load_state WHERE slot=1;",
         &statement,error,error_capacity)) return false;

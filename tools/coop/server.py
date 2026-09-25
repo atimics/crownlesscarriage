@@ -42,7 +42,7 @@ def away_days(seconds):
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 WORLD_ID = re.compile(r"^[0-9a-f]{32}$")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 '\-]{0,30}$")
-ACTIONS = {'abandon', 'accept', 'archive_map', 'assign_horse', 'break', 'breed_horses', 'buy_map', 'buy_treasure', 'camp', 'camp_road_site', 'cancel_archive_recruitment', 'care_horses', 'change_dungeon', 'clear_road_site', 'deliver_dispatch', 'deliver_prophecy', 'dungeon_encounter', 'enter_dungeon', 'exchange_gossip', 'fight', 'fund_grain_supply', 'goblin_intercept', 'goblin_trade', 'goblin_tunnel', 'goblin_warn', 'heard_story', 'help_pony', 'intercept_tribute', 'leave_dungeon', 'leave_pony', 'lodge', 'meet_pony', 'mine_bargain', 'mine_break_contact', 'mine_cache', 'mine_inspect', 'mine_learn_lead', 'mine_pack', 'mine_report_return', 'mine_step', 'mine_take', 'mine_use', 'move_dungeon', 'negotiate', 'observe_oven_court', 'open_shortcut', 'pace', 'pass_road_site', 'pickup_dispatch', 'pickup_relief_crate', 'press_on', 'provisions', 'refuse', 'repair', 'repair_road_site', 'reserve_archive_recruitment', 'resume_travel', 'retrieve_map', 'return_named_treasure', 'return_treasure', 'road_leg', 'scriven', 'search_dungeon', 'sell_map', 'sell_treasure', 'skip_watch', 'steal_hoard', 'steal_named_treasure', 'stop_travel', 'stow_relief_crate', 'support_bakery', 'swap_pony', 'take_body_purse', 'talk', 'trade', 'transfer_road_site', 'travel', 'visit_mine', 'withdraw'}
+ACTIONS = {'abandon', 'accept', 'archive_map', 'assign_horse', 'break', 'breed_horses', 'buy_map', 'buy_treasure', 'camp', 'camp_road_site', 'cancel_archive_recruitment', 'care_horses', 'change_dungeon', 'clear_road_site', 'deliver_dispatch', 'deliver_prophecy', 'dungeon_encounter', 'enter_dungeon', 'exchange_gossip', 'fight', 'fund_grain_supply', 'goblin_intercept', 'goblin_trade', 'goblin_tunnel', 'goblin_warn', 'heard_story', 'help_pony', 'intercept_tribute', 'leave_dungeon', 'leave_pony', 'lodge', 'meet_pony', 'mine_bargain', 'mine_break_contact', 'mine_cache', 'mine_inspect', 'mine_learn_lead', 'mine_pack', 'mine_report_return', 'mine_step', 'mine_take', 'mine_use', 'move_dungeon', 'negotiate', 'observe_oven_court', 'open_shortcut', 'pace', 'pass_road_site', 'pickup_dispatch', 'pickup_relief_crate', 'press_on', 'provisions', 'refuse', 'repair', 'repair_road_site', 'reserve_archive_recruitment', 'resume_travel', 'retrieve_map', 'return_named_treasure', 'return_treasure', 'road_leg', 'scriven', 'search_dungeon', 'sell_map', 'sell_treasure', 'skip_watch', 'steal_hoard', 'steal_named_treasure', 'stop_travel', 'stow_relief_crate', 'support_bakery', 'swap_pony', 'take_body_purse', 'talk', 'trade', 'trade_supply', 'transfer_road_site', 'travel', 'visit_mine', 'withdraw'}
 
 
 class ApiError(Exception):
@@ -461,7 +461,7 @@ class Worlds:
         target = body.get("target", "0")
         require(isinstance(target, str) and re.fullmatch(r"[0-9]{1,20}", target) and int(target) < 2**64,
                 "Choose a valid target.")
-        good = number(body.get("good", 0), 0, 13, "good")
+        good = number(body.get("good", 0), 0, 14, "good")
         amount = number(body.get("amount", 0), -1000000, 1000000, "quantity")
         payload = json.dumps({k: v for k, v in body.items() if k != "campaign"}, sort_keys=True)
         payload_hash = hashlib.sha256(payload.encode()).hexdigest()
