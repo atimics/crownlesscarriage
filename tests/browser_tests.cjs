@@ -790,7 +790,8 @@ async function main() {
         let taps = 0, stillIntervals = 0, previous = null;
         const finish = () => reliefWalks.push({crate, action, seconds:(Date.now()-started)/1000,
           taps, reissues:Math.max(0, taps-1), samples});
-        for (let attempt = 0; attempt < 12; ++attempt) {
+        const maxSamples = action === 'Walk to carriage' ? 18 : 12;
+        for (let attempt = 0; attempt < maxSamples; ++attempt) {
           if (await controls.button(arrival).read()) {
             finish();
             return;
@@ -1042,8 +1043,8 @@ async function main() {
               await controls.button('Park carriage').tap();
               await mobile.waitForTimeout(1000);
             } else if (names.includes('Travel')) {
-              await controls.button('Travel').tap();
-              await mobile.waitForTimeout(300);
+              if (await controls.button('Travel').clickIfVisible())
+                await mobile.waitForTimeout(300);
             } else if (names.includes('1 Not now.')) {
               await controls.button('1 Not now.').tap();
             } else {
