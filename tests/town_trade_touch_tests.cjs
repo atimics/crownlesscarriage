@@ -33,6 +33,24 @@ async function main() {
       undefined, {timeout: 120000});
   }
 
+  // The bakery can be across town. CI renders in software at a low frame
+  // rate, so allow a long walk, and say where the walker stopped if it fails.
+  async function waitForBakeryCounter(page) {
+    const start = await page.evaluate(() => Module.crownlessLocalNavigation);
+    try {
+      await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
+        .some(button => /^Trade .*Baker/.test(button.label)),
+      undefined, {timeout: 150000});
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        navigation: Module.crownlessLocalNavigation,
+        scene: Module.crownlessTouchFrame.scene,
+        cards: Module.crownlessTouchFrame.buttons.map(button => button.label)
+      }));
+      throw new Error(`Bakery counter not reached: ${JSON.stringify({start, ...state})}; ${error.message}`);
+    }
+  }
+
   async function chooseBakery(controls, page) {
     for (let attempt = 0; attempt < 4; ++attempt) {
       const buttons = await controls.buttons();
@@ -56,9 +74,7 @@ async function main() {
     const controls = gameControls(page, true);
     if (await page.evaluate(() => Module.crownlessTouchFrame.scene !== 'trade')) {
       if (!await controls.button(/^Trade .*Baker/).read()) await chooseBakery(controls, page);
-      await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
-        .some(button => /^Trade .*Baker/.test(button.label)),
-      undefined, {timeout: 45000});
+      await waitForBakeryCounter(page);
       await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
         undefined, {timeout: 45000});
@@ -85,9 +101,7 @@ async function main() {
     await fs.mkdir(path.join(output, name), {recursive: true});
     await page.screenshot({path: path.join(output, name, 'town.png')});
     await chooseBakery(controls, page);
-    await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
-      .some(button => /^Trade .*Baker/.test(button.label)),
-    undefined, {timeout: 45000});
+    await waitForBakeryCounter(page);
     const arrival = await page.evaluate(() => Module.crownlessLocalNavigation);
     assert(Math.hypot(arrival.x - start.x, arrival.z - start.z) > 2,
       `${name}: entering the bakery walks across town: ${JSON.stringify({start, arrival})}`);
