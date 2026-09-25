@@ -1,0 +1,5 @@
+add_executable(scheduled_events_tests tests/scheduled_events_tests.c)
+target_link_libraries(scheduled_events_tests PRIVATE crownless_persistence)
+cc_strict_warnings(scheduled_events_tests)
+cc_large_sim_stack(scheduled_events_tests)
+add_test(NAME scheduled_event_replay COMMAND scheduled_events_tests)
