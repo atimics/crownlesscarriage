@@ -41,20 +41,27 @@
 
 /* ---- shared, cross-translation-unit state --------------------------- */
 
-CcVisualPalette g_cc_active_palette = CC_VISUAL_PALETTE_CLASSIC_INIT;
-CcStylePack g_cc_active_style_pack = {0};
-int32_t cc_active_art_width = CC_LOCAL_ART_WIDTH;
-int32_t cc_active_art_height = CC_LOCAL_ART_HEIGHT;
-int32_t cc_active_art_upscale_filter = TEXTURE_FILTER_POINT;
-
-static char g_cc_active_style_pack_id[CC_STYLE_ID_MAX] = "classic";
-static bool g_cc_active_style_pack_loaded_cleanly = true;
-
 /* The ultimate, hardcoded-in-the-binary fallback. These are the original
    shared shader paths the client always shipped before style packs
    existed; they stay put on disk (see assets/shaders/README or the audit
    notes in docs/design/style-packs.md) specifically so this fallback can
-   never itself go missing, even if assets/stylepacks/ is damaged. */
+   never itself go missing, even if assets/stylepacks/ is damaged.
+
+   This is a *compile-time* initializer, not just something
+   CcStylePackResetToClassic() applies at runtime, and g_cc_active_style_pack
+   below is defined with it rather than with {0}. A style pack's shader
+   paths are plain strings: an all-zeroed (all-empty-string) CcStylePack is
+   not a safe "nothing loaded yet" placeholder the way a NULL pointer would
+   be, because ResolveAssetPath("", ...) does not reliably fail closed --
+   on at least one real toolchain it resolved the empty path to the asset
+   root *directory* and fed that to the shader compiler as if it were a
+   file, producing an empty/corrupt shader instead of an honest "not
+   found". CcLocalRendererInit() is reachable from more than one binary
+   (renderer_regression_tests and other test executables initialize the
+   renderer directly, without going through crownless_carriage's main() and
+   its CcStylePackLoad() call), so "just call CcStylePackLoad() first" is
+   not a guarantee this file can make on its own -- the default has to be
+   safe by construction. */
 #define CC_STYLE_FALLBACK_WORLD_VERTEX_SHADER "assets/shaders/world_lit.vs"
 #define CC_STYLE_FALLBACK_WORLD_FRAGMENT_SHADER "assets/shaders/world_lit.fs"
 #define CC_STYLE_FALLBACK_SKINNED_VERTEX_SHADER \
@@ -68,56 +75,48 @@ static bool g_cc_active_style_pack_loaded_cleanly = true;
 #define CC_STYLE_FALLBACK_GRADE_SHADER "assets/shaders/style_grade.fs"
 #define CC_STYLE_FALLBACK_HERO_INK_STRENGTH 0.52f
 
-static const float CC_STYLE_FALLBACK_MATERIAL_INK[CC_STYLE_MATERIAL_INK_COUNT] = {
-    0.52f, 0.88f, 0.62f, 0.58f, 0.68f, 0.76f, 0.46f, 0.60f, 0.96f,
-};
+#define CC_STYLE_PACK_CLASSIC_FALLBACK_INIT { \
+    .id = "classic", \
+    .version = "0.0.0-fallback", \
+    .world_vertex_shader = CC_STYLE_FALLBACK_WORLD_VERTEX_SHADER, \
+    .world_fragment_shader = CC_STYLE_FALLBACK_WORLD_FRAGMENT_SHADER, \
+    .skinned_vertex_shader = CC_STYLE_FALLBACK_SKINNED_VERTEX_SHADER, \
+    .painted_environment_fragment_shader = \
+        CC_STYLE_FALLBACK_PAINTED_ENVIRONMENT_SHADER, \
+    .tree_foliage_fragment_shader = CC_STYLE_FALLBACK_TREE_FOLIAGE_SHADER, \
+    .hero_fragment_shader = CC_STYLE_FALLBACK_HERO_SHADER, \
+    .npc_fragment_shader = CC_STYLE_FALLBACK_NPC_SHADER, \
+    .grade_fragment_shader = CC_STYLE_FALLBACK_GRADE_SHADER, \
+    .hero_ink_strength = CC_STYLE_FALLBACK_HERO_INK_STRENGTH, \
+    .material_ink = { \
+        0.52f, 0.88f, 0.62f, 0.58f, 0.68f, 0.76f, 0.46f, 0.60f, 0.96f, \
+    }, \
+    .dither_strength = 0.0f, \
+    .palette = CC_VISUAL_PALETTE_CLASSIC_INIT, \
+    .render_target_width = CC_LOCAL_ART_WIDTH, \
+    .render_target_height = CC_LOCAL_ART_HEIGHT, \
+    .render_target_upscale_filter = TEXTURE_FILTER_POINT, \
+    .post_chain = {{ \
+        .name = "grade", \
+        .shader_path = CC_STYLE_FALLBACK_GRADE_SHADER, \
+        .input_scene_color = true, \
+        .cache = CC_STYLE_PASS_CACHE_PER_FRAME, \
+    }}, \
+    .post_chain_count = 1, \
+}
+
+CcVisualPalette g_cc_active_palette = CC_VISUAL_PALETTE_CLASSIC_INIT;
+CcStylePack g_cc_active_style_pack = CC_STYLE_PACK_CLASSIC_FALLBACK_INIT;
+int32_t cc_active_art_width = CC_LOCAL_ART_WIDTH;
+int32_t cc_active_art_height = CC_LOCAL_ART_HEIGHT;
+int32_t cc_active_art_upscale_filter = TEXTURE_FILTER_POINT;
+
+static char g_cc_active_style_pack_id[CC_STYLE_ID_MAX] = "classic";
+static bool g_cc_active_style_pack_loaded_cleanly = true;
 
 static void CcStylePackResetToClassic(CcStylePack *pack)
 {
-    *pack = (CcStylePack){0};
-    (void)snprintf(pack->id, sizeof(pack->id), "classic");
-    (void)snprintf(pack->version, sizeof(pack->version), "0.0.0-fallback");
-    (void)snprintf(pack->world_vertex_shader,
-                   sizeof(pack->world_vertex_shader), "%s",
-                   CC_STYLE_FALLBACK_WORLD_VERTEX_SHADER);
-    (void)snprintf(pack->world_fragment_shader,
-                   sizeof(pack->world_fragment_shader), "%s",
-                   CC_STYLE_FALLBACK_WORLD_FRAGMENT_SHADER);
-    (void)snprintf(pack->skinned_vertex_shader,
-                   sizeof(pack->skinned_vertex_shader), "%s",
-                   CC_STYLE_FALLBACK_SKINNED_VERTEX_SHADER);
-    (void)snprintf(pack->painted_environment_fragment_shader,
-                   sizeof(pack->painted_environment_fragment_shader), "%s",
-                   CC_STYLE_FALLBACK_PAINTED_ENVIRONMENT_SHADER);
-    (void)snprintf(pack->tree_foliage_fragment_shader,
-                   sizeof(pack->tree_foliage_fragment_shader), "%s",
-                   CC_STYLE_FALLBACK_TREE_FOLIAGE_SHADER);
-    (void)snprintf(pack->hero_fragment_shader,
-                   sizeof(pack->hero_fragment_shader), "%s",
-                   CC_STYLE_FALLBACK_HERO_SHADER);
-    (void)snprintf(pack->npc_fragment_shader,
-                   sizeof(pack->npc_fragment_shader), "%s",
-                   CC_STYLE_FALLBACK_NPC_SHADER);
-    (void)snprintf(pack->grade_fragment_shader,
-                   sizeof(pack->grade_fragment_shader), "%s",
-                   CC_STYLE_FALLBACK_GRADE_SHADER);
-    pack->hero_ink_strength = CC_STYLE_FALLBACK_HERO_INK_STRENGTH;
-    for (int32_t index = 0; index < CC_STYLE_MATERIAL_INK_COUNT; ++index) {
-        pack->material_ink[index] = CC_STYLE_FALLBACK_MATERIAL_INK[index];
-    }
-    pack->dither_strength = 0.0f;
-    pack->palette = (CcVisualPalette)CC_VISUAL_PALETTE_CLASSIC_INIT;
-    pack->render_target_width = CC_LOCAL_ART_WIDTH;
-    pack->render_target_height = CC_LOCAL_ART_HEIGHT;
-    pack->render_target_upscale_filter = TEXTURE_FILTER_POINT;
-    (void)snprintf(pack->post_chain[0].name,
-                   sizeof(pack->post_chain[0].name), "grade");
-    (void)snprintf(pack->post_chain[0].shader_path,
-                   sizeof(pack->post_chain[0].shader_path), "%s",
-                   CC_STYLE_FALLBACK_GRADE_SHADER);
-    pack->post_chain[0].input_scene_color = true;
-    pack->post_chain[0].cache = CC_STYLE_PASS_CACHE_PER_FRAME;
-    pack->post_chain_count = 1;
+    *pack = (CcStylePack)CC_STYLE_PACK_CLASSIC_FALLBACK_INIT;
 }
 
 /* ---- a small dependency-free JSON reader ----------------------------- */
