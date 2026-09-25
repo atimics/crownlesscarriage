@@ -765,8 +765,6 @@ typedef struct CcSettlement {
     int32_t mine_tool_wear;
     int32_t smith_tool_wear;
     int32_t paper_tool_wear;
-    int32_t supply_order_day[2];
-    int32_t supply_order_filled[2];
     int32_t treasure_gold_committed;
     int32_t treasure_gems_committed;
     int32_t treasure_work;
@@ -2326,7 +2324,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 678392,
+_Static_assert(sizeof(CcSim) == 678296,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2447,7 +2445,7 @@ bool CcSimHorseCarePreview(const CcSim *sim, CcHorseCarePreview *preview);
 CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
 bool CcGoodIsValid(CcGood good);
-/* Fixed local haul quotes. Buyers each order eight units per day. */
+/* Local haul quotes follow the buyer's finished stock and expected use. */
 typedef struct CcSupplyOffer {
     int32_t source_unit_price;
     int32_t delivery_unit_price;

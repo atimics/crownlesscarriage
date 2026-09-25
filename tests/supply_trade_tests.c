@@ -44,8 +44,11 @@ static void RoundTrip(void)
 static void CheckWheat(void)
 {
     Prepare(0);
+    sim.settlements[0].reserve_target[CC_GOOD_BREAD] = 20;
+    sim.settlements[0].consumption[CC_GOOD_BREAD] = 0;
+    sim.settlements[0].stock[CC_GOOD_BREAD] = 15;
     CcSupplyOffer offer = CcSimSupplyOffer(&sim, CC_GOOD_WHEAT);
-    CC_CHECK(offer.ready && offer.remaining == 8);
+    CC_CHECK(offer.ready && offer.remaining == 6);
     CC_CHECK(offer.source_unit_price == 3 && offer.delivery_unit_price == 5);
     int bread = sim.settlements[0].stock[CC_GOOD_BREAD];
     int wheat = sim.settlements[0].stock[CC_GOOD_WHEAT];
@@ -58,30 +61,37 @@ static void CheckWheat(void)
     CC_CHECK(sim.settlements[0].stock[CC_GOOD_WHEAT] == wheat - 4);
     CC_CHECK(CcSimTrackedGold(&sim) == total);
     RoundTrip();
-    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 4);
-    CC_CHECK(Trade(CC_GOOD_WHEAT, 5));
-    Reject(CC_GOOD_WHEAT, -5);
-    CC_CHECK(Trade(CC_GOOD_WHEAT, -4));
+    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 2);
+    CC_CHECK(Trade(CC_GOOD_WHEAT, 3));
+    Reject(CC_GOOD_WHEAT, -3);
+    CC_CHECK(Trade(CC_GOOD_WHEAT, -2));
     Reject(CC_GOOD_WHEAT, -1);
     RoundTrip();
     CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 0);
     ++sim.current_day;
-    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 8);
+    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 0);
+    CcCommand retail = {.kind=CC_COMMAND_TRADE, .target_id=sim.player.location_id,
+        .good=CC_GOOD_BREAD, .amount=2};
+    CC_CHECK(CcSimApply(&sim, &retail, error, sizeof(error)));
+    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 2);
     CC_CHECK(Trade(CC_GOOD_WHEAT, -1));
-    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 7);
+    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == 1);
 }
 
 static void CheckStone(void)
 {
     Prepare(3);
     CcSupplyOffer offer = CcSimSupplyOffer(&sim, CC_GOOD_RAW_STONE);
-    CC_CHECK(offer.source_available == 24 && offer.remaining == 8);
+    CC_CHECK(offer.source_available == 24);
     CC_CHECK(offer.source_unit_price == 3 && offer.delivery_unit_price == 6);
     CcMoney total = CcSimTrackedGold(&sim);
     CC_CHECK(Trade(CC_GOOD_RAW_STONE, 4));
     RoundTrip();
     sim.player.location_id = sim.settlements[4].id;
     sim.carriage.location_id = sim.player.location_id;
+    sim.settlements[4].stock[CC_GOOD_STONE] = 0;
+    sim.settlements[4].reserve_target[CC_GOOD_STONE] = 10;
+    sim.settlements[4].consumption[CC_GOOD_STONE] = 0;
     int stone = sim.settlements[4].stock[CC_GOOD_STONE];
     CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_RAW_STONE).source_available == 0);
     Reject(CC_GOOD_RAW_STONE, 1);
@@ -91,7 +101,7 @@ static void CheckStone(void)
     CC_CHECK(sim.settlements[4].stock[CC_GOOD_RAW_STONE] == 0);
     CC_CHECK(CcSimTrackedGold(&sim) == total);
     RoundTrip();
-    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_RAW_STONE).remaining == 4);
+    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_RAW_STONE).remaining == 6);
 }
 
 static void CheckRejections(void)
@@ -148,6 +158,8 @@ static void CheckJournal(void)
     const char *path = "supply-journal-test.ccsave";
     (void)remove(path);
     Prepare(0);
+    sim.settlements[0].stock[CC_GOOD_BREAD] = 0;
+    CC_CHECK(CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining >= 2);
     CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
     CC_CHECK(journal != NULL);
     CcCommand command = {.kind=CC_COMMAND_TRADE_SUPPLY,
@@ -155,11 +167,12 @@ static void CheckJournal(void)
     CC_CHECK(CcJournalApply(journal, &sim, &command, error, sizeof(error)));
     command.amount = -2;
     CC_CHECK(CcJournalApply(journal, &sim, &command, error, sizeof(error)));
+    int wanted = CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining;
     CC_CHECK(CcJournalFlush(journal, &sim, error, sizeof(error)));
     CcJournalAbandon(&journal);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
-    CC_CHECK(CcSimSupplyOffer(&restored, CC_GOOD_WHEAT).remaining == 6);
+    CC_CHECK(CcSimSupplyOffer(&restored, CC_GOOD_WHEAT).remaining == wanted);
     (void)remove(path);
 }
 
@@ -176,7 +189,7 @@ static void CheckLegacy(void)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.player.coins == sim.player.coins);
     CC_CHECK(restored.settlements[3].stock[CC_GOOD_RAW_STONE] == 24);
-    CC_CHECK(CcSimSupplyOffer(&restored, CC_GOOD_WHEAT).remaining == 8);
+    CC_CHECK(CcSimSupplyOffer(&restored, CC_GOOD_WHEAT).ready);
     sim = restored;
     RoundTrip();
 }
@@ -184,6 +197,6 @@ static void CheckLegacy(void)
 int main(void)
 {
     CheckWheat(); CheckStone(); CheckRejections(); CheckBuyback(); CheckJournal(); CheckLegacy();
-    puts("PASS paid local deliveries: quotes, profit, stocks, daily limits, atomic rejection, save and journal replay");
+    puts("PASS paid local deliveries: quotes, profit, stocks, stock demand, atomic rejection, save and journal replay");
     return 0;
 }

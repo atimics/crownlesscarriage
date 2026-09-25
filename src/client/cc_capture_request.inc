@@ -232,8 +232,9 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         long town = strtol(argv[2], &town_end, 10);
         long good = strtol(argv[3], &good_end, 10);
         if (town_end == argv[2] || *town_end != '\0' || town < 0 || town >= 6 ||
-            good_end == argv[3] || *good_end != '\0' || good < 0 || good >= CC_GOOD_ROTTEN_MEAT) {
-            (void)fprintf(stderr, "Choose a town from 0 to 5 and a shop good from 0 to 11.\n");
+            good_end == argv[3] || *good_end != '\0' || good < 0 || good >= CC_GOOD_COUNT ||
+            good == CC_GOOD_ROTTEN_MEAT || good == CC_GOOD_ROTTEN_GRAIN) {
+            (void)fprintf(stderr, "Choose a town from 0 to 5 and a shop good from 0 to 11, or raw stone 14.\n");
             return false;
         }
         request->capture_town_index = (int32_t)town;

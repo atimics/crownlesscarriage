@@ -220,12 +220,6 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 34U) {
             HASH_VALUE(item->paper_tool_wear);
         }
-        if (sim->schema_version >= 117U) {
-            for (int order = 0; order < 2; ++order) {
-                HASH_VALUE(item->supply_order_day[order]);
-                HASH_VALUE(item->supply_order_filled[order]);
-            }
-        }
         HASH_VALUE(sim->last_shortage_level[i]);
     }
     for (int32_t i = 0; i < sim->route_count; ++i) {
