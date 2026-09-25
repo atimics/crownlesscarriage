@@ -522,6 +522,33 @@ static void PrintSettlementTrace(FILE *stream, const CcSim *sim,
 }
 #include "sim_route_metrics.inc"
 
+typedef struct MetricDayContext {
+    CcMetricsHistory *history;
+    RouteObservation *routes;
+    FILE *settlements_csv;
+    FILE *route_csv;
+    int32_t seed_number;
+    int32_t trace_start_day;
+    int32_t trace_every_days;
+    int32_t final_day;
+} MetricDayContext;
+
+static void ObserveMetricDay(const CcSim *sim, void *raw_context)
+{
+    MetricDayContext *context = raw_context;
+    UpdateDailyHistory(sim, context->history);
+    int32_t elapsed_days = sim->current_day - 1;
+    if (context->settlements_csv != NULL &&
+        elapsed_days >= context->trace_start_day &&
+        (elapsed_days == context->trace_start_day ||
+         elapsed_days % context->trace_every_days == 0 ||
+         elapsed_days == context->final_day)) {
+        PrintSettlementTrace(context->settlements_csv, sim,
+                             context->seed_number, elapsed_days);
+    }
+    if (context->route_csv != NULL) ObserveRoutes(sim, context->routes);
+}
+
 int main(int argc, char **argv)
 {
     int32_t seeds = 100;
@@ -699,19 +726,16 @@ int main(int argc, char **argv)
         for (int32_t i = 0; i < sim.route_count; ++i) {
             history.route_was_closed[i] = sim.routes[i].closed;
         }
+        MetricDayContext day_context = {
+            .history = &history, .routes = routes,
+            .settlements_csv = settlements_csv, .route_csv = route_csv,
+            .seed_number = seed_number, .trace_start_day = trace_start_day,
+            .trace_every_days = trace_every_days, .final_day = years * 365
+        };
         for (int32_t year = 1; year <= years; ++year) {
-            for (int32_t day = 0; day < 365; ++day) {
-                CcSimAdvanceDaysWithNutritionAccounting(&sim, 1,
-                    nutrition_csv != NULL ? &nutrition : NULL);
-                UpdateDailyHistory(&sim, &history);
-                int32_t elapsed_days = (year - 1) * 365 + day + 1;
-                if (settlements_csv != NULL && elapsed_days >= trace_start_day &&
-                    (elapsed_days == trace_start_day ||
-                     elapsed_days % trace_every_days == 0 || elapsed_days == years * 365)) {
-                    PrintSettlementTrace(settlements_csv, &sim, seed_number, elapsed_days);
-                }
-                if (route_csv != NULL) ObserveRoutes(&sim, routes);
-            }
+            CcSimAdvanceDaysObserved(&sim, 365,
+                nutrition_csv != NULL ? &nutrition : NULL,
+                ObserveMetricDay, &day_context);
             UpdateHistory(&sim, &history);
             if (!CcSimValidate(&sim, error, sizeof(error))) {
                 (void)fprintf(stderr,

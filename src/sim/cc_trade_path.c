@@ -69,6 +69,9 @@ bool CcTradeFindPath(const CcSim *sim, CcId from_id, CcId to_id,
         CcId current_id = sim->settlements[current].id;
         for (int32_t route_slot = 0; route_slot < sim->route_count; ++route_slot) {
             const CcRoute *route = &sim->routes[route_slot];
+            CcId neighbor_id = route->from_id == current_id ? route->to_id :
+                               route->to_id == current_id ? route->from_id : 0U;
+            if (neighbor_id == 0U) continue;
             if (!allow_kingdom_borders &&
                 CcSimRouteCrossesKingdomBorder(sim, route->id)) continue;
             if (carriage_kingdom_id != 0U) {
@@ -85,8 +88,6 @@ bool CcTradeFindPath(const CcSim *sim, CcId from_id, CcId to_id,
             int32_t available_capacity = effective_capacity -
                 (route_used != NULL ? route_used[route_slot] : 0);
             if (available_capacity < MaximumI32(1, required_slots)) continue;
-            CcId neighbor_id = route->from_id == current_id ? route->to_id :
-                               route->to_id == current_id ? route->from_id : 0U;
             int32_t neighbor = SettlementSlotById(sim, neighbor_id);
             if (neighbor < 0 || visited[neighbor] ||
                 CcSettlementIsAbandoned(&sim->settlements[neighbor])) continue;
@@ -115,4 +116,3 @@ bool CcTradeFindPath(const CcSim *sim, CcId from_id, CcId to_id,
     if (path_capacity != NULL) *path_capacity = bottleneck[target];
     return true;
 }
-

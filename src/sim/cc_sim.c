@@ -16870,18 +16870,48 @@ static void CaptureCensusSources(const CcSim *sim, CcCensusSources *sources)
     }
 }
 
-void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
+typedef struct CcGossipRefreshInputs {
+    CcId story_ids[CC_MAX_GOSSIP];
+    uint32_t story_towns[CC_MAX_GOSSIP];
+    int32_t eligible_count;
+    CcId eligible_ids[CC_MAX_CHARACTER_RECORDS];
+    CcId eligible_towns[CC_MAX_CHARACTER_RECORDS];
+} CcGossipRefreshInputs;
+
+static void CaptureGossipRefreshInputs(const CcSim *sim,
+                                       CcGossipRefreshInputs *inputs)
+{
+    memset(inputs, 0, sizeof(*inputs));
+    for (int32_t i = 0; i < CC_MAX_GOSSIP; ++i) {
+        inputs->story_ids[i] = sim->gossip[i].event_id;
+        inputs->story_towns[i] = sim->gossip[i].settlement_mask;
+    }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *person = &sim->characters[i];
+        if (!CcSimCharacterIsActive(sim, person) ||
+            person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+            CcCharacterAgeYears(sim, person) < 16) continue;
+        int32_t slot = inputs->eligible_count++;
+        inputs->eligible_ids[slot] = person->id;
+        inputs->eligible_towns[slot] = person->current_settlement_id;
+    }
+}
+
+static void AdvanceDaysInternal(CcSim *sim, int32_t days,
     CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
-    CcRoadProductionAccounting *sites)
+    CcRoadProductionAccounting *sites, CcSimDayObserver observer, void *context)
 {
     if (sim == NULL || days <= 0 || sim->current_day < 1 ||
         sim->current_day > CC_SIM_MAX_DAY ||
         days > CC_SIM_MAX_DAY - sim->current_day) return;
     int32_t next_situation_expiry = NextSituationExpiryDay(sim);
+    CcGossipRefreshInputs previous_gossip_inputs;
+    bool have_gossip_inputs = false;
+    bool gossip_followup_due = false;
+    CcCensusSources census_before, census_after;
+    if (sim->schema_version >= 117U)
+        CaptureCensusSources(sim, &census_before);
     for (int32_t day = 0; day < days; ++day) {
-        CcCensusSources census_before, census_after;
-        if (sim->schema_version >= 117U)
-            CaptureCensusSources(sim, &census_before);
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         if (sim->schema_version >= 85U && sim->archive_staff.active) {
@@ -16902,7 +16932,25 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         if (sim->schema_version >= 94U) CcSimAdvanceWarParties(sim);
         if (sim->schema_version >= 85U) (void)CcSimAppointArchiveRecruit(sim);
         HearLocalGossip(sim);
-        CcSimRefreshCharacterGossip(sim);
+        if (sim->schema_version >= 46U) {
+            CcGossipRefreshInputs current_gossip_inputs;
+            CaptureGossipRefreshInputs(sim, &current_gossip_inputs);
+            if (!have_gossip_inputs || gossip_followup_due ||
+                memcmp(&current_gossip_inputs, &previous_gossip_inputs,
+                       sizeof(current_gossip_inputs)) != 0) {
+                gossip_followup_due = false;
+                CcSimRefreshCharacterGossip(sim);
+                CaptureGossipRefreshInputs(sim, &previous_gossip_inputs);
+                if (memcmp(current_gossip_inputs.story_ids,
+                           previous_gossip_inputs.story_ids,
+                           sizeof(current_gossip_inputs.story_ids)) != 0 ||
+                    memcmp(current_gossip_inputs.story_towns,
+                           previous_gossip_inputs.story_towns,
+                           sizeof(current_gossip_inputs.story_towns)) != 0)
+                    gossip_followup_due = true;
+                have_gossip_inputs = true;
+            }
+        }
         if (!sim->journey.active) {
             ExchangeGossip(sim, sim->player.id, sim->player.location_id,
                             "Your fellow travelers");
@@ -16973,8 +17021,23 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
             if (memcmp(&census_before, &census_after,
                        sizeof(census_before)) != 0)
                 CcCensusReconcile(sim);
+            census_before = census_after;
         }
+        if (observer != NULL) observer(sim, context);
     }
+}
+
+void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
+    CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
+    CcRoadProductionAccounting *sites)
+{
+    AdvanceDaysInternal(sim, days, accounting, smithy, sites, NULL, NULL);
+}
+
+void CcSimAdvanceDaysObserved(CcSim *sim, int32_t days,
+    CcNutritionAccounting *accounting, CcSimDayObserver observer, void *context)
+{
+    AdvanceDaysInternal(sim, days, accounting, NULL, NULL, observer, context);
 }
 
 static const CcSituation *MineEvidenceSituation(const CcSim *sim,
