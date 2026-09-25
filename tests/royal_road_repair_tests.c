@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
 #include "test_support.h"
 
 #include <string.h>
@@ -81,6 +82,7 @@ static void BreakRoute(int32_t slot)
         place->stock[CC_GOOD_TOOLS] = MaxI32(place->stock[CC_GOOD_TOOLS], 4);
         place->population = 100;
     }
+    CcCensusReconcile(&sim);
     CC_CHECK(CcSimRoadRecoveryPlan(&sim, road->id).blocked != 0U);
 }
 
