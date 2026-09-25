@@ -790,7 +790,8 @@ async function main() {
         let taps = 0, stillIntervals = 0, previous = null;
         const finish = () => reliefWalks.push({crate, action, seconds:(Date.now()-started)/1000,
           taps, reissues:Math.max(0, taps-1), samples});
-        for (let attempt = 0; attempt < 12; ++attempt) {
+        const maxSamples = action === 'Walk to carriage' ? 18 : 12;
+        for (let attempt = 0; attempt < maxSamples; ++attempt) {
           if (await controls.button(arrival).read()) {
             finish();
             return;
