@@ -247,7 +247,7 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
             Vector3 bay = CcLocalWarehouseGoodPosition((CcGood)good);
             CcInteractionTarget *stock = AdventureTarget(local, sim, CC_INTERACTION_STOCK,
                 (uint64_t)good + 1U,
-                TextFormat("%s: %d in warehouse", CcGoodName((CcGood)good), warehouse->stock[good]),
+                TextFormat("%s: %d here", CcGoodName((CcGood)good), warehouse->stock[good]),
                 "Trade", bay, 0.52f, 0.70f, 0.64f, (Vector2){bay.x, 2.85f}, 0.80f);
             if (stock != NULL) stock->amount = good;
         }
@@ -708,7 +708,9 @@ static AdventureQuote AdventureTradeQuote(const CcSim *sim, const LocalState *lo
         shop->kind != CC_LOCAL_SHOP_GRAIN_MERCHANT) {
         reason = "Bring the promise to the grain merchant.";
     } else if (local->trade_mode != 2 &&
-        !CcLocalShopSells(shop, local->trade_good)) {
+        !CcLocalShopSells(shop, local->trade_good) &&
+        !(local->trade_mode == 1 &&
+          LocalShopHandlesSpoiledCargo(shop, local->trade_good))) {
         reason = "This shop trades different goods.";
     } else {
         bool promised_here = promise != NULL && promise->target_id == place->id &&
@@ -758,12 +760,20 @@ static Rectangle AdventureGoodBounds(Rectangle panel, int32_t good)
         panel.y + 140.0f + (float)(good / 2) * pitch, width, pitch - 3.0f};
 }
 
-static Rectangle AdventureShopGoodBounds(Rectangle panel,
-    const CcLocalShop *shop, CcGood good)
+static bool AdventureShopGoodVisible(const CcSim *sim,
+    const CcLocalShop *shop, int mode, CcGood good)
+{
+    return CcLocalShopSells(shop, good) ||
+        (mode == 1 && LocalShopHandlesSpoiledCargo(shop, good) &&
+         sim->player.cargo[good] > 0);
+}
+
+static Rectangle AdventureShopGoodBounds(Rectangle panel, const CcSim *sim,
+    const CcLocalShop *shop, int mode, CcGood good)
 {
     int32_t slot = 0;
     for (int32_t current = 0; current < (int32_t)good; ++current)
-        if (CcLocalShopSells(shop, (CcGood)current)) ++slot;
+        if (AdventureShopGoodVisible(sim, shop, mode, (CcGood)current)) ++slot;
     return AdventureGoodBounds(panel, slot);
 }
 
@@ -803,7 +813,8 @@ static void DrawAdventureCouncil(const CcSim *sim, LocalState *local, const CcSe
     if (selected < 0) selected = 0;
     AdventurePanelTitle(panel, "The road and its people");
     const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
-    for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), tabs[i], true, i == 5);
+    for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), tabs[i],
+        AdventureShopModeAvailable(LocalActiveShop(sim, local), i), i == 5);
     const char *concerns[] = {"Grain", "Repair", "Trade", "Visitor", "Camp", "Scout"};
     for (int i = 0; i < CC_ROAD_COUNCIL_ROWS; ++i)
         AdventureButton(CouncilRowButton(panel, i), TextFormat("%s: %s", concerns[i], council.rows[i].name), true, i == selected);
@@ -838,7 +849,8 @@ static void DrawAdventureGrainSupply(const CcSim *sim, LocalState *local, const 
     const CcCharacter *organiser = CcSimCharacter(sim, supply->organiser_id != 0 ? supply->organiser_id : offer.contact_id);
     AdventurePanelTitle(panel, "Continuing grain deliveries");
     const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
-    for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), tabs[i], true, i == 4);
+    for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), tabs[i],
+        AdventureShopModeAvailable(LocalActiveShop(sim, local), i), i == 4);
     int x = (int)panel.x + 28, y = (int)panel.y + 135;
     CcOverlayDrawText(organiser != NULL ? organiser->name : "A local organiser is needed", x, y, AdventureTextSize(20), INK);
     y += 36;
@@ -882,6 +894,15 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
     Rectangle panel = AdventurePanel();
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
     if (place == NULL) return;
+    const CcLocalShop *selected_shop = LocalActiveShop(sim, local);
+    if (CcSettlementIsAbandoned(place) || selected_shop == NULL) {
+        AdventurePanelTitle(panel, "Closed shop");
+        CcOverlayDrawText("The town's services are closed.",
+            (int)panel.x + 28, (int)panel.y + 140, AdventureTextSize(16), MUTED);
+        return;
+    }
+    if (!AdventureShopModeAvailable(selected_shop, local->trade_mode))
+        local->trade_mode = 0;
     if (local->trade_mode == 5) { DrawAdventureCouncil(sim, local, place); return; }
     if (local->trade_mode == 4) { DrawAdventureGrainSupply(sim, local, place); return; }
     if (local->trade_mode == 3) {
@@ -889,7 +910,8 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
         const CcCharacter *contact = CcSimCharacter(sim, plan.contact_id);
         AdventurePanelTitle(panel, "The town bakery");
         const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
-        for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), tabs[i], true, i == 3);
+        for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), tabs[i],
+            AdventureShopModeAvailable(selected_shop, i), i == 3);
         int x = (int)panel.x + 28, y = (int)panel.y + 138;
         CcOverlayDrawText(contact != NULL ? (plan.remembered ? TextFormat("%s remembers your help", contact->name) : contact->name) : "Waiting for a local contact", x, y, AdventureTextSize(20), INK);
         y += 35 + AdventureWrap(place->service_project == CC_SERVICE_BAKERY ?
@@ -943,11 +965,13 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
             sim->player.coins, quote.reason));
     for (int i = 0; i < 6; ++i) AdventureButton(AdventureTab(panel, i, 6), modes[i],
         AdventureShopModeAvailable(shop, i), i == local->trade_mode);
-    CcOverlayDrawText(local->trade_mode == 0 ? "WAREHOUSE STOCK" : "CARRIAGE LOAD",
+    CcOverlayDrawText(local->trade_mode == 0 ? "SHOP STOCK" : "CARRIAGE LOAD",
         (int)panel.x + 24, (int)panel.y + 119, AdventureTextSize(11), MUTED);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-        if (!CcLocalShopSells(shop, (CcGood)good)) continue;
-        Rectangle bounds = AdventureShopGoodBounds(panel, shop, (CcGood)good);
+        if (!AdventureShopGoodVisible(sim, shop, local->trade_mode,
+            (CcGood)good)) continue;
+        Rectangle bounds = AdventureShopGoodBounds(panel, sim, shop,
+            local->trade_mode, (CcGood)good);
         bool active = good == (int32_t)quote.command.good;
         int32_t quantity = local->trade_mode == 0 ? place->stock[good] : sim->player.cargo[good];
         ClientTouchAdd(bounds, TextFormat("%s: %d", CcGoodName((CcGood)good), quantity),
@@ -998,7 +1022,7 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
             (int)panel.y + (readable_canvas ? 269 : 244), AdventureTextSize(14), TEAL);
     }
     AdventureButton(AdventureConfirmBounds(panel), TextFormat("%s  Enter", modes[local->trade_mode]), quote.available, false);
-    CcOverlayDrawText(TextFormat("Warehouse %d  |  Carriage %d",
+    CcOverlayDrawText(TextFormat("Shop %d  |  Carriage %d",
         place->stock[quote.command.good], sim->player.cargo[quote.command.good]),
         x, (int)panel.y + (readable_canvas ? 390 : 278), AdventureTextSize(readable_canvas ? 15 : 12), TEAL);
     (void)AdventureWrap(quote.reason, x, (int)panel.y + (readable_canvas ? 415 : 360),
@@ -1019,11 +1043,24 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
     Rectangle panel = AdventurePanel();
     const CcLocalShop *shop = LocalActiveShop(sim, local);
     if (ClientKeyPressed(KEY_ESCAPE) || AdventureHit(AdventureClose(panel))) { *view = VIEW_LOCAL; return true; }
+    const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
+    if (town == NULL || CcSettlementIsAbandoned(town) || shop == NULL) return true;
+    if (!AdventureShopModeAvailable(shop, local->trade_mode)) {
+        local->trade_mode = 0;
+        local->trade_good = LocalShopFirstGood(shop);
+        local->trade_quote_presented = false;
+    }
     bool changed = false;
     for (int i = 0; i < 6; ++i) {
         if (AdventureShopModeAvailable(shop, i) &&
             (AdventureHit(AdventureTab(panel, i, 6)) || ClientKeyPressed(KEY_ONE + i))) {
             local->trade_mode = i; changed = true;
+            if (i == 0 || i == 1) {
+                if (!CcLocalShopSells(shop, local->trade_good) &&
+                    !(i == 1 && LocalShopHandlesSpoiledCargo(shop,
+                        local->trade_good)))
+                    local->trade_good = LocalShopFirstGood(shop);
+            }
         }
     }
     if (local->trade_mode == 5) {
@@ -1062,13 +1099,16 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
     }
     if (local->trade_mode != 2) {
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
-            if (CcLocalShopSells(shop, (CcGood)good) &&
-                AdventureHit(AdventureShopGoodBounds(panel, shop, (CcGood)good))) {
+            if (AdventureShopGoodVisible(sim, shop, local->trade_mode,
+                    (CcGood)good) &&
+                AdventureHit(AdventureShopGoodBounds(panel, sim, shop,
+                    local->trade_mode, (CcGood)good))) {
                 local->trade_good = (CcGood)good; changed = true;
             }
         }
         if (ClientKeyPressed(KEY_UP) || ClientKeyPressed(KEY_DOWN)) {
-            local->trade_good = LocalShopNextGood(shop, local->trade_good,
+            local->trade_good = LocalShopNextGood(sim, shop, local->trade_mode,
+                local->trade_good,
                 ClientKeyPressed(KEY_UP) ? -1 : 1); changed = true;
         }
         int step = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? 10 : 1;
@@ -1626,7 +1666,8 @@ static void DrawAdventureHeader(const CcSim *sim, const LocalState *local,
                     "Waiting for shared world" : "Travelling / Space to stop") :
         local->road_choice_active ? "Choose a road card or tap its sign" :
         local->site_travel_active ? "Tap the carriage to stop or drive" :
-        local->market_interior ? profile->interior_service : profile->identity;
+        local->market_interior && LocalActiveShop(sim, local) != NULL ?
+            LocalActiveShop(sim, local)->service_name : profile->identity;
     if (local->journey_travel_active && sim->journey.active &&
         sim->journey.ambush_warned && sim->journey.ambush_pending) {
         const CcBanditGroup *bandits = CcSimBanditGroupOnRoute(

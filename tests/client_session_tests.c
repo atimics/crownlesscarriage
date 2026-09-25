@@ -91,6 +91,7 @@ int main(void)
         .position_z = 2.75f,
         .facing_yaw = -0.35f,
         .opening_step = 1U,
+        .shop_building_index = 3,
         .athletics = {
             .experience = {12.5f, 23.5f, 34.5f},
             .travel_training_distance = 8.25f,
@@ -115,9 +116,16 @@ int main(void)
     CC_CHECK(fabsf(restored.position_z - original.position_z) < 0.0001f);
     CC_CHECK(fabsf(restored.facing_yaw - original.facing_yaw) < 0.0001f);
     CC_CHECK(restored.opening_step == original.opening_step);
+    CC_CHECK(restored.shop_building_index == original.shop_building_index);
     CC_CHECK(AthleticProfilesMatch(&restored.athletics,
                                    &original.athletics));
 
+    CC_CHECK(RewriteSessionAsLegacy(session_path, 9));
+    CC_CHECK(CcClientSessionRead(session_path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.shop_building_index == 2);
+
+    CC_CHECK(CcClientSessionWrite(session_path, &original,
+                                  error, sizeof(error)));
     CC_CHECK(RewriteSessionAsLegacy(session_path, 7));
     CC_CHECK(CcClientSessionRead(session_path, &restored, error, sizeof(error)));
     CC_CHECK(restored.version == CC_CLIENT_SESSION_VERSION);

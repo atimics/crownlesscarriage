@@ -51,12 +51,12 @@ async function main() {
     const controls = gameControls(page, true);
     if (await page.evaluate(() => Module.crownlessTouchFrame.scene !== 'trade')) {
       const buttons = await controls.buttons();
-      if (buttons.some(button => button.label === 'Enter Granary hall')) {
-        await controls.button('Enter Granary hall').tap();
+      if (buttons.some(button => button.label === 'Enter Bakery')) {
+        await controls.button('Enter Bakery').tap();
       }
       await page.waitForFunction(() =>
-        Module.crownlessTouchFrame.reading.includes('Granary keeper'), undefined, {timeout: 45000});
-      await controls.button(/^Trade .*Granary keeper/).tap();
+        Module.crownlessTouchFrame.reading.includes('Baker'), undefined, {timeout: 45000});
+      await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
         undefined, {timeout: 45000});
     }
@@ -69,7 +69,7 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     await startGame(page);
     const controls = gameControls(page, true);
-    await controls.button('Enter Granary hall').waitFor();
+    await controls.button('Enter Bakery').waitFor();
     if (width === 390) {
       const mobileDetailSize = await page.locator('#touch-actions .touch-detail')
         .evaluate(node => getComputedStyle(node).fontSize);
@@ -81,10 +81,10 @@ async function main() {
 
     await fs.mkdir(path.join(output, name), {recursive: true});
     await page.screenshot({path: path.join(output, name, 'town.png')});
-    await controls.button('Enter Granary hall').tap();
-    await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Granary keeper'),
+    await controls.button('Enter Bakery').tap();
+    await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'),
       undefined, {timeout: 45000});
-    await controls.button(/^Trade .*Granary keeper/).tap();
+    await controls.button(/^Trade .*Baker/).tap();
     await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
       undefined, {timeout: 45000});
     await page.waitForTimeout(300);

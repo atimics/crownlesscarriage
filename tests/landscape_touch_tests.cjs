@@ -80,12 +80,12 @@ async function main() {
     await page.waitForFunction(() => Module.crownlessScreen === 'playing', undefined, {timeout: 45000});
     await layout(`${stage} town`);
     const frame = await page.evaluate(() => Module.crownlessTouchFrame);
-    if (frame.scene !== 'trade' && !frame.reading.includes('Granary keeper')) {
-      await tap('Enter Granary hall', `${stage} town`);
-      await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Granary keeper'),
+    if (frame.scene !== 'trade' && !frame.reading.includes('Baker')) {
+      await tap('Enter Bakery', `${stage} town`);
+      await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'),
         undefined, {timeout: 30000});
     }
-    if (frame.scene !== 'trade') await tap(/Trade .*Granary keeper/, `${stage} keeper`);
+    if (frame.scene !== 'trade') await tap(/Trade .*Baker/, `${stage} keeper`);
     await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
       undefined, {timeout: 30000});
     return layout(`${stage} trade`);
@@ -151,7 +151,7 @@ async function main() {
       confirmedQuote: '8 crowns for 2 Bread', receipt: 'Purse 42 to 34; cargo 0 to 2 Bread',
       reloaded: 'Purse 34; carriage holds 2 Bread'
     }, null, 2) + '\n');
-    console.log('Landscape touch action panel, Granary trade, save, and reload passed at 844x390');
+    console.log('Landscape touch action panel, Bakery trade, save, and reload passed at 844x390');
   } finally {
     await context.close();
     await browser.close();

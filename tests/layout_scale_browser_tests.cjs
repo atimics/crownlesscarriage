@@ -94,11 +94,11 @@ async function main() {
       await controls.button(/^Back/).tap();
       await page.waitForFunction(() => Module.crownlessScreen === 'playing', undefined, {timeout: 15000});
 
-      await controls.button('Enter Granary hall').tap();
-      await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Granary keeper'), undefined, {timeout: 30000});
-      await controls.button(/^Trade .*Granary keeper/).tap();
+      await controls.button('Enter Bakery').tap();
+      await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'), undefined, {timeout: 30000});
+      await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade', undefined, {timeout: 30000});
-      const trade = await validateButtons(page, `${name} Granary trade`);
+      const trade = await validateButtons(page, `${name} Bakery trade`);
       const replay = trade.buttons.find(button => button.label === 'Replay F7');
       const skip = trade.buttons.find(button => button.label === 'Skip F8');
       assert(replay && skip, `${name}: keeper speech controls remain available on the trade panel`);
@@ -106,7 +106,7 @@ async function main() {
         `${name}: speech controls stay in the clear top margin above the trade panel`);
       assert.match(trade.reading, /For 1 Bread, the price is 4 crowns\./,
         `${name}: keeper caption remains available with the trade controls`);
-      await page.screenshot({path: path.join(directory, 'granary-trade.png')});
+      await page.screenshot({path: path.join(directory, 'bakery-trade.png')});
       assert.deepEqual(errors, [], `${name}: browser reports no page errors`);
       const result = {viewport: `${width}x${height}`, text: size,
         town: town.title, book: book.title, trade: trade.title,
