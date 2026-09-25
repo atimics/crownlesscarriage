@@ -149,6 +149,14 @@ int main(void)
     CC_CHECK(CcCensusResidentById(&restored, known) != NULL);
     CheckCensus(&restored);
 
+    /* A named death changes the census even when the town total stays put. */
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    CcId departed = sim.characters[0].id;
+    sim.characters[0].death_day = sim.current_day + 1;
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(CcCensusResidentById(&sim, departed) == NULL);
+    CheckCensus(&sim);
+
     /* A lost town keeps its named people in recorded shelter. */
     CcSimInit(&sim, UINT32_C(0x3235a7ed));
     sim.settlements[0].population = 0;
