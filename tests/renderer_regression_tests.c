@@ -229,6 +229,10 @@ int main(int argc, char **argv)
             TestTownSkyGraphics();
         } else if (strcmp(argv[1], "--carriage-graphics") == 0) {
             TestCarriageDrawReadOnly();
+            TestForkDrawReadOnly();
+            TestEncounterDrawReadOnly();
+            TestSiteDrawReadOnly();
+            TestConvoyDrawReadOnly();
         } else if (strcmp(argv[1], "--graphics") == 0) {
             TestBodyText();
             TestTravelForestCameraTurn();
