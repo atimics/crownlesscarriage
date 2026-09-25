@@ -6480,7 +6480,10 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
                         CC_MAP_COLLECTION_COUNT),
              958, 171, 10, MUTED);
     if (map == NULL) {
-        CcOverlayDrawText("NO MAP", 958, 143, 15, MUTED);
+        CcOverlayDrawText("NO ROUTE MAP", 958, 193, 15, MUTED);
+        if (here != NULL && sim->schema_version >= 114U)
+            CcOverlayDrawText("D  view the districts", 958, 215, 12, TEAL);
+        CcOverlayDrawText("M  close case", 958, 604, 10, MUTED);
         return;
     }
     const CcRoute *route = CcSimRoute(sim, map->route_id);
