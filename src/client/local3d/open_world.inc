@@ -1153,7 +1153,7 @@ static bool StorybookCellVisible(Camera3D camera, int32_t x, int32_t z,
     Vector3 center = {(float)x * 80.0f + 40.0f, ground + 8.0f,
                        (float)z * 80.0f + 40.0f};
     return CameraBoundsVisible(camera, center, (Vector3){49.0f, 60.0f, 49.0f},
-        (float)CC_LOCAL_ART_WIDTH / (float)CC_LOCAL_ART_HEIGHT, 240.0f);
+        (float)CcArtWidth() / (float)CcArtHeight(), 240.0f);
 }
 
 static int StorybookCellTrees(const CcWorldManifest *manifest,

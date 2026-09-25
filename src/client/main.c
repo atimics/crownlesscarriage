@@ -11,6 +11,7 @@
 #include "client/cc_music_player.h"
 #include "client/cc_overlay.h"
 #include "client/cc_road_book.h"
+#include "client/cc_style_pack.h"
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
@@ -11754,6 +11755,30 @@ static int RunTravelAudioRegression(void)
 
 int main(int argc, char **argv)
 {
+    /* --style <id> can be typed anywhere on the command line, but almost
+       every capture/test/benchmark flag below this point reads argv by a
+       *fixed position* (argv[1], argv[2], and so on -- some even branch on
+       the exact argc), not by scanning for a name. Rather than teach each
+       of those parsers about one more optional flag, strip "--style <id>"
+       out of argv/argc here, before anything else looks at them, so the
+       rest of main() runs exactly as if the flag had never been on the
+       command line. CROWNLESS_STYLE (an environment variable, not an argv
+       entry) needs no such filtering. */
+    const char *style_flag_value = NULL;
+    {
+        int32_t filtered_argc = 0;
+        for (int32_t argument = 0; argument < argc; ++argument) {
+            if (strcmp(argv[argument], "--style") == 0 &&
+                argument + 1 < argc) {
+                style_flag_value = argv[argument + 1];
+                ++argument;
+                continue;
+            }
+            argv[filtered_argc] = argv[argument];
+            ++filtered_argc;
+        }
+        argc = filtered_argc;
+    }
 #if defined(CC_CLIENT_SELF_TESTS)
     if (argc == 2 && strcmp(argv[1], "--test-continuous-road") == 0)
         return RunRoadTravelInputRegression(NULL);
@@ -11833,6 +11858,8 @@ int main(int argc, char **argv)
             screen_first_hero = false;
         }
     }
+    CcStylePackLoad(style_flag_value != NULL ? style_flag_value
+                                             : getenv("CROWNLESS_STYLE"));
     CcRenderBenchmark benchmark = {0};
     if (!CcRenderBenchmarkParse(argc, argv, &benchmark)) return 1;
     CcCaptureRequest capture_request = {0};
@@ -11979,8 +12006,8 @@ int main(int argc, char **argv)
     if (map_textures.economic_goods.id != 0U) {
         SetTextureFilter(map_textures.economic_goods, TEXTURE_FILTER_POINT);
     }
-    RenderTexture2D local_target = LoadRenderTexture(CC_LOCAL_ART_WIDTH, CC_LOCAL_ART_HEIGHT);
-    SetTextureFilter(local_target.texture, TEXTURE_FILTER_POINT);
+    RenderTexture2D local_target = LoadRenderTexture(CcArtWidth(), CcArtHeight());
+    SetTextureFilter(local_target.texture, CcArtUpscaleFilter());
     CcLocalRendererSetScreenFirstHero(screen_first_hero);
     CcLocalRendererSetReducedMotion(preferences.reduced_motion);
     CcLocalRendererInit();
@@ -12405,8 +12432,8 @@ int main(int argc, char **argv)
         CcLocalRendererSetAtmosphere(
             CcCaptureAtmosphere(&capture_request, &sim),
             2.4f);
-        int32_t local_target_width=CC_LOCAL_ART_WIDTH;
-        int32_t local_target_height=CC_LOCAL_ART_HEIGHT;
+        int32_t local_target_width=CcArtWidth();
+        int32_t local_target_height=CcArtHeight();
         if(sim.mine.phase!=CC_MINE_NONE)
             MineRenderTargetSize(&sim,&local,&local_target_width,&local_target_height);
         if(local_target.texture.width!=local_target_width ||

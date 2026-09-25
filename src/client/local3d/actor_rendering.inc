@@ -587,7 +587,7 @@ static bool DrawNpcArchetypePose3D(
     DrawContactShadow(
         contact_shadow, 0.62f * scale * width * silhouette_gain,
         0.43f * scale * width * silhouette_gain, presentation_yaw,
-        (Color){2, 7, 10, 98});
+        CC_STYLE_CONTACT_SHADOW_SOFT);
     SetNpcPalette(appearance, 0.50f, false, (Vector3){0});
     DrawModelEx(archetype->model, position,
                 (Vector3){0.0f, 1.0f, 0.0f},
@@ -633,7 +633,7 @@ static bool DrawNpcArchetypePose3D(
                   &face, expression, false);
     RestoreWorldLighting();
     if (visual_style.hero.ready) {
-        float ink_strength = CC_HERO_INK_STRENGTH;
+        float ink_strength = g_cc_active_style_pack.hero_ink_strength;
         SetShaderValue(visual_style.hero.shader,
                        visual_style.hero.ink_strength_location,
                        &ink_strength, SHADER_UNIFORM_FLOAT);
@@ -744,7 +744,7 @@ static void DrawNpcAppearancePoseFigure3D(
 
     DrawContactShadow(
         (Vector3){position.x, position.y + 0.006f, position.z},
-        0.62f * scale, 0.43f * scale, yaw, (Color){2, 7, 10, 115});
+        0.62f * scale, 0.43f * scale, yaw, CC_STYLE_CONTACT_SHADOW_STRONG);
     float thigh = (0.084f + muscle * 0.024f) * mass * scale;
     DrawCylinderEx(hip, knee_l, thigh, thigh * 0.82f, 9,
                    appearance.trousers);
@@ -2034,7 +2034,7 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
     toe.z = SnapContactCoordinate(toe.z);
     heel.y = fmaxf(0.016f, agent->position.y + 0.014f);
     toe.y = heel.y;
-    Color print = (Color){67, 59, 48, 116};
+    Color print = CC_STYLE_FOOTSTEP_PRINT;
     DrawLine3D(heel, toe, print);
     DrawBox(heel, (Vector3){0.16f, 0.014f, 0.11f}, print);
 
@@ -2047,7 +2047,7 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
     dust_smear.y = shadow.y + 0.006f;
     DrawGroundBrushStroke(dust_smear, back, 0.32f * dust,
                           0.12f * dust,
-                          Fade((Color){150, 125, 86, 255}, dust * 0.42f));
+                          Fade(CC_STYLE_ROAD_DUST, dust * 0.42f));
 }
 
 static void DrawRobotShell(const CcLocalAgent *agent)
@@ -2074,7 +2074,7 @@ static void DrawRobotShell(const CcLocalAgent *agent)
         float body_length = rig->morphology.limb_count >= 6 ? 0.72f : 0.54f;
         DrawOrientedBox(local_body, (Vector3){0.0f, 0.0f, 0.0f},
                         (Vector3){0.54f, 0.38f, body_length}, agent->facing_yaw,
-                        (Color){42, 128, 136, 255});
+                        CC_STYLE_ROBOT_CHASSIS_TEAL);
         DrawSmallSphere(local_body, 0.085f, WORLD_GOLD);
         DrawOrientedBox(local_body, (Vector3){0.0f, 0.02f, 0.22f},
                         (Vector3){0.24f, 0.18f, 0.28f}, agent->facing_yaw,
@@ -2101,7 +2101,7 @@ static void DrawRobotShell(const CcLocalAgent *agent)
             float skin = segment == 0 ? 0.072f : 0.058f;
             DrawCylinderEx(a, b, skin, skin * 0.82f, 8,
                            limb->state == CC_LIMB_DISABLED ?
-                           (Color){67, 48, 51, 255} : (Color){54, 66, 71, 255});
+                           (Color){67, 48, 51, 255} : CC_STYLE_ROBOT_LIMB_DARK);
             Vector3 rig_a = Add3(a, rig_offset);
             Vector3 rig_b = Add3(b, rig_offset);
             DrawCylinderEx(rig_a, rig_b, 0.022f, 0.022f, 7, bone);
@@ -2186,24 +2186,24 @@ static void DrawRobotShell(const CcLocalAgent *agent)
                         (Color){44, 61, 65, 255});
         DrawOrientedBox(body, (Vector3){0.0f, 0.36f, hero_lean * 0.55f},
                         (Vector3){0.50f, 0.50f, 0.29f}, upper_yaw,
-                        (Color){42, 128, 136, 255});
+                        CC_STYLE_ROBOT_CHASSIS_TEAL);
         DrawOrientedBox(body, (Vector3){0.0f, 0.39f, 0.165f + hero_lean * 0.55f},
                         (Vector3){0.34f, 0.29f, 0.045f}, upper_yaw,
-                        (Color){223, 173, 67, 255});
+                        CC_STYLE_ROBOT_CHASSIS_GOLD);
         DrawCylinderEx(shoulder_l, elbow_l, 0.065f, 0.055f, 8,
-                       (Color){42, 128, 136, 255});
+                       CC_STYLE_ROBOT_CHASSIS_TEAL);
         DrawCylinderEx(elbow_l, hand_l, 0.055f, 0.045f, 8,
-                       (Color){54, 66, 71, 255});
+                       CC_STYLE_ROBOT_LIMB_DARK);
         DrawCylinderEx(shoulder_r, elbow_r, 0.065f, 0.055f, 8,
-                       (Color){42, 128, 136, 255});
+                       CC_STYLE_ROBOT_CHASSIS_TEAL);
         DrawCylinderEx(elbow_r, hand_r, 0.055f, 0.045f, 8,
-                       (Color){54, 66, 71, 255});
+                       CC_STYLE_ROBOT_LIMB_DARK);
         DrawCharacterSphere(shoulder_l, 0.095f,
-                            (Color){223, 173, 67, 255});
+                            CC_STYLE_ROBOT_CHASSIS_GOLD);
         DrawCharacterSphere(shoulder_r, 0.095f,
-                            (Color){223, 173, 67, 255});
-        DrawSmallSphere(hand_l, 0.055f, (Color){221, 174, 118, 255});
-        DrawSmallSphere(hand_r, 0.055f, (Color){221, 174, 118, 255});
+                            CC_STYLE_ROBOT_CHASSIS_GOLD);
+        DrawSmallSphere(hand_l, 0.055f, CC_STYLE_ROBOT_SKIN_BRONZE);
+        DrawSmallSphere(hand_r, 0.055f, CC_STYLE_ROBOT_SKIN_BRONZE);
 
         Vector3 visual_spine_base = Add3(spine_base, rig_offset);
         Vector3 visual_chest = Add3(chest, rig_offset);
@@ -2234,7 +2234,7 @@ static void DrawRobotShell(const CcLocalAgent *agent)
 
         Vector3 head = LocalPoint(body, 0.0f, 0.81f, hero_lean * 1.25f,
                                   upper_yaw);
-        DrawCharacterSphere(head, 0.18f, (Color){221, 174, 118, 255});
+        DrawCharacterSphere(head, 0.18f, CC_STYLE_ROBOT_SKIN_BRONZE);
         DrawCharacterSphere(
             LocalPoint(body, 0.0f, 0.91f,
                        -0.025f + hero_lean * 1.25f, upper_yaw),
