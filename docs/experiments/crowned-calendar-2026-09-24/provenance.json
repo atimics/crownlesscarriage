@@ -1,0 +1,108 @@
+{
+  "before": {
+    "run": {
+      "source_commit": "f10a7323633814a448b24b0c08629a38eee77971",
+      "tracked_changes_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "binary_sha256": "c5fee393686b796b73d3ad1ceaa3de904f9d08fdfbc3d7a549af28b450c813cd",
+      "probe_sha256": "4601dc045b32cc81ae5f61a6f385fe6f132f72ac8bebf1f495ec1f7c4b446a62",
+      "raw_world_seeds": [
+        5,
+        17,
+        42,
+        137,
+        731,
+        2026
+      ],
+      "solar_year_days": 364,
+      "years_per_world": 3000,
+      "player_actions": 0,
+      "validation": "weekly state checks and final save encode/decode hash equality",
+      "event_examples": "first two per kind per century, all dragon succession and diplomacy changes"
+    },
+    "outcomes": [
+      {
+        "seed": 5,
+        "exit_code": 0,
+        "seconds": 42.24
+      },
+      {
+        "seed": 17,
+        "exit_code": 0,
+        "seconds": 42.21
+      },
+      {
+        "seed": 42,
+        "exit_code": 0,
+        "seconds": 42.46
+      },
+      {
+        "seed": 137,
+        "exit_code": 0,
+        "seconds": 42.8
+      },
+      {
+        "seed": 731,
+        "exit_code": 0,
+        "seconds": 40.53
+      },
+      {
+        "seed": 2026,
+        "exit_code": 0,
+        "seconds": 40.4
+      }
+    ]
+  },
+  "after": {
+    "run": {
+      "source_commit": "7c5f0e4073166e4383b22021f04986ddde8e0ad9",
+      "tracked_changes_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "binary_sha256": "8f6ce3d9b2d5263b4d11cf275c9e92e5787ecf48814d25538a8ef04e9cdbf78e",
+      "probe_sha256": "5e317ba44abbc5223ab561d8af5b3f62a4e7f04f6d86f0ba122c67458a2a81a9",
+      "raw_world_seeds": [
+        5,
+        17,
+        42,
+        137,
+        731,
+        2026
+      ],
+      "solar_year_days": 364,
+      "years_per_world": 3000,
+      "player_actions": 0,
+      "validation": "weekly state checks and final save encode/decode hash equality",
+      "event_examples": "first two per kind per century, all dragon succession and diplomacy changes"
+    },
+    "outcomes": [
+      {
+        "seed": 5,
+        "exit_code": 0,
+        "seconds": 44.73
+      },
+      {
+        "seed": 17,
+        "exit_code": 0,
+        "seconds": 44.23
+      },
+      {
+        "seed": 42,
+        "exit_code": 0,
+        "seconds": 43.88
+      },
+      {
+        "seed": 137,
+        "exit_code": 0,
+        "seconds": 42.69
+      },
+      {
+        "seed": 731,
+        "exit_code": 0,
+        "seconds": 40.64
+      },
+      {
+        "seed": 2026,
+        "exit_code": 0,
+        "seconds": 40.57
+      }
+    ]
+  }
+}

@@ -5149,6 +5149,7 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
             CcTreasure *treasure = &sim->treasures[i];
             *treasure = (CcTreasure){0};
             if (sim->schema_version >= 113U) sim->scriven.books[i] = (CcScrivenBook){0};
+            if (sim->schema_version >= 115U) sim->crown_calendar.book_editions[i] = 0;
             treasure->id = NextId(sim, CC_ENTITY_TREASURE);
             return treasure;
         }
@@ -9584,9 +9585,9 @@ static void AdvanceDragonEcology(CcSim *sim)
                           CC_EVENT_DRAGON_CROWNED,
                           "it leaves the brood cave to seek a crown of its own");
     } else if (dragon->life_stage == CC_DRAGON_STAGE_CROWNED &&
-               dragon->age_days >= 500 * 365 &&
+               dragon->age_days >= (sim->schema_version >= 115U ? 1200 : 500) * 365 &&
                dragon->crown_strength >= 60 &&
-               dragon->crown_continuity_days >= 200 * 365 &&
+               dragon->crown_continuity_days >= (sim->schema_version >= 115U ? 800 : 200) * 365 &&
                dragon->territory_stability >= 75 &&
                (sim->schema_version < 57U || DragonCanBecomeDeepWyrm(sim))) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
