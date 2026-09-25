@@ -1,0 +1,4 @@
+add_executable(shared_clock_tests tests/shared_clock_tests.c)
+target_link_libraries(shared_clock_tests PRIVATE crownless_sim)
+cc_strict_warnings(shared_clock_tests)
+add_test(NAME coordinated_company_clock COMMAND shared_clock_tests)
