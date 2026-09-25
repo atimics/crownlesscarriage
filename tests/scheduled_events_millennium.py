@@ -10,6 +10,13 @@ EXPECTED_HASHES = {
     118: {1: "1545048496086583334", 2: "914304945445556228", 3: "7099700105504748256"},
     # Schema 119 adds raw stone inventory and mine production.
     119: {1: "7437858379406480744", 2: "12539320987051683624", 3: "13067450569132321010"},
+    # Schema 120 adds a temporary cargo overflow allowance for legacy mine
+    # save recovery.
+    120: {
+        1: "6606000563570832781",
+        2: "1799973476309109639",
+        3: "16512264284917628599",
+    },
 }
 
 

@@ -150,6 +150,9 @@ static bool EnsurePlayerKnowledgeColumns(sqlite3 *database,
     return EnsureColumn(database, "player_company", "feed_tray_wheat",
             "ALTER TABLE player_company ADD COLUMN feed_tray_wheat INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
+        EnsureColumn(database, "player_company", "cargo_overflow_allowance",
+            "ALTER TABLE player_company ADD COLUMN cargo_overflow_allowance INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
         EnsureColumn(database, "gossip_carrier", "told_player",
             "ALTER TABLE gossip_carrier ADD COLUMN told_player INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity) &&
@@ -1044,7 +1047,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " id INTEGER PRIMARY KEY, location_id INTEGER NOT NULL, coins INTEGER NOT NULL,"
         " food_cargo INTEGER NOT NULL, material_cargo INTEGER NOT NULL, tools_cargo INTEGER NOT NULL,"
         " cargo_capacity INTEGER NOT NULL, passenger_capacity INTEGER NOT NULL,"
-        " reputation INTEGER NOT NULL, feed_tray_wheat INTEGER NOT NULL DEFAULT 0);";
+        " reputation INTEGER NOT NULL, feed_tray_wheat INTEGER NOT NULL DEFAULT 0,"
+        " cargo_overflow_allowance INTEGER NOT NULL DEFAULT 0);";
     const char *royal_carriage_schema =
         "CREATE TABLE IF NOT EXISTS royal_carriage ("
         " slot INTEGER PRIMARY KEY, id INTEGER NOT NULL UNIQUE,"
@@ -3331,7 +3335,7 @@ static bool SavePlayer(sqlite3 *database, const CcSim *sim,
                        char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "INSERT INTO player_company VALUES(?,?,?,?,?,?,?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO player_company VALUES(?,?,?,?,?,?,?,?,?,?,?);",
                  &statement, error, error_capacity)) return false;
     const CcPlayerCompany *p = &sim->player;
     BindId(statement, 1, p->id); BindId(statement, 2, p->location_id);
@@ -3340,6 +3344,7 @@ static bool SavePlayer(sqlite3 *database, const CcSim *sim,
     BindInt(statement, 7, p->cargo_capacity); BindInt(statement, 8, p->passenger_capacity);
     BindInt(statement, 9, p->reputation);
     BindInt(statement, 10, p->feed_tray_wheat);
+    BindInt(statement, 11, p->cargo_overflow_allowance);
     bool result = StepDone(database, statement, error, error_capacity);
     sqlite3_finalize(statement);
     return result;
@@ -6171,6 +6176,7 @@ static bool ReadPlayer(sqlite3 *database, CcSim *sim,
     p->map_capacity = CC_MAP_CAPACITY;
     p->reputation = sqlite3_column_int(statement, 8);
     p->feed_tray_wheat = sqlite3_column_int(statement, 9);
+    p->cargo_overflow_allowance = sqlite3_column_int(statement, 10);
     sqlite3_finalize(statement);
     return true;
 }
