@@ -1837,8 +1837,11 @@ static void DrawDragonCliffRoost(const CcSim *sim)
     };
     float dragon_yaw = dragon_variant == CC_CREATURE_DRAGON_WHELP ?
         -0.48f * PI : 0.48f * PI;
+    /* The whelp reads as only a few dark pixels next to the ledge rock
+       at the shared 0.9 scale used for the older stages: bump it up so
+       its silhouette and contrast actually land at this camera distance. */
     float dragon_scale = dragon_variant == CC_CREATURE_DRAGON_WHELP ?
-        1.24f : 0.90f;
+        2.20f : 0.90f;
     (void)DrawCreature3D(dragon_variant, pose, dragon_position,
                          dragon_yaw, dragon_scale, DragonCourtHairColor(&sim->dragon));
 
