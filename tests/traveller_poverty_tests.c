@@ -1,5 +1,6 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
 #include "sim/cc_sim_custody.h"
 #include "test_support.h"
 #include <stdio.h>
@@ -27,6 +28,7 @@ static void prepare(void) {
     place->service_mask|=UINT32_C(1)<<CC_SERVICE_INN;
     for(int g=0;g<CC_GOOD_COUNT;++g)if(CcGoodNutritionValue((CcGood)g,CC_NUTRITION_CIVILIAN)>0)place->stock[g]=0;
     place->price[CC_GOOD_BREAD]=1;
+    CcCensusReconcile(&sim);
 }
 static void fund(CcMoney wanted) {
     CcMoney amount=wanted-person()->travel_coins;
