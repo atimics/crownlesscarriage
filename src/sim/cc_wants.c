@@ -97,16 +97,16 @@ static CcId Supply(const CcSim *sim, CcId from, CcGood good, int quantity)
 static const CcCharacter *Smith(const CcSim *sim, CcId from)
 {
     for (int pass = 0; pass < 2; ++pass) {
-    for (int i = 0; i < sim->character_count; ++i) {
-        const CcCharacter *p = &sim->characters[i];
-        if ((p->current_settlement_id == from) != (pass == 0)) continue;
-        const CcSettlement *town = CcSimSettlement(sim, p->current_settlement_id);
-        if (Alive(sim, p) && p->occupation == CC_OCCUPATION_SMITH &&
-            p->activity != CC_CHARACTER_ACTIVITY_TRAVELLING && p->travel_destination_id == 0 &&
-            town != NULL && town->population > 0 && town->stock[CC_GOOD_TOOLS] > 0 &&
-            CcSettlementHasService(town, CC_SERVICE_SMITHY) && Reachable(sim, from, town->id) &&
-            Supply(sim, town->id, CC_GOOD_IRON, 1) != 0) return p;
-    }
+        for (int i = 0; i < sim->character_count; ++i) {
+            const CcCharacter *p = &sim->characters[i];
+            if ((p->current_settlement_id == from) != (pass == 0)) continue;
+            const CcSettlement *town = CcSimSettlement(sim, p->current_settlement_id);
+            if (Alive(sim, p) && p->occupation == CC_OCCUPATION_SMITH &&
+                p->activity != CC_CHARACTER_ACTIVITY_TRAVELLING && p->travel_destination_id == 0 &&
+                town != NULL && town->population > 0 && town->stock[CC_GOOD_TOOLS] > 0 &&
+                CcSettlementHasService(town, CC_SERVICE_SMITHY) && Reachable(sim, from, town->id) &&
+                Supply(sim, town->id, CC_GOOD_IRON, 1) != 0) return p;
+        }
     }
     return NULL;
 }
@@ -216,8 +216,10 @@ static void SeedBelongings(CcSim *sim)
     for (int i = 0; i < sim->character_count && item_slot < CC_BELONGINGS; ++i) {
         CcCharacter *p = &sim->characters[i];
         CcSettlement *town = CcSimSettlementMutable(sim, p->current_settlement_id);
-        if (!Alive(sim, p) || p->occupation == CC_OCCUPATION_NONE || town == NULL ||
-            town->stock[CC_GOOD_TOOLS] <= 2 || p->activity == CC_CHARACTER_ACTIVITY_TRAVELLING) continue;
+        if (!Alive(sim, p) || p->occupation == CC_OCCUPATION_NONE || p->bandit_group_id != 0 ||
+            CcCharacterAgeYears(sim, p) < 16 || town == NULL || town->population == 0 ||
+            town->stock[CC_GOOD_TOOLS] <= 2 || p->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+            p->travel_destination_id != 0) continue;
         CcCustodyEntry *entry = NULL;
         for (int j = 0; j < CC_CUSTODY_CAPACITY; ++j)
             if (sim->custody.entries[j].id == 0) { entry = &sim->custody.entries[j]; break; }
@@ -296,8 +298,9 @@ void CcWantsAdvance(CcSim *sim)
             if (item_entry != NULL && item_entry->condition >= 70) can_repair = true;
             for (int j = 0; j < CC_PERSONAL_WANTS; ++j) {
                 const CcPersonalWant *child = &sim->wants.wants[j];
+                const CcCharacter *smith = CcSimCharacter(sim, child->person_id);
                 if (child->parent_id == w->id && child->status == CC_WANT_ACTIVE &&
-                    Alive(sim, CcSimCharacter(sim, child->person_id))) can_repair = true;
+                    Alive(sim, smith) && smith->occupation == CC_OCCUPATION_SMITH) can_repair = true;
             }
             if (!can_repair) { Finish(sim, w, CC_WANT_CLOSED); continue; }
         }
@@ -332,7 +335,7 @@ void CcWantsAdvance(CcSim *sim)
             if (e == NULL || e->owner_id != p->id) continue;
             bool away = e->holder.kind != CC_CUSTODY_CHARACTER;
             CcId source = e->holder.kind == CC_CUSTODY_STORE ? e->holder.id :
-                e->holder.kind == CC_CUSTODY_PLAYER ? sim->player.location_id : town->id;
+                e->holder.kind == CC_CUSTODY_PLAYER ? item->last_place_id : town->id;
             if (!Reachable(sim, town->id, source)) continue;
             if (e->condition < 70) {
                 const CcCharacter *smith = Smith(sim, source);
@@ -400,6 +403,8 @@ bool CcWantsPlan(const CcSim *sim, const CcCommand *cmd, char *reason, size_t ca
         (cmd->actor_id != 0 && cmd->actor_id != sim->player.id)) return Fail(reason, capacity, "Choose a current personal request.");
     if (sim->journey.active || sim->mine.phase != CC_MINE_NONE || sim->dungeon_expedition.active)
         return Fail(reason, capacity, "Meet at a town to exchange items.");
+    if (sim->pony_company.encounter >= 0)
+        return Fail(reason, capacity, "Finish your pony visit before exchanging items.");
     if (cmd->amount == CC_WANT_DISCOVER) {
         if (sim->wants.initialized != 1 || !Present(sim, CcSimCharacter(sim, cmd->target_id)))
             return Fail(reason, capacity, "Choose a person's current item request.");
