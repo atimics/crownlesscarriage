@@ -46,8 +46,8 @@ async function main() {
     async function view() {
       return api(`/api/worlds/${worldId}/state?campaign=1`);
     }
-    async function command(action, target = '0') {
-      const current = await view();
+    async function command(action, target = '0', current = null) {
+      current ||= await view();
       return api(`/api/worlds/${worldId}/command`, {protocol: 1,
         sequence: current.next_sequence, action_revision: current.action_revision,
         action, target, good: 0, amount: 0});
@@ -57,7 +57,8 @@ async function main() {
     assert(route, 'An open road reaches the staffed stable');
     assert((await command('travel', route.id)).accepted);
     for (let step = 0; step < 50; step++) {
-      const current = (await view()).state;
+      const selected = await view();
+      const current = selected.state;
       const journey = current.journey;
       if (!journey.active) break;
       let action, target = '0';
@@ -75,8 +76,19 @@ async function main() {
         assert.equal(journey.phase, 1);
         action = 'skip_watch';
       }
-      const result = await command(action, target);
-      assert(result.accepted, `${action}: ${result.message}`);
+      const result = await command(action, target, selected);
+      if (!result.accepted) {
+        const latest = result.world.state;
+        const before = [journey.active, journey.phase, journey.stop,
+          journey.road_site?.id, current.road_position?.anchor,
+          current.road_position?.coordinate];
+        const after = [latest.journey.active, latest.journey.phase,
+          latest.journey.stop, latest.journey.road_site?.id,
+          latest.road_position?.anchor, latest.road_position?.coordinate];
+        assert.notDeepEqual(after, before,
+          `${action} was rejected without a new road state: ${result.message}`);
+        continue;
+      }
     }
     const arrived = (await view()).state;
     assert.equal(arrived.journey.active, false);
