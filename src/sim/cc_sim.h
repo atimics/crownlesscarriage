@@ -2457,6 +2457,7 @@ typedef struct CcSupplyOffer {
 } CcSupplyOffer;
 CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good);
 void CcSimInitializeSupplyEconomy(CcSim *sim);
+int32_t CcSimTradeResalePrice(const CcSim *sim, const CcSettlement *town, CcGood good);
 
 int32_t CcGoodCountForSchema(uint32_t schema_version);
 const CcGoodDefinition *CcGoodDefinitionFor(CcGood good);
