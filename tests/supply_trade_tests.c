@@ -87,6 +87,8 @@ static void CheckStone(void)
     CcMoney total = CcSimTrackedGold(&sim);
     CC_CHECK(Trade(CC_GOOD_RAW_STONE, 4));
     RoundTrip();
+    sim.settlements[4].stock[CC_GOOD_STONE] = 0;
+    CC_CHECK(CcSimSupplyOfferAt(&sim, sim.settlements[4].id, CC_GOOD_RAW_STONE).remaining > 0);
     sim.player.location_id = sim.settlements[4].id;
     sim.carriage.location_id = sim.player.location_id;
     sim.settlements[4].stock[CC_GOOD_STONE] = 0;

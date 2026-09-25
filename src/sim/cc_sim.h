@@ -2454,6 +2454,7 @@ typedef struct CcSupplyOffer {
     bool ready;
 } CcSupplyOffer;
 CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good);
+CcSupplyOffer CcSimSupplyOfferAt(const CcSim *sim, CcId town_id, CcGood good);
 void CcSimInitializeSupplyEconomy(CcSim *sim);
 int32_t CcSimTradeResalePrice(const CcSim *sim, const CcSettlement *town, CcGood good);
 

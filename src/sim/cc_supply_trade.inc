@@ -23,15 +23,15 @@ void CcSimInitializeSupplyEconomy(CcSim *sim)
     }
 }
 
-CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good)
+CcSupplyOffer CcSimSupplyOfferAt(const CcSim *sim, CcId town_id, CcGood good)
 {
     CcSupplyOffer offer = {0};
     if (sim == NULL || sim->schema_version < 117U ||
         (good != CC_GOOD_WHEAT && good != CC_GOOD_RAW_STONE)) return offer;
     offer.source_unit_price = 3;
     offer.delivery_unit_price = good == CC_GOOD_WHEAT ? 5 : 6;
-    const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
-    if (town == NULL || sim->journey.active || town->population <= 0 ||
+    const CcSettlement *town = CcSimSettlement(sim, town_id);
+    if (town == NULL || town->population <= 0 ||
         town->fire_damage >= 80) return offer;
     bool wheat = good == CC_GOOD_WHEAT;
     bool source = wheat || (town->function == CC_SETTLEMENT_MINING &&
@@ -47,6 +47,12 @@ CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good)
     CcMoney funds = town->market_coins / offer.delivery_unit_price;
     if (funds < offer.remaining) offer.remaining = (int32_t)funds;
     return offer;
+}
+
+CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good)
+{
+    if (sim == NULL || sim->journey.active) return (CcSupplyOffer){0};
+    return CcSimSupplyOfferAt(sim, sim->player.location_id, good);
 }
 
 static bool ApplySupplyTrade(CcSim *sim, const CcCommand *command,
