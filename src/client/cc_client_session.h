@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define CC_CLIENT_SESSION_VERSION UINT32_C(9)
+#define CC_CLIENT_SESSION_VERSION UINT32_C(10)
 #define CC_CLIENT_SESSION_GUARD_COUNT 3
 #define CC_CLIENT_SESSION_RAIDER_COUNT 2
 #define CC_CLIENT_SESSION_SKILL_COUNT 3
@@ -109,6 +109,7 @@ typedef struct CcClientSession {
     float site_travel_progress;
     bool site_travel_active;
     bool site_returning;
+    int32_t shop_building_index;
     CcClientAthleticProfile athletics;
     CcClientRoadEncounter road_encounter;
 } CcClientSession;
