@@ -2427,7 +2427,7 @@ static void CheckWoodPaperJournalMigration(char *error,
 
     /* Captured with main 9ab3a56 before changing the paper recipe. */
     CcSim legacy_view = restored;
-    legacy_view.schema_version = 36U;
+    CcTestStampLegacyGoods(&legacy_view, 36U);
     legacy_view.next_entity_serial -= (uint64_t)restored.kingdom_count;
     legacy_view.settlements[1].stock[CC_GOOD_WOOD] -= 22;
     legacy_view.shipments[1].status = CC_SHIPMENT_TRAVELLING;
@@ -3138,6 +3138,12 @@ static void CheckSchema110RoadBlockJournalUpgrade(char *error,
     CC_CHECK(restored.player.coins == 31);
     CC_CHECK(restored.bandits[0].route_id == restored.journey.route_id);
     CC_CHECK(restored.bandits[0].coins == 0);
+    int32_t empty_outputs = 0;
+    for (int32_t site = 0; site < restored.road_site_count; ++site) {
+        if (restored.road_sites[site].output_good == CC_GOOD_COUNT)
+            empty_outputs += 1;
+    }
+    CC_CHECK(empty_outputs > 0);
     CC_CHECK(CcTestBeforeCalendarHash(&restored) == UINT64_C(10350592686180817433));
     const char *copy = "schema110-road-block-upgraded.ccsave";
     RemoveDatabase(copy);
@@ -3612,7 +3618,7 @@ static void CheckShippedTravellerSave(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
-    restored.schema_version = 60U;
+    CcTestStampLegacyGoods(&restored, 60U);
     CC_CHECK(CcSimHash(&restored) == UINT64_C(0xaf82f2230153da41));
     CcSimAdvanceDays(&restored, 9);
     CC_CHECK(CcSimHash(&restored) == UINT64_C(0x3c8745b83278bea2));

@@ -271,7 +271,7 @@ static void CheckLegacyHistory(void)
     /* Captured from main 615031d9, schema 113, raw seed 42, 364 days.
        Old journals replay their original rules before the runtime upgrade. */
     CcSimInit(&sim, 42U);
-    sim.schema_version = 113U;
+    CcTestStampLegacyGoods(&sim, 113U);
     CcSimAdvanceDays(&sim, 364);
     CC_CHECK(CcSimHash(&sim) == UINT64_C(5945950365194471743));
 }

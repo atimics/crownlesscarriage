@@ -16,6 +16,44 @@
         }                                                                      \
     } while (0)
 
+/* A current initializer seeds goods and sentinel values that were absent
+   from older campaigns. Restore their original in-memory starting shape
+   before testing a historical journal or captured hash. */
+static inline void CcTestStampLegacyGoods(CcSim *sim, uint32_t schema_version)
+{
+    sim->schema_version = schema_version;
+    if (schema_version >= 117U) return;
+    for (int32_t town = 0; town < sim->settlement_count; ++town) {
+        CcSettlement *place = &sim->settlements[town];
+        place->stock[CC_GOOD_RAW_STONE] = 0;
+        place->reserve_target[CC_GOOD_RAW_STONE] = 0;
+        place->production[CC_GOOD_RAW_STONE] = 0;
+        place->consumption[CC_GOOD_RAW_STONE] = 0;
+        place->price[CC_GOOD_RAW_STONE] = 0;
+    }
+    for (int32_t site = 0; site < sim->road_site_count; ++site) {
+        CcRoadSite *road_site = &sim->road_sites[site];
+        if (road_site->input_good == CC_GOOD_COUNT)
+            road_site->input_good = CC_GOOD_RAW_STONE;
+        if (road_site->output_good == CC_GOOD_COUNT)
+            road_site->output_good = CC_GOOD_RAW_STONE;
+    }
+}
+
+static inline void CcTestAdoptCurrentGoods(CcSim *sim, uint32_t old_schema)
+{
+    sim->schema_version = CC_SIM_SCHEMA_VERSION;
+    if (old_schema >= 117U) return;
+    for (int32_t site = 0; site < sim->road_site_count; ++site) {
+        CcRoadSite *road_site = &sim->road_sites[site];
+        if (road_site->input_good == CC_GOOD_RAW_STONE)
+            road_site->input_good = CC_GOOD_COUNT;
+        if (road_site->output_good == CC_GOOD_RAW_STONE)
+            road_site->output_good = CC_GOOD_COUNT;
+    }
+    CcSimInitializeSupplyEconomy(sim);
+}
+
 /* Pin the complete pre-calendar state of shipped migrations independently of
    the new saved pages. Current-schema round trips are tested separately. */
 static inline uint64_t CcTestBeforeCalendarHash(const CcSim *sim)
@@ -23,7 +61,7 @@ static inline uint64_t CcTestBeforeCalendarHash(const CcSim *sim)
     CcSim *legacy = malloc(sizeof(*legacy));
     CC_CHECK(legacy != NULL);
     *legacy = *sim;
-    legacy->schema_version = 112U;
+    CcTestStampLegacyGoods(legacy, 112U);
     uint64_t hash = CcSimHash(legacy);
     free(legacy);
     return hash;

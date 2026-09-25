@@ -641,7 +641,7 @@ int main(int argc,char **argv)
     /* This file was written by the released schema-102 build at 2d56168d.
        A 102 hash reads only the shipped 96 custody rows before migration. */
     CcSimInit(&prechange,0x71a7e5);
-    prechange.schema_version=102U;
+    CcTestStampLegacyGoods(&prechange,102U);
     prechange.mine.source_id=prechange.mine.source_owner_id=0;
     prechange.mine.cache_id=prechange.mine.cache_owner_id=0;
     prechange.mine.source_x=prechange.mine.source_y=0;
@@ -1036,7 +1036,7 @@ int main(int argc,char **argv)
     CC_CHECK(restored.character_births==24);
     CC_CHECK(strcmp(restored.characters[0].name,"Rowen Venn")==0);
     CC_CHECK(strcmp(restored.characters[23].name,"Hartha Stonehewer")==0);
-    restored.schema_version=58U;
+    CcTestStampLegacyGoods(&restored,58U);
     CC_CHECK(CcSimHash(&restored)==UINT64_C(1053288272468887993));
     AtBranch(&sim,false);
     Check(CcCoopApply(&sim,"visit_mine",CcMineSite(&sim)->id,0,0,error,sizeof(error)));

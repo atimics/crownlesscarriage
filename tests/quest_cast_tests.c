@@ -25,7 +25,7 @@ static void RoundTrip(void)
 static void HistoricalSnapshot(void)
 {
     CcSimInit(&sim, UINT32_C(0x9e3779b9));
-    sim.schema_version = 73U;
+    CcTestStampLegacyGoods(&sim, 73U);
     for (int day = 0; day < 12410; ++day) CcSimAdvanceDays(&sim, 1);
     bool retired = false;
     for (int i = 0; i < sim.situation_count; ++i) {
@@ -221,7 +221,7 @@ int main(int argc, char **argv)
     CC_CHECK(CcSaveEncode(&sim, &bytes, &length, error, sizeof(error)));
     CC_CHECK(CcSaveDecode(bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
-    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcTestAdoptCurrentGoods(&sim, 73U);
     CcSimInitializeGoblinPolitics(&sim);
     CcScrivenInit(&sim);
     for (int32_t i = 0; i < sim.character_count; ++i) {
@@ -245,9 +245,9 @@ int main(int argc, char **argv)
     journal = CcJournalResume(path, &sim, error, sizeof(error));
     if (journal == NULL) fprintf(stderr, "%s\n", error);
     CC_CHECK(journal != NULL && sim.schema_version == CC_SIM_SCHEMA_VERSION);
-    sim.schema_version = 73U;
+    CcTestStampLegacyGoods(&sim, 73U);
     CC_CHECK(CcSimHash(&sim) == UINT64_C(17607823286729841219));
-    sim.schema_version = CC_SIM_SCHEMA_VERSION;
+    CcTestAdoptCurrentGoods(&sim, 73U);
         CcSimInitializeGoblinPolitics(&sim);
     Valid();
     CC_CHECK(CcJournalClose(&journal, &sim, error, sizeof(error)));
