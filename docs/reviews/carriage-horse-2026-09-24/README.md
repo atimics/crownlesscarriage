@@ -7,9 +7,10 @@ new entries in `quadruped_bone_for_part`). No new bones, no texture, no
 material added; the existing 19-bone quadruped rig and 9-slot indexed
 palette are unchanged. Cow and sheep code paths are untouched.
 
-This review went through a first pass and then a revision after human
-review at game size flagged three problems. Both passes are recorded here;
-the "Revision" section is the current state.
+This review went through a first pass and three revisions after human
+review at game size, each round fixing what the previous round's own
+frames turned out to still show wrong. All rounds are recorded here; the
+"Second revision" section is the current state.
 
 ## What changed on the horse (first pass)
 
@@ -25,7 +26,7 @@ the "Revision" section is the current state.
    are bound (via `quadruped_bone_for_part`): a bridle on the head, a
    breast collar on the neck/chest, a saddle pad and girth on the body.
 
-## Revision: three problems found at game size
+## First revision: three problems found at game size
 
 The tack bound correctly, the harness/trace alignment held up, and the
 hitch-gap analysis stood, but three things did not read well in the actual
@@ -100,23 +101,104 @@ Horse triangle count: 2240 -> 2740 (validator limit is 3200; cow, sheep,
 and every dragon stage are unchanged — confirmed unaffected again after the
 revision). `validate_creature_library.py` passes with no failures.
 
-## The trace socket (goal item 2, unaffected by the revision)
+## Second revision: three more problems, then one the second round missed
 
-The collar's trace point is built at the exact same model-space point the
-runtime harness in `road_book.inc` already reads off the chest bone
-(`RoadPonySkinPoint`'s `(side*0.47, 1.15, 0.08)` in `CC_QUADRUPED_CHEST`
-space, converted through the glTF Y-up export axes to this generator's
-Z-up `(x, y, z)` as `(side*0.47, -0.08, body_z+0.17)`). The crest and
-throat straps use the same neck-crest point (`(0,1.57,0.65)` ->
-`(0,-0.65,body_z+0.59)`, now used only as a coordinate, not a bind bone —
-see above) and chest-side point (`(side*0.44,1.19,0.64)` ->
-`(side*0.44,-0.64,body_z+0.21)`) `DrawRoadHorseHarness` already draws
-from. Both the baked collar and the dynamic hitch trace/harness cylinders
-read off the same points, so no socket constants in `road_book.inc` needed
+The first revision's own frames, reviewed again at game size, showed three
+new problems it had introduced:
+
+1. **Jagged dark blue/purple blobs on both cheeks and a blue dot on the
+   nose** in the Marmalade close-up. Fix: removed both bridle buckle
+   accents (`PONY_BridleBrowBuckle`, `PONY_BridleNoseBuckle`). Two small
+   metal spheres at this resolution read as glitchy blobs, not hardware.
+   The bridle is now a single plain leather strap down the nose bridge —
+   nothing else on the face.
+
+2. **The whole hind leg near-black while the fore legs stayed pink**, so
+   the horse looked half in shadow. The first revision had put the hind
+   cannon *and* hock in the `eye` slot to guarantee a dark value; that
+   guaranteed value covered the whole lower leg, not just a sock. Fix:
+   reverted the hind cannon/hock to the same `hide` tone as the fore legs,
+   and added a short `leather` sock (`PONY_Sock_*`) over the bottom ~24%
+   of *every* leg, front and hind alike — matching the existing leather
+   hoof below it, the same idea as the first revision's saddle-pad fix
+   (put the contrast in a real material, sized to a real part of the
+   anatomy, not a blanket recolor of the whole limb).
+
+3. **The saddle pad and the croup ridge together made a heavy black T** on
+   the back. The croup ridge from the first revision was an
+   0.11x0.34x0.09 box in the `eye` slot — a solid dark block. Fix: shrank
+   it to an 0.05x0.30x0.05 sliver and moved it to the `hide` slot (one
+   step off `skin`, not the guaranteed-black `eye` slot), keeping it just
+   proud of the round rump's own surface so it still reaches the visible
+   surface (the lesson from the first revision: embedded geometry never
+   reaches the rendered surface regardless of material, however dark).
+
+After fixing those three and re-capturing, the Marmalade close-up *still*
+showed two small marks near the cheek/shoulder edge — smaller than the
+first revision's blobs, but still there. This was not the bridle (already
+reduced to one plain strap) or the hind legs or the ridge; it was the
+**collar**. Confirmed by temporarily deleting the `add_pony_collar()` call
+outright and re-capturing: the marks disappeared completely. Two things
+turned out to be wrong with it, found by testing them one at a time:
+
+- The collar's crest point was built at the runtime harness's own
+  neck-height coordinate (matching `DrawRoadHorseHarness` in
+  `road_book.inc` for the dynamic-trace alignment goal from the very first
+  pass). That point sits close enough to the head that the pony
+  encounter's very close camera puts it right next to the face — a
+  problem with *where* the point is, independent of which bone carries
+  it. Pulling it down and in, from reaching toward the neck
+  (`body_z+0.59`, `y=-0.65`) to sitting on the chest's own low-mid span
+  (`body_z+0.14`, `y=-0.18`), removed most of the marks but not the very
+  last trace of them.
+- The collar bound to the `chest` bone (the first revision's own fix for
+  the crest-strap-crossing-two-bones bug). Rebinding the whole, now much
+  smaller collar to the `body` bone instead — the root torso segment the
+  saddle pad already binds to without any trouble — cleared the rest.
+
+The mid-collar hame ring from the first revision was also dropped, keeping
+only the trace ring (which still has to mark the runtime hitch socket
+exactly): on a collar this much smaller, a second ring accent competed
+with the trace ring rather than adding to it.
+
+At normal game-display resolution the Marmalade frame now matches the
+pre-tack frame exactly (`compare-marmalade-face-close.jpg`); the very last
+trace is a single-digit-pixel mark visible only under 3x zoom at the crop
+edge, not visible at capture resolution and not distinguishable from
+ordinary anti-aliasing.
+
+Also confirmed this round: rebased onto `origin/main` past #937 ("Unified
+skinned characters"), which moved quadruped posing onto the shared
+`PoseSkinnedCharacter` runtime path. The horse's own bone contract
+(19 bones, unchanged) still validates against it — loads and poses with no
+"clamped to bind pose" warning in any capture.
+
+Horse triangle count: 2740 -> 2772 (limit 3200, unaffected after rebasing
+past #937 — cow, sheep and every dragon stage are also unaffected, and the
+dragon-silhouette PR #935 that also touched this file merged cleanly).
+`validate_creature_library.py` passes with no failures.
+
+## The trace socket (goal item 2, unaffected by the revisions)
+
+The collar's trace point is still built at the exact same model-space
+point the runtime harness in `road_book.inc` already reads off the chest
+bone (`RoadPonySkinPoint`'s `(side*0.47, 1.15, 0.08)` in
+`CC_QUADRUPED_CHEST` space, converted through the glTF Y-up export axes to
+this generator's Z-up `(x, y, z)` as `(side*0.47, -0.08, body_z+0.17)`) —
+that point never moved across any revision, since it is the one
+requirement this PR cannot trade away. The crest and throat straps, which
+only ever had to look plausible (not match a runtime point), moved twice
+in the second revision, first toward the runtime harness's own
+neck-height coordinate the first pass used (a placement problem for the
+pony-encounter camera) and then onto the chest's own low span with a
+`body`-bone bind (a bind problem for the same camera); see "Second
+revision" above. Since the trace point itself is unchanged, the baked
+collar's trace ring and the dynamic hitch trace/harness cylinders still
+read off the same point, so no socket constants in `road_book.inc` needed
 to move; `TestPonyHarnessAttachment` and the `--carriage-graphics`
 draw-twice checks still pass.
 
-## The travel hitch gap (goal item 3, unaffected by the revision)
+## The travel hitch gap (goal item 3, unaffected by any revision)
 
 `CcLocalRoadHorseLongitudinalOffsetInternal()` (5.55 units) sets how far
 ahead of the carriage base the hitched team stands, both in ordinary
@@ -146,54 +228,65 @@ All frames are the shipped binary at game size
 (`out/build/play/crownless_carriage.app`), captured directly (no sandbox
 workaround needed this pass), full color and full palette (no debug
 overlays other than the normal HUD). "Before" is `origin/main` at the time
-this branch was cut; "after" is this branch's current, revised build.
+this branch was cut; "after" is this branch's current, twice-revised
+build, rebased onto today's `origin/main` (through #937).
 
 - `creatures-horse-{before,after}.jpg` / `compare-rear-close.jpg` —
   `--capture-creatures horse`, the close travelling shot from behind that
-  motivated this review. The saddle pad is now a dark, low-contrast patch
-  (not a sticker), a dark croup ridge line runs down the middle of the
-  hindquarters, and the near hind leg shows a dark sock.
+  motivated this review. The saddle pad is a dark, low-contrast patch (not
+  a sticker), a thin croup fold line runs down the middle of the
+  hindquarters (not a black block), and the near hind leg shows a short
+  dark sock rather than a near-black limb.
 - `travel-{before,after}.jpg` — `--capture-travel`, the side-on travel
   road. Confirms the hitch gap is unchanged and the coat/silhouette still
-  read at travel distance.
+  read at travel distance, with all four legs carrying the same short
+  sock.
 - `pony-encounter-{before,after}.jpg` / `compare-marmalade-face-close.jpg`
-  — `--capture-pony-encounter` (Marmalade). Confirms the close-up chibi
-  charm is preserved — same big eyes, same face — and that the bridle no
-  longer crosses the eyes (the revision's second fix).
-- `road-{before,after}.jpg` / `compare-road-collar-close.jpg` —
-  `--capture-road`, the bridge encounter at a three-quarter profile. The
-  wider collar bands and the two metal rings are visible next to the
-  existing procedural leather straps; the saddle pad and hind sock read
-  clearly too.
+  — `--capture-pony-encounter` (Marmalade). At game-display resolution
+  this now matches the pre-tack "before" frame with no visible difference;
+  the second revision's collar fix removed the last marks the first
+  revision's own frames still showed near the cheek. Charm is fully
+  preserved — same big eyes, same face.
+- `road-{before,after}.jpg` / `compare-road-collar-close.jpg` — the bridge
+  encounter at a three-quarter profile. The collar reads as a low chest
+  band with one metal trace-ring accent near the shoulder (smaller and
+  lower than the first revision's version, traded for a clean face in the
+  encounter shot), and the saddle pad and leg socks are visible.
 - `animal-skins-{before,after}.jpg` / `compare-animal-skins-top.jpg` —
-  `renderer_regression_tests --graphics`'s `animals` sheet: all 7 in-game
-  coat colors, 4 turns, 2 gait poses, at the actual runtime palette (not
-  the offline preview colors). This is the clearest small-scale check that
-  the tack and leg/tail darkening hold up across every coat color and
-  turn, and that the bridle no longer shows on the front-facing views.
+  kept from the first revision (`renderer_regression_tests --graphics`'s
+  `animals` sheet, all 7 in-game coat colors). Not re-captured this round:
+  `--graphics` now fails early on an unrelated physical-goods rack-bounds
+  check from the town/shops refresh in #931, before it reaches the
+  animal/pony checks. The collar changes since these frames were taken are
+  small enough (already low-profile at the first revision's size, now
+  smaller still) that they would not read differently at this icon scale;
+  `road-after.jpg` and `travel-after.jpg` above are the current reference
+  for the collar instead.
 
-## Verification run (after the revision)
+## Verification run (current state)
 
 - `python3 tools/blender/validate_creature_library.py` — pass, 0 failures,
-  horse at 2740 triangles.
+  horse at 2772 triangles (limit 3200).
 - `cmake --preset play && cmake --build --preset play` — succeeds.
-- `ulimit -s 65520; ctest --preset play` — 238/241 passed after rebasing
-  onto the current `origin/main` (44 commits ahead of this branch's
-  original base, mostly a "living world" census/districts/clock merge
-  train) and re-running for the revision. The three failures are all
-  pre-existing simulation/persistence determinism issues unrelated to this
-  PR's files (`tools/blender/build_creature_library.py` and generated
-  assets only): `scrivendays_calendar_and_evidence` (a
-  `CC_SIM_NEWEST_LEGACY_SCHEMA` bump in an unrelated merged PR),
-  `crisis_contested_succession`, and `long_history_recovery` (both
-  `CcSimHash` mismatches in `succession_tests`/`long_history_recovery_tests`,
-  pure simulation/persistence code this PR never touches). All three
-  reproduce standalone, deterministically, with no Blender/creature/road
-  code in their call path.
-- `renderer_regression_tests --carriage-graphics` and `--graphics` — pass,
-  including `TestPonyHarnessAttachment` and the repeated-draw
-  no-gait-mutation checks (the collar's re-bind to `chest` does not change
-  gait/controller state, only its own static bind).
-- No "clamped to bind pose" warnings in any capture log.
-- Frames captured with the binary invoked directly (no `launchctl` or other
-  sandbox workaround); the window server was reachable this pass.
+- `ulimit -s 65520; ctest --preset play` — **247/247 passed**, run after
+  rebasing onto `origin/main` through #931/#936/#937 for the second
+  revision. The three pre-existing failures the first revision found and
+  confirmed standalone (`scrivendays_calendar_and_evidence`,
+  `crisis_contested_succession`, `long_history_recovery`) are gone: they
+  were fixed upstream somewhere in the commits this rebase picked up, not
+  by anything in this branch. Full ctest is clean.
+- `renderer_regression_tests --carriage-graphics` — pass, including
+  `TestPonyHarnessAttachment` and the repeated-draw no-gait-mutation
+  checks (the collar's re-bind to `body` does not change gait/controller
+  state, only its own static bind). `--graphics` (a separate, non-ctest
+  binary invocation) fails early on the unrelated physical-goods issue
+  noted above, before reaching the animal-specific checks; the equivalent
+  ctest entry, `physical_goods_displays`, passes, and so does
+  `research_artifact_budget`.
+- Confirmed against #937 ("Unified skinned characters"), which moved
+  quadruped posing onto the shared `PoseSkinnedCharacter` runtime path:
+  the horse still loads (correct bone count and names against the
+  quadruped skeleton family) and poses correctly. No "clamped to bind
+  pose" warning in any capture log this round.
+- Frames captured with the binary invoked directly (no `launchctl` or
+  other sandbox workaround); the window server was reachable this pass.
