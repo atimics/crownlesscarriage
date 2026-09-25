@@ -4890,7 +4890,6 @@ static ContextActionSet BuildContextActions(
             AddDetailedContextAction(&set, CONTEXT_ACTION_OVEN_QUESTION,
                 "What do the ovens need?", TextFormat("%d", set.count + 1),
                 "ASK ABOUT THE LOCAL TALLY", true, false);
-        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         const CcCharacter *contact=CcSimMineEvidenceContact(sim);
         bool jory=contact != NULL && contact->id == local->conversation_character_id;
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
@@ -4914,6 +4913,7 @@ static ContextActionSet BuildContextActions(
             "Chat", TextFormat("%d",set.count+1), "",
             !core_conversation.pending && core_conversation.round_phase == 0U,
             false);
+        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         AddDetailedContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW, "Farewell", "ESC", "", true, false);
         return set;
     }
@@ -5130,7 +5130,6 @@ static ContextActionSet BuildContextActions(
             AddDetailedContextAction(&set, CONTEXT_ACTION_OVEN_QUESTION,
                 "What do the ovens need?", TextFormat("%d", set.count + 1),
                 "ASK ABOUT THE LOCAL TALLY", true, false);
-        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         const CcCharacter *contact=CcSimMineEvidenceContact(sim);
         bool jory=character != NULL && contact != NULL && character->id == contact->id;
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
@@ -5187,6 +5186,7 @@ static ContextActionSet BuildContextActions(
                                      CC_STORY_PLAYER_PROMISE));
             }
         }
+        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         AddContextAction(&set, CONTEXT_ACTION_CLOSE_VIEW,
                          CcStoryPlayerChoiceText(
                              situation != NULL ? situation->kind :
