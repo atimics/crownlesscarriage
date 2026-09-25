@@ -121,7 +121,7 @@ static void CheckFirstLeg(void)
     CC_CHECK(CcSaveEncode(&sim,&bytes,&size,error,sizeof(error)));
     CC_CHECK(CcSaveDecode(bytes,size,&restored,error,sizeof(error)));CcSaveFreeBuffer(bytes);
     CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION);
-    restored.schema_version=92U;CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
+    restored.schema_version=92U;CC_CHECK(CcSimHash(&sim)==CcTestBeforeCensusHash(&restored));
 
 }
 

@@ -1,4 +1,5 @@
 #include "sim/cc_scriven.h"
+#include "sim/cc_census.h"
 #include "sim/cc_sim.h"
 
 #include <stddef.h>
@@ -47,6 +48,7 @@ uint64_t CcSimHash(const CcSim *sim)
     bool hash_lifecycles = sim->schema_version >= 26U;
     uint64_t hash = UINT64_C(1469598103934665603);
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
+    if (sim->schema_version >= 114U) HASH_VALUE(CcCensusHash(&sim->census));
     if (sim->schema_version >= 113U) HASH_VALUE(CcScrivenHash(&sim->scriven));
     if (sim->schema_version >= 99U) {
         int32_t custody_capacity=sim->schema_version < 103U ?

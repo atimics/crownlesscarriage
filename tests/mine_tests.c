@@ -649,7 +649,7 @@ int main(int argc,char **argv)
     prechange.mine.source_released=false;
     CcCustodyInit(&prechange.custody);
     prechange.custody.capacity=CC_CUSTODY_LEGACY_CAPACITY;
-    CC_CHECK(CcSimHash(&prechange)==UINT64_C(2100520264052232360));
+    CC_CHECK(CcTestBeforeCensusHash(&prechange)==UINT64_C(2100520264052232360));
     Check(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-102-generator-25-prechange.ccsave",
         &restored,error,sizeof(error)));
     CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION &&
@@ -983,7 +983,7 @@ int main(int argc,char **argv)
         CC_CHECK(restored.mine.pack[good]==changed.mine.pack[good]);
     }
     restored.schema_version=59U;
-    CC_CHECK(CcSimHash(&restored)==CcSimHash(&changed));
+    CC_CHECK(CcTestBeforeCensusHash(&restored)==CcSimHash(&changed));
     Check(CcSaveWrite(path,&sim,error,sizeof(error)));
     Check(CcSaveRead(path,&restored,error,sizeof(error)));
     CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
@@ -1037,7 +1037,7 @@ int main(int argc,char **argv)
     CC_CHECK(strcmp(restored.characters[0].name,"Rowen Venn")==0);
     CC_CHECK(strcmp(restored.characters[23].name,"Hartha Stonehewer")==0);
     restored.schema_version=58U;
-    CC_CHECK(CcSimHash(&restored)==UINT64_C(1053288272468887993));
+    CC_CHECK(CcTestBeforeCensusHash(&restored)==UINT64_C(1053288272468887993));
     AtBranch(&sim,false);
     Check(CcCoopApply(&sim,"visit_mine",CcMineSite(&sim)->id,0,0,error,sizeof(error)));
     Check(CcCoopApply(&sim,"mine_step",(CcId)sim.mine.revision,0,0,error,sizeof(error)));

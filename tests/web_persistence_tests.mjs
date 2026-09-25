@@ -113,6 +113,7 @@ class LockManager {
 
 const lockManager = new LockManager();
 let pageCounter = 0;
+let campaignCounter = 0;
 
 async function createPage() {
   pageCounter += 1;
@@ -138,7 +139,15 @@ async function createPage() {
     },
     indexedDB,
     navigator: {locks: lockManager},
-    crypto: {randomUUID: () => "page-" + pageCounter},
+    crypto: {
+      randomUUID: () => "page-" + pageCounter,
+      getRandomValues(bytes) {
+        campaignCounter += 1;
+        for (let i = 0; i < bytes.length; i += 1)
+          bytes[i] = (campaignCounter + i) & 255;
+        return bytes;
+      }
+    },
     addRunDependency() {},
     removeRunDependency() { ready(); },
     addEventListener(name, listener) { listeners.set(name, listener); },

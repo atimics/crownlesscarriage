@@ -1,5 +1,6 @@
 #include "persistence/cc_starting_campaign.h"
 #include "persistence/cc_save.h"
+#include "sim/cc_census.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,7 +19,10 @@ bool CcStartingCampaignDeepWyrm(CcSim *sim, const char *path,
     /* The shipped campaign identity was recorded at schema 95. */
     uint32_t loaded_schema = world->schema_version;
     world->schema_version = 95U;
+    uint64_t migrated_serial = world->next_entity_serial;
+    world->next_entity_serial -= CcCensusIssuedIdCount(&world->census);
     uint64_t recorded_hash = CcSimHash(world);
+    world->next_entity_serial = migrated_serial;
     world->schema_version = loaded_schema;
     if (world->world_seed != CC_DEEP_WYRM_SEED || world->current_day != CC_DEEP_WYRM_DAY ||
         world->schema_version != CC_SIM_SCHEMA_VERSION || world->generator_version != 25U ||

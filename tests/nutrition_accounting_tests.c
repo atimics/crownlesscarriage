@@ -1,4 +1,5 @@
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
 #include "persistence/cc_save.h"
 #include "test_support.h"
 #include <string.h>
@@ -113,6 +114,7 @@ int main(void)
     CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-53-generator-25-nutrition.ccsave",
         &observed, fixture_error, sizeof(fixture_error)));
     observed.schema_version = 53U;
+    observed.next_entity_serial -= CcCensusIssuedIdCount(&observed.census);
     control = observed;
     daily = observed;
     memset(&totals, 0, sizeof(totals));

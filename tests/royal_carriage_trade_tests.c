@@ -1,5 +1,6 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
 
 #include "test_support.h"
 
@@ -178,6 +179,7 @@ static void CheckAbandonedDelivery(void)
     /* The world ran under schema 74, before goblin factions existed;
        re-initialise them for the current-schema checks this test is about. */
     CcSimInitializeGoblinPolitics(&sim);
+    CcCensusReconcile(&sim);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
     const char *path = "abandoned-delivery.ccsave";
     CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
@@ -624,7 +626,8 @@ int main(void)
         CC_CHECK(upgraded.generator_version == CC_GENERATOR_VERSION);
         CC_CHECK(upgraded.royal_carriage_count == upgraded.kingdom_count);
         CC_CHECK(upgraded.next_entity_serial == legacy.next_entity_serial +
-                 (uint64_t)upgraded.kingdom_count);
+                 (uint64_t)upgraded.kingdom_count +
+                 CcCensusIssuedIdCount(&upgraded.census));
         CC_CHECK(CcSimValidate(&upgraded, error, sizeof(error)));
         CC_CHECK(CcSaveWrite(legacy_path, &upgraded, error, sizeof(error)));
         CcSim again;

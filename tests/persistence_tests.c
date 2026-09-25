@@ -1,4 +1,5 @@
 #include "sim/cc_archive_recruitment.h"
+#include "sim/cc_census.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_sim_versions_internal.h"
@@ -14,6 +15,32 @@ enum {
     CC_TEST_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE = 17,
     CC_TEST_SCHEMA17_EVENT_ENCOUNTER_LOOT = 90
 };
+
+static uint64_t CensusIssuedIds(const CcSim *sim)
+{
+    uint64_t issued = (uint64_t)sim->census.district_count;
+    for (int32_t i = 0; i < sim->census.resident_count; ++i)
+        if (!sim->census.residents[i].rich_identity) ++issued;
+    return issued;
+}
+
+static uint64_t LegacyHashBeforeCensusSerial(CcSim *sim)
+{
+    uint64_t issued = CensusIssuedIds(sim);
+    uint64_t current = sim->next_entity_serial;
+    sim->next_entity_serial -= issued;
+    uint64_t hash = CcSimHash(sim);
+    sim->next_entity_serial = current;
+    return hash;
+}
+
+static bool LegacyStateMatchesAfterCensusUpgrade(CcSim *restored,
+                                                 const CcSim *after)
+{
+    return after->schema_version < 114U ?
+        LegacyHashBeforeCensusSerial(restored) == CcSimHash(after) :
+        CcSimHash(restored) == CcSimHash(after);
+}
 
 static void RequireSqlite(int result, sqlite3 *database, const char *context)
 {
@@ -2415,7 +2442,8 @@ static void CheckWoodPaperJournalMigration(char *error,
     /* Captured with main 9ab3a56 before changing the paper recipe. */
     CcSim legacy_view = restored;
     legacy_view.schema_version = 36U;
-    legacy_view.next_entity_serial -= (uint64_t)restored.kingdom_count;
+    legacy_view.next_entity_serial -=
+        (uint64_t)restored.kingdom_count + CensusIssuedIds(&restored);
     legacy_view.settlements[1].stock[CC_GOOD_WOOD] -= 22;
     legacy_view.shipments[1].status = CC_SHIPMENT_TRAVELLING;
     CC_CHECK(CcSimHash(&legacy_view) == UINT64_C(0x8e390ecaf46cc546));
@@ -2464,7 +2492,7 @@ static void CheckPreGossipJournalMigration(char *error, size_t error_capacity)
     CC_CHECK(restored.archives.lore_stored == 1);
     CC_CHECK(restored.gossip_last_event_id == 0U);
     restored.schema_version = 41U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&suffix));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &suffix));
     RemoveDatabase(path);
 }
 
@@ -2541,7 +2569,8 @@ static void CheckLegacyLifecycleJournalCompatibility(
     CC_CHECK(restored.current_day == suffix.current_day);
     CC_CHECK(restored.characters[0].id == first_character_id);
     CC_CHECK(restored.next_entity_serial ==
-             first_unused_serial + (uint64_t)restored.kingdom_count);
+             first_unused_serial + (uint64_t)restored.kingdom_count +
+             CensusIssuedIds(&restored));
     CC_CHECK(restored.character_births == 0);
     CC_CHECK(restored.character_deaths == 0);
     for (int32_t i = 0; i < restored.character_count; ++i) {
@@ -2996,6 +3025,7 @@ static void CheckDragonHairPersistence(void)
     CC_CHECK(restored.dragon.hair_color == CC_DRAGON_HAIR_PURPLE);
     court.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&court);
+    CcCensusInit(&court);
     CC_CHECK(CcSimHash(&court) == CcSimHash(&restored));
     RemoveDatabase(path);
 }
@@ -3015,6 +3045,7 @@ static void CheckSchema41Upgrade(void)
     CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
     legacy->schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(legacy);
+    CcCensusInit(legacy);
     /* The new active-state clock starts at the migration date. */
     for (int32_t i = 0; i < legacy->character_count; ++i) {
         CC_CHECK(restored->characters[i].detail_active);
@@ -3243,7 +3274,7 @@ static void CheckSchema76ArchiveJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 76U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3269,7 +3300,7 @@ static void CheckSchema77ArchiveJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 77U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3295,7 +3326,7 @@ static void CheckSchema78OccupationJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 78U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3321,7 +3352,7 @@ static void CheckSchema79RecruitmentJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 77U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3348,7 +3379,7 @@ static void CheckSchema82RecruitmentJourneyJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 82U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3375,7 +3406,7 @@ static void CheckSchema84RecruitmentTrainingJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 83U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3402,7 +3433,7 @@ static void CheckSchema85RecruitmentStaffJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 84U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3428,7 +3459,7 @@ static void CheckSchema86RecruitmentAutomaticJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 85U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3454,7 +3485,7 @@ static void CheckSchema87RecruitmentBindingJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 86U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3480,7 +3511,7 @@ static void CheckSchema88RecruitmentVolumeJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 87U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3506,7 +3537,7 @@ static void CheckSchema89RecruitmentReserveJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 88U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3527,7 +3558,7 @@ static void CheckSchema89HistoricalCast(void)
     AddLegacyDayJournalSuffix(path, &legacy, &after, 88U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     restored.schema_version = 88U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     RemoveDatabase(path);
 }
 
@@ -3551,7 +3582,7 @@ static void CheckSchema90RecruitmentLifetimeJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 89U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3579,7 +3610,7 @@ static void CheckSchema58SmithyCapacity(void)
     CC_CHECK(restored.settlements[3].production[CC_GOOD_TOOLS] == 0);
     CC_CHECK(restored.settlements[1].production[CC_GOOD_TOOLS] == 7);
     restored.schema_version = 58U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&legacy));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &legacy));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&restored);
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
@@ -3599,7 +3630,9 @@ static void CheckShippedTravellerSave(void)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
     restored.schema_version = 60U;
-    CC_CHECK(CcSimHash(&restored) == UINT64_C(0xaf82f2230153da41));
+    CC_CHECK(LegacyHashBeforeCensusSerial(&restored) ==
+             UINT64_C(0xaf82f2230153da41));
+    restored.next_entity_serial -= CensusIssuedIds(&restored);
     CcSimAdvanceDays(&restored, 9);
     CC_CHECK(CcSimHash(&restored) == UINT64_C(0x3c8745b83278bea2));
 }
@@ -3635,7 +3668,7 @@ static void CheckPre61KnowledgeJournal(void)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.historic_character_count == 0);
     restored.schema_version = 60U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&restored);
     for (int32_t i = 0; i < restored.character_count; ++i) {
@@ -3670,7 +3703,7 @@ static void CheckPre64SiteJournal(void)
     AddLegacyDayJournalSuffix(path, &legacy, &after, 64U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     restored.schema_version = 64;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 7);
@@ -3704,7 +3737,7 @@ static void CheckPre65FreightJournal(void)
     AddLegacyDayJournalSuffix(path, &legacy, &after, 65U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     restored.schema_version = 65;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 35);
@@ -3730,7 +3763,7 @@ static void CheckPre67MaintenanceJournal(void)
     AddLegacyDayJournalSuffix(path, &legacy, &after, 67U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     restored.schema_version = 67;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 7);
@@ -3758,7 +3791,7 @@ static void CheckPre68WearJournal(void)
     AddLegacyDayJournalSuffix(path, &legacy, &after, 68U, 25U);
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     restored.schema_version = 68;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&restored);
     CcSimAdvanceDays(&restored, 7);
@@ -3830,7 +3863,7 @@ static void CheckSchema95RecruitmentJournal(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = 95U;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);
@@ -3855,7 +3888,7 @@ static void CheckRecentRecruitmentJournal(uint32_t schema)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     restored.schema_version = schema;
-    CC_CHECK(CcSimHash(&restored) == CcSimHash(&after));
+    CC_CHECK(LegacyStateMatchesAfterCensusUpgrade(&restored, &after));
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     CC_CHECK(CcSaveWrite(path, &restored, error, sizeof(error)));
     RemoveDatabase(path);

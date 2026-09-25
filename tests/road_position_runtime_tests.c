@@ -121,7 +121,7 @@ static void StartPilot(CcSim *sim)
 
 static void CheckFirstStopParity(void)
 {
-    CcSim one_tick;
+    static CcSim one_tick;
     StartPilot(&one_tick);
     CcSim large = one_tick;
     CcSim shared = one_tick;
@@ -146,7 +146,7 @@ static void CheckFirstStopParity(void)
 
 static void CheckMineRoadAdapter(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0x3235a7ed));
     const CcRoadSite *mine = CcMineSite(&sim);
     CC_CHECK(mine != NULL);
@@ -171,14 +171,14 @@ static void CheckMineRoadAdapter(void)
 
 static void CheckSaveReloadAndTokens(void)
 {
-    CcSim sim;
+    static CcSim sim;
     StartPilot(&sim);
     CcSimAdvanceRuntimeTicks(&sim, 1000);
     CC_CHECK(sim.journey.road_waiting_choice);
     unsigned char *bytes = NULL;
     size_t length = 0U;
     CC_CHECK(CcSaveEncode(&sim, &bytes, &length, error, sizeof(error)));
-    CcSim restored;
+    static CcSim restored;
     CC_CHECK(CcSaveDecode(
         bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
@@ -213,12 +213,11 @@ static void CheckSaveReloadAndTokens(void)
     memcpy(frozen_x, restored.journey.road_geometry_x_units,
            sizeof(frozen_x));
     restored.settlements[0].size = CC_SETTLEMENT_CAPITAL_SIZE;
-    restored.settlements[0].population = 999999;
     bytes = NULL;
     length = 0U;
     CC_CHECK(CcSaveEncode(
         &restored, &bytes, &length, error, sizeof(error)));
-    CcSim midpoint;
+    static CcSim midpoint;
     CC_CHECK(CcSaveDecode(
         bytes, length, &midpoint, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
@@ -232,7 +231,7 @@ static void CheckSaveReloadAndTokens(void)
 
 static void CheckMidSpurReversal(void)
 {
-    CcSim sim;
+    static CcSim sim;
     StartPilot(&sim);
     CcPilotRoadTopology pilot;
     CC_CHECK(CcPilotRoadTopologyBuildWithLength(
@@ -259,7 +258,7 @@ static void CheckMidSpurReversal(void)
     unsigned char *bytes = NULL;
     size_t length = 0U;
     CC_CHECK(CcSaveEncode(&sim, &bytes, &length, error, sizeof(error)));
-    CcSim restored;
+    static CcSim restored;
     CC_CHECK(CcSaveDecode(bytes, length, &restored,
                           error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
@@ -279,7 +278,7 @@ static void CheckMidSpurReversal(void)
 
 static void CheckLongDetourAndHazardOrdering(void)
 {
-    CcSim detour;
+    static CcSim detour;
     StartPilot(&detour);
     detour.journey.ambush_pending = false;
     CcPilotRoadTopology pilot;
@@ -332,7 +331,7 @@ static void CheckLongDetourAndHazardOrdering(void)
              CC_WORLD_WATCH_SUBTICKS);
     CC_CHECK(CcSimValidate(&detour, error, sizeof(error)));
 
-    CcSim hazard;
+    static CcSim hazard;
     StartPilot(&hazard);
     CC_CHECK(CcPilotRoadTopologyBuildWithLength(
         &hazard, hazard.journey.road_geometry_length_units, &pilot));

@@ -111,6 +111,7 @@ add_library(crownless_sim
     src/sim/cc_scriven.c
     src/sim/cc_scriven_codec.c
     src/sim/cc_sim.c
+    src/sim/cc_census.c
     src/sim/cc_custody.c
     src/sim/cc_sim_custody.c
     src/sim/cc_sim_hash.c
@@ -191,6 +192,7 @@ add_library(crownless_local_place
     src/client/cc_local_place.c
 )
 target_include_directories(crownless_local_place PUBLIC src)
+target_link_libraries(crownless_local_place PUBLIC crownless_sim)
 cc_strict_warnings(crownless_local_place)
 
 add_library(crownless_world

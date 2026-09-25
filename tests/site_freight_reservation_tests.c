@@ -1,4 +1,5 @@
 #include "sim/cc_production.h"
+#include "sim/cc_census.h"
 #include "persistence/cc_save.h"
 #include "test_support.h"
 #include <string.h>
@@ -42,6 +43,7 @@ int main(void)
     sim.royal_carriages[1].location_id = site->home_settlement_id;
     sim.royal_carriages[1].condition = 100;
     sim.royal_carriages[1].next_dispatch_day = sim.current_day;
+    CcCensusReconcile(&sim);
     if (!CcSimValidate(&sim, error, sizeof(error))) { fprintf(stderr, "%s\n", error); CC_CHECK(false); }
     CcSiteFreightPlan planned = CcSimPlanSiteFreight(&sim, sim.royal_carriages[1].id, site->id);
     CC_CHECK(planned.gate == CC_SITE_FREIGHT_READY && planned.good == CC_GOOD_WHEAT && planned.quantity == 4);

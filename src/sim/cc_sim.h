@@ -34,6 +34,9 @@
 #define CC_MAX_PENDING_ECHOES 3
 #define CC_MAX_CHARACTERS 128
 #define CC_MAX_CHARACTER_RECORDS 256
+#define CC_CENSUS_PERSON_CAP 32768
+#define CC_CENSUS_DISTRICTS_PER_TOWN 6
+#define CC_CENSUS_DISTRICT_CAP (CC_MAX_SETTLEMENTS * CC_CENSUS_DISTRICTS_PER_TOWN)
 /* The character cap was 24 through schema 79. Saves written then carry that
    many gossip carrier slots and hash exactly those, so the carrier capacity
    must come from the schema rather than the current cap. */
@@ -71,7 +74,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 113
+#define CC_SIM_SCHEMA_VERSION 114
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -110,8 +113,34 @@ typedef enum CcEntityKind {
     CC_ENTITY_ROAD_SITE = 22,
     CC_ENTITY_ROYAL_CARRIAGE = 23,
     CC_ENTITY_MINE_SOURCE = 24,
-    CC_ENTITY_MINE_CACHE = 25
+    CC_ENTITY_MINE_CACHE = 25,
+    CC_ENTITY_DISTRICT = 26
 } CcEntityKind;
+
+/* Every living resident has one row. Rich CcCharacter detail uses this same ID. */
+typedef struct CcCensusResident {
+    CcId id;
+    int32_t birth_day;
+    int32_t district_slot;
+    int32_t dwelling_slot;
+    int32_t left_day;
+    int32_t rich_identity;
+    int32_t sheltered;
+} CcCensusResident;
+
+typedef struct CcCensusDistrict {
+    CcId id;
+    CcId settlement_id;
+    char name[CC_NAME_CAPACITY];
+    int32_t dwelling_count;
+} CcCensusDistrict;
+
+typedef struct CcCensus {
+    int32_t district_count;
+    CcCensusDistrict districts[CC_CENSUS_DISTRICT_CAP];
+    int32_t resident_count;
+    CcCensusResident residents[CC_CENSUS_PERSON_CAP];
+} CcCensus;
 
 typedef enum CcGood {
     CC_GOOD_BREAD = 0,
@@ -2247,6 +2276,7 @@ typedef struct CcSim {
     CcFront fronts[CC_MAX_FRONTS];
     CcQuestOutcomeRecord quest_outcomes[CC_MAX_QUEST_OUTCOMES];
     CcCharacter characters[CC_MAX_CHARACTER_RECORDS];
+    CcCensus census;
     CcRelationship relationships[CC_MAX_RELATIONSHIPS];
     int32_t relationship_count;
     CcEvent events[CC_MAX_EVENTS];
@@ -2321,7 +2351,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 656024,
+_Static_assert(sizeof(CcSim) == 1706632,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

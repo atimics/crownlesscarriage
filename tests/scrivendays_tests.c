@@ -1,4 +1,5 @@
 #include "sim/cc_scriven.h"
+#include "sim/cc_census.h"
 #include "sim/cc_archive_volumes_internal.h"
 #include "persistence/cc_save.h"
 #include <stdio.h>
@@ -45,6 +46,7 @@ static bool RoundTrip(void)
 {
     unsigned char *data=NULL;size_t length=0;
     sim.royal_trade_week=sim.current_day/7;
+    CcCensusReconcile(&sim);
     CHECK(CcSimValidate(&sim,error,sizeof(error)) || (fprintf(stderr,"%s\n",error),false));
     CHECK(CcSaveEncode(&sim,&data,&length,error,sizeof(error)));
     CHECK(CcSaveDecode(data,length,&copy,error,sizeof(error)) || (fprintf(stderr,"%s\n",error),false));
@@ -239,6 +241,7 @@ static bool Schema112(void)
     CHECK(copy.schema_version==CC_SIM_SCHEMA_VERSION);
     CHECK(CcScrivenBookById(&copy,id)!=NULL && copy.scriven.age_count==0);
     copy.schema_version=112;
+    copy.next_entity_serial -= CcCensusIssuedIdCount(&copy.census);
     CHECK(CcSimHash(&copy)==before);
     return true;
 }

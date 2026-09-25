@@ -1,5 +1,6 @@
 #include "sim/cc_occupations.h"
 #include "persistence/cc_save.h"
+#include "sim/cc_census.h"
 #include "test_support.h"
 
 #include <stdio.h>
@@ -38,6 +39,7 @@ static void RoundTrip(void)
 {
     unsigned char *bytes = NULL;
     size_t length = 0;
+    CcCensusReconcile(&sim);
     if (!CcSimValidate(&sim, error, sizeof(error))) {
         fprintf(stderr, "Occupation fixture: %s\n", error);
         CC_CHECK(false);

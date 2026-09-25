@@ -4,6 +4,7 @@
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
 #include "sim/cc_oven_court.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
@@ -5038,6 +5039,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeOccupations(sim);
     CcSimInitializeUnderroadNetwork(sim);
     CcScrivenInit(sim);
+    CcCensusInit(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -11689,7 +11691,10 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
         CcSimSettlement(sim, settlement_id) == NULL) return NULL;
     character = &sim->characters[sim->character_count++];
     *character = (CcCharacter){0};
-    character->id = NextId(sim, CC_ENTITY_CHARACTER);
+    character->id = CcCensusClaimResident(sim, settlement_id);
+    bool claimed_resident = character->id != 0U;
+    if (character->id == 0U)
+        character->id = NextId(sim, CC_ENTITY_CHARACTER);
     character->detail_active = sim->schema_version >= 101U &&
         CcSimActiveCharacterCount(sim) < CC_MAX_CHARACTERS;
     character->last_active_day = character->detail_active ? sim->current_day : 0;
@@ -11708,6 +11713,19 @@ static CcCharacter *PromoteCharacter(CcSim *sim, const char *name,
     InitializeCharacterLife(
         sim, character, 0U, 0,
         16 + (int32_t)(MixCharacterSeed(character->appearance_seed) % 58U));
+    if (claimed_resident) {
+        const CcCensusResident *resident =
+            CcCensusResidentById(sim, character->id);
+        if (resident != NULL) {
+            character->birth_day = resident->birth_day;
+            int64_t natural_death = (int64_t)character->birth_day +
+                CharacterNaturalLifeDays(character->appearance_seed, 0);
+            if (natural_death <= sim->current_day)
+                natural_death = (int64_t)sim->current_day + 365;
+            character->death_day = natural_death > CC_SIM_MAX_DAY ?
+                CC_SIM_MAX_DAY : (int32_t)natural_death;
+        }
+    }
     character->player_disposition = 0;
     character->stress = activity == CC_CHARACTER_ACTIVITY_SEEKING_AID ?
         68 : 28;
@@ -16753,6 +16771,7 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         DeliverDelayedEchoIfReady(sim);
         AdvanceGoblinPolitics(sim);
         CcScrivenAdvance(sim);
+        CcCensusReconcile(sim);
     }
 }
 
@@ -20292,6 +20311,7 @@ bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_
     }
     if (ok && sim->schema_version >= 75U) ReconcileGoblinFactions(sim);
     if (ok) CcSimPeopleEnterSettlement(sim);
+    if (ok) CcCensusReconcile(sim);
     return ok;
 }
 
@@ -22723,6 +22743,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 }
             }
         }
+    }
+    if (!CcCensusValidate(sim)) {
+        SetError(error, error_capacity, "The resident census or homes are invalid.");
+        return false;
     }
     return true;
 }

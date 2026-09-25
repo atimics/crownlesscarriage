@@ -1,5 +1,6 @@
 #include "sim/cc_archive_internal.h"
 #include "persistence/cc_save.h"
+#include "sim/cc_census.h"
 #include "test_support.h"
 #include <string.h>
 
@@ -62,7 +63,10 @@ static void RoundTrip(void)
     CC_CHECK(CcSaveDecode(bytes, length, &restored, error, sizeof(error)));
     CcSaveFreeBuffer(bytes);
     restored.schema_version = sim.schema_version;
-    CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
+    CC_CHECK(CcSimHash(&sim) == (sim.schema_version < 114U ?
+        CcTestBeforeCensusHash(&restored) : CcSimHash(&restored)));
+    if (sim.schema_version < 114U)
+        restored.next_entity_serial -= CcCensusIssuedIdCount(&restored.census);
     for (int32_t i = 0; i < sim.royal_carriage_count; ++i) {
         CC_CHECK(sim.royal_carriages[i].id == restored.royal_carriages[i].id);
         CC_CHECK(sim.royal_carriages[i].location_id == restored.royal_carriages[i].location_id);
