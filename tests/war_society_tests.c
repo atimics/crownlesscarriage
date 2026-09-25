@@ -32,7 +32,7 @@ static void FallSettlement(CcSim *sim, int32_t slot)
 static void CheckWarCampContest(char *error, size_t capacity)
 {
     /* A strong band takes a fallen town. */
-    CcSim seize;
+    static CcSim seize;
     CcSimInit(&seize, UINT32_C(0x60c11b));
     seize.bandits[0].members = 70;
     seize.bandits[0].supplies = 40;
@@ -56,7 +56,7 @@ static void CheckWarCampContest(char *error, size_t capacity)
     CC_CHECK(CcSimValidate(&seize, error, capacity));
 
     /* A weak band does not claim the ruin. */
-    CcSim weak;
+    static CcSim weak;
     CcSimInit(&weak, UINT32_C(0x60c11b));
     weak.bandits[0].members = 25;
     weak.bandits[0].supplies = 15;
@@ -69,7 +69,7 @@ static void CheckWarCampContest(char *error, size_t capacity)
                          "war camp") == 0);
 
     /* A held ruin cannot be resettled while the band is strong. */
-    CcSim contested;
+    static CcSim contested;
     CcSimInit(&contested, UINT32_C(0xba1a5eed));
     contested.settlement_count = 2;
     contested.route_count = 1;
@@ -121,7 +121,7 @@ static void CheckWarCampContest(char *error, size_t capacity)
     /* Save round trip keeps the camp; an old-schema save reads it as 0. */
     const char *path = "/tmp/crownless-war-camp.ccsave";
     (void)remove(path);
-    CcSim saved;
+    static CcSim saved;
     CcSimInit(&saved, UINT32_C(0x60c11b));
     saved.bandits[0].members = 70;
     saved.bandits[0].supplies = 40;
@@ -131,7 +131,7 @@ static void CheckWarCampContest(char *error, size_t capacity)
     CC_CHECK(saved.bandits[0].camp_settlement_id != 0U);
     uint64_t hash = CcSimHash(&saved);
     CC_CHECK(CcSaveWrite(path, &saved, error, capacity));
-    CcSim restored;
+    static CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, capacity));
     CC_CHECK(CcSimHash(&restored) == hash);
     CC_CHECK(restored.bandits[0].camp_settlement_id ==
@@ -175,7 +175,7 @@ static void CheckWarSocietyEvents(char *error, size_t capacity)
 
     /* Every bond produced by war society connects two living characters
      * and the relationship table reflects it. */
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0x60c11c));
     for (int32_t i = 0; i < sim.kingdom_count; ++i) {
         for (int32_t j = 0; j < sim.kingdom_count; ++j) {
@@ -248,14 +248,14 @@ static void SetupLegitimacyGateWorld(CcSim *sim, uint32_t seed)
    while a schema-77 replay keeps the old absolute floor. */
 static void CheckLegitimacyGateDecoupled(char *error, size_t capacity)
 {
-    CcSim current;
+    static CcSim current;
     SetupLegitimacyGateWorld(&current, UINT32_C(0x6440c0de));
     CC_CHECK(current.schema_version >= 78U);
     CcSimAdvanceDays(&current, 1);
     CC_CHECK(WarDeclarationInFlight(&current));
     CC_CHECK(CcSimValidate(&current, error, capacity));
 
-    CcSim legacy;
+    static CcSim legacy;
     SetupLegitimacyGateWorld(&legacy, UINT32_C(0x6440c0de));
     legacy.schema_version = 77U;
     CcSimAdvanceDays(&legacy, 1);
@@ -271,7 +271,7 @@ int main(void)
     CheckWarCampContest(error, sizeof(error));
 
     /* Fall Thornford (full cast world) and follow the refugees. */
-    CcSim fall;
+    static CcSim fall;
     CcSimInit(&fall, UINT32_C(0x60c11a));
     int32_t thornford = -1;
     for (int32_t i = 0; i < fall.settlement_count; ++i) {
@@ -346,7 +346,7 @@ int main(void)
     CC_CHECK(CcSimValidate(&fall, error, sizeof(error)));
 
     /* A resident of the dead town, dying later, is not born into the ruin. */
-    CcSim heir;
+    static CcSim heir;
     CcSimInit(&heir, UINT32_C(0x60c11a));
     FallSettlement(&heir, thornford);
     CcSimAdvanceDays(&heir, 28);
@@ -385,7 +385,7 @@ int main(void)
     CC_CHECK(CountEvents(&heir, CC_EVENT_CHARACTER_BORN, "born into") >= 1);
 
     /* With no living host, the world stays quiet: nobody relocates. */
-    CcSim dead_world;
+    static CcSim dead_world;
     CcSimInit(&dead_world, UINT32_C(0x60c11a));
     for (int32_t i = 0; i < dead_world.settlement_count; ++i) {
         dead_world.settlements[i].population = 0;
@@ -407,7 +407,7 @@ int main(void)
     (void)remove(path);
     uint64_t hash = CcSimHash(&fall);
     CC_CHECK(CcSaveWrite(path, &fall, error, sizeof(error)));
-    CcSim restored;
+    static CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == hash);
     int32_t restored_refugees = 0;

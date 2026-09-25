@@ -1,5 +1,6 @@
 #include "metagame/cc_metagame.h"
 #include "persistence/cc_save.h"
+#include "sim/cc_census.h"
 #include "test_support.h"
 #include "story/cc_speech.h"
 
@@ -758,7 +759,7 @@ static void CheckLegacyNoticeMigration(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION && !restored.notice_board.ready);
     restored.schema_version = 96U;
-    CC_CHECK(CcSimHash(&restored) == legacy_hash);
+    CC_CHECK(CcTestBeforeCensusHash(&restored) == legacy_hash);
     restored.schema_version = CC_SIM_SCHEMA_VERSION;
     /* A save between upgrade and first refresh preserves the transition. */
     uint64_t transition_hash = CcSimHash(&restored);
@@ -1316,6 +1317,7 @@ static void CheckResearchMissionHearsAbandonedLair(void)
        by CheckLocalAndRemoteAccounts; the essential fix here is that a fact
        born in a dead town can reach the Scriptorium at all. */
     CC_CHECK(story->heard_day > 0);
+    CcCensusReconcile(&sim);
     CheckValid();
 }
 

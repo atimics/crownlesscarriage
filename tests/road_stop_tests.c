@@ -161,7 +161,7 @@ static void CheckPersistence(void)
             legacy_projection.carriage.speed_milli_per_second =
                 sim.carriage.speed_milli_per_second;
             legacy_projection.schema_version = version;
-            CC_CHECK(CcSimHash(&legacy_projection) == legacy_hash);
+            CC_CHECK(CcTestBeforeCensusHash(&legacy_projection) == legacy_hash);
         }
         (void)remove(path);
     }
@@ -270,7 +270,7 @@ static void CheckPre62Save(void)
     legacy_projection.carriage.speed_milli_per_second =
         sim.carriage.speed_milli_per_second;
     legacy_projection.schema_version = 62U;
-    CC_CHECK(CcSimHash(&legacy_projection) == hash);
+    CC_CHECK(CcTestBeforeCensusHash(&legacy_projection) == hash);
     CC_CHECK(CcSimApply(&restored, &clear, error, sizeof(error)));
     CC_CHECK(restored.road_sites[0].accessible);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
@@ -337,7 +337,7 @@ static void CheckStoreTransfers(void)
     legacy_projection.carriage.speed_milli_per_second =
         sim.carriage.speed_milli_per_second;
     legacy_projection.schema_version = 63;
-    CC_CHECK(CcSimHash(&sim) == CcSimHash(&legacy_projection));
+    CC_CHECK(CcSimHash(&sim) == CcTestBeforeCensusHash(&legacy_projection));
     for (int32_t slot = 0; slot < restored.road_site_count; ++slot)
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
             CC_CHECK(restored.road_sites[slot].stock[good] == 0);

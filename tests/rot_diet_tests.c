@@ -185,7 +185,7 @@ static void CheckLegacyAndPersistence(void)
     CcSaveFreeBuffer(bytes);
     CC_CHECK(loaded.schema_version == CC_SIM_SCHEMA_VERSION);
     loaded.schema_version = 75U;
-    CC_CHECK(CcSimHash(&loaded) == hash);
+    CC_CHECK(CcTestBeforeCensusHash(&loaded) == hash);
     loaded.schema_version = CC_SIM_SCHEMA_VERSION;
     sim = loaded;
     CcSimAdvanceDays(&sim, 100);

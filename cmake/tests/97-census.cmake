@@ -1,0 +1,5 @@
+add_executable(census_tests tests/census_tests.c)
+target_link_libraries(census_tests PRIVATE crownless_local_place crownless_persistence)
+cc_strict_warnings(census_tests)
+cc_large_sim_stack(census_tests)
+add_test(NAME persistent_resident_census COMMAND census_tests)

@@ -176,7 +176,7 @@ int main(void)
 {
     CheckWyrmheartRecovery();
     char error[256];
-    CcSim offices;
+    static CcSim offices;
     CcSimInit(&offices, UINT32_C(0xab807001));
     CC_CHECK(CcSimCharacter(
         &offices, offices.archives.abbot_character_id) != NULL);
@@ -199,7 +199,7 @@ int main(void)
     CC_CHECK(anointed_realms == 1);
     CC_CHECK(CountEvents(&offices, CC_EVENT_KING_ANOINTED) == 1);
 
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0xd2a60ec0));
     CC_CHECK(sim.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
     CC_CHECK(sim.dragon.activity == CC_DRAGON_ACTIVITY_DORMANT);
@@ -247,7 +247,8 @@ int main(void)
 
     CcTreasure *remembered = &sim.treasures[sim.treasure_count++];
     *remembered = (CcTreasure){
-        .id = CcMakeId(CC_ENTITY_TREASURE, UINT64_C(9001)),
+        .id = CcMakeId(CC_ENTITY_TREASURE,
+                       sim.next_entity_serial++),
         .maker_settlement_id = sim.settlements[0].id,
         .owner_id = sim.dragon.id,
         .location_id = sim.dragon.lair_settlement_id,
@@ -259,7 +260,6 @@ int main(void)
     };
     (void)snprintf(remembered->name, sizeof(remembered->name),
                    "The First Crown's Seal");
-    sim.next_entity_serial = UINT64_C(9002);
     memory_before = sim.dragon.memory_integrity;
     CcCommand steal_named = {
         .kind = CC_COMMAND_STEAL_DRAGON_NAMED_TREASURE,
@@ -281,9 +281,12 @@ int main(void)
     CC_CHECK(sim.player.treasure_cargo_slots == 0);
     CC_CHECK(sim.dragon.memory_integrity >= 90);
     CC_CHECK(remembered->owner_id == sim.dragon.id);
-    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    if (!CcSimValidate(&sim, error, sizeof(error))) {
+        (void)fprintf(stderr, "Dragon world: %s\n", error);
+        CC_CHECK(false);
+    }
 
-    CcSim deep_wyrm;
+    static CcSim deep_wyrm;
     CcSimInit(&deep_wyrm, UINT32_C(0xdee00001));
     deep_wyrm.dragon.hoard = 5000;
     deep_wyrm.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
@@ -298,7 +301,7 @@ int main(void)
     CC_CHECK(deep_wyrm.dragon.crown_strength >= 60);
     CC_CHECK(deep_wyrm.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
 
-    CcSim wyrm;
+    static CcSim wyrm;
     CcSimInit(&wyrm, UINT32_C(0xdee00002));
     wyrm.dragon.hoard = 5000;
     wyrm.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
@@ -323,7 +326,7 @@ int main(void)
     }
     CC_CHECK(wyrmheart_found);
 
-    CcSim brood;
+    static CcSim brood;
     CcSimInit(&brood, UINT32_C(0xb200dc0d));
     brood.dragon.hoard = 5000;
     brood.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
@@ -343,7 +346,7 @@ int main(void)
     CC_CHECK(brood.dragon.broods_laid == 1);
     CC_CHECK(CountEvents(&brood, CC_EVENT_DRAGON_BROOD) == 1);
 
-    CcSim dispossessed;
+    static CcSim dispossessed;
     CcSimInit(&dispossessed, UINT32_C(0xd155055e));
     dispossessed.dragon.territory_stability = 0;
     dispossessed.dragon.territoryless_days = 0;
@@ -359,7 +362,7 @@ int main(void)
     CC_CHECK(CountEvents(
         &dispossessed, CC_EVENT_DRAGON_UNCROWNED) == 1);
 
-    CcSim stockpile;
+    static CcSim stockpile;
     CcSimInit(&stockpile, UINT32_C(0x570c901e));
     stockpile.dragon.age_days = 1200 * 365;
     stockpile.dragon.regional_influence = 80;
@@ -393,7 +396,7 @@ int main(void)
         &stockpile, stockpile.dragon_campaign.hero_character_id) != NULL);
     CC_CHECK(patron_named);
 
-    CcSim bane;
+    static CcSim bane;
     CcSimInit(&bane, UINT32_C(0xba4e0001));
     CcSettlement *origin = CcSimSettlementMutable(&bane,
         bane.dragon_campaign.origin_settlement_id);
@@ -461,7 +464,7 @@ int main(void)
     brood.dragon.hair_color = CC_DRAGON_HAIR_BLUE;
     (void)remove(path);
     CC_CHECK(CcSaveWrite(path, &brood, error, sizeof(error)));
-    CcSim restored;
+    static CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&brood));
     CC_CHECK(restored.dragon.hair_color == CC_DRAGON_HAIR_BLUE);
@@ -512,7 +515,7 @@ int main(void)
     CcSimAdvanceDays(&restored, 1);
     CC_CHECK(restored.dragon.life_stage == CC_DRAGON_STAGE_WANDERER);
 
-    CcSim cult;
+    static CcSim cult;
     CcSimInit(&cult, UINT32_C(0xc0175eed));
     cult.dragon.slain = true;
     cult.dragon.slain_day = 1;
@@ -541,7 +544,7 @@ int main(void)
     CC_CHECK(cult.dragon_cult.devotion > 50);
     CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_CULT_RALLIED) == 1);
 
-    CcSim offering_recovery;
+    static CcSim offering_recovery;
     CcSimInit(&offering_recovery, UINT32_C(0x0ffee110));
     offering_recovery.dragon.slain = true;
     offering_recovery.dragon.life_stage = CC_DRAGON_STAGE_AFTERDRAGON;
@@ -611,7 +614,7 @@ int main(void)
     CC_CHECK(CountEvents(&cult, CC_EVENT_GOBLIN_DRAGON_SEED) == 1);
     CC_CHECK(CcSimValidate(&cult, error, sizeof(error)));
 
-    CcSim offerings;
+    static CcSim offerings;
     CcSimInit(&offerings, UINT32_C(0x0ffe7106));
     offerings.dragon.slain = true;
     offerings.dragon.slain_day = 1;
@@ -646,7 +649,7 @@ int main(void)
     CC_CHECK(CountEvents(
         &offerings, CC_EVENT_GOBLIN_DRAGON_SEED) == 1);
 
-    CcSim living_cult;
+    static CcSim living_cult;
     CcSimInit(&living_cult, UINT32_C(0xc0171a1e));
     living_cult.current_day = 2 * 365 - 1;
     living_cult.goblins.members = 24;
@@ -660,7 +663,7 @@ int main(void)
     CC_CHECK(CountEvents(
         &living_cult, CC_EVENT_GOBLIN_CULT_RALLIED) == 1);
 
-    CcSim ash_poor_cult;
+    static CcSim ash_poor_cult;
     CcSimInit(&ash_poor_cult, UINT32_C(0xc017a500));
     ash_poor_cult.current_day = 4 * 365 - 1;
     ash_poor_cult.goblins.members = 12;
@@ -673,7 +676,7 @@ int main(void)
     CcSimAdvanceDays(&ash_poor_cult, 1);
     CC_CHECK(ash_poor_cult.goblins.members == 13);
 
-    CcSim stages;
+    static CcSim stages;
     CcSimInit(&stages, UINT32_C(0x57a6e500));
     stages.dragon.memory_integrity = 20;
     stages.dragon.brood_cooldown_days = 1000;
@@ -719,7 +722,7 @@ int main(void)
     CC_CHECK(stages.dragon.hunt_cooldown_days >= 14);
     CC_CHECK(stages.dragon.hunt_cooldown_days <= 42);
 
-    CcSim strength;
+    static CcSim strength;
     CcSimInit(&strength, UINT32_C(0x57a3e67a));
     strength.dragon.body_condition = 80;
     strength.dragon.crown_strength = 60;

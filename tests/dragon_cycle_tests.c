@@ -44,7 +44,7 @@ static void FillEventLedger(CcSim *sim)
 
 static void CheckFullLedgerDragonTheft(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0x1297e157));
     FillEventLedger(&sim);
 
@@ -76,7 +76,7 @@ static void CheckFullLedgerDragonTheft(void)
 
 static void CheckFullLedgerDragonSlaying(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0x12951a17));
     FillEventLedger(&sim);
 
@@ -141,7 +141,7 @@ static void CheckFullLedgerDragonSlaying(void)
 
 int main(void)
 {
-    CcSim sim;
+    static CcSim sim;
     CcSimInit(&sim, UINT32_C(0xd12a600b));
     /* This scenario follows treasure taken from a town. Separate portage
        tests cover the caches already held in the underroad. */
@@ -149,7 +149,7 @@ int main(void)
         sim.dungeons[0].rooms[room].loot_quantity = 0;
     char error[256];
 
-    CcSim tunnel;
+    static CcSim tunnel;
     CcSimInit(&tunnel, UINT32_C(0x6f626c69));
     CcId town_id = tunnel.player.location_id;
     CcCommand climb = {
@@ -276,7 +276,7 @@ int main(void)
     const char *path = "/tmp/crownless-dragon-cycle-tests.ccsave";
     (void)remove(path);
     CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
-    CcSim restored;
+    static CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&sim));
     CC_CHECK(restored.dragon.stolen_outstanding == 20);
@@ -296,7 +296,7 @@ int main(void)
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
     CC_CHECK(remove(path) == 0);
 
-    CcSim intercepted;
+    static CcSim intercepted;
     CcSimInit(&intercepted, UINT32_C(0x1a7e2ce7));
     intercepted.player.location_id = intercepted.dragon.lair_settlement_id;
     intercepted.carriage.location_id = intercepted.player.location_id;
@@ -314,7 +314,8 @@ int main(void)
     CcTreasure *tribute_relic =
         &intercepted.treasures[intercepted.treasure_count++];
     *tribute_relic = (CcTreasure){
-        .id = CcMakeId(CC_ENTITY_TREASURE, UINT64_C(9102)),
+        .id = CcMakeId(CC_ENTITY_TREASURE,
+                       intercepted.next_entity_serial++),
         .maker_settlement_id = intercepted.settlements[0].id,
         .owner_id = intercepted.goblins.id,
         .location_id = intercepted.goblins.lair_settlement_id,
@@ -326,7 +327,6 @@ int main(void)
     };
     (void)snprintf(tribute_relic->name, sizeof(tribute_relic->name),
                    "The Ember Tithe");
-    intercepted.next_entity_serial = UINT64_C(9103);
     intercepted.goblins.carried_treasure_id = tribute_relic->id;
     CcMoney intercepted_hoard = intercepted.dragon.hoard;
     CcMoney intercepted_coins = intercepted.player.coins;
@@ -348,9 +348,12 @@ int main(void)
              CC_GOBLIN_TRIBUTE_IDLE);
     CC_CHECK(CountEvents(
         &intercepted, CC_EVENT_GOBLIN_TRIBUTE_TAKEN) == 1);
-    CC_CHECK(CcSimValidate(&intercepted, error, sizeof(error)));
+    if (!CcSimValidate(&intercepted, error, sizeof(error))) {
+        (void)fprintf(stderr, "Intercepted world: %s\n", error);
+        CC_CHECK(false);
+    }
 
-    CcSim unjust;
+    static CcSim unjust;
     CcSimInit(&unjust, UINT32_C(0x1ae0a117));
     for (int32_t i = 0; i < unjust.settlement_count; ++i) {
         unjust.settlements[i].prosperity = 40;
@@ -406,7 +409,7 @@ int main(void)
     (void)remove(social_path);
     uint64_t social_hash = CcSimHash(&unjust);
     CC_CHECK(CcSaveWrite(social_path, &unjust, error, sizeof(error)));
-    CcSim social_restored;
+    static CcSim social_restored;
     CC_CHECK(CcSaveRead(social_path, &social_restored,
                         error, sizeof(error)));
     CC_CHECK(CcSimHash(&social_restored) == social_hash);
@@ -436,7 +439,7 @@ int main(void)
     CC_CHECK(CountEvents(&unjust, CC_EVENT_DRAGON_TREASURE_RETURNED) == 1);
     CC_CHECK(CcSimValidate(&unjust, error, sizeof(error)));
 
-    CcSim war;
+    static CcSim war;
     CcSimInit(&war, UINT32_C(0x7a251e17));
     war.diplomacy[1][2] = CC_DIPLOMACY_WAR;
     war.diplomacy[2][1] = CC_DIPLOMACY_WAR;
@@ -534,7 +537,7 @@ int main(void)
     const char *war_path = "/tmp/crownless-war-hoard-raid-tests.ccsave";
     (void)remove(war_path);
     CC_CHECK(CcSaveWrite(war_path, &war, error, sizeof(error)));
-    CcSim war_restored;
+    static CcSim war_restored;
     CC_CHECK(CcSaveRead(war_path, &war_restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&war_restored) == CcSimHash(&war));
     CC_CHECK(war_restored.hoard_raiders.war_raids_completed == 1);
@@ -542,7 +545,7 @@ int main(void)
     CC_CHECK(war_restored.goblins.hoard_defenses == 1);
     CC_CHECK(remove(war_path) == 0);
 
-    CcSim dragon_host;
+    static CcSim dragon_host;
     CcSimInit(&dragon_host, UINT32_C(0xd2a60a11));
     for (int32_t first = 0; first < dragon_host.kingdom_count; ++first) {
         dragon_host.dragon.hoard += dragon_host.kingdoms[first].treasury;
@@ -626,13 +629,13 @@ int main(void)
     const char *slain_path = "/tmp/crownless-dragons-slain-tests.ccsave";
     (void)remove(slain_path);
     CC_CHECK(CcSaveWrite(slain_path, &dragon_host, error, sizeof(error)));
-    CcSim slain_restored;
+    static CcSim slain_restored;
     CC_CHECK(CcSaveRead(slain_path, &slain_restored, error, sizeof(error)));
     CC_CHECK(slain_restored.dragon.dragons_slain == 2);
     CC_CHECK(CcSimHash(&slain_restored) == CcSimHash(&dragon_host));
     CC_CHECK(remove(slain_path) == 0);
 
-    CcSim learning_host;
+    static CcSim learning_host;
     CcSimInit(&learning_host, UINT32_C(0xd2a61ea7));
     learning_host.dragon_campaign.phase = CC_DRAGON_CAMPAIGN_OUTBOUND;
     learning_host.dragon_campaign.alliance_kingdom_mask = UINT32_C(7);
@@ -654,7 +657,7 @@ int main(void)
     learning_host.dragon_campaign.defeats = 20;
     CC_CHECK(CcDragonCampaignExperience(&learning_host) == 72);
 
-    CcSim alliance_peace;
+    static CcSim alliance_peace;
     CcSimInit(&alliance_peace, UINT32_C(0xa111a9ce));
     alliance_peace.dragon.slain = true;
     alliance_peace.dragon.slain_day = alliance_peace.current_day;
@@ -674,7 +677,8 @@ int main(void)
     alliance_peace.monster_count = 0;
     alliance_peace.courier_count = 1;
     alliance_peace.couriers[0] = (CcCourier){
-        .id = CcMakeId(CC_ENTITY_COURIER, UINT64_C(9999)),
+        .id = CcMakeId(CC_ENTITY_COURIER,
+                       alliance_peace.next_entity_serial++),
         .kind = CC_COURIER_PEACE_OFFER,
         .status = CC_COURIER_TRAVELLING,
         .issuer_kingdom_id = alliance_peace.kingdoms[0].id,
@@ -687,14 +691,13 @@ int main(void)
         .arrival_day = alliance_peace.current_day + 1,
         .reliability = 100
     };
-    alliance_peace.next_entity_serial = UINT64_C(10000);
     CcSimAdvanceDays(&alliance_peace, 1);
     CC_CHECK(alliance_peace.couriers[0].status == CC_COURIER_DELIVERED);
     CC_CHECK(alliance_peace.diplomacy[0][1] == CC_DIPLOMACY_PEACE &&
              alliance_peace.diplomacy[1][0] == CC_DIPLOMACY_PEACE);
     CC_CHECK(CountEvents(&alliance_peace, CC_EVENT_PEACE_DECLARED) == 1);
 
-    CcSim empty_court;
+    static CcSim empty_court;
     CcSimInit(&empty_court, UINT32_C(0xe607c017));
     CcId empty_kingdom = empty_court.kingdoms[1].id;
     for (int32_t place = 0; place < empty_court.settlement_count; ++place) {
@@ -717,7 +720,7 @@ int main(void)
         return 1;
     }
 
-    CcSim territorial_peace;
+    static CcSim territorial_peace;
     CcSimInit(&territorial_peace, UINT32_C(0x7e221701));
     territorial_peace.dragon.slain = true;
     territorial_peace.dragon.slain_day = territorial_peace.current_day;
@@ -774,7 +777,7 @@ int main(void)
     CC_CHECK(territorial_peace.diplomacy[0][1] ==
              CC_DIPLOMACY_PEACE);
 
-    CcSim dormant_alliance;
+    static CcSim dormant_alliance;
     CcSimInit(&dormant_alliance, UINT32_C(0xa111d0a0));
     dormant_alliance.current_day = 20 * 112 - 1;
     dormant_alliance.dragon.hoard = 0;
@@ -797,7 +800,7 @@ int main(void)
     CC_CHECK(dormant_alliance.diplomacy[0][1] ==
              CC_DIPLOMACY_PEACE);
 
-    CcSim crisis_alliance;
+    static CcSim crisis_alliance;
     CcSimInit(&crisis_alliance, UINT32_C(0xa111c215));
     crisis_alliance.current_day = 30 * 112 - 1;
     crisis_alliance.dragon.hoard =

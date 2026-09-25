@@ -1,4 +1,5 @@
 #include "persistence/cc_save.h"
+#include "sim/cc_census.h"
 #include "sim/cc_mine.h"
 #include "test_support.h"
 
@@ -205,12 +206,17 @@ static void CheckJourneySaves(void)
             CcMineInitializeLoad(&sim);
         }
         if (version < 105U) CC_CHECK(CcRoadMigrateLegacyJourney(&sim));
+        if (version < 117U) CcCensusInit(&sim);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }
     CcSimInit(&sim, 42U);
     sim.player.coins = 0;
+    (void)remove(path);
+    (void)remove("free-departure.ccsave-wal");
+    (void)remove("free-departure.ccsave-shm");
     CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    if (journal == NULL) (void)fprintf(stderr, "Travel journal: %s\n", error);
     CC_CHECK(journal != NULL);
     CcCommand depart = {.kind = CC_COMMAND_TRAVEL, .target_id = sim.settlements[1].id};
     CC_CHECK(CcJournalApply(journal, &sim, &depart, error, sizeof(error)));
@@ -275,12 +281,17 @@ static void CheckAbandonedTownExit(void)
         }
     }
     CC_CHECK(disconnected != 0U);
+    CcCensusReconcile(&sim);
     uint64_t before = CcSimHash(&sim);
     CC_CHECK(!CcSimTravelPreview(&sim, disconnected, &preview,
                                  error, sizeof(error)));
     CC_CHECK(strstr(error, "No direct carriage route") != NULL);
     CC_CHECK(CcSimHash(&sim) == before);
+    (void)remove(path);
+    (void)remove("abandoned-company-exit.ccsave-wal");
+    (void)remove("abandoned-company-exit.ccsave-shm");
     CcJournal *journal = CcJournalStart(path, &sim, error, sizeof(error));
+    if (journal == NULL) (void)fprintf(stderr, "Travel journal: %s\n", error);
     CC_CHECK(journal != NULL);
     CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = destination->id};
     CC_CHECK(CcJournalApply(journal, &sim, &travel, error, sizeof(error)));

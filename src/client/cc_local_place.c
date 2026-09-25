@@ -1,4 +1,5 @@
 #include "client/cc_local_place.h"
+#include "sim/cc_census.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -923,10 +924,34 @@ void CcLocalTownStatus(const CcSim *sim, CcId town, char *text, size_t capacity)
     int32_t food = CcNutritionAvailable(
         place->stock, CC_NUTRITION_CIVILIAN) / CC_NUTRITION_PER_RATION;
     if (!CcSettlementIsAbandoned(place)) {
-        (void)snprintf(text, capacity,
-                       "%d residents / %d visitor%s / %d food rations%s",
-                       place->population, visitors, visitors == 1 ? "" : "s", food,
-                       place->hunger >= 40 ? " / Hungry town" : "");
+        if (sim->schema_version >= 114U &&
+            CcCensusPopulation(sim, town) == place->population) {
+            int32_t homes = 0, districts = 0;
+            for (int32_t i = 0; i < sim->census.district_count; ++i) {
+                const CcCensusDistrict *district = &sim->census.districts[i];
+                if (district->settlement_id != town) continue;
+                homes += district->dwelling_count;
+                ++districts;
+            }
+            const CcCensusDistrict *centre = NULL;
+            for (int32_t i = 0; i < sim->census.district_count; ++i)
+                if (sim->census.districts[i].settlement_id == town) {
+                    centre = &sim->census.districts[i];
+                    break;
+                }
+            (void)snprintf(text, capacity,
+                "%.24s: %d people / %d homes | %d residents across %d districts / %d homes / %d food%s",
+                centre != NULL ? centre->name : "Town centre",
+                centre != NULL ? CcCensusDistrictPopulation(sim, centre->id) : 0,
+                centre != NULL ? centre->dwelling_count : 0,
+                place->population, districts, homes, food,
+                place->hunger >= 40 ? " / Hungry town" : "");
+        } else {
+            (void)snprintf(text, capacity,
+                "%d residents / %d visitor%s / %d food rations%s",
+                place->population, visitors, visitors == 1 ? "" : "s", food,
+                place->hunger >= 40 ? " / Hungry town" : "");
+        }
     } else if (band != NULL) {
         (void)snprintf(text, capacity,
                        "Occupied ruins / 0 residents / %d visitor%s / %d bandits / Services closed",

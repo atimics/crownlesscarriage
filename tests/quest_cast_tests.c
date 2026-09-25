@@ -1,4 +1,5 @@
 #include "sim/cc_scriven.h"
+#include "sim/cc_census.h"
 #include "persistence/cc_save.h"
 #include "test_support.h"
 #include <string.h>
@@ -232,6 +233,7 @@ int main(int argc, char **argv)
         sim.characters[i].last_active_day = sim.current_day;
         sim.characters[i].introduced_day = 0;
     }
+    CcCensusInit(&sim);
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     FILE *source = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-generator-25-cast-journal.ccsave", "rb");
     FILE *copy = fopen(path, "wb");
@@ -246,7 +248,10 @@ int main(int argc, char **argv)
     if (journal == NULL) fprintf(stderr, "%s\n", error);
     CC_CHECK(journal != NULL && sim.schema_version == CC_SIM_SCHEMA_VERSION);
     sim.schema_version = 73U;
+    uint64_t census_issued = CcCensusIssuedIdCount(&sim.census);
+    sim.next_entity_serial -= census_issued;
     CC_CHECK(CcSimHash(&sim) == UINT64_C(17607823286729841219));
+    sim.next_entity_serial += census_issued;
     sim.schema_version = CC_SIM_SCHEMA_VERSION;
         CcSimInitializeGoblinPolitics(&sim);
     Valid();

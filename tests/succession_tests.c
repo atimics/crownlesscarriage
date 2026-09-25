@@ -1,6 +1,7 @@
 #include "sim/cc_occupations.h"
 #include "sim/cc_mine.h"
 #include "persistence/cc_save.h"
+#include "sim/cc_census.h"
 #include "sim/cc_sim.h"
 
 #include "test_support.h"
@@ -186,6 +187,7 @@ static void CheckSuccessionSaves(void)
                 sim.characters[i].introduced_day = 0;
             }
         }
+        if (version < 114U) CcCensusInit(&sim);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }
@@ -226,9 +228,12 @@ static void CheckSeedSweep(char *error, size_t capacity)
 static void CheckSeedTwoLandLoss(char *error, size_t capacity)
 {
     CcSim sim;
-    CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR
+    if (!CcSaveRead(CC_TEST_SOURCE_DIR
         "/tests/fixtures/shipped/seed-2-before-land-loss.ccsave",
-        &sim, error, capacity));
+        &sim, error, capacity)) {
+        (void)fprintf(stderr, "Land loss fixture: %s\n", error);
+        CC_CHECK(false);
+    }
     CC_CHECK(sim.current_day == 5864249);
     CcSimAdvanceDays(&sim, 1);
     CC_CHECK(sim.current_day == 5864250);

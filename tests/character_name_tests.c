@@ -95,7 +95,8 @@ static void CheckResidentsAndSaves(void)
     CC_CHECK(strcmp(restored.characters[0].name, "Ilya Venn") == 0);
     CC_CHECK(strcmp(restored.characters[23].name, "Tamsin Lark") == 0);
     restored.schema_version = 57U;
-    CC_CHECK(CcSimHash(&restored) == UINT64_C(9371884615631308597));
+    CC_CHECK(CcTestBeforeCensusHash(&restored) ==
+             UINT64_C(9371884615631308597));
 }
 
 int main(void) { CheckNamePool(); CheckResidentsAndSaves(); return 0; }
