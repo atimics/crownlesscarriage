@@ -7130,16 +7130,23 @@ bool CcJournalFlush(CcJournal *journal, CcSim *sim,
         SetError(error, error_capacity, "");
         return true;
     }
-    CcSim durable_base = journal->pending_runtime_base;
+    CcSim *durable_base = malloc(sizeof(*durable_base));
+    if (durable_base == NULL) {
+        SetError(error, error_capacity, "Could not allocate journal state.");
+        return false;
+    }
+    *durable_base = journal->pending_runtime_base;
     int32_t ticks = journal->pending_runtime_ticks;
     journal->pending_runtime_ticks = 0;
     if (!AppendJournalOperation(journal,
                                 CC_JOURNAL_OPERATION_ADVANCE_RUNTIME_TICKS,
-                                NULL, ticks, &durable_base, sim,
+                                NULL, ticks, durable_base, sim,
                                 error, error_capacity)) {
-        *sim = durable_base;
+        *sim = *durable_base;
+        free(durable_base);
         return false;
     }
+    free(durable_base);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -7161,12 +7168,24 @@ bool CcJournalApply(CcJournal *journal, CcSim *sim,
         return false;
     }
     if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
-    CcSim candidate = *sim;
-    if (!CcSimApply(&candidate, command, error, error_capacity)) return false;
+    CcSim *candidate = malloc(sizeof(*candidate));
+    if (candidate == NULL) {
+        SetError(error, error_capacity, "Could not allocate journal state.");
+        return false;
+    }
+    *candidate = *sim;
+    if (!CcSimApply(candidate, command, error, error_capacity)) {
+        free(candidate);
+        return false;
+    }
     if (!AppendJournalOperation(journal, CC_JOURNAL_OPERATION_COMMAND,
-                                command, 0, sim, &candidate,
-                                error, error_capacity)) return false;
-    *sim = candidate;
+                                command, 0, sim, candidate,
+                                error, error_capacity)) {
+        free(candidate);
+        return false;
+    }
+    *sim = *candidate;
+    free(candidate);
     SetError(error, error_capacity, "");
     return true;
 }
@@ -7183,12 +7202,21 @@ bool CcJournalAdvanceDays(CcJournal *journal, CcSim *sim, int32_t days,
         return false;
     }
     if (!CcJournalFlush(journal, sim, error, error_capacity)) return false;
-    CcSim candidate = *sim;
-    CcSimAdvanceDays(&candidate, days);
+    CcSim *candidate = malloc(sizeof(*candidate));
+    if (candidate == NULL) {
+        SetError(error, error_capacity, "Could not allocate journal state.");
+        return false;
+    }
+    *candidate = *sim;
+    CcSimAdvanceDays(candidate, days);
     if (!AppendJournalOperation(journal, CC_JOURNAL_OPERATION_ADVANCE_DAYS,
-                                NULL, days, sim, &candidate,
-                                error, error_capacity)) return false;
-    *sim = candidate;
+                                NULL, days, sim, candidate,
+                                error, error_capacity)) {
+        free(candidate);
+        return false;
+    }
+    *sim = *candidate;
+    free(candidate);
     SetError(error, error_capacity, "");
     return true;
 }
