@@ -20310,8 +20310,10 @@ bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_
             sim,cargo_before,event != NULL ? event->id : 0U);
     }
     if (ok && sim->schema_version >= 75U) ReconcileGoblinFactions(sim);
-    if (ok) CcSimPeopleEnterSettlement(sim);
-    if (ok) CcCensusReconcile(sim);
+    if (ok) {
+        CcSimPeopleEnterSettlement(sim);
+        CcCensusReconcile(sim);
+    }
     return ok;
 }
 
