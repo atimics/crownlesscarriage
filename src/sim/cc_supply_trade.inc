@@ -8,7 +8,7 @@ int32_t CcSimTradeResalePrice(const CcSim *sim, const CcSettlement *town, CcGood
     return MaximumI32(1, town->price[good] * 3 / 4);
 }
 
-/* Local paid deliveries have a finite order shared by every player. */
+/* Producer stock and finished workshop goods are shared by every player. */
 void CcSimInitializeSupplyEconomy(CcSim *sim)
 {
     if (sim == NULL) return;
@@ -20,10 +20,6 @@ void CcSimInitializeSupplyEconomy(CcSim *sim)
         town->production[CC_GOOD_RAW_STONE] = mine ? 6 : 0;
         town->consumption[CC_GOOD_RAW_STONE] = 0;
         town->price[CC_GOOD_RAW_STONE] = 3;
-        for (int order = 0; order < 2; ++order) {
-            town->supply_order_day[order] = sim->current_day;
-            town->supply_order_filled[order] = 0;
-        }
     }
 }
 
@@ -41,20 +37,15 @@ CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good)
     bool source = wheat || (town->function == CC_SETTLEMENT_MINING &&
         CcSettlementHasService(town, CC_SERVICE_MINE));
     offer.source_available = source ? town->stock[good] : 0;
-    /* The small shop order uses its own daily labor allowance. The town
-       service flag describes the larger civic production works. */
     offer.ready = true;
-    int order = wheat ? 0 : 1;
-    int32_t filled = town->supply_order_day[order] == sim->current_day ?
-        town->supply_order_filled[order] : 0;
-    if (offer.ready) {
-        offer.remaining = MaximumI32(0, 8 - filled);
-        CcMoney funds = town->market_coins / offer.delivery_unit_price;
-        if (funds < offer.remaining) offer.remaining = (int32_t)funds;
-        CcGood output = wheat ? CC_GOOD_BREAD : CC_GOOD_STONE;
-        offer.remaining = MinimumI32(offer.remaining,
-            CC_SIM_MAX_UNITS - town->stock[output]);
-    }
+    CcGood output = wheat ? CC_GOOD_BREAD : CC_GOOD_STONE;
+    int32_t next_use = wheat ? CcEconomyWeeklyFoodUse(sim, town) :
+        town->consumption[CC_GOOD_STONE];
+    int32_t target = MinimumI32(CC_SIM_MAX_UNITS,
+        town->reserve_target[output] + next_use);
+    offer.remaining = MaximumI32(0, target - town->stock[output]);
+    CcMoney funds = town->market_coins / offer.delivery_unit_price;
+    if (funds < offer.remaining) offer.remaining = (int32_t)funds;
     return offer;
 }
 
@@ -108,12 +99,6 @@ static bool ApplySupplyTrade(CcSim *sim, const CcCommand *command,
             SetError(error, error_capacity, "Finish the promised consignment before taking a local order.");
             return false;
         }
-        int order = command->good == CC_GOOD_WHEAT ? 0 : 1;
-        if (town->supply_order_day[order] != sim->current_day) {
-            town->supply_order_day[order] = sim->current_day;
-            town->supply_order_filled[order] = 0;
-        }
-        town->supply_order_filled[order] += units;
         sim->player.cargo[command->good] -= units;
         town->market_coins -= coins;
         sim->player.coins += coins;

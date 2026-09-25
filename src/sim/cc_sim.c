@@ -20775,17 +20775,6 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
             SetError(error, error_capacity, "Town fire history is invalid.");
             return false;
         }
-        if (sim->schema_version >= 117U) {
-            for (int order = 0; order < 2; ++order) {
-                if (settlement->supply_order_day[order] < 0 ||
-                    settlement->supply_order_day[order] > sim->current_day ||
-                    settlement->supply_order_filled[order] < 0 ||
-                    settlement->supply_order_filled[order] > 8) {
-                    SetError(error, error_capacity, "Workshop order state is invalid.");
-                    return false;
-                }
-            }
-        }
         int32_t saved_good_count = CcGoodCountForSchema(sim->schema_version);
         for (int32_t good = 0; good < saved_good_count; ++good) {
             if (settlement->stock[good] < 0 ||
