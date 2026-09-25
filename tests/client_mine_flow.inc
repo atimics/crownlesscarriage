@@ -200,7 +200,7 @@ static int RunMineInputRegression(void)
         BoundingBox bar_bounds={0};
         Ray bar_ray={.position={15,1.15f,9},.direction={0,-.3f,1}};
         MINE_CHECK(MineClosedBarDistance(bar_ray,&slab_distance) &&
-            fabsf(MineOccluderDistance(&picked,bar_ray,100.0f)-slab_distance)<.001f,
+            fabsf(MineOccluderDistanceExcept(&picked,bar_ray,100.0f,-1,-1)-slab_distance)<.001f,
             "The visible bar beams must use the same occlusion distance as picking.");
         MINE_CHECK(MineLabelPosition(surface,&picked,&pick_local,(Vector3){15,1,10},15,10,
                                       &label_x,&label_y) &&

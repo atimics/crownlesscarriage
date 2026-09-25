@@ -182,10 +182,6 @@ static float MineOccluderDistanceExcept(const CcSim *sim,Ray ray,float limit,
     }
     return nearest;
 }
-static float MineOccluderDistance(const CcSim *sim,Ray ray,float limit)
-{
-    return MineOccluderDistanceExcept(sim,ray,limit,-1,-1);
-}
 static bool MineLineVisibleExcept(const CcSim *sim,Vector3 from,Vector3 to,
                                   int32_t skip_x,int32_t skip_y);
 static bool MineLineVisibleExcept(const CcSim *sim,Vector3 from,Vector3 to,
