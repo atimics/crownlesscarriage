@@ -1826,41 +1826,44 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
     }
 }
 
-void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
-                       CcLocalSiteKind site, bool travelling,
-                       bool returning, float progress, float clock,
-                       RenderTexture2D target, Rectangle destination)
+/* Pure camera selection for the local-site scenes (dragon cave, goblin
+   cave, dungeon), factored out of CcLocalDrawSite3D so it can be exercised
+   directly by tests without a render target or GL context, the same way
+   CcLocalStreetCameraInternal and CcLocalMineCamera are. */
+Camera3D CcLocalSiteCamera(const CcSim *sim, const CcLocalAgent *agent,
+                           CcLocalSiteKind site, bool travelling,
+                           bool returning, float progress, float clock,
+                           int32_t art_height)
 {
-    if (sim == NULL || agent == NULL || site == CC_LOCAL_SITE_NONE) return;
-    PrepareRuntimeAssets(0U);
     float amount = fmaxf(0.0f, fminf(1.0f, progress));
     float carriage_x = travelling ?
         returning ? 62.0f - amount * 40.0f : 22.0f + amount * 40.0f :
         CC_LOCAL_SITE_CARRIAGE_X;
-    /* The approach road is forty units either way round. */
-    float carriage_travel = travelling ? amount * 40.0f : 0.0f;
     Vector3 carriage = {carriage_x, 0.0f, CC_LOCAL_SITE_CARRIAGE_Z};
-    Camera3D camera;
     if (travelling && returning) {
         float sway = sinf(clock * 0.85f) * 0.24f;
-        camera = SnapCameraToArtPixels(
+        return SnapCameraToArtPixels(
             PerspectiveCameraComposed(
                 (Vector3){carriage.x - 12.0f, carriage.y + 1.20f,
                           carriage.z + sway * 0.35f},
                 (Vector3){11.5f, 4.8f, 3.8f + sway}, 43.0f),
-            target.texture.height);
-    } else if (travelling) {
-        camera = RoadCamera(carriage, true, clock, true,
-                            target.texture.height);
-    } else if (site == CC_LOCAL_SITE_DRAGON_CAVE &&
-               agent->position.x > 45.0f) {
+            art_height);
+    }
+    if (travelling) {
+        return RoadCamera(carriage, true, clock, true, art_height);
+    }
+    if (site == CC_LOCAL_SITE_DRAGON_CAVE && agent->position.x > 45.0f) {
         /* A fixed hero-relative offset put the roost camera right against
            the model once the dragon grew past the stage it was tuned for:
            the crowned and deep-wyrm bodies (13-20 units long) filled the
            frame like a ribbon and hid the hero entirely. Frame the point
            between the hero and the dragon's actual (stage-dependent) perch
            position instead, and pull the camera back further for the
-           bigger stages, so both subjects stay on screen at every stage. */
+           bigger stages, so both subjects stay on screen at every stage.
+           Keep the low, mostly-horizontal eye line used elsewhere for
+           grounded local scenes (see docs/design/ground-level-towns.md):
+           retreat further back rather than craning the lens down onto the
+           roost from above. */
         CcCreatureVariant dragon_variant =
             DragonCreatureForLifeStage(sim->dragon.life_stage);
         float dragon_back_offset = 0.0f, dragon_body_length = 0.0f;
@@ -1875,18 +1878,36 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
         float reach = fmaxf(dragon_body_length,
                             Vector3Distance(agent->position, dragon_position));
         float pull_back = fmaxf(1.0f, reach / 11.0f);
-        camera = SnapCameraToArtPixels(
+        return SnapCameraToArtPixels(
             PerspectiveCameraComposed(
                 Vector3Add(midpoint, (Vector3){0.0f, 3.0f, 0.0f}),
-                Vector3Scale((Vector3){-7.0f, 11.0f, 27.0f}, pull_back), 46.0f),
-            target.texture.height);
-    } else {
-        camera = SnapCameraToArtPixels(
-            PerspectiveCameraComposed(
-                Vector3Add(agent->position, (Vector3){5.0f, 1.0f, 0.0f}),
-                (Vector3){-11.0f, 7.5f, 12.5f}, 43.0f),
-            target.texture.height);
+                Vector3Scale((Vector3){-7.0f, 7.0f, 29.0f}, pull_back), 46.0f),
+            art_height);
     }
+    return SnapCameraToArtPixels(
+        PerspectiveCameraComposed(
+            Vector3Add(agent->position, (Vector3){5.0f, 1.0f, 0.0f}),
+            (Vector3){-11.0f, 7.5f, 12.5f}, 43.0f),
+        art_height);
+}
+
+void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
+                       CcLocalSiteKind site, bool travelling,
+                       bool returning, float progress, float clock,
+                       RenderTexture2D target, Rectangle destination)
+{
+    if (sim == NULL || agent == NULL || site == CC_LOCAL_SITE_NONE) return;
+    PrepareRuntimeAssets(0U);
+    float amount = fmaxf(0.0f, fminf(1.0f, progress));
+    float carriage_x = travelling ?
+        returning ? 62.0f - amount * 40.0f : 22.0f + amount * 40.0f :
+        CC_LOCAL_SITE_CARRIAGE_X;
+    /* The approach road is forty units either way round. */
+    float carriage_travel = travelling ? amount * 40.0f : 0.0f;
+    Vector3 carriage = {carriage_x, 0.0f, CC_LOCAL_SITE_CARRIAGE_Z};
+    Camera3D camera = CcLocalSiteCamera(sim, agent, site, travelling,
+                                        returning, progress, clock,
+                                        target.texture.height);
     RememberPresentedCamera(CC_LOCAL_SCENE_ROAD, camera, agent,
                             target.texture.width, target.texture.height);
     const CcSettlement *anchor = CcSimSettlement(
