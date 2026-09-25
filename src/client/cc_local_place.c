@@ -15,7 +15,7 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .keeper_name = "Edda — Granary keeper",
         .interior_service = "Provisions, seed, and harvest accounts",
         .map_form = "Dispersed crofts around a threshing green",
-        .lane_count = 9,
+        .lane_count = 10,
         .lane = {
             {"Ford road", 4.8f, 11, {{96,36}, {90,36}, {84,34}, {77,38}, {66,40},
                 {57,35}, {49,33}, {41,32}, {32,28.5f}, {24,29.4f}, {7,27}}},
@@ -30,6 +30,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             {"Barn lane", 1.8f, 4, {{24,29.4f}, {16,28.5f}, {13,23}, {10.5f,21}}},
             {"West pasture", 1.8f, 5, {{16,28.5f}, {14,38}, {13,47}, {11,48}, {8,48}}},
             {"Cart yard", 3.4f, 3, {{42,51.2f}, {40,51.4f}, {37.4f,51.2f}}},
+            {"Stationers' footway", 2.0f, 4, {{8,48}, {10,55},
+                {11,65.5f}, {17.5f,65.5f}}},
         },
         .carriage_lane_count = 3,
         .carriage_lane = {{0,7}, {1,3}, {8,2}},
@@ -58,7 +60,7 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .terrain_salt = UINT32_C(0x16f11fe9),
         .feature_mask = CC_LOCAL_PLACE_FARMLAND |
                         CC_LOCAL_PLACE_CARRIAGE,
-        .building_count = 8,
+        .building_count = 9,
         .primary_building = 2,
         .compound_structure_count = 9,
         .room_name = {
@@ -112,6 +114,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              4.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
             {"Orchard bunkhouse", 53.00f, 60.00f, 8.00f, 6.00f,
              3.60f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Stationer's cottage", 14.00f, 58.00f, 7.00f, 6.00f,
+             3.50f, CC_LOCAL_BUILDING_WORKSHOP, true},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 67.50f, 8.00f, 0.70f, 18.00f, 1.10f},
@@ -730,7 +734,7 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .feature_mask = CC_LOCAL_PLACE_INDUSTRY |
                         CC_LOCAL_PLACE_CARRIAGE |
                         CC_LOCAL_PLACE_DUNGEON,
-        .building_count = 7,
+        .building_count = 9,
         .primary_building = 2,
         .compound_structure_count = 9,
         .room_name = {
@@ -782,6 +786,10 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              7.00f, CC_LOCAL_BUILDING_WORKER_ROW, true},
             {"Returned goods shed", 50.00f, 58.00f, 10.00f, 7.00f,
              5.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+            {"Wayfarers' bakery", 14.00f, 58.00f, 7.00f, 6.00f,
+             4.60f, CC_LOCAL_BUILDING_DOMESTIC, true},
+            {"Expedition stationer", 68.00f, 53.00f, 8.00f, 7.00f,
+             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 67.00f, 10.00f, 0.80f, 20.50f, 4.60f},
