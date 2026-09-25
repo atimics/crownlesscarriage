@@ -3046,9 +3046,10 @@ static void DrawInteriorServiceMark(const CcLocalPlaceProfile *profile,
 Vector3 CcLocalWarehouseGoodPosition(CcGood good)
 {
     if (good < 0 || good >= CC_GOOD_COUNT) return (Vector3){0};
-    return (Vector3){MARKET_SHELF_FOOTPRINT.x + 0.40f + (float)((int32_t)good % 7) * 0.57f,
-        0.23f + (float)((int32_t)good / 7) * 0.82f,
-        (int32_t)good < 7 ? 1.65f : 1.02f};
+    CcGood bay_good = good == CC_GOOD_RAW_STONE ? CC_GOOD_STONE : good;
+    return (Vector3){MARKET_SHELF_FOOTPRINT.x + 0.40f + (float)((int32_t)bay_good % 7) * 0.57f,
+        0.23f + (float)((int32_t)bay_good / 7) * 0.82f,
+        (int32_t)bay_good < 7 ? 1.65f : 1.02f};
 }
 
 int32_t CcLocalWarehousePileCountInternal(const CcSettlement *place, CcGood good)

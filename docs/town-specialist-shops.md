@@ -1,8 +1,7 @@
 # Town shops
 
 Every town has nine shops. Look for the painted sign above each door. Walk to
-the door and press **F** to enter. Each shop uses the town's current stock and
-prices.
+the door and press **F** to enter. Each shop has its own goods and posted prices.
 Silverwick also has a mine supply office near the quarry.
 
 | Shop | Goods |
@@ -24,6 +23,14 @@ to carry to a bakery. Silverwick's mine supply office sells raw stone for a
 stonecutter. Both workshops buy their materials for the town's current orders.
 Bring spoiled meat to the butcher
 or spoiled grain to the grain merchant for the existing sale and disposal terms.
+
+Wheat and raw stone cost 3 crowns per unit at their source. A bakery pays 5
+crowns for wheat, giving 2 crowns per delivered unit. A stonecutter pays 6
+crowns for raw stone, giving 3 crowns per delivered unit. Each buyer's order
+follows the gap between finished stock and the town's reserve and expected use,
+within the buyer's funds. Deliveries fill that gap. Sales and consumption create
+fresh demand. Delivered wheat becomes bread; delivered raw stone becomes cut
+stone in that town's stock.
 
 Each town has its own streets around these shops.
 

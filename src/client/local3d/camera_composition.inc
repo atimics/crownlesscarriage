@@ -1377,6 +1377,20 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
     };
     camera = StreetCameraClearVolume(camera,
         Vector3Add(convoy->town_position, (Vector3){0.0f, 1.55f, 0.0f}));
+    if (active_place_function == CC_SETTLEMENT_CAPITAL) {
+        /* The exchange roof crosses the avenue lens midway through arrival. */
+        float x = convoy->town_position.x;
+        float clear_view = SmoothStep01((x - 53.0f) / 3.0f) *
+                           SmoothStep01((65.0f - x) / 3.0f);
+        if (clear_view > 0.0f) {
+            Vector3 avenue_station = {
+                x + 3.1f, 0.0f, convoy->town_position.z + 14.6f};
+            camera.position = Vector3Lerp(camera.position, avenue_station,
+                                          clear_view);
+            camera.position.y = CcLocalTerrainHeightAt(
+                camera.position.x, camera.position.z) + 3.0f;
+        }
+    }
 
     Vector3 arrival_offset = Vector3Subtract(camera.position, camera.target);
     float arrival_span = 2.0f * Vector3Length(arrival_offset) *
