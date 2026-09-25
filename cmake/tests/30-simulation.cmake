@@ -21,6 +21,11 @@ cc_strict_warnings(road_withdraw_time_tests)
 cc_large_sim_stack(road_withdraw_time_tests)
 add_test(NAME timed_road_withdrawal COMMAND road_withdraw_time_tests)
 
+add_executable(dmath_tests tests/dmath_tests.c)
+target_link_libraries(dmath_tests PRIVATE crownless_sim)
+cc_strict_warnings(dmath_tests)
+add_test(NAME deterministic_math COMMAND dmath_tests)
+
 add_executable(road_position_tests tests/road_position_tests.c)
 target_link_libraries(road_position_tests PRIVATE crownless_sim)
 cc_strict_warnings(road_position_tests)

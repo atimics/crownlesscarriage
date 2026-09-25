@@ -159,15 +159,9 @@ jobs:
         # Several tests keep more than one 1.7 MB CcSim on the stack, and
         # cc_large_sim_stack() only raises the stack on Windows toolchains.
         # Match the local play suite, which runs under a raised stack limit.
-        # sqlite_round_trip is excluded for now: its shipped schema-110 fixture
-        # was recorded on macOS/arm64 and its journal replay diverges on
-        # Linux/x86_64 ("Action journal replay diverged from its committed
-        # hash"). That is a cross-platform determinism bug being fixed
-        # separately; remove this exclusion with that fix. The test still
-        # runs in the local play suite.
         run: |
           ulimit -s unlimited
-          ctest --test-dir build --output-on-failure -E '^sqlite_round_trip$'
+          ctest --test-dir build --output-on-failure
 
   determinism-trace:
     name: Determinism trace / ${{ matrix.platform }}
@@ -210,6 +204,7 @@ jobs:
           fi
           out="trace-${{ matrix.platform }}.txt"
           {
+            $tool dmath
             $tool seeds 300
             for seed in 1 0x205722 0x3235a7ed 0xc0a7118e 0xffffffff; do
               $tool geometry "$seed"

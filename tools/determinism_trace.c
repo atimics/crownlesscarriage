@@ -8,11 +8,13 @@
      seeds [days]        run a few fixed seeds, drive journeys, print hashes
      replay <save>...    load saves, print a hash trace for each journal step
      geometry <seed>     print every route's quantized road geometry
+     dmath               print a hash of the deterministic math over a sweep
 
    For each journal step the replay trace prints the whole-state hash and one
    hash per SQLite snapshot table, so the first differing subsystem is easy
    to see when two platforms disagree. */
 #include "persistence/cc_save.h"
+#include "sim/cc_dmath.h"
 #include "sim/cc_road_position.h"
 #include "sim/cc_sim.h"
 
@@ -178,10 +180,11 @@ static void ObserveReplay(void *context, const CcJournalReplayStep *step,
     char prefix[160];
     (void)snprintf(prefix, sizeof(prefix), "replay %s step %" PRIu64,
                    replay->label, step->ordinal);
-    printf("%s op=%d command=%d count=%d applied=%d hash=%016" PRIx64
-           " committed=%016" PRIx64 " %s day=%d tick=%" PRIu64 "\n",
+    printf("%s op=%d command=%d count=%d applied=%d legacy=%d hash=%016"
+           PRIx64 " committed=%016" PRIx64 " %s day=%d tick=%" PRIu64 "\n",
            prefix, step->operation_kind, step->command_kind,
-           step->step_count, step->applied ? 1 : 0, hash,
+           step->step_count, step->applied ? 1 : 0,
+           step->legacy_arithmetic ? 1 : 0, hash,
            step->committed_post_state_hash,
            hash == step->committed_post_state_hash ? "match" : "DIVERGED",
            sim->current_day, sim->clock.tick);
@@ -339,6 +342,31 @@ static void RunSeeds(int32_t days)
     }
 }
 
+/* Bit patterns of the deterministic math over a fixed sweep. */
+static void RunDmath(void)
+{
+    uint64_t hash = UINT64_C(1469598103934665603);
+    uint32_t state = UINT32_C(0x2545f491);
+    for (int32_t i = 0; i < 100000; ++i) {
+        state = state * UINT32_C(1664525) + UINT32_C(1013904223);
+        float x = ((float)(state >> 8) / 16777216.0f - 0.5f) * 64.0f;
+        state = state * UINT32_C(1664525) + UINT32_C(1013904223);
+        float y = ((float)(state >> 8) / 16777216.0f - 0.5f) * 1024.0f;
+        float values[4] = {CcDmathSinf(x), CcDmathCosf(x),
+                           CcDmathAtan2f(y, x), CcDmathSqrtf(y * y)};
+        double power = CcDmathExp2((double)x);
+        hash = HashBytes(hash, values, sizeof(values));
+        hash = HashBytes(hash, &power, sizeof(power));
+        if (i % 20000 == 0) {
+            printf("dmath %d x=%a y=%a sin=%a cos=%a atan2=%a exp2=%a\n",
+                   i, (double)x, (double)y, (double)values[0],
+                   (double)values[1], (double)values[2], power);
+        }
+    }
+    printf("dmath contraction-off=%d hash=%016" PRIx64 "\n",
+           CcDmathContractionIsOff() ? 1 : 0, hash);
+}
+
 static void RunGeometry(uint32_t seed)
 {
     static CcSim sim;
@@ -370,12 +398,16 @@ int main(int argc, char **argv)
         int first = verbose ? 3 : 2;
         return RunReplay(argc - first, argv + first, verbose) == 0 ? 0 : 1;
     }
+    if (argc >= 2 && strcmp(argv[1], "dmath") == 0) {
+        RunDmath();
+        return 0;
+    }
     if (argc >= 3 && strcmp(argv[1], "geometry") == 0) {
         RunGeometry((uint32_t)strtoul(argv[2], NULL, 0));
         return 0;
     }
     fprintf(stderr,
             "usage: %s seeds [days] | replay [--verbose] <save>... | "
-            "geometry <seed>\n", argv[0]);
+            "geometry <seed> | dmath\n", argv[0]);
     return 2;
 }

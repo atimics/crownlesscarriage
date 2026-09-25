@@ -1,4 +1,5 @@
 #include "sim/cc_doubt.h"
+#include "sim/cc_dmath.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -16,7 +17,7 @@ CcDoubtConfig CcDoubtDefaultConfig(void)
 double CcDoubtRunWeight(const CcDoubtConfig *config, int age_days)
 {
     if (config == NULL || age_days < 0) return 0.0;
-    return pow(2.0, -(double)age_days / config->half_life_days);
+    return CcDmathExp2(-(double)age_days / config->half_life_days);
 }
 
 double CcDoubtSample(const CcDoubtConfig *config, const CcDoubtRun *runs,

@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 enum {
@@ -70,6 +71,7 @@ static CcCommandKind ReadCommandKind(uint32_t schema_version,
 
 static bool ValidateJournalCheckpoint(sqlite3 *database, const CcSim *sim,
                                       uint64_t generation, uint64_t cursor,
+                                      int32_t *epoch_version,
                                       char *error, size_t error_capacity)
 {
     sqlite3_stmt *statement = NULL;
@@ -90,7 +92,8 @@ static bool ValidateJournalCheckpoint(sqlite3 *database, const CcSim *sim,
     bool parsed = CcSaveParseStoredHash(sqlite3_column_text(statement, 2),
                                   &checkpoint_hash);
     sqlite3_finalize(statement);
-    if (record_version != CC_JOURNAL_RECORD_VERSION ||
+    if ((record_version != CC_JOURNAL_RECORD_VERSION &&
+         record_version != CC_JOURNAL_LEGACY_ARITHMETIC_RECORD_VERSION) ||
         world_seed != sim->world_seed || !parsed) {
         SetError(error, error_capacity,
                  "Journal epoch does not match the campaign checkpoint.");
@@ -118,16 +121,24 @@ static bool ValidateJournalCheckpoint(sqlite3 *database, const CcSim *sim,
                  "Journal checkpoint hash does not match the snapshot.");
         return false;
     }
+    *epoch_version = record_version;
     return true;
 }
 
 bool CcJournalReplay(sqlite3 *database, CcSim *sim,
                           uint64_t generation, uint64_t cursor,
-                          uint64_t *replayed_through,
+                          uint64_t *replayed_through, bool *legacy_epoch,
                           char *error, size_t error_capacity)
 {
+    int32_t epoch_version = 0;
     if (!ValidateJournalCheckpoint(database, sim, generation, cursor,
+                                   &epoch_version,
                                    error, error_capacity)) return false;
+    bool legacy = epoch_version == CC_JOURNAL_LEGACY_ARITHMETIC_RECORD_VERSION;
+    /* Set once a legacy record's hash disagrees with today's arithmetic. */
+    bool unverified = false;
+    CcSim *backup = NULL;
+    if (legacy_epoch != NULL) *legacy_epoch = legacy;
     sqlite3_stmt *statement = NULL;
     const char *sql =
         "SELECT ordinal,record_version,operation_kind,command_kind,actor_id,target_id,"
@@ -169,14 +180,27 @@ bool CcJournalReplay(sqlite3 *database, CcSim *sim,
             CcSaveParseStoredHash(sqlite3_column_text(statement, 13), &pre_hash) &&
             CcSaveParseStoredHash(sqlite3_column_text(statement, 14), &post_hash);
         if (ordinal != expected_ordinal ||
-            version != CC_JOURNAL_RECORD_VERSION ||
+            version != epoch_version ||
             schema_version != expected_schema_version ||
             generator_version != expected_generator_version ||
-            !hashes_valid || CcSimHash(sim) != pre_hash) {
+            !hashes_valid || (!unverified && CcSimHash(sim) != pre_hash)) {
             SetError(error, error_capacity,
                      "Action journal continuity check failed.");
             sqlite3_finalize(statement);
+            free(backup);
             return false;
+        }
+        if (unverified) {
+            /* Keep a copy so a command that no longer applies cannot leave
+               a half-applied state behind. */
+            if (backup == NULL) backup = malloc(sizeof(*backup));
+            if (backup == NULL) {
+                SetError(error, error_capacity,
+                         "Could not allocate journal replay state.");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            *backup = *sim;
         }
         char replay_error[192];
         bool applied = true;
@@ -205,6 +229,7 @@ bool CcJournalReplay(sqlite3 *database, CcSim *sim,
                 applied = false;
                 break;
         }
+        bool matched = applied && CcSimHash(sim) == post_hash;
         if (replay_observer != NULL) {
             CcJournalReplayStep step = {
                 .ordinal = ordinal,
@@ -213,19 +238,31 @@ bool CcJournalReplay(sqlite3 *database, CcSim *sim,
                 .step_count = step_count,
                 .pre_state_hash = pre_hash,
                 .committed_post_state_hash = post_hash,
-                .applied = applied
+                .applied = applied,
+                .legacy_arithmetic = legacy,
+                .verified = matched && !unverified
             };
             replay_observer(replay_observer_context, &step, sim);
         }
-        if (!applied || CcSimHash(sim) != post_hash) {
+        if (!applied && legacy && unverified) {
+            /* The state already differs from what the old build saw, so a
+               later command can stop applying (a stale road-leg token, for
+               example). Keep everything replayed before it. */
+            *sim = *backup;
+            break;
+        }
+        if (!applied || (!matched && !legacy)) {
             SetError(error, error_capacity,
                      "Action journal replay diverged from its committed hash.");
             sqlite3_finalize(statement);
+            free(backup);
             return false;
         }
+        if (!matched) unverified = true;
         expected_ordinal += 1U;
     }
-    if (result != SQLITE_DONE) {
+    free(backup);
+    if (result != SQLITE_DONE && result != SQLITE_ROW) {
         SetSqlError(error, error_capacity, database,
                     "Could not replay action journal");
         sqlite3_finalize(statement);
