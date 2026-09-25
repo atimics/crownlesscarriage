@@ -33,12 +33,12 @@ static bool WorldCardPoint(CcSim *sim, LocalState *local, ClientView view,
         client_test_pointer = (Vector2){500, 300};
         if (chosen->key.kind == CC_INTERACTION_ACTION) {
             Rectangle labels[CC_INTERACTION_CAPACITY] = {0};
-            WorldActionLabelLayout(local, labels);
+            WorldActionLabelLayout(local, chosen, NULL, labels);
             int32_t chosen_index = (int32_t)(chosen - local->interactions.targets);
+            if (labels[chosen_index].width > 0) return false;
+            WorldActionLabelLayout(local, chosen, chosen, labels);
             Rectangle label = labels[chosen_index];
             if (label.width <= 0) return false;
-            client_test_pointer = (Vector2){label.x + label.width * 0.5f,
-                label.y + label.height * 0.5f};
             if (WorldActionPointerTarget(local, client_test_pointer) != chosen) return false;
         }
     }

@@ -66,7 +66,7 @@ static int32_t TakeAllianceGood(CcSim *sim, uint32_t mask, CcGood good,
                                 int32_t quantity);
 static CcId LatestLocalCause(const CcSim *sim, CcId location);
 static void AssignHistoryOffices(CcSim *sim, bool announce);
-static void GrowBanditCamp(CcBanditGroup *bandits);
+static void UpdateBanditCamp(const CcSim *sim, CcBanditGroup *bandits);
 static void ResolveTargetSituations(CcSim *sim, CcSituationKind kind, CcId target);
 static void SetError(char *error, size_t capacity, const char *message);
 
@@ -5154,6 +5154,7 @@ static CcTreasure *AllocateTreasure(CcSim *sim)
             CcTreasure *treasure = &sim->treasures[i];
             *treasure = (CcTreasure){0};
             if (sim->schema_version >= 113U) sim->scriven.books[i] = (CcScrivenBook){0};
+            if (sim->schema_version >= 115U) sim->crown_calendar.book_editions[i] = 0;
             treasure->id = NextId(sim, CC_ENTITY_TREASURE);
             return treasure;
         }
@@ -5767,6 +5768,7 @@ static void SeizeFallenTown(CcSim *sim, CcSettlement *ruin,
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         CcBanditGroup *bandits = &sim->bandits[i];
         if (bandits->influence < 50 ||
+            (sim->schema_version >= 114U && bandits->members < 12) ||
             bandits->camp_settlement_id != 0U) continue;
         if (claimant == NULL || bandits->influence > claimant->influence) {
             claimant = bandits;
@@ -5780,7 +5782,7 @@ static void SeizeFallenTown(CcSim *sim, CcSettlement *ruin,
         claimant->influence,
         (claimant->members + claimant->supplies) / 2 +
         MinimumI32(20, claimant->raids_completed / 3));
-    GrowBanditCamp(claimant);
+    UpdateBanditCamp(sim, claimant);
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -5798,7 +5800,8 @@ static void ReleaseAbandonedCamps(CcSim *sim)
     if (sim->schema_version < 47U) return;
     for (int32_t i = 0; i < sim->bandit_count; ++i) {
         CcBanditGroup *bandits = &sim->bandits[i];
-        if (bandits->camp_settlement_id == 0U || bandits->influence >= 30) {
+        if (bandits->camp_settlement_id == 0U || (bandits->influence >= 30 &&
+            (sim->schema_version < 114U || bandits->members >= 12))) {
             continue;
         }
         const CcSettlement *camp = CcSimSettlement(
@@ -6751,6 +6754,19 @@ static uint32_t GossipLookupSlot(CcId id)
 void CcSimRefreshCharacterGossip(CcSim *sim)
 {
     if (sim == NULL || sim->schema_version < 46U) return;
+    /* Earlier journals gathered gossip for each resident in turn. Keep that
+       cursor order while replaying a world saved before this faster scan. */
+    if (sim->schema_version < 118U) {
+        for (int32_t i = 0; i < sim->character_count; ++i) {
+            const CcCharacter *person = &sim->characters[i];
+            if (!CcSimCharacterIsActive(sim, person) ||
+                person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ||
+                CcCharacterAgeYears(sim, person) < 16) continue;
+            ExchangeGossip(sim, person->id, person->current_settlement_id,
+                           person->name);
+        }
+        return;
+    }
     bool gathered = false;
     uint32_t town_story_masks[CC_MAX_SETTLEMENTS] = {0};
     int16_t carrier_slots[CC_GOSSIP_LOOKUP_CAP];
@@ -7775,20 +7791,35 @@ static int32_t ServiceMaskCount(uint32_t mask)
     return count;
 }
 
-static void GrowBanditCamp(CcBanditGroup *bandits)
+static void UpdateBanditCamp(const CcSim *sim, CcBanditGroup *bandits)
 {
     CcBanditCampSize desired = bandits->influence >= 80 ||
             bandits->raids_completed >= 6 ? CC_BANDIT_OUTLAW_TOWN :
         bandits->influence >= 60 || bandits->raids_completed >= 3 ?
             CC_BANDIT_WAR_CAMP :
         bandits->influence >= 35 ? CC_BANDIT_CAMP : CC_BANDIT_HIDEOUT;
-    if (desired > bandits->camp_size) bandits->camp_size = desired;
+    if (sim->schema_version >= 114U) {
+        CcBanditCampSize supported = bandits->members >= 60 ? CC_BANDIT_OUTLAW_TOWN :
+            bandits->members >= 30 ? CC_BANDIT_WAR_CAMP :
+            bandits->members >= 12 ? CC_BANDIT_CAMP : CC_BANDIT_HIDEOUT;
+        bandits->camp_size = desired < supported ? desired : supported;
+    } else if (desired > bandits->camp_size) bandits->camp_size = desired;
     static const CcServiceKind order[] = {
         CC_SERVICE_BLACK_MARKET, CC_SERVICE_STABLE, CC_SERVICE_SMITHY,
         CC_SERVICE_HEALER, CC_SERVICE_BARRACKS, CC_SERVICE_MARKET,
         CC_SERVICE_GRANARY, CC_SERVICE_GUILDHALL
     };
     int32_t capacity = CcBanditCampServiceCapacity(bandits->camp_size);
+    if (sim->schema_version >= 114U) {
+        for (int32_t i = (int32_t)(sizeof(order) / sizeof(order[0])) - 1;
+             i >= 0 && ServiceMaskCount(bandits->service_mask) > capacity; --i)
+            bandits->service_mask &= ~ServiceBit(order[i]);
+        /* Older saves may carry any valid service mix. Close remaining
+           excess services in a stable order as the camp shrinks. */
+        for (int32_t service = CC_SERVICE_COUNT - 1;
+             service >= 0 && ServiceMaskCount(bandits->service_mask) > capacity; --service)
+            bandits->service_mask &= ~ServiceBit((CcServiceKind)service);
+    }
     for (size_t i = 0; i < sizeof(order) / sizeof(order[0]) &&
                        ServiceMaskCount(bandits->service_mask) < capacity; ++i) {
         bandits->service_mask |= ServiceBit(order[i]);
@@ -7821,6 +7852,12 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     for (int32_t i = 0; i < 2; ++i) {
         CcSettlement *candidate = candidates[i];
         if (candidate == NULL || CcSettlementIsAbandoned(candidate)) continue;
+        if (sim->schema_version >= 114U) {
+            int32_t largest = 0;
+            for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+                largest = MaximumI32(largest, candidate->stock[good]);
+            if (largest < 4) continue;
+        }
         int32_t score = -candidate->security * 2;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             score += candidate->stock[good];
@@ -7974,7 +8011,7 @@ static void AdvanceBanditRaids(CcSim *sim)
                 bandits->influence = ClampI32(
                     (bandits->members + bandits->supplies) / 2 +
                     MinimumI32(20, bandits->raids_completed / 3), 0, 100);
-                GrowBanditCamp(bandits);
+                UpdateBanditCamp(sim, bandits);
                 char text[CC_EVENT_TEXT_CAPACITY];
                 (void)snprintf(text, sizeof(text),
                                "%s returns with %d %s; the %s now supports %d services.",
@@ -8089,6 +8126,49 @@ static CcNutritionPurpose GoblinDiet(const CcSim *sim)
     return sim->schema_version >= 76U ? CC_NUTRITION_SCAVENGER : CC_NUTRITION_CIVILIAN;
 }
 
+static CcSettlement *GoblinRaidTarget(CcSim *sim, CcGoblinRaidMotive motive)
+{
+    const CcGoblinSociety *goblins = &sim->goblins;
+    CcSettlement *target = NULL;
+    int64_t best_score = INT64_MIN;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        CcSettlement *place = &sim->settlements[i];
+        if (CcSettlementIsAbandoned(place) ||
+            place->id == sim->dragon.lair_settlement_id ||
+            place->id == goblins->lair_settlement_id) continue;
+        if (sim->schema_version >= 114U) {
+            bool useful = motive == CC_GOBLIN_RAID_HUNGER ?
+                CcEconomyNutritionRations(place->stock, GoblinDiet(sim)) > 0 :
+                motive == CC_GOBLIN_RAID_EQUIPMENT ?
+                    place->stock[CC_GOOD_IRON] > 0 || place->stock[CC_GOOD_TOOLS] > 0 ||
+                    place->stock[CC_GOOD_WEAPONS] > 0 :
+                    place->market_coins > 0 || place->stock[CC_GOOD_GOLD] > 0 ||
+                    place->stock[CC_GOOD_GEMS] > 0 || TreasureAtSettlementMutable(sim, place->id) != NULL;
+            if (!useful) continue;
+        }
+        int64_t score = -(int64_t)place->security * 2;
+        if (motive == CC_GOBLIN_RAID_HUNGER) {
+            score += CcEconomyNutritionRations(
+                place->stock, GoblinDiet(sim)) * 4;
+        } else if (motive == CC_GOBLIN_RAID_EQUIPMENT) {
+            score += place->stock[CC_GOOD_IRON] +
+                     place->stock[CC_GOOD_TOOLS] * 10 +
+                     place->stock[CC_GOOD_WEAPONS] * 15;
+        } else {
+            CcTreasure *treasure = TreasureAtSettlementMutable(sim, place->id);
+            score += place->market_coins / 3 +
+                     place->stock[CC_GOOD_GOLD] * 40 +
+                     place->stock[CC_GOOD_GEMS] * 70 +
+                     (treasure != NULL ? treasure->appraised_value : 0);
+        }
+        if (target == NULL || score > best_score) {
+            target = place;
+            best_score = score;
+        }
+    }
+    return target;
+}
+
 static void PlanGoblinTribute(CcSim *sim)
 {
     CcGoblinSociety *goblins = &sim->goblins;
@@ -8122,34 +8202,23 @@ static void PlanGoblinTribute(CcSim *sim)
             if (sim->goblin_politics.factions[sim->goblin_politics.raid_faction].members > 0) break;
         }
     }
-    CcSettlement *target = NULL;
-    int64_t best_score = INT64_MIN;
-    for (int32_t i = 0; i < sim->settlement_count; ++i) {
-        CcSettlement *place = &sim->settlements[i];
-        if (CcSettlementIsAbandoned(place) ||
-            place->id == sim->dragon.lair_settlement_id ||
-            place->id == goblins->lair_settlement_id) continue;
-        int64_t score = -(int64_t)place->security * 2;
-        if (goblins->raid_motive == CC_GOBLIN_RAID_HUNGER) {
-            score += CcEconomyNutritionRations(
-                place->stock, GoblinDiet(sim)) * 4;
-        } else if (goblins->raid_motive == CC_GOBLIN_RAID_EQUIPMENT) {
-            score += place->stock[CC_GOOD_IRON] +
-                     place->stock[CC_GOOD_TOOLS] * 10 +
-                     place->stock[CC_GOOD_WEAPONS] * 15;
-        } else {
-            CcTreasure *treasure = TreasureAtSettlementMutable(sim, place->id);
-            score += place->market_coins / 3 +
-                     place->stock[CC_GOOD_GOLD] * 40 +
-                     place->stock[CC_GOOD_GEMS] * 70 +
-                     (treasure != NULL ? treasure->appraised_value : 0);
-        }
-        if (target == NULL || score > best_score) {
-            target = place;
-            best_score = score;
+    CcSettlement *target = GoblinRaidTarget(sim, goblins->raid_motive);
+    if (target == NULL && sim->schema_version >= 114U && goblins->cohesion >= 25) {
+        /* Scouts bring the muster to an available supply when the first
+           purpose has exhausted its targets. Hunger still comes first. */
+        for (int32_t motive = CC_GOBLIN_RAID_HUNGER;
+             motive <= CC_GOBLIN_RAID_DRAGON_TRIBUTE && target == NULL; ++motive) {
+            target = GoblinRaidTarget(sim, (CcGoblinRaidMotive)motive);
+            if (target != NULL) goblins->raid_motive = (CcGoblinRaidMotive)motive;
         }
     }
-    if (target == NULL) return;
+    if (target == NULL) {
+        if (sim->schema_version >= 114U) {
+            goblins->raid_motive = CC_GOBLIN_RAID_NONE;
+            goblins->tribute_cooldown_days = 28;
+        }
+        return;
+    }
     goblins->tribute_phase = CC_GOBLIN_TRIBUTE_PREPARING;
     goblins->tribute_target_id = target->id;
     goblins->target_warned = false;
@@ -8406,6 +8475,7 @@ static void AdvanceGoblinTribute(CcSim *sim)
             }
         }
         sim->dragon.hoard += delivered;
+        CreditCultRestitution(sim, delivered);
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             sim->dragon.hoard_goods[good] += goblins->carried_goods[good];
             goblins->carried_goods[good] = 0;
@@ -9608,9 +9678,9 @@ static void AdvanceDragonEcology(CcSim *sim)
                           CC_EVENT_DRAGON_CROWNED,
                           "it leaves the brood cave to seek a crown of its own");
     } else if (dragon->life_stage == CC_DRAGON_STAGE_CROWNED &&
-               dragon->age_days >= 500 * 365 &&
+               dragon->age_days >= (sim->schema_version >= 115U ? 1200 : 500) * 365 &&
                dragon->crown_strength >= 60 &&
-               dragon->crown_continuity_days >= 200 * 365 &&
+               dragon->crown_continuity_days >= (sim->schema_version >= 115U ? 800 : 200) * 365 &&
                dragon->territory_stability >= 75 &&
                (sim->schema_version < 57U || DragonCanBecomeDeepWyrm(sim))) {
         ChangeDragonStage(sim, CC_DRAGON_STAGE_DEEP_WYRM,
@@ -10045,6 +10115,19 @@ static void ReleaseBlockedRoyalCarriage(CcSim *sim,
     }
     CcId location_id = place != NULL ? place->id : carriage->location_id;
     RecordGrainShipment(sim, shipment, location_id, false);
+    if (sim->schema_version >= 114U &&
+        (shipment == NULL || shipment->quantity <= 0)) {
+        char parked[CC_EVENT_TEXT_CAPACITY];
+        (void)snprintf(parked, sizeof(parked),
+            "An empty royal carriage parks at %.32s after %.48s.",
+            place != NULL ? place->name : "the nearest safe road house",
+            reason != NULL ? reason : "a border delay");
+        (void)PushEvent(sim, CC_EVENT_ROYAL_CARRIAGE_BLOCKED, carriage->id,
+            location_id, 0U, 0, parked);
+        ParkRoyalCarriage(carriage, location_id);
+        carriage->departure_day = sim->current_day;
+        return;
+    }
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(
         text, sizeof(text),
@@ -15097,6 +15180,10 @@ static void UpdateThreats(CcSim *sim)
         const CcRoute *route = CcSimRoute(sim, bandits->route_id);
         const CcSettlement *a = route != NULL ? CcSimSettlement(sim, route->from_id) : NULL;
         const CcSettlement *b = route != NULL ? CcSimSettlement(sim, route->to_id) : NULL;
+        if (sim->schema_version >= 114U) {
+            if (a != NULL && CcSettlementIsAbandoned(a)) a = NULL;
+            if (b != NULL && CcSettlementIsAbandoned(b)) b = NULL;
+        }
         int32_t hunger = (a != NULL ? a->hunger : 0) + (b != NULL ? b->hunger : 0);
         int32_t debt_pressure =
             (a != NULL ? IronLedgerDebtPressure(sim, a->kingdom_id) : 0) +
@@ -15118,7 +15205,7 @@ static void UpdateThreats(CcSim *sim)
         bandits->influence = ClampI32(
             (bandits->members + bandits->supplies) / 2 +
             MinimumI32(20, bandits->raids_completed / 3), 0, 100);
-        GrowBanditCamp(bandits);
+        UpdateBanditCamp(sim, bandits);
         /* A strong idle band hunts on its own: when supplies run low it
          * raids, as it would under the player's charter. A war camp
          * extends its reach to every road that touches the ruin. */
@@ -16822,7 +16909,7 @@ static void AdvanceDaysInternal(CcSim *sim, int32_t days,
     bool have_gossip_inputs = false;
     bool gossip_followup_due = false;
     CcCensusSources census_before, census_after;
-    if (sim->schema_version >= 114U)
+    if (sim->schema_version >= 117U)
         CaptureCensusSources(sim, &census_before);
     for (int32_t day = 0; day < days; ++day) {
         sim->current_day += 1;
@@ -16929,7 +17016,7 @@ static void AdvanceDaysInternal(CcSim *sim, int32_t days,
         DeliverDelayedEchoIfReady(sim);
         AdvanceGoblinPolitics(sim);
         CcScrivenAdvance(sim);
-        if (sim->schema_version >= 114U) {
+        if (sim->schema_version >= 117U) {
             CaptureCensusSources(sim, &census_after);
             if (memcmp(&census_before, &census_after,
                        sizeof(census_before)) != 0)

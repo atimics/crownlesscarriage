@@ -97,7 +97,7 @@ static void ReadyAtHaulers(CcSim *sim)
     CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,
         .target_id=CcMineSite(sim)->id};
     Check(CcSimApply(sim,&visit,error,sizeof(error)));
-    ApplyGood(sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,3);
+    ApplyGood(sim,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,2);
     ApplyGood(sim,CC_COMMAND_MINE_PACK,CC_GOOD_IRON,5);
     Walk(sim,15,3);
     Apply(sim,CC_COMMAND_MINE_USE,0);
@@ -782,7 +782,7 @@ int main(int argc,char **argv)
     haul.player.cargo[CC_GOOD_BREAD]=3;
     CcCommand haul_visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=CcMineSite(&haul)->id};
     Check(CcSimApply(&haul,&haul_visit,error,sizeof(error)));
-    ApplyGood(&haul,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,2);
+    ApplyGood(&haul,CC_COMMAND_MINE_PACK,CC_GOOD_BREAD,1);
     Walk(&haul,15,3); Apply(&haul,CC_COMMAND_MINE_USE,0);
     Walk(&haul,26,16);
     CC_CHECK(haul.mine.source_owner_id==haul.goblins.id);
@@ -988,7 +988,7 @@ int main(int argc,char **argv)
     Check(CcSaveRead(path,&restored,error,sizeof(error)));
     CC_CHECK(CcSimHash(&sim)==CcSimHash(&restored));
     Walk(&sim,15,4);Apply(&sim,CC_COMMAND_MINE_USE,0);
-    CC_CHECK(sim.mine.phase==CC_MINE_LEVEL && sim.mine.pack[CC_GOOD_BREAD]==1);
+    CC_CHECK(sim.mine.phase==CC_MINE_LEVEL && sim.mine.pack[CC_GOOD_BREAD]==2);
     CC_CHECK(!CcMineWalkable(&sim,CC_MINE_LEVEL,15,10));
     Walk(&sim,26,4);Apply(&sim,CC_COMMAND_MINE_USE,0);
     CC_CHECK(sim.mine.surveyed);
@@ -1024,7 +1024,7 @@ int main(int argc,char **argv)
     CC_CHECK(error[0]=='\0');
     Check(CcSimValidate(&restored,error,sizeof(error)));
     CC_CHECK(restored.mine.phase==CC_MINE_NONE && restored.mine.surveyed && restored.mine.bar_open);
-    CC_CHECK(restored.player.cargo[CC_GOOD_BREAD]==2 && restored.journey.elapsed_subticks==anchor);
+    CC_CHECK(restored.player.cargo[CC_GOOD_BREAD]==3 && restored.journey.elapsed_subticks==anchor);
     CcSimAdvanceRuntimeTicks(&restored,1);CC_CHECK(restored.journey.elapsed_subticks>anchor);
     CcSimInit(&sim,123);sim.schema_version=57;
     Check(CcSaveWrite(path,&sim,error,sizeof(error)));
