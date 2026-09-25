@@ -358,7 +358,7 @@ static bool CrownCodecAndLegacy(void)
     unsigned char *data=NULL; size_t size=0;
     CHECK(CcSaveEncode(&sim,&data,&size,error,sizeof(error)));
     CHECK(CcSaveDecode(data,size,&copy,error,sizeof(error))); CcSaveFreeBuffer(data);
-    CHECK(copy.schema_version==115 && copy.crown_calendar.editions==0);
+    CHECK(copy.schema_version==CC_SIM_SCHEMA_VERSION && copy.crown_calendar.editions==0);
     copy.schema_version=114; CHECK(CcSimHash(&copy)==CcSimHash(&sim));
     return true;
 }
