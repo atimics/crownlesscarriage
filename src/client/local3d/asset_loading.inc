@@ -2547,8 +2547,19 @@ static void DrawDragonRig(CcCreatureVariant variant,
     if (variant == CC_CREATURE_DRAGON_WHELP) {
         body.y -= 0.28f * scale;
         DrawCreatureEllipsoid(
-            body, (Vector3){0.62f * scale * tension, 0.48f * scale,
-                            0.72f * scale}, yaw, palette->skin);
+            body, (Vector3){0.58f * scale * tension, 0.46f * scale,
+                            0.64f * scale}, yaw, palette->skin);
+        /* A round belly reads as a single blob at a few pixels; a
+           distinct chest puff and haunch give it a mass hierarchy even
+           at hatchling scale, without losing the cute round silhouette. */
+        DrawCreatureEllipsoid(
+            LocalPoint(body, 0.0f, 0.04f * scale, 0.46f * scale, yaw),
+            (Vector3){0.52f * scale, 0.42f * scale, 0.46f * scale}, yaw,
+            palette->skin);
+        DrawCreatureEllipsoid(
+            LocalPoint(body, 0.0f, -0.06f * scale, -0.42f * scale, yaw),
+            (Vector3){0.46f * scale, 0.36f * scale, 0.40f * scale}, yaw,
+            palette->hide);
         Vector3 head = LocalPoint(body, 0.0f, 0.22f * scale,
                                   0.88f * scale, yaw);
         DrawCylinderEx(body, head, 0.24f * scale, 0.20f * scale, 7,
@@ -2606,8 +2617,20 @@ static void DrawDragonRig(CcCreatureVariant variant,
     }
 
     if (variant == CC_CREATURE_DRAGON_WANDERER) {
+        /* A single 1.55-long ellipsoid was the "long thin ribbon" body:
+           split it into a deep chest, a cinched waist, and a haunch so
+           the lean silhouette still reads as a body, not a tube. */
+        DrawCreatureEllipsoid(
+            LocalPoint(body, 0.0f, 0.0f, 0.86f * scale, yaw),
+            (Vector3){0.46f * scale * tension, 0.40f * scale, 0.62f * scale},
+            yaw, palette->skin);
         DrawCreatureEllipsoid(body,
-            (Vector3){0.43f * scale * tension, 0.38f * scale, 1.55f * scale}, yaw, palette->skin);
+            (Vector3){0.30f * scale * tension, 0.32f * scale, 0.62f * scale},
+            yaw, palette->skin);
+        DrawCreatureEllipsoid(
+            LocalPoint(body, 0.0f, 0.02f * scale, -0.92f * scale, yaw),
+            (Vector3){0.42f * scale * tension, 0.36f * scale, 0.56f * scale},
+            yaw, palette->skin);
         Vector3 neck_a = LocalPoint(body, 0.0f, 0.22f * scale,
                                     1.28f * scale, yaw);
         Vector3 neck_b = LocalPoint(body, -0.10f * scale, 0.48f * scale,
@@ -2698,6 +2721,13 @@ static void DrawDragonRig(CcCreatureVariant variant,
         const int32_t serpent_count =
             (int32_t)(sizeof(serpent) / sizeof(serpent[0]));
         DrawCreatureTube(serpent, serpent_radii, serpent_count, scale, palette->skin, palette->hide);
+        /* Even a legless elder needs a deep chest, not just a smooth
+           taper: a distinct mass bulge right behind the neck. */
+        Vector3 chest_mass = serpent[1];
+        chest_mass.y += 0.12f * scale;
+        DrawCreatureEllipsoid(chest_mass,
+            (Vector3){1.05f * scale, 1.00f * scale, 0.92f * scale}, yaw,
+            palette->hide);
         Vector3 neck_a = LocalPoint(body, -0.22f * scale, 0.92f * scale,
                                     4.62f * scale, yaw);
         Vector3 neck_b = LocalPoint(body, 0.18f * scale, 1.16f * scale,
@@ -2782,8 +2812,29 @@ static void DrawDragonRig(CcCreatureVariant variant,
         LocalPoint(body, 0.10f * scale, -0.08f * scale,
                    -2.65f * scale, yaw),
     };
-    const float crowned_radii[] = {0.64f, 0.68f, 0.58f, 0.46f};
+    /* Chest, then a cinched waist, then a haunch flare before the tail
+       taper: the old profile (0.64, 0.68, 0.58, 0.46) barely moved and
+       read as a uniform tube. Explicit shoulder/haunch masses below add
+       the width a smooth tube profile cannot. */
+    const float crowned_radii[] = {0.76f, 0.50f, 0.68f, 0.42f};
     DrawCreatureTube(crowned, crowned_radii, 4, scale, palette->skin, palette->hide);
+    DrawCreatureEllipsoid(
+        LocalPoint(body, 0.0f, 0.10f * scale, 1.05f * scale, yaw),
+        (Vector3){0.86f * scale, 1.00f * scale, 0.76f * scale}, yaw,
+        palette->hide);
+    for (int32_t side = -1; side <= 1; side += 2) {
+        float sign = (float)side;
+        DrawCreatureEllipsoid(
+            LocalPoint(body, sign * 0.62f * scale, 0.14f * scale,
+                       1.35f * scale, yaw),
+            (Vector3){0.40f * scale, 0.42f * scale, 0.42f * scale}, yaw,
+            palette->skin);
+        DrawCreatureEllipsoid(
+            LocalPoint(body, sign * 0.64f * scale, 0.0f,
+                       -1.55f * scale, yaw),
+            (Vector3){0.42f * scale, 0.50f * scale, 0.46f * scale}, yaw,
+            palette->skin);
+    }
     Vector3 neck_a = LocalPoint(body, -0.12f * scale, 0.38f * scale,
                                 2.38f * scale, yaw);
     Vector3 neck_b = LocalPoint(body, 0.16f * scale, 0.52f * scale,

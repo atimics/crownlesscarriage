@@ -930,6 +930,54 @@ def add_dragon_tail(spec: CreatureSpec, collection: bpy.types.Collection,
                     spec, f"tail_{index}", sides=9)
 
 
+def add_dragon_wing(
+    spec: CreatureSpec, collection: bpy.types.Collection, side: str,
+    shoulder: Vector, elbow: Vector, wrist: Vector,
+    fingers: tuple[Vector, ...], trailing_anchor: Vector,
+    arm_radius: float, finger_radius: float, membrane_thickness: float,
+    *, fold_amount: float = 0.34, fold_depth: float = 0.10,
+    membrane_semantic: str = "secondary", fold_semantic: str = "accent",
+) -> None:
+    """A strutted wing: an arm and forearm bone, a fan of finger struts,
+    and membrane panels between them with a scalloped trailing edge
+    folded out of the wing's own plane. Real strut volume plus a
+    genuine fold keeps the wing reading as a structure, not one flat
+    plane, and keeps it visible edge-on."""
+    add_segment(f"WING_UpperArm_{side}", shoulder, elbow,
+                arm_radius, arm_radius * 0.66, "skin", collection, spec,
+                f"wing_arm_{side.lower()}", sides=8)
+    add_segment(f"WING_Forearm_{side}", elbow, wrist,
+                arm_radius * 0.66, arm_radius * 0.40, "skin", collection,
+                spec, f"wing_arm_{side.lower()}", sides=7)
+    for index, tip in enumerate(fingers):
+        radius = finger_radius * (1.0 - index * 0.16)
+        add_segment(f"WING_Finger_{side}_{index}", wrist, tip,
+                    radius, radius * 0.20, "skin", collection, spec,
+                    f"wing_finger_{side.lower()}_{index}", sides=5)
+    span = fingers[-1] - wrist
+    trail = trailing_anchor - wrist
+    normal = span.cross(trail)
+    normal = normal.normalized() if normal.length > 1e-6 else Vector((0.0, 0.0, 1.0))
+    for index in range(len(fingers) - 1):
+        tip_a = fingers[index]
+        tip_b = fingers[index + 1]
+        valley = tip_a.lerp(tip_b, 0.5).lerp(wrist, fold_amount)
+        fold_sign = 1.0 if index % 2 == 0 else -1.0
+        valley = valley + normal * (fold_depth * fold_sign)
+        semantic = membrane_semantic if index % 2 == 0 else fold_semantic
+        add_prism(f"WING_Membrane_{side}_{index}",
+                  (wrist, tip_a, valley, tip_b), membrane_thickness,
+                  semantic, collection, spec,
+                  f"wing_membrane_{side.lower()}_{index}")
+    trailing_valley = fingers[-1].lerp(trailing_anchor, 0.5).lerp(
+        wrist, fold_amount * 0.7)
+    trailing_valley = trailing_valley - normal * (fold_depth * 0.6)
+    add_prism(f"WING_Membrane_{side}_trailing",
+              (wrist, fingers[-1], trailing_valley, trailing_anchor),
+              membrane_thickness, fold_semantic, collection, spec,
+              f"wing_membrane_{side.lower()}_trailing")
+
+
 def build_dragon_whelp(spec: CreatureSpec,
                        collection: bpy.types.Collection) -> None:
     phase = pose_phase(spec.pose)
@@ -940,11 +988,17 @@ def build_dragon_whelp(spec: CreatureSpec,
     fin_twitch = cycle * 0.10 if moving else 0.08 if threat else 0.0
     head_sway = cycle * 0.035 if moving else 0.0
     body_z = 0.52 if resting else 0.78
-    add_ellipsoid("WHELP_RoundBody", (0.0, 0.08, body_z),
-                  (0.54, 0.70, 0.48), "skin", collection, spec, "body",
+    add_ellipsoid("WHELP_RoundBody", (0.0, 0.10, body_z),
+                  (0.48, 0.58, 0.44), "skin", collection, spec, "body",
                   subdivisions=2)
     add_ellipsoid("WHELP_Belly", (0.0, -0.30, body_z - 0.10),
                   (0.48, 0.42, 0.42), "hide", collection, spec, "chest",
+                  subdivisions=2)
+    add_ellipsoid("WHELP_Chest", (0.0, -0.36, body_z + 0.06),
+                  (0.54, 0.40, 0.48), "skin", collection, spec, "chest",
+                  subdivisions=2)
+    add_ellipsoid("WHELP_Haunch", (0.0, 0.48, body_z - 0.04),
+                  (0.48, 0.38, 0.42), "skin", collection, spec, "haunch",
                   subdivisions=2)
     for name, sign, longitudinal, offset in (
         ("fl", -1.0, -0.36, 0.0), ("fr", 1.0, -0.36, 0.5),
@@ -975,9 +1029,18 @@ def build_dragon_whelp(spec: CreatureSpec,
             rotation=(0.12 if threat else 0.0, 0.0, 0.0), bevel=0.035)
     for side, sign in (("L", -1.0), ("R", 1.0)):
         add_ellipsoid(f"WHELP_Eye_{side}",
-                      head + Vector((0.31 * sign, -0.31, 0.11)),
-                      (0.090, 0.035, 0.105), "eye", collection, spec,
+                      head + Vector((0.32 * sign, -0.31, 0.12)),
+                      (0.100, 0.040, 0.115), "eye", collection, spec,
                       f"eye_{side.lower()}")
+        add_ellipsoid(f"WHELP_BrowRidge_{side}",
+                      head + Vector((0.30 * sign, -0.22, 0.24)),
+                      (0.15, 0.075, 0.10), "secondary", collection, spec,
+                      f"eye_{side.lower()}")
+        add_cone(f"WHELP_BrowNub_{side}",
+                 head + Vector((0.20 * sign, -0.04, 0.34)),
+                 0.045, 0.13, "horn", collection, spec,
+                 f"brow_nub_{side.lower()}",
+                 rotation=(0.30, 0.0, 0.0), vertices=5)
         ear_points = (
             (0.30 * sign, head.y + 0.01, head.z + 0.18),
             (0.64 * sign, head.y + 0.14,
@@ -994,14 +1057,18 @@ def build_dragon_whelp(spec: CreatureSpec,
          Vector((0.34 * cycle, 1.98, body_z - 0.22))),
         (0.22, 0.15, 0.075, 0.018))
     for side, sign in (("L", -1.0), ("R", 1.0)):
-        shoulder = (0.36 * sign, -0.12, body_z + 0.31)
-        wing = (shoulder,
-                (0.78 * sign, 0.05,
-                 body_z + 0.70 + cycle * 0.07 * sign),
-                (0.95 * sign, 0.72, body_z + 0.28),
-                (0.38 * sign, 0.46, body_z + 0.18))
-        add_prism(f"WHELP_WingBud_{side}", wing, 0.045, "accent",
-                  collection, spec, f"wing_bud_{side.lower()}")
+        shoulder = Vector((0.34 * sign, -0.10, body_z + 0.32))
+        elbow = Vector((0.62 * sign, 0.10 + cycle * 0.04 * sign,
+                        body_z + 0.58))
+        wrist = Vector((0.80 * sign, 0.22, body_z + 0.42))
+        fingers = (
+            Vector((0.98 * sign, 0.50, body_z + 0.20)),
+            Vector((0.68 * sign, 0.58, body_z + 0.02)),
+        )
+        trailing_anchor = Vector((0.30 * sign, 0.30, body_z + 0.14))
+        add_dragon_wing(spec, collection, side, shoulder, elbow, wrist,
+                       fingers, trailing_anchor, 0.075, 0.050, 0.032,
+                       fold_amount=0.30, fold_depth=0.055)
     for crest, y in enumerate((-0.74, -0.45, -0.10)):
         add_cone(f"WHELP_Crest_{crest}", (0.0, y, body_z + 0.58),
                  0.065, 0.15, "horn", collection, spec, f"crest_{crest}",
@@ -1016,11 +1083,17 @@ def build_dragon_wanderer(spec: CreatureSpec,
     threat = spec.pose == "threat"
     cycle = math.sin(phase * math.tau)
     body_z = 0.90 if resting else 1.55
-    add_ellipsoid("WANDERER_LeanBody", (0.0, 0.15, body_z),
-                  (0.52, 1.44, 0.40), "skin", collection, spec, "body",
+    add_ellipsoid("WANDERER_Chest", (0.0, -0.58, body_z + 0.10),
+                  (0.56, 0.62, 0.48), "skin", collection, spec, "chest",
+                  subdivisions=2)
+    add_ellipsoid("WANDERER_Waist", (0.0, 0.10, body_z - 0.06),
+                  (0.38, 0.62, 0.32), "skin", collection, spec, "body",
+                  subdivisions=2)
+    add_ellipsoid("WANDERER_Haunch", (0.0, 0.86, body_z + 0.02),
+                  (0.50, 0.56, 0.42), "skin", collection, spec, "haunch",
                   subdivisions=2)
     add_ellipsoid("WANDERER_KeelChest", (0.0, -0.78, body_z + 0.06),
-                  (0.48, 0.64, 0.58), "hide", collection, spec, "chest",
+                  (0.48, 0.60, 0.56), "hide", collection, spec, "chest",
                   subdivisions=2)
     for name, sign, longitudinal, offset in (
         ("fl", -1.0, -0.76, 0.0), ("fr", 1.0, -0.76, 0.5),
@@ -1053,8 +1126,12 @@ def build_dragon_wanderer(spec: CreatureSpec,
             rotation=(0.12 if threat else 0.0, 0.0, 0.0), bevel=0.018)
     for side, sign in (("L", -1.0), ("R", 1.0)):
         add_ellipsoid(f"WANDERER_Eye_{side}",
-                      head + Vector((0.20 * sign, -0.40, 0.08)),
-                      (0.045, 0.024, 0.055), "eye", collection, spec,
+                      head + Vector((0.21 * sign, -0.40, 0.09)),
+                      (0.052, 0.028, 0.062), "eye", collection, spec,
+                      f"eye_{side.lower()}")
+        add_ellipsoid(f"WANDERER_BrowRidge_{side}",
+                      head + Vector((0.19 * sign, -0.28, 0.17)),
+                      (0.075, 0.040, 0.075), "secondary", collection, spec,
                       f"eye_{side.lower()}")
         add_cone(f"WANDERER_SweptHorn_{side}",
                  head + Vector((0.18 * sign, 0.02, 0.22)),
@@ -1072,21 +1149,18 @@ def build_dragon_wanderer(spec: CreatureSpec,
     wing_height = body_z + (2.65 if threat else 1.45)
     wing_reach = 3.45 if threat else 2.75
     for side, sign in (("L", -1.0), ("R", 1.0)):
-        shoulder = (0.37 * sign, -0.56, body_z + 0.38)
-        wing = (shoulder,
-                (1.62 * sign, -0.18, wing_height),
-                (wing_reach * sign, 1.12, body_z + 0.92),
-                (1.72 * sign, 1.88, body_z + 0.18),
-                (0.52 * sign, 0.72, body_z + 0.20))
-        add_prism(f"WANDERER_SweptWing_{side}", wing, 0.052,
-                  "secondary", collection, spec,
-                  f"swept_wing_{side.lower()}")
-        add_segment(f"WANDERER_WingArm_{side}", shoulder, wing[1],
-                    0.105, 0.052, "skin", collection, spec,
-                    f"wing_arm_{side.lower()}", sides=7)
-        add_segment(f"WANDERER_WingFinger_{side}", wing[1], wing[2],
-                    0.055, 0.018, "skin", collection, spec,
-                    f"wing_finger_{side.lower()}", sides=6)
+        shoulder = Vector((0.37 * sign, -0.56, body_z + 0.38))
+        elbow = Vector((1.62 * sign, -0.18, wing_height))
+        wrist = Vector((2.35 * sign, 0.55,
+                        body_z + (0.98 if threat else 0.62)))
+        fingers = (
+            Vector((wing_reach * sign, 1.12, body_z + 0.92)),
+            Vector((1.72 * sign, 1.88, body_z + 0.18)),
+        )
+        trailing_anchor = Vector((0.52 * sign, 0.72, body_z + 0.20))
+        add_dragon_wing(spec, collection, side, shoulder, elbow, wrist,
+                       fingers, trailing_anchor, 0.115, 0.062, 0.048,
+                       fold_amount=0.32, fold_depth=0.14)
     for spine, y in enumerate((-1.15, -0.30, 0.60)):
         add_cone(f"WANDERER_BackBlade_{spine}",
                  (0.0, y, body_z + 0.48), 0.075, 0.34, "horn",
@@ -1107,16 +1181,31 @@ def build_dragon_crowned(spec: CreatureSpec,
         Vector((-0.18 * cycle, 1.30, body_z - 0.08)),
         Vector((0.10 * cycle, 2.65, body_z - 0.14)),
     )
+    # Chest, then a cinched waist, then a haunch flare before the tail
+    # taper: a deliberate mass contour instead of a near-uniform tube.
+    torso_radii_start = (0.76, 0.50, 0.68)
+    torso_radii_end = (0.50, 0.68, 0.42)
     for index in range(len(torso_points) - 1):
         add_segment(f"CROWNED_SerpentineTorso_{index}",
                     torso_points[index], torso_points[index + 1],
-                    (0.64, 0.68, 0.58)[index],
-                    (0.68, 0.58, 0.46)[index],
+                    torso_radii_start[index], torso_radii_end[index],
                     "skin", collection, spec, f"serpentine_torso_{index}",
                     sides=12)
-    add_ellipsoid("CROWNED_Ribcage", (0.0, -1.05, body_z + 0.05),
-                  (0.72, 1.15, 0.60), "hide", collection, spec, "chest",
+    add_ellipsoid("CROWNED_Ribcage", (0.0, -1.05, body_z + 0.08),
+                  (0.88, 1.05, 0.78), "hide", collection, spec, "chest",
                   subdivisions=2)
+    add_ellipsoid("CROWNED_Shoulder_L", (-0.62, -1.35, body_z + 0.20),
+                  (0.42, 0.46, 0.44), "skin", collection, spec,
+                  "shoulder_left", subdivisions=1)
+    add_ellipsoid("CROWNED_Shoulder_R", (0.62, -1.35, body_z + 0.20),
+                  (0.42, 0.46, 0.44), "skin", collection, spec,
+                  "shoulder_right", subdivisions=1)
+    add_ellipsoid("CROWNED_Haunch_L", (-0.64, 1.55, body_z + 0.02),
+                  (0.44, 0.54, 0.48), "skin", collection, spec,
+                  "haunch_left", subdivisions=1)
+    add_ellipsoid("CROWNED_Haunch_R", (0.64, 1.55, body_z + 0.02),
+                  (0.44, 0.54, 0.48), "skin", collection, spec,
+                  "haunch_right", subdivisions=1)
     for name, sign, longitudinal, offset in (
         ("fl", -1.0, -1.35, 0.0), ("fr", 1.0, -1.35, 0.5),
         ("hl", -1.0, 1.72, 0.5), ("hr", 1.0, 1.72, 0.0),
@@ -1141,16 +1230,24 @@ def build_dragon_crowned(spec: CreatureSpec,
     add_dragon_neck(spec, collection, neck,
                     (0.50, 0.43, 0.35, 0.27, 0.18))
     head = neck[-1] + Vector((0.0, -0.36, 0.0))
-    add_ellipsoid("CROWNED_Head", head, (0.40, 0.72, 0.30), "skin",
+    add_ellipsoid("CROWNED_Head", head, (0.44, 0.76, 0.34), "skin",
                   collection, spec, "head", subdivisions=2)
+    add_ellipsoid("CROWNED_JawHinge",
+                  head + Vector((0.0, -0.42, -0.04)),
+                  (0.42, 0.32, 0.32), "secondary", collection, spec,
+                  "jaw", subdivisions=1)
     add_box("CROWNED_Jaw",
             head + Vector((0.0, -0.56, -0.16 if not threat else -0.27)),
             (0.56, 0.78, 0.16), "secondary", collection, spec, "jaw",
             rotation=(0.12 if threat else 0.0, 0.0, 0.0), bevel=0.028)
     for side, sign in (("L", -1.0), ("R", 1.0)):
         add_ellipsoid(f"CROWNED_Eye_{side}",
-                      head + Vector((0.27 * sign, -0.48, 0.09)),
-                      (0.057, 0.028, 0.068), "eye", collection, spec,
+                      head + Vector((0.29 * sign, -0.48, 0.10)),
+                      (0.066, 0.032, 0.078), "eye", collection, spec,
+                      f"eye_{side.lower()}")
+        add_ellipsoid(f"CROWNED_BrowRidge_{side}",
+                      head + Vector((0.27 * sign, -0.34, 0.22)),
+                      (0.095, 0.050, 0.090), "secondary", collection, spec,
                       f"eye_{side.lower()}")
         add_cone(f"CROWNED_Horn_{side}",
                  head + Vector((0.24 * sign, 0.05, 0.29)),
@@ -1176,17 +1273,20 @@ def build_dragon_crowned(spec: CreatureSpec,
     wing_height = body_z + (3.00 if threat else 1.18)
     wing_reach = 3.90 if threat else 2.45
     for side, sign in (("L", -1.0), ("R", 1.0)):
-        shoulder = (0.58 * sign, -1.18, body_z + 0.48)
-        wing = (shoulder,
-                (1.82 * sign, -0.36, wing_height),
-                (wing_reach * sign, 1.08, body_z + (0.92 if threat else 0.34)),
-                (2.05 * sign, 2.12, body_z + 0.18),
-                (0.72 * sign, 0.58, body_z + 0.22))
-        add_prism(f"CROWNED_Wing_{side}", wing, 0.074, "secondary",
-                  collection, spec, f"wing_{side.lower()}")
-        add_segment(f"CROWNED_WingArm_{side}", shoulder, wing[1],
-                    0.14, 0.078, "skin", collection, spec,
-                    f"wing_arm_{side.lower()}", sides=8)
+        shoulder = Vector((0.58 * sign, -1.18, body_z + 0.48))
+        elbow = Vector((1.82 * sign, -0.36, wing_height))
+        wrist = Vector((2.68 * sign, 0.42,
+                        body_z + (1.05 if threat else 0.55)))
+        fingers = (
+            Vector((wing_reach * sign, 1.08,
+                    body_z + (0.92 if threat else 0.34))),
+            Vector((2.55 * sign, 1.65, body_z + 0.24)),
+            Vector((2.05 * sign, 2.12, body_z + 0.18)),
+        )
+        trailing_anchor = Vector((0.72 * sign, 0.58, body_z + 0.22))
+        add_dragon_wing(spec, collection, side, shoulder, elbow, wrist,
+                       fingers, trailing_anchor, 0.155, 0.088, 0.062,
+                       fold_amount=0.34, fold_depth=0.18)
     for spine, position in enumerate((
         (0.0, -4.18, body_z + 0.98), (0.0, -3.24, body_z + 0.96),
         (0.0, -2.28, body_z + 0.88), (0.0, -1.28, body_z + 0.78),
@@ -1228,6 +1328,11 @@ def build_dragon_deep_wyrm(spec: CreatureSpec,
                     serpent_radii[index], serpent_radii[index + 1],
                     "skin" if index % 3 else "hide", collection, spec,
                     f"serpent_body_{index}", sides=12)
+    # Even a legless, serpentine elder still needs a deep chest: a
+    # distinct mass bulge right behind the neck, not just a smooth taper.
+    add_ellipsoid("ANCIENT_ChestMass", serpent[1] + Vector((0.0, 0.0, 0.12)),
+                  (1.08, 1.02, 0.96), "hide", collection, spec, "chest",
+                  subdivisions=2)
 
     neck = (
         serpent[0],
@@ -1245,8 +1350,12 @@ def build_dragon_deep_wyrm(spec: CreatureSpec,
             rotation=(0.15 if threat else 0.0, 0.0, 0.0), bevel=0.055)
     for side, sign in (("L", -1.0), ("R", 1.0)):
         add_ellipsoid(f"ANCIENT_Eye_{side}",
-                      head + Vector((0.43 * sign, -0.68, 0.13)),
-                      (0.075, 0.035, 0.090), "eye", collection, spec,
+                      head + Vector((0.44 * sign, -0.68, 0.14)),
+                      (0.085, 0.040, 0.100), "eye", collection, spec,
+                      f"eye_{side.lower()}")
+        add_ellipsoid(f"ANCIENT_BrowRidge_{side}",
+                      head + Vector((0.40 * sign, -0.50, 0.30)),
+                      (0.13, 0.065, 0.12), "secondary", collection, spec,
                       f"eye_{side.lower()}")
         for crown, (x, y, z, length, angle) in enumerate((
             (0.26, 0.08, 0.38, 1.55, 0.12),
@@ -1281,23 +1390,21 @@ def build_dragon_deep_wyrm(spec: CreatureSpec,
     wing_height = body_z + (4.40 if threat else 1.72)
     wing_reach = 6.20 if threat else 4.25
     for side, sign in (("L", -1.0), ("R", 1.0)):
-        shoulder = (0.72 * sign, -2.38, body_z + 0.74)
-        elbow = (2.46 * sign, -1.12, wing_height)
-        tip = (wing_reach * sign, 0.42, body_z + 1.02)
-        rear = (2.58 * sign, 2.40, body_z + 0.12)
-        notch = (1.38 * sign, 0.82, body_z + 0.50)
-        add_prism(f"ANCIENT_WingFront_{side}",
-                  (shoulder, elbow, tip, notch), 0.10, "secondary",
-                  collection, spec, f"wing_front_{side.lower()}")
-        add_prism(f"ANCIENT_WingRear_{side}",
-                  (elbow, tip, rear, notch), 0.10, "accent",
-                  collection, spec, f"wing_rear_{side.lower()}")
-        add_segment(f"ANCIENT_WingArm_{side}", shoulder, elbow,
-                    0.24, 0.12, "skin", collection, spec,
-                    f"wing_arm_{side.lower()}", sides=9)
-        add_segment(f"ANCIENT_WingFinger_{side}", elbow, tip,
-                    0.13, 0.035, "skin", collection, spec,
-                    f"wing_finger_{side.lower()}", sides=8)
+        shoulder = Vector((0.72 * sign, -2.38, body_z + 0.74))
+        elbow = Vector((2.46 * sign, -1.12, wing_height))
+        wrist = Vector((3.65 * sign, -0.10,
+                        body_z + (1.55 if threat else 0.95)))
+        # Ancient, weathered "broken sails": the middle digit reads
+        # shorter than its neighbours, like a tear that healed over.
+        fingers = (
+            Vector((wing_reach * sign, 0.42, body_z + 1.02)),
+            Vector((3.55 * sign, 1.35, body_z + 0.55)),
+            Vector((2.58 * sign, 2.40, body_z + 0.12)),
+        )
+        trailing_anchor = Vector((1.38 * sign, 0.82, body_z + 0.50))
+        add_dragon_wing(spec, collection, side, shoulder, elbow, wrist,
+                       fingers, trailing_anchor, 0.225, 0.115, 0.088,
+                       fold_amount=0.30, fold_depth=0.22)
     for plate, point in enumerate(serpent[:-1]):
         add_cone(f"ANCIENT_Spine_{plate}",
                  (point.x, point.y, point.z + serpent_radii[plate] * 0.82),
