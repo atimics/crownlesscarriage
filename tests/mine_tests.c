@@ -367,9 +367,10 @@ static void TestLegacyMineFullCarriageRecovery(void)
     int32_t original_tools=overloaded.player.cargo[CC_GOOD_TOOLS];
     int32_t pack_bread=overloaded.mine.pack[CC_GOOD_BREAD];
     int32_t pack_iron=overloaded.mine.pack[CC_GOOD_IRON];
-    /* Schema 117 predates this fix; #923 shipped schema 116 and the
-       following census work moved the legacy boundary to 117. */
-    overloaded.schema_version=117U;
+    /* Schema 119 predates this fix (schema 120): it is the newest legacy
+       schema, so the raw-stone good stamping in CcTestStampLegacyGoods is a
+       no-op here and only the schema label changes. */
+    CcTestStampLegacyGoods(&overloaded,119U);
     const char *path="mine-legacy-full-carriage.ccsave";
     Check(CcSaveWrite(path,&overloaded,error,sizeof(error)));
     Check(CcSaveRead(path,&restored,error,sizeof(error)));

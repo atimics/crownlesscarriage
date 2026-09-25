@@ -13,9 +13,9 @@ EXPECTED_HASHES = {
     # Schema 120 adds a temporary cargo overflow allowance for legacy mine
     # save recovery.
     120: {
-        1: "PLACEHOLDER1",
-        2: "PLACEHOLDER2",
-        3: "PLACEHOLDER3",
+        1: "6606000563570832781",
+        2: "1799973476309109639",
+        3: "16512264284917628599",
     },
 }
 
