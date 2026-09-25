@@ -1396,6 +1396,9 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " appraised_value INTEGER NOT NULL, created_day INTEGER NOT NULL,"
         " destroyed INTEGER NOT NULL);";
     const char *goods_schema =
+        "CREATE TABLE IF NOT EXISTS supply_order ("
+        " town INTEGER NOT NULL, kind INTEGER NOT NULL, day INTEGER NOT NULL,"
+        " filled INTEGER NOT NULL, PRIMARY KEY(town,kind));"
         "CREATE TABLE IF NOT EXISTS settlement_good ("
         " settlement_slot INTEGER NOT NULL, good INTEGER NOT NULL,"
         " stock INTEGER NOT NULL, reserve_target INTEGER NOT NULL,"
@@ -3659,6 +3662,7 @@ invalid:
 #include "persistence/cc_save_notices.inc"
 #include "persistence/cc_save_scriven.inc"
 #include "persistence/cc_save_mine.inc"
+#include "persistence/cc_save_supply.inc"
 #include "persistence/cc_save_goblin_politics.inc"
 
 static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
@@ -3715,7 +3719,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
             "DELETE FROM player_material_economy;"
             "DELETE FROM goblin_material_economy;"
             "DELETE FROM dragon_material_economy; DELETE FROM treasure;"
-            "DELETE FROM settlement_good; DELETE FROM player_good;"
+            "DELETE FROM supply_order; DELETE FROM settlement_good; DELETE FROM player_good;"
             "DELETE FROM goblin_good; DELETE FROM dragon_good;"
             "DELETE FROM dragon_campaign_good;",
             error, error_capacity) &&
@@ -3728,6 +3732,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveCrownCalendar(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
+        SaveSupplyOrders(database, sim, error, error_capacity) &&
         SaveTownRecovery(database, sim, error, error_capacity) &&
               SaveGrainSupplies(database, sim, error, error_capacity) &&
               SaveArchiveRecruitment(database, sim, error, error_capacity) &&
@@ -6441,6 +6446,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadDiplomacyAndCouriers(database, sim,
                                        error, error_capacity) &&
               ReadSettlements(database, sim, error, error_capacity) &&
+              ReadSupplyOrders(database, sim, error, error_capacity) &&
               ReadTownRecovery(database, sim, error, error_capacity) &&
               ReadGrainSupplies(database, sim, error, error_capacity) &&
               ReadArchiveRecruitment(database, sim, error, error_capacity) &&
