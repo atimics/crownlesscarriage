@@ -33,16 +33,35 @@ async function main() {
       undefined, {timeout: 120000});
   }
 
+  // The bakery can be across town. CI renders in software at a low frame
+  // rate, so allow a long walk, and say where the walker stopped if it fails.
+  async function waitForBakeryCounter(page) {
+    const start = await page.evaluate(() => Module.crownlessLocalNavigation);
+    try {
+      await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
+        .some(button => /^Trade .*Baker/.test(button.label)),
+      undefined, {timeout: 150000});
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        navigation: Module.crownlessLocalNavigation,
+        scene: Module.crownlessTouchFrame.scene,
+        cards: Module.crownlessTouchFrame.buttons.map(button => button.label)
+      }));
+      throw new Error(`Bakery counter not reached: ${JSON.stringify({start, ...state})}; ${error.message}`);
+    }
+  }
+
+  async function chooseBakery(controls) {
+    assert(await controls.pageTo('Enter Bakery'), 'The town tray must list the bakery');
+    await controls.button('Enter Bakery').tap();
+  }
+
   async function enterTrade(page) {
     const controls = gameControls(page, true);
     if (await page.evaluate(() => Module.crownlessTouchFrame.scene !== 'trade')) {
-      const buttons = await controls.buttons();
-      if (buttons.some(button => button.label === 'Enter Granary hall')) {
-        await controls.button('Enter Granary hall').tap();
-      }
-      await page.waitForFunction(() =>
-        Module.crownlessTouchFrame.reading.includes('Granary keeper'), undefined, {timeout: 45000});
-      await controls.button(/^Trade .*Granary keeper/).tap();
+      if (!await controls.button(/^Trade .*Baker/).read()) await chooseBakery(controls);
+      await waitForBakeryCounter(page);
+      await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
         undefined, {timeout: 45000});
     }
@@ -55,7 +74,7 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     await startGame(page);
     const controls = gameControls(page, true);
-    await controls.button('Enter Granary hall').waitFor();
+    const start = await page.evaluate(() => Module.crownlessLocalNavigation);
     if (width === 390) {
       const mobileDetailSize = await page.locator('#touch-actions .touch-detail')
         .evaluate(node => getComputedStyle(node).fontSize);
@@ -67,10 +86,12 @@ async function main() {
 
     await fs.mkdir(path.join(output, name), {recursive: true});
     await page.screenshot({path: path.join(output, name, 'town.png')});
-    await controls.button('Enter Granary hall').tap();
-    await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Granary keeper'),
-      undefined, {timeout: 45000});
-    await controls.button(/^Trade .*Granary keeper/).tap();
+    await chooseBakery(controls);
+    await waitForBakeryCounter(page);
+    const arrival = await page.evaluate(() => Module.crownlessLocalNavigation);
+    assert(Math.hypot(arrival.x - start.x, arrival.z - start.z) > 2,
+      `${name}: entering the bakery walks across town: ${JSON.stringify({start, arrival})}`);
+    await controls.button(/^Trade .*Baker/).tap();
     await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
       undefined, {timeout: 45000});
     await page.waitForTimeout(300);

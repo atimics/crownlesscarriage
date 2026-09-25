@@ -62,7 +62,7 @@ uint64_t CcSimHash(const CcSim *sim)
         HASH_VALUE(sim->mine.return_speed); HASH_VALUE(sim->mine.light);
         HASH_VALUE(sim->mine.steps); HASH_VALUE(sim->mine.seen);
         HASH_VALUE(sim->mine.bar_open); HASH_VALUE(sim->mine.surveyed);
-        for (int32_t good=0;good<CC_GOOD_COUNT;++good) HASH_VALUE(sim->mine.pack[good]);
+        for (int32_t good=0;good<CcGoodCountForSchema(sim->schema_version);++good) HASH_VALUE(sim->mine.pack[good]);
         if (sim->schema_version >= 103U) {
             HASH_VALUE(sim->mine.source_id); HASH_VALUE(sim->mine.source_owner_id);
             HASH_VALUE(sim->mine.cache_id); HASH_VALUE(sim->mine.cache_owner_id);
@@ -236,13 +236,20 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(item->id); HASH_VALUE(item->route_id);
             HASH_VALUE(item->home_settlement_id);
             hash = HashString(hash, item->name);
-            HASH_VALUE(item->kind); HASH_VALUE(item->input_good);
-            HASH_VALUE(item->output_good); HASH_VALUE(item->progress_milli);
+            /* Before schema 119 the "no good" sentinel was 14, the old
+               goods count. Hash it that way so recorded hashes still match. */
+            bool legacy_goods = sim->schema_version < 119U;
+            HASH_VALUE(item->kind);
+            HASH_VALUE(legacy_goods && item->input_good == CC_GOOD_COUNT ?
+                CC_GOOD_RAW_STONE : item->input_good);
+            HASH_VALUE(legacy_goods && item->output_good == CC_GOOD_COUNT ?
+                CC_GOOD_RAW_STONE : item->output_good);
+            HASH_VALUE(item->progress_milli);
             HASH_VALUE(item->side); HASH_VALUE(item->spur_length);
             HASH_VALUE(item->condition); HASH_VALUE(item->blocker);
             HASH_VALUE(item->accessible);
             if (sim->schema_version >= 64U) {
-                for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) HASH_VALUE(item->stock[good]);
+                for (int32_t good = 0; good < CcGoodCountForSchema(sim->schema_version); ++good) HASH_VALUE(item->stock[good]);
             }
         }
     }
@@ -1158,7 +1165,7 @@ uint64_t CcSimHash(const CcSim *sim)
     }
     if (sim->schema_version >= 75U) {
         HASH_VALUE(sim->dragon_cult.offering_coins);
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = 0; good < CcGoodCountForSchema(sim->schema_version); ++good) {
             HASH_VALUE(sim->dragon_cult.offering_stock[good]);
         }
         const CcGoblinPolitics *p = &sim->goblin_politics;

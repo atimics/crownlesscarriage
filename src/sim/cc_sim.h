@@ -74,7 +74,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 118
+#define CC_SIM_SCHEMA_VERSION 119
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -161,6 +161,7 @@ typedef enum CcGood {
     CC_GOOD_PAPER = 11,
     CC_GOOD_ROTTEN_MEAT = 12,
     CC_GOOD_ROTTEN_GRAIN = 13,
+    CC_GOOD_RAW_STONE = 14,
     CC_GOOD_COUNT
 } CcGood;
 
@@ -709,6 +710,7 @@ typedef enum CcCommandKind {
     CC_COMMAND_STOW_RELIEF_CRATE = 80,
     CC_COMMAND_CARE_HORSES = 81,
     CC_COMMAND_SCRIVEN = 82,
+    CC_COMMAND_TRADE_SUPPLY = 83,
     CC_COMMAND_COUNT
 } CcCommandKind;
 
@@ -2352,7 +2354,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 1728768,
+_Static_assert(sizeof(CcSim) == 1728904,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2477,6 +2479,19 @@ bool CcSimHorseCarePreview(const CcSim *sim, CcHorseCarePreview *preview);
 CcId CcMakeId(CcEntityKind kind, uint64_t serial);
 CcEntityKind CcIdKind(CcId id);
 bool CcGoodIsValid(CcGood good);
+/* Local haul quotes follow the buyer's finished stock and expected use. */
+typedef struct CcSupplyOffer {
+    int32_t source_unit_price;
+    int32_t delivery_unit_price;
+    int32_t remaining;
+    int32_t source_available;
+    bool ready;
+} CcSupplyOffer;
+CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good);
+CcSupplyOffer CcSimSupplyOfferAt(const CcSim *sim, CcId town_id, CcGood good);
+void CcSimInitializeSupplyEconomy(CcSim *sim);
+int32_t CcSimTradeResalePrice(const CcSim *sim, const CcSettlement *town, CcGood good);
+
 int32_t CcGoodCountForSchema(uint32_t schema_version);
 const CcGoodDefinition *CcGoodDefinitionFor(CcGood good);
 const char *CcGoodName(CcGood good);

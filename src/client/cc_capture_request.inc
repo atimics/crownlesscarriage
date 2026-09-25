@@ -6,6 +6,10 @@ typedef struct CcCaptureRequest {
     bool capture_world;
     bool capture_opening;
     bool capture_interior;
+    bool capture_shop;
+    bool capture_shop_interior;
+    bool capture_shop_front;
+    CcGood capture_shop_good;
     bool capture_navigation;
     bool capture_defense;
     bool capture_downclimb;
@@ -212,6 +216,30 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
     request->capture_town_index = 0;
     request->capture_town_x = 44.25f;
     request->capture_town_z = 28.85f;
+    request->capture_shop_interior = argc >= 2 &&
+        strcmp(argv[1], "--capture-shop-interior") == 0;
+    request->capture_shop_front = argc >= 2 &&
+        strcmp(argv[1], "--capture-shop-front") == 0;
+    request->capture_shop = request->capture_shop_interior || request->capture_shop_front ||
+        (argc >= 2 && strcmp(argv[1], "--capture-shop") == 0);
+    if (request->capture_shop) {
+        if (argc != 5 && argc != 7) {
+            (void)fprintf(stderr, "capture shop: TOWN GOOD FRAME [WIDTH HEIGHT]\n");
+            return false;
+        }
+        char *town_end = NULL;
+        char *good_end = NULL;
+        long town = strtol(argv[2], &town_end, 10);
+        long good = strtol(argv[3], &good_end, 10);
+        if (town_end == argv[2] || *town_end != '\0' || town < 0 || town >= 6 ||
+            good_end == argv[3] || *good_end != '\0' || good < 0 || good >= CC_GOOD_COUNT ||
+            good == CC_GOOD_ROTTEN_MEAT || good == CC_GOOD_ROTTEN_GRAIN) {
+            (void)fprintf(stderr, "Choose a town from 0 to 5 and a shop good from 0 to 11, or raw stone 14.\n");
+            return false;
+        }
+        request->capture_town_index = (int32_t)town;
+        request->capture_shop_good = (CcGood)good;
+    }
     if (request->capture_town_state) {
         if (argc != 7 || (strcmp(argv[6], "burnt") != 0 &&
             strcmp(argv[6], "rebuilding") != 0 && strcmp(argv[6], "lawless") != 0 &&
@@ -429,7 +457,7 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
                     request->capture_menu || request->capture_delete || request->capture_world ||
                     request->capture_board ||
                     request->capture_opening ||
-                    request->capture_interior || request->capture_navigation || request->capture_limbs ||
+                    request->capture_interior || request->capture_shop || request->capture_navigation || request->capture_limbs ||
                     request->capture_walk_cycle || request->capture_defense ||
                     request->capture_downclimb || request->capture_road_fork ||
                     request->capture_road_zoom ||
@@ -447,7 +475,8 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
                     request->capture_atmosphere || request->capture_face ||
                     request->capture_room || request->capture_npc_review || request->capture_heraldry ||
                     request->capture_creature_media);
-    request->capture_path = request->capture_ux ? argv[3] : request->capture_storybook ? argv[4] :
+    request->capture_path = request->capture_shop ? argv[4] :
+                               request->capture_ux ? argv[3] : request->capture_storybook ? argv[4] :
                                request->capture_creature_media ? argv[3] :
                                request->capture_room ? argv[4] :
                                request->capture_face ? argv[3] :

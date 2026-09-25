@@ -4909,6 +4909,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeWoodEconomy(sim);
     CcSimInitializeStoneEconomy(sim);
     CcSimInitializePaperEconomy(sim);
+    if (sim->schema_version >= 119U) CcSimInitializeSupplyEconomy(sim);
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         SeedSettlementServices(&sim->settlements[i]);
     }
@@ -17299,6 +17300,8 @@ static bool ApplyMineReportReturn(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+#include "cc_supply_trade.inc"
+
 static bool ApplyTrade(CcSim *sim, const CcCommand *command,
                        char *error, size_t error_capacity)
 {
@@ -17364,7 +17367,7 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             SetError(error, error_capacity, "The carriage does not carry that cargo.");
             return false;
         }
-        int32_t sale_price = MaximumI32(1, price * 3 / 4);
+        int32_t sale_price = CcSimTradeResalePrice(sim, settlement, command->good);
         CcMoney proceeds = (CcMoney)selling * (CcMoney)sale_price;
         if (settlement->market_coins < proceeds) {
             SetError(error, error_capacity,
@@ -17460,7 +17463,7 @@ static bool ApplyGoblinTrade(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "The goblin lair cannot be reached.");
         return false;
     }
-    int32_t unit_price = MaximumI32(1, lair->price[command->good] * 3 / 4);
+    int32_t unit_price = CcSimTradeResalePrice(sim, lair, command->good);
     CcMoney proceeds = (CcMoney)unit_price * command->amount;
     if (lair->market_coins < proceeds) {
         SetError(error, error_capacity,
@@ -20260,7 +20263,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
                  "Return to the carriage before taking an outside action.");
         return false;
     }
-    bool settlement_action = command->kind == CC_COMMAND_TRADE ||
+    bool settlement_action = command->kind == CC_COMMAND_TRADE_SUPPLY ||
+        command->kind == CC_COMMAND_TRADE ||
         command->kind == CC_COMMAND_REPAIR_ROUTE ||
         command->kind == CC_COMMAND_CHANGE_DUNGEON ||
         command->kind == CC_COMMAND_BUY_MAP ||
@@ -20341,6 +20345,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_SWAP_PONY:
         case CC_COMMAND_LEAVE_PONY:
             return CcPoniesApply(sim, command, error, error_capacity);
+        case CC_COMMAND_TRADE_SUPPLY:
+            return ApplySupplyTrade(sim, command, error, error_capacity);
         case CC_COMMAND_TRADE:
             return ApplyTrade(sim, command, error, error_capacity);
         case CC_COMMAND_TRAVEL:

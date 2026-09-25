@@ -8,6 +8,7 @@
 #include "client/cc_client_session.h"
 #include "client/cc_local3d.h"
 #include "client/cc_local_place.h"
+#include "client/cc_local_shops.h"
 #include "client/cc_music_player.h"
 #include "client/cc_overlay.h"
 #include "client/cc_road_book.h"
@@ -323,6 +324,7 @@ typedef struct LocalState {
     CcMoney trade_presented_total;
     CcMoney trade_presented_reward;
     CcCommand trade_presented_command;
+    int32_t trade_presented_shop_building_index;
     char receipt[256];
     uint32_t receipt_serial;
     double voice_ambient_after, voice_effort_after;
@@ -370,6 +372,7 @@ typedef struct LocalState {
     float site_travel_progress;
     float fork_turn_progress;
     bool market_interior;
+    int32_t shop_building_index;
     bool site_travel_active;
     bool site_returning;
     bool road_choice_active;
@@ -630,7 +633,9 @@ EM_JS(int, ClientBrowserHeapBytes, (), {
 #pragma clang diagnostic pop
 #endif
 
+#if defined(CC_CLIENT_SELF_TESTS)
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
+#endif
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
                                       CC_LOCAL_CARRIAGE_Z};
 static const Vector2 LOCAL_CARRIAGE_BAY = {
@@ -1314,6 +1319,78 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
 static void RepositionHero(LocalState *local, Vector2 position,
                            bool market_interior);
 
+static const CcLocalShop *LocalActiveShop(const CcSim *sim,
+    const LocalState *local)
+{
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(sim, sim->player.location_id));
+    if (profile == NULL) return NULL;
+    int32_t index = local->open_world_market ? profile->primary_building :
+        local->shop_building_index;
+    return (local->market_interior || local->open_world_market) ?
+        CcLocalShopForBuilding(profile, index) : NULL;
+}
+
+static CcGood LocalShopFirstGood(const CcLocalShop *shop)
+{
+    for (int32_t good = 0; good < CC_GOOD_COUNT; ++good)
+        if (CcLocalShopSells(shop, (CcGood)good)) return (CcGood)good;
+    return CC_GOOD_FOOD;
+}
+
+static bool LocalShopHandlesSpoiledCargo(const CcLocalShop *shop, CcGood good)
+{
+    return shop != NULL &&
+        ((shop->kind == CC_LOCAL_SHOP_BUTCHER &&
+          good == CC_GOOD_ROTTEN_MEAT) ||
+         (shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT &&
+          good == CC_GOOD_ROTTEN_GRAIN));
+}
+
+static bool LocalShopSupplySource(const CcLocalShop *shop, CcGood good)
+{
+    return shop != NULL &&
+        ((shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT && good == CC_GOOD_WHEAT) ||
+         (shop->kind == CC_LOCAL_SHOP_MINE_SUPPLIER && good == CC_GOOD_RAW_STONE));
+}
+
+static bool LocalShopSupplyBuyer(const CcLocalShop *shop, CcGood good)
+{
+    return shop != NULL &&
+        ((shop->kind == CC_LOCAL_SHOP_BAKERY && good == CC_GOOD_WHEAT) ||
+         (shop->kind == CC_LOCAL_SHOP_STONECUTTER && good == CC_GOOD_RAW_STONE));
+}
+
+static CcGood LocalShopNextGood(const CcSim *sim, const CcLocalShop *shop,
+    int mode, CcGood current, int direction)
+{
+    for (int32_t step = 1; step <= CC_GOOD_COUNT; ++step) {
+        int32_t good = ((int32_t)current + direction * step +
+            CC_GOOD_COUNT * 2) % CC_GOOD_COUNT;
+        if ((mode == 0 && CcLocalShopSells(shop, (CcGood)good)) ||
+            (mode == 1 && CcLocalShopBuys(shop, (CcGood)good)) ||
+            (mode == 1 && LocalShopHandlesSpoiledCargo(shop, (CcGood)good) &&
+             sim->player.cargo[good] > 0)) return (CcGood)good;
+    }
+    return current;
+}
+
+static const CcLocalShop *LocalShopNearPosition(const CcLocalPlaceProfile *profile,
+    Vector2 position, float radius)
+{
+    if (profile == NULL) return NULL;
+    const CcLocalShop *nearest = NULL;
+    float best = radius;
+    for (int32_t building = 0; building < profile->building_count; ++building) {
+        const CcLocalShop *shop = CcLocalShopForBuilding(profile, building);
+        if (shop == NULL) continue;
+        CcLocalLanePoint point = CcLocalShopApproach(profile, shop);
+        float distance = GridDistance(position, (Vector2){point.x, point.z});
+        if (distance < best) { best = distance; nearest = shop; }
+    }
+    return nearest;
+}
+
 static const Vector3 *LocalConversationFocus(const LocalState *local, ClientView view)
 {
     return local->adventure_ui && view == VIEW_CHARACTER ?
@@ -1352,6 +1429,7 @@ static void ResetLocalState(LocalState *local)
     local->trade_mode = 0;
     local->trade_confirmed = false;
     local->trade_quote_presented = false;
+    local->trade_presented_shop_building_index = -1;
     local->book_offset = 0;
     local->book_page = 0;
     local->carriage_tab = CARRIAGE_OVERVIEW;
@@ -1368,6 +1446,7 @@ static void ResetLocalState(LocalState *local)
     local->conversation_situation_id = 0U;
     local->opening_step = CC_LOCAL_OPENING_COMPLETE;
     local->market_interior = false;
+    local->shop_building_index = -1;
     local->open_world_market = false;
     local->site_kind = CC_LOCAL_SITE_NONE;
     local->site_travel_progress = 0.0f;
@@ -2391,7 +2470,9 @@ static bool SaveLocalSession(const char *path, const CcSim *sim,
         .opening_step = (uint32_t)local->opening_step,
         .site_travel_progress = local->site_travel_progress,
         .site_travel_active = local->site_travel_active,
-        .site_returning = local->site_returning
+        .site_returning = local->site_returning,
+        .shop_building_index = local->market_interior ?
+            local->shop_building_index : 0
     };
     CaptureAthleticProfile(&session.athletics, &local->agent.athletics);
     CaptureRoadEncounter(&session.road_encounter, local);
@@ -2705,6 +2786,13 @@ static bool RestoreLocalSession(const char *path, const CcSim *sim,
     RepositionHero(local,
                    (Vector2){session.position_x, session.position_z}, market);
     local->market_interior = market;
+    if (market) {
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+            CcSimSettlement(sim, sim->player.location_id));
+        local->shop_building_index = CcLocalShopForBuilding(profile,
+            session.shop_building_index) != NULL ? session.shop_building_index :
+            profile->primary_building;
+    }
     local->site_kind = site;
     if (site != CC_LOCAL_SITE_NONE) {
         CcLocalAgentSetScene(&local->agent, CC_LOCAL_SCENE_ROAD);
@@ -3217,7 +3305,9 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
                         destination != NULL ? destination->name : "Gate") :
              local->market_interior && place != NULL ?
                  TextFormat("%s  /  %s", place->name,
-                            profile->primary_hall) :
+                            LocalActiveShop(sim, local) != NULL ?
+                                LocalActiveShop(sim, local)->name :
+                                profile->primary_hall) :
              place != NULL ?
                  TextFormat("%s  /  %s", place->name, profile->identity) :
                  "Crownless";
@@ -4308,17 +4398,6 @@ static int32_t ActiveSituationCount(const CcSim *sim)
     return count;
 }
 
-static CcGood ContextCargoGood(const CcSim *sim)
-{
-    const CcSituation *accepted = CcSimAcceptedSituation(sim);
-    if (accepted != NULL &&
-        (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
-         accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
-        return accepted->good;
-    }
-    return CC_GOOD_FOOD;
-}
-
 static int32_t SelectedCombatTargetIndex(const LocalState *local)
 {
     if (local == NULL) return -1;
@@ -4533,8 +4612,17 @@ static const CcSituation *AdventureDeliveryAtHand(const CcSim *sim)
 static bool AdventureHandoffTarget(const CcSim *sim, const LocalState *local,
                                    const CcInteractionTarget *target)
 {
-    return target != NULL && AdventureDeliveryAtHand(sim) != NULL &&
-        target->key.kind == (local->market_interior ? CC_INTERACTION_COUNTER : CC_INTERACTION_DOOR);
+    if (target == NULL || AdventureDeliveryAtHand(sim) == NULL) return false;
+    if (local->market_interior)
+        return target->key.kind == CC_INTERACTION_COUNTER &&
+            LocalActiveShop(sim, local) != NULL &&
+            LocalActiveShop(sim, local)->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT;
+    if (target->key.kind != CC_INTERACTION_DOOR) return false;
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+        CcSimSettlement(sim, sim->player.location_id));
+    const CcLocalShop *shop = CcLocalShopForBuilding(profile,
+        (int32_t)target->key.object - 1);
+    return shop != NULL && shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT;
 }
 
 static int AdventurePriorityRank(const CcSim *sim, const LocalState *local,
@@ -4646,8 +4734,8 @@ static ContextActionSet BuildContextActions(
                     GridDistance(LocalPosition(local),
                         (Vector2){previous->approach_x, previous->approach_z}) : 0.0f;
                 if (previous == NULL || previous_priority > priority ||
-                    (previous_priority == priority && (priority > 0 ||
-                        previous_distance <= distance))) break;
+                    (previous_priority == priority &&
+                        previous_distance <= distance)) break;
                 ContextAction swap = set.items[at - 1];
                 set.items[at - 1] = set.items[at]; set.items[at] = swap;
                 --at;
@@ -4683,14 +4771,18 @@ static ContextActionSet BuildContextActions(
         if (local->world_cards_presented && (local->interaction.approaching ||
             GridDistance(LocalPosition(local), local->presented_card_origin) <= 3.0f)) {
             ContextActionSet steady = {0};
-            bool care_present = false;
+            /* Stable care and the road out keep a slot on the first page,
+               so a blocked reason stays visible beside the shop doors. */
+            int pinned = 0;
             for (int i = 0; i < set.count; ++i)
-                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES)
-                    care_present = true;
+                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES ||
+                    set.items[i].kind == CONTEXT_ACTION_CHOOSE_ROAD)
+                    ++pinned;
             /* Keep the current relief step visible while nearby town cards change. */
             for (int pass = 0; pass < 4; ++pass) {
                 int count = pass == 1 ? local->presented_target_count : set.count;
-                int limit = pass < 2 && care_present ? 3 : 4;
+                int limit = pass < 2 ? 4 - pinned : 4;
+                if (limit < 1) limit = 1;
                 for (int i = 0; i < count && steady.count < limit; ++i) {
                     int candidate = i;
                     if (pass == 1) {
@@ -4714,7 +4806,8 @@ static ContextActionSet BuildContextActions(
                         AdventurePriorityRank(sim, local,
                             CcInteractionFind(&local->interactions,
                                               action->target)) == 0) continue;
-                    if (pass == 2 && action->kind != CONTEXT_ACTION_CARE_HORSES)
+                    if (pass == 2 && action->kind != CONTEXT_ACTION_CARE_HORSES &&
+                        action->kind != CONTEXT_ACTION_CHOOSE_ROAD)
                         continue;
                     bool included = false;
                     for (int j = 0; j < steady.count; ++j)
@@ -4724,15 +4817,53 @@ static ContextActionSet BuildContextActions(
                     if (!included) steady.items[steady.count++] = *action;
                 }
             }
+            for (int i = 0; i < set.count; ++i) {
+                bool included = false;
+                for (int j = 0; j < steady.count; ++j)
+                    if (steady.items[j].kind == set.items[i].kind &&
+                        CcInteractionKeyEqual(steady.items[j].target,
+                                              set.items[i].target)) included = true;
+                if (!included) steady.items[steady.count++] = set.items[i];
+            }
             set = steady;
         }
         if (set.count > 4) {
-            for (int i = 4; i < set.count; ++i)
-                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES) {
-                    set.items[3] = set.items[i];
-                    break;
+            /* Nine shop doors must not push the way out or stable care off
+               the first page. The carriage, the road and stable care take
+               the last page-one slots in that order. Every frame uses the
+               same slots, so a card does not move between reading and tap. */
+            int pinned[3], pinned_count = 0;
+            for (int kind = 0; kind < 3; ++kind)
+                for (int i = 0; i < set.count; ++i) {
+                    const ContextAction *item = &set.items[i];
+                    bool match = kind == 0 ?
+                        item->kind == CONTEXT_ACTION_WORLD_TARGET &&
+                            item->target.kind == CC_INTERACTION_CARRIAGE :
+                        kind == 1 ? item->kind == CONTEXT_ACTION_CHOOSE_ROAD :
+                        item->kind == CONTEXT_ACTION_CARE_HORSES;
+                    if (match) { pinned[pinned_count++] = i; break; }
                 }
-            set.count = 4;
+            if (pinned_count > 0) {
+                ContextActionSet ordered = set;
+                int lead = 4 - pinned_count, count = 0, others = 0;
+                for (int pass = 0; pass < 2; ++pass) {
+                    if (pass == 1)
+                        for (int j = 0; j < pinned_count; ++j)
+                            ordered.items[count++] = set.items[pinned[j]];
+                    for (int i = 0; i < set.count; ++i) {
+                        bool is_pinned = false;
+                        for (int j = 0; j < pinned_count; ++j)
+                            if (pinned[j] == i) is_pinned = true;
+                        if (is_pinned) continue;
+                        /* Pass 0 fills the lead slots; pass 1 adds the rest. */
+                        if ((pass == 0) == (others < lead))
+                            ordered.items[count++] = set.items[i];
+                        ++others;
+                    }
+                    others = 0;
+                }
+                set = ordered;
+            }
         }
         return set;
     }
@@ -5388,15 +5519,21 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->market_interior || local->open_world_market) {
+        const CcLocalShop *shop = LocalActiveShop(sim, local);
+        const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
+        if (place == NULL || CcSettlementIsAbandoned(place) || shop == NULL) return set;
         if (local->open_world_market ||
             GridDistance(position, INTERIOR_COUNTER) < 2.25f) {
             if (local->adventure_ui) {
-                AddDetailedContextAction(&set, CONTEXT_ACTION_OPEN_TRADE, "Trade with the keeper", "F", "BUY / SELL / DELIVER", true, false);
+                AddDetailedContextAction(&set, CONTEXT_ACTION_OPEN_TRADE,
+                    TextFormat("Trade at %s", shop->name), "F", "BUY / SELL", true, false);
                 return set;
             }
-            CcGood good = ContextCargoGood(sim);
+            CcGood good = CC_GOOD_FOOD;
             const CcSituation *accepted = CcSimAcceptedSituation(sim);
+            if (accepted != NULL) good = accepted->good;
             bool delivery = accepted != NULL &&
+                shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT &&
                 (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
                  accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
                 accepted->target_id == sim->player.location_id &&
@@ -5411,11 +5548,10 @@ static ContextActionSet BuildContextActions(
                         TextFormat("Deliver %d %s", remaining,
                                    CcGoodName(good)));
             }
-            const CcSettlement *place = CcSimSettlement(
-                sim, sim->player.location_id);
             if (place != NULL) {
                 for (int32_t cargo_good = 0;
                      cargo_good < CC_GOOD_COUNT; ++cargo_good) {
+                    if (!CcLocalShopSells(shop, (CcGood)cargo_good)) continue;
                     if (place->stock[cargo_good] <= 0 &&
                         sim->player.cargo[cargo_good] <= 0) continue;
                     AddCargoContextAction(
@@ -5428,7 +5564,32 @@ static ContextActionSet BuildContextActions(
                             TextFormat("%s %dc · %d held",
                                        CcGoodName((CcGood)cargo_good),
                                        place->price[cargo_good],
-                                       sim->player.cargo[cargo_good]));
+                        sim->player.cargo[cargo_good]));
+                }
+                for (int32_t cargo_good = CC_GOOD_ROTTEN_MEAT;
+                     cargo_good <= CC_GOOD_ROTTEN_GRAIN; ++cargo_good) {
+                    if (!LocalShopHandlesSpoiledCargo(shop, (CcGood)cargo_good) ||
+                        sim->player.cargo[cargo_good] <= 0) continue;
+                    int32_t slot = set.count;
+                    AddContextAction(&set, CONTEXT_ACTION_SELL_CARGO,
+                        TextFormat("Sell 1 %s", CcGoodName((CcGood)cargo_good)));
+                    if (set.count > slot) {
+                        set.items[slot].good = (CcGood)cargo_good;
+                        set.items[slot].amount = -1;
+                    }
+                }
+                for (int32_t cargo_good = 0;
+                     cargo_good < CC_GOOD_COUNT; ++cargo_good) {
+                    if (!CcLocalShopBuys(shop, (CcGood)cargo_good) ||
+                        CcLocalShopSells(shop, (CcGood)cargo_good) ||
+                        sim->player.cargo[cargo_good] <= 0) continue;
+                    int32_t slot = set.count;
+                    AddContextAction(&set, CONTEXT_ACTION_SELL_CARGO,
+                        TextFormat("Deliver 1 %s", CcGoodName((CcGood)cargo_good)));
+                    if (set.count > slot) {
+                        set.items[slot].good = (CcGood)cargo_good;
+                        set.items[slot].amount = -1;
+                    }
                 }
             }
         }
@@ -5445,7 +5606,7 @@ static ContextActionSet BuildContextActions(
             AddContextAction(&set, CONTEXT_ACTION_OPEN_PROMISES,
                              "Read town board");
             AddContextAction(&set, CONTEXT_ACTION_ENTER_MARKET,
-                             "Enter market hall");
+                             "Enter grain merchant");
             AddRestTeamAction(&set, sim);
             if (OutgoingRouteCount(sim) > 0) {
                 AddContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD,
@@ -5454,6 +5615,20 @@ static ContextActionSet BuildContextActions(
         }
         if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         return set;
+    }
+
+    if (!local->adventure_ui && local->site_kind == CC_LOCAL_SITE_NONE) {
+        const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(town);
+        const CcLocalShop *shop = LocalShopNearPosition(profile, position, 1.7f);
+        if (shop != NULL) {
+            int32_t slot = set.count;
+            AddDetailedContextAction(&set, CONTEXT_ACTION_ENTER_MARKET,
+                TextFormat("Enter %s", shop->name), "F", "LOCAL SHOP",
+                town != NULL && !CcSettlementIsAbandoned(town), false);
+            if (set.count > slot) set.items[slot].target.object =
+                (uint64_t)shop->building_index + 1U;
+        }
     }
 
     if (local->course.situation_witness_active &&
@@ -5775,8 +5950,6 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
     int32_t shown = ContextCardCount(&actions, first);
     if (actions.count > shown) {
         Rectangle previous = ContextPageBounds(false), next = ContextPageBounds(true);
-        ClientTouchAdd(previous, "Previous objects", true, false);
-        ClientTouchAdd(next, "More objects", true, false);
         DrawPanel(previous, PANEL_DEEP); DrawPanel(next, PANEL_DEEP);
         CcOverlayDrawText("<", (int)previous.x + 16, (int)previous.y + 22, 18, CC_GOLD);
         CcOverlayDrawText(">", (int)next.x + 16, (int)next.y + 22, 18, CC_GOLD);
@@ -5888,6 +6061,12 @@ static void DrawContextActionTray(const CcSim *sim, LocalState *local,
             draw_detail(detail, (int)bounds.x + 10, (int)bounds.y + 56,
                 detail_size, action->enabled ? MUTED : Fade(MUTED, 0.46f));
         }
+    }
+    /* Cards come first in the touch list, so their order stays steady
+       when paging arrows appear or disappear. */
+    if (actions.count > shown) {
+        ClientTouchAdd(ContextPageBounds(false), "Previous objects", true, false);
+        ClientTouchAdd(ContextPageBounds(true), "More objects", true, false);
     }
 }
 
@@ -6841,6 +7020,11 @@ static int32_t CarriagePassengerCount(const CcSim *sim)
 static bool DrawEconomicGoodIcon(Texture2D atlas, CcGood good,
                                  Rectangle destination, Color tint)
 {
+    /* The atlas has no raw stone cell yet. Show darker cut stone. */
+    if (good == CC_GOOD_RAW_STONE) {
+        good = CC_GOOD_STONE;
+        tint = ColorBrightness(tint, -0.3f);
+    }
     if (atlas.id == 0U || good < 0 || good >= CC_GOOD_COUNT ||
         atlas.width < ((int32_t)good + 1) * 32 || atlas.height < 32) {
         return false;
@@ -7332,6 +7516,7 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     if (journal != NULL) {
         switch (command.kind) {
             case CC_COMMAND_TRADE:
+            case CC_COMMAND_TRADE_SUPPLY:
             case CC_COMMAND_BUY_MAP:
             case CC_COMMAND_SELL_MAP:
             case CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE:
@@ -7342,11 +7527,14 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
             default: break;
         }
     }
-    if (command.kind == CC_COMMAND_TRADE) {
+    if (command.kind == CC_COMMAND_TRADE ||
+        command.kind == CC_COMMAND_TRADE_SUPPLY) {
         CcMoney change = sim->player.coins - coins_before;
         (void)snprintf(message, message_capacity,
             "%s %d %s. %s%" PRId64 " crowns. Purse: %" PRId64 ".%s",
-            command.amount > 0 ? "Bought" : "Sold", abs(command.amount),
+            command.amount > 0 ? "Bought" :
+                command.kind == CC_COMMAND_TRADE_SUPPLY ? "Delivered" : "Sold",
+            abs(command.amount),
             CcGoodName(command.good), change >= 0 ? "+" : "", change,
             sim->player.coins,
             promise_before != 0U && CcSimAcceptedSituation(sim) == NULL ?
@@ -9970,7 +10158,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (local->adventure_ui && *view == VIEW_LOCAL &&
         (context_action == CONTEXT_ACTION_OPEN_TRADE || (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_interact : KEY_F) && local->open_world_market))) {
         local->trade_quantity = 1;
-        local->trade_good = ContextCargoGood(sim);
+        local->trade_good = LocalShopFirstGood(LocalActiveShop(sim, local));
         local->trade_mode = 0;
         local->trade_confirmed = false;
         local->trade_quote_presented = false;
@@ -11220,23 +11408,45 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                         context_action == CONTEXT_ACTION_LEAVE_MARKET,
                     GridDistance(position, INTERIOR_EXIT), 1.25f)) {
                 local->market_interior = false;
+                const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+                    CcSimSettlement(sim, sim->player.location_id));
+                const CcLocalShop *shop = CcLocalShopForBuilding(profile,
+                    local->shop_building_index);
                 if (local->open_world) {
                     BindOpenWorldForLocalState(local);
                     PositionOpenWorldAtSettlement(sim, local);
                 } else {
+                    CcLocalLanePoint approach = shop != NULL ?
+                        CcLocalShopApproach(profile, shop) :
+                        (CcLocalLanePoint){CC_LOCAL_MARKET_X,
+                            CC_LOCAL_MARKET_Z + 1.10f};
                     RepositionHero(local,
-                                   (Vector2){CC_LOCAL_MARKET_X,
-                                             CC_LOCAL_MARKET_Z + 1.10f},
+                                   (Vector2){approach.x, approach.z},
                                    false);
                 }
+                local->shop_building_index = -1;
                 message[0] = '\0';
             } else if (!local->market_interior &&
                        local->site_kind == CC_LOCAL_SITE_NONE &&
-                       CcClientInteractionActivated(
-                           interact ||
-                               context_action == CONTEXT_ACTION_ENTER_MARKET,
-                           GridDistance(position, LOCAL_MARKET),
-                           1.30f)) {
+                       (interact || context_action == CONTEXT_ACTION_ENTER_MARKET) &&
+                       !CcSettlementIsAbandoned(CcSimSettlement(sim,
+                           sim->player.location_id)) &&
+                       LocalShopNearPosition(CcLocalPlaceProfileForSettlement(
+                           CcSimSettlement(sim, sim->player.location_id)),
+                           position, 1.7f) != NULL) {
+                const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+                    CcSimSettlement(sim, sim->player.location_id));
+                const CcLocalShop *shop = LocalShopNearPosition(profile,
+                    position, 1.7f);
+                if (context_action == CONTEXT_ACTION_ENTER_MARKET &&
+                    pressed_action.target.object != 0U)
+                    shop = CcLocalShopForBuilding(profile,
+                        (int32_t)pressed_action.target.object - 1);
+                if (shop == NULL) return;
+                CcLocalLanePoint approach = CcLocalShopApproach(profile, shop);
+                if (GridDistance(position, (Vector2){approach.x, approach.z}) >= 1.7f)
+                    return;
+                local->shop_building_index = shop->building_index;
                 local->market_interior = true;
                 RepositionHero(local, (Vector2){2.05f, 5.35f}, true);
                 message[0] = '\0';
@@ -11280,10 +11490,17 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             (local->market_interior &&
              GridDistance(position, INTERIOR_COUNTER) < 2.25f);
         if (can_trade && !local->adventure_ui) {
-            CcGood context_good = ContextCargoGood(sim);
+            const CcLocalShop *shop = LocalActiveShop(sim, local);
+            const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
+            if (town == NULL || CcSettlementIsAbandoned(town) || shop == NULL)
+                return;
+            const CcSituation *accepted = CcSimAcceptedSituation(sim);
+            CcGood context_good = accepted != NULL ? accepted->good : CC_GOOD_FOOD;
             if (context_action == CONTEXT_ACTION_DELIVER_CARGO) {
-                const CcSituation *accepted = CcSimAcceptedSituation(sim);
-                if (accepted != NULL) {
+                if (accepted != NULL && shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT &&
+                    accepted->target_id == sim->player.location_id &&
+                    (accepted->kind == CC_SITUATION_RELIEF_DELIVERY ||
+                     accepted->kind == CC_SITUATION_BLACK_MARKET_DELIVERY)) {
                     int32_t amount = accepted->quantity - accepted->progress;
                     if (amount < 1) amount = 1;
                     if (amount > sim->player.cargo[context_good]) {
@@ -11297,20 +11514,35 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                     (void)ApplyCommand(*journal, sim, trade, message,
                                        message_capacity);
                 }
-            } else if (context_action == CONTEXT_ACTION_BUY_CARGO) {
-                CcCommand trade = {
-                    .kind = CC_COMMAND_TRADE,
+            } else if (context_action == CONTEXT_ACTION_BUY_CARGO ||
+                       context_action == CONTEXT_ACTION_SELL_CARGO) {
+                bool buying = pressed_action.amount > 0;
+                if ((buying && CcLocalShopSells(shop, pressed_action.good)) ||
+                    (!buying && CcLocalShopBuys(shop, pressed_action.good))) {
+                  bool supply = buying ?
+                      LocalShopSupplySource(shop, pressed_action.good) :
+                      LocalShopSupplyBuyer(shop, pressed_action.good);
+                  CcCommand trade = {
+                    .kind = supply ? CC_COMMAND_TRADE_SUPPLY : CC_COMMAND_TRADE,
+                    .target_id = supply ? town->id : 0U,
                     .good = pressed_action.good,
                     .amount = pressed_action.amount
                 };
                 (void)ApplyCommand(*journal, sim, trade, message,
                                    message_capacity);
+                }
             }
             bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
             for (int32_t good = 0; good < 9; ++good) {
                 if (!ClientKeyPressed(KEY_ONE + good)) continue;
+                if (shift ? !CcLocalShopBuys(shop, (CcGood)good) :
+                    !CcLocalShopSells(shop, (CcGood)good)) continue;
+                bool supply = shift ?
+                    LocalShopSupplyBuyer(shop, (CcGood)good) :
+                    LocalShopSupplySource(shop, (CcGood)good);
                 CcCommand trade = {
-                    .kind = CC_COMMAND_TRADE,
+                    .kind = supply ? CC_COMMAND_TRADE_SUPPLY : CC_COMMAND_TRADE,
+                    .target_id = supply ? town->id : 0U,
                     .good = (CcGood)good,
                     .amount = shift ? -1 : 1
                 };
@@ -11891,7 +12123,10 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
         const CcLocalPlaceProfile *place = CcLocalPlaceProfileForSettlement(
             CcSimSettlement(sim, sim->player.location_id));
         int32_t quantity = quote.command.amount < 0 ? -quote.command.amount : quote.command.amount;
-        has_speech = CcSpeechTrade(sim, place->keeper_name, quote.command.good,
+        const CcLocalShop *shop = LocalActiveShop(sim, local);
+        has_speech = CcSpeechTrade(sim,
+            shop != NULL ? shop->keeper_name : place->keeper_name,
+            quote.command.good,
             quantity, quote.total, local->trade_mode, quote.reason, &speech);
     }
     char voice_path[768];
@@ -12890,8 +13125,8 @@ int main(int argc, char **argv)
                                   &local.convoy, clock,
                                   local_target, local_bounds);
             } else if (local.market_interior) {
-                CcLocalDrawInterior3D(&sim, &local.agent, clock,
-                                      local_target, local_bounds);
+                CcLocalDrawShopInterior3D(&sim, &local.agent, clock,
+                    local_target, local_bounds, LocalActiveShop(&sim, &local));
             } else {
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course,
                                     view == VIEW_CHARACTER,

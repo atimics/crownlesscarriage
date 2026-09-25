@@ -436,12 +436,12 @@ class CoopTests(unittest.TestCase):
 
     def test_player_session_versions(self):
         context = self.worlds.view(self.id, self.a)['session_context']
-        for version in (7, 8, 9):
+        for version in (7, 8, 9, 10):
             saved = dict(sequence=version, context=context,
                          session=f'CROWNLESS_SESSION {version}\nlaunch test\n')
             self.worlds.save_session(self.id, self.a, saved)
             self.assertEqual(self.worlds.view(self.id, self.a, campaign=True)['session'], saved)
-        for version in (6, 10):
+        for version in (6, 11):
             with self.assertRaises(ApiError):
                 self.worlds.save_session(self.id, self.a, dict(sequence=10, context=context,
                     session=f'CROWNLESS_SESSION {version}\nlaunch test\n'))

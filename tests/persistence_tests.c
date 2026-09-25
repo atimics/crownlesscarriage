@@ -1810,6 +1810,15 @@ static void CheckSchema25Compatibility(char *error, size_t error_capacity)
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
                 CC_CHECK(restored.settlements[settlement]
                              .reserve_target[good] > 0);
+            } else if (good == CC_GOOD_RAW_STONE) {
+                bool mine = restored.settlements[settlement].function ==
+                    CC_SETTLEMENT_MINING;
+                CC_CHECK(restored.settlements[settlement].stock[good] ==
+                         (mine ? 24 : 0));
+                CC_CHECK(restored.settlements[settlement].reserve_target[good] ==
+                         (mine ? 8 : 0));
+                CC_CHECK(restored.settlements[settlement].production[good] ==
+                         (mine ? 6 : 0));
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
                 CC_CHECK(restored.settlements[settlement]
@@ -1896,6 +1905,10 @@ static void CheckSchema26Compatibility(char *error, size_t error_capacity)
                 CC_CHECK(restored.settlements[settlement].stock[good] > 0);
                 CC_CHECK(restored.settlements[settlement]
                              .reserve_target[good] > 0);
+            } else if (good == CC_GOOD_RAW_STONE) {
+                CC_CHECK(restored.settlements[settlement].stock[good] ==
+                         (restored.settlements[settlement].function ==
+                          CC_SETTLEMENT_MINING ? 24 : 0));
             } else {
                 CC_CHECK(restored.settlements[settlement].stock[good] == 0);
             }
@@ -2441,7 +2454,7 @@ static void CheckWoodPaperJournalMigration(char *error,
 
     /* Captured with main 9ab3a56 before changing the paper recipe. */
     CcSim legacy_view = restored;
-    legacy_view.schema_version = 36U;
+    CcTestStampLegacyGoods(&legacy_view, 36U);
     legacy_view.next_entity_serial -=
         (uint64_t)restored.kingdom_count + CensusIssuedIds(&restored);
     legacy_view.settlements[1].stock[CC_GOOD_WOOD] -= 22;
@@ -3045,6 +3058,7 @@ static void CheckSchema41Upgrade(void)
     CC_CHECK(restored->schema_version == CC_SIM_SCHEMA_VERSION);
     legacy->schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(legacy);
+    CcSimInitializeSupplyEconomy(legacy);
     CcCensusInit(legacy);
     /* The new active-state clock starts at the migration date. */
     for (int32_t i = 0; i < legacy->character_count; ++i) {
@@ -3155,6 +3169,12 @@ static void CheckSchema110RoadBlockJournalUpgrade(char *error,
     CC_CHECK(restored.player.coins == 31);
     CC_CHECK(restored.bandits[0].route_id == restored.journey.route_id);
     CC_CHECK(restored.bandits[0].coins == 0);
+    int32_t empty_outputs = 0;
+    for (int32_t site = 0; site < restored.road_site_count; ++site) {
+        if (restored.road_sites[site].output_good == CC_GOOD_COUNT)
+            empty_outputs += 1;
+    }
+    CC_CHECK(empty_outputs > 0);
     CC_CHECK(CcTestBeforeCalendarHash(&restored) == UINT64_C(10350592686180817433));
     const char *copy = "schema110-road-block-upgraded.ccsave";
     RemoveDatabase(copy);
@@ -3629,7 +3649,7 @@ static void CheckShippedTravellerSave(void)
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
-    restored.schema_version = 60U;
+    CcTestStampLegacyGoods(&restored, 60U);
     CC_CHECK(LegacyHashBeforeCensusSerial(&restored) ==
              UINT64_C(0xaf82f2230153da41));
     restored.next_entity_serial -= CensusIssuedIds(&restored);

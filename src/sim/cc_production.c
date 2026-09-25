@@ -123,6 +123,7 @@ int32_t CcEconomyEffectiveProduction(const CcSim *sim,
                                    int32_t index, CcGood good)
 {
     if (CcSettlementIsAbandoned(settlement)) return 0;
+    if (good == CC_GOOD_RAW_STONE && sim->schema_version < 119U) return 0;
     bool legacy_food_economy = sim->schema_version < 29U;
     int32_t production = settlement->production[good];
     CcGood staple = legacy_food_economy ? CC_GOOD_BREAD : CC_GOOD_WHEAT;
@@ -171,7 +172,7 @@ int32_t CcEconomyEffectiveProduction(const CcSim *sim,
     if (good == CC_GOOD_WOOD && settlement->stock[CC_GOOD_TOOLS] <= 0) {
         production = MaximumI32(1, production / 4);
     }
-    if (good == CC_GOOD_STONE) {
+    if (good == CC_GOOD_STONE || good == CC_GOOD_RAW_STONE) {
         if (!CcSettlementHasService(settlement, CC_SERVICE_MINE)) return 0;
         if (settlement->stock[CC_GOOD_TOOLS] <= 0) {
             production = MaximumI32(1, production / 4);
@@ -179,7 +180,8 @@ int32_t CcEconomyEffectiveProduction(const CcSim *sim,
     }
     if (legacy_food_economy && good >= CC_GOOD_TOOLS) return 0;
     if (good != CC_GOOD_WHEAT && good != CC_GOOD_IRON &&
-        good != CC_GOOD_WOOD && good != CC_GOOD_STONE) return 0;
+        good != CC_GOOD_WOOD && good != CC_GOOD_STONE &&
+        good != CC_GOOD_RAW_STONE) return 0;
     return MaximumI32(0, production);
 }
 

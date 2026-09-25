@@ -21,12 +21,12 @@ static CcCapturePresentation CcCapturePresentationFor(
         .context_actions = true, .commands = true,
     };
 #if defined(CC_CLIENT_SELF_TESTS)
-    result.adventure_ui |= request->capture_ux || request->capture_road_fork ||
+    result.adventure_ui |= request->capture_shop || request->capture_ux || request->capture_road_fork ||
         request->capture_road_carriage ||
         request->capture_road || request->capture_parley ||
         request->capture_mine_road || request->capture_mine_road_reverse;
     result.navigation |= request->capture_ux;
-    result.accept_input = !(request->capture_ux || request->capture_road_fork);
+    result.accept_input = !(request->capture_shop || request->capture_ux || request->capture_road_fork);
     result.update_convoy = !(request->capture_road_arrival || request->capture_storybook);
     result.local_panels = !(request->capture_npc_review || request->capture_heraldry);
     result.combat_status = !request->capture_gameplay_reel;
@@ -49,6 +49,22 @@ static bool CcCaptureActive(const CcCaptureRequest *request) { return request->c
 static bool CcCaptureConfigureWindow(const CcCaptureRequest *request,
     int argc, char **argv, CcCaptureWindow *window)
 {
+    if (request->capture_shop && argc == 7) {
+        char *width_end = NULL;
+        char *height_end = NULL;
+        long width = strtol(argv[5], &width_end, 10);
+        long height = strtol(argv[6], &height_end, 10);
+        if (width_end == argv[5] || *width_end != '\0' ||
+            height_end == argv[6] || *height_end != '\0' ||
+            width < 342 || width > 1920 || height < 560 || height > 1080) {
+            (void)fprintf(stderr, "Shop capture size must be 342..1920 by 560..1080.\n");
+            return false;
+        }
+        window->width = (int32_t)width;
+        window->height = (int32_t)height;
+        window->minimum_width = (int32_t)width;
+        window->minimum_height = (int32_t)height;
+    }
     if (request->capture_mine_yard && argc >= 5) {
         char *width_end = NULL;
         char *height_end = NULL;

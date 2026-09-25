@@ -150,7 +150,7 @@ static void CheckSuccessionSaves(void)
         CcSim sim;
         CcSim restored;
         CcSimInit(&sim, UINT32_C(0x50cc0e5));
-        sim.schema_version = version;
+        CcTestStampLegacyGoods(&sim, version);
         if (version < 103U) {
             sim.mine = (CcMineVisit){0};
             CcCustodyInit(&sim.custody);
@@ -170,7 +170,7 @@ static void CheckSuccessionSaves(void)
         CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
         CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
         CC_CHECK(restored.kingdoms[slot].ruler_character_id == winner_id);
-        sim.schema_version = CC_SIM_SCHEMA_VERSION;
+        CcTestAdoptCurrentGoods(&sim, version);
         if (version < 103U) {
             sim.custody.capacity = CC_CUSTODY_CAPACITY;
             CcMineInitializeLoad(&sim);
@@ -187,7 +187,7 @@ static void CheckSuccessionSaves(void)
                 sim.characters[i].introduced_day = 0;
             }
         }
-        if (version < 114U) CcCensusInit(&sim);
+        if (version < 117U) CcCensusInit(&sim);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }

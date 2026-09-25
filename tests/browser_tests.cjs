@@ -717,9 +717,12 @@ async function main() {
       await controls.button('Play').tap();
       await mobile.waitForFunction(() => Module.crownlessScreen === 'playing');
       assert.equal((await mobile.evaluate(() => window.touchTaps)).length, 1);
-      const nearby = (await controls.buttons()).filter(button => button.y >= 590);
+      // Nine town shops page through four cards, so paging arrows sit beside them.
+      const paging = /^(More objects|Previous objects)$/;
+      const nearby = (await controls.buttons()).filter(button =>
+        button.y >= 590 && !paging.test(button.label));
       assert.equal(nearby.length, 4, JSON.stringify(await controls.buttons()));
-      assert((await controls.buttons()).every(button => !/More objects|Previous objects|Fast forward|Press on/.test(button.label)));
+      assert((await controls.buttons()).every(button => !/Fast forward|Press on/.test(button.label)));
       const firstTownAction = await mobile.evaluate(() => {
         const panel = document.querySelector('#touch-actions');
         const action = panel.querySelector('.touch-buttons button');
@@ -828,7 +831,9 @@ async function main() {
               navigation.z-previous.z) < 0.25) stillIntervals++;
           else stillIntervals = 0;
           if (taps === 0) {
-            const firstCard = (await controls.buttons())[0];
+            // Paging arrows come before the cards in the touch frame.
+            const firstCard = (await controls.buttons()).find(button =>
+              !/^(Previous objects|More objects)$/.test(button.label));
             assert.equal(firstCard.label, action,
               `Crate ${crate} relief action must stay first as nearby town cards change: ` +
               JSON.stringify(await controls.buttons()));
@@ -1066,7 +1071,7 @@ async function main() {
       assert(roadJourney.driveChoices > 0, JSON.stringify(roadJourney));
       assert(roadJourney.roadsideStops > 0, JSON.stringify(roadJourney));
       assert(roadJourney.bridgePaid, JSON.stringify(roadJourney));
-      await controls.button('Deliver promise Company store').tap();
+      await controls.button('Deliver promise Grain merchant').tap();
       const storeApproach = [];
       for (let step = 0; step < 18; ++step) {
         if (await controls.button('Deliver promise Oren — Company clerk').read())

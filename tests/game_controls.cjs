@@ -41,6 +41,38 @@ function gameControls(page, touch = false) {
     return {click, tap: click, clickIfVisible, waitFor, read,
       isDisabled: async () => !(await read()).enabled};
   }
-  return {button, buttons, reading: () => page.evaluate(() => Module.crownlessTouchFrame.reading)};
+  // Page the context tray until a card appears. Wait for each redraw before
+  // reading: a slow renderer can still show the previous page, and reading it
+  // again would tap past the card or off the last page.
+  async function turnPage(label) {
+    const revision = await page.evaluate(() => Module.crownlessTouchFrame.revision);
+    await button(label).tap();
+    await page.waitForFunction(previous =>
+      Module.crownlessTouchFrame.revision !== previous, revision, {timeout: 15000});
+  }
+  // The tray pages wrap around, so paging forward reaches every page. A frame
+  // read just after a page turn can briefly lack both the card and the arrows,
+  // so wait for one of them before deciding.
+  async function trayState(name) {
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      if (await button(name).read()) return 'found';
+      if (await button('More objects').read()) return 'more';
+      if (Date.now() >= deadline) return 'none';
+      await page.waitForTimeout(100);
+    }
+  }
+  async function pageTo(name, maxPages = 12) {
+    for (let attempt = 0; attempt < maxPages; ++attempt) {
+      const state = await trayState(name);
+      if (state === 'found') return true;
+      if (state === 'none') break;
+      await turnPage('More objects');
+    }
+    if (await button(name).read()) return true;
+    console.error(`pageTo(${name}) gave up; tray: ${JSON.stringify((await buttons()).map(item => item.label))}`);
+    return false;
+  }
+  return {button, buttons, pageTo, reading: () => page.evaluate(() => Module.crownlessTouchFrame.reading)};
 }
 module.exports = {gameControls};

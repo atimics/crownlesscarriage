@@ -692,6 +692,18 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
 {
     uint32_t legacy_version = sim->schema_version;
     if (!UpgradeLegacyRuntimeSchema(sim, error, error_capacity)) return false;
+    if (legacy_version < 119U) {
+        /* The old goods count was also the road site's "no output" value.
+         * Convert saved sentinels after historical hash and journal checks. */
+        for (int32_t site = 0; site < sim->road_site_count; ++site) {
+            CcRoadSite *road_site = &sim->road_sites[site];
+            if (road_site->input_good == CC_GOOD_RAW_STONE)
+                road_site->input_good = CC_GOOD_COUNT;
+            if (road_site->output_good == CC_GOOD_RAW_STONE)
+                road_site->output_good = CC_GOOD_COUNT;
+        }
+        CcSimInitializeSupplyEconomy(sim);
+    }
     if (legacy_version < 109U) UpgradeReliefLoading(sim);
     if (legacy_version < 99U) CcCustodyInit(&sim->custody);
     if (legacy_version < 101U) {

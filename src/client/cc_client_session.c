@@ -177,6 +177,8 @@ static bool ClientSessionValidateBase(const CcClientSession *session)
            fabsf(session->position_z) <= 100000.0f &&
            fabsf(session->facing_yaw) <= 100000.0f &&
            session->opening_step <= 2U &&
+           session->shop_building_index >= 0 &&
+           session->shop_building_index <= 31 &&
            SessionFloatInRange(session->site_travel_progress, 0.0f, 1.0f);
 }
 
@@ -306,6 +308,7 @@ bool CcClientSessionWrite(const char *path, const CcClientSession *session,
     ok = ok && fprintf(file, "TRAVEL %d %d %.9g\n",
         session->site_travel_active ? 1 : 0, session->site_returning ? 1 : 0,
         (double)session->site_travel_progress) > 0;
+    ok = ok && fprintf(file, "SHOP %d\n", session->shop_building_index) > 0;
     ok = ok && fflush(file) == 0;
 #if !defined(__EMSCRIPTEN__) && \
     (defined(__APPLE__) || defined(__linux__) || defined(__unix__))
@@ -463,7 +466,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
     int header_fields = fscanf(file, "%31s %u", marker, &version);
     int body_fields = 0;
     if (header_fields == 2 &&
-        (version == CC_CLIENT_SESSION_VERSION || version == 8U || version == 7U || version == 6U || version == 5U)) {
+        (version == CC_CLIENT_SESSION_VERSION || version == 9U || version == 8U || version == 7U || version == 6U || version == 5U)) {
         body_fields = fscanf(file, "%u %llu %d %d %llu %f %f %f %u %d",
                              &world_seed, &location_id, &scene,
                              &coordinate_space, &route_id, &position_x,
@@ -499,7 +502,7 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         .road_encounter.mode =
             (CcClientRoadEncounterMode)road_encounter_mode
     };
-    bool current_payload = (version == CC_CLIENT_SESSION_VERSION || version == 8U || version == 7U || version == 6U) &&
+    bool current_payload = (version == CC_CLIENT_SESSION_VERSION || version == 9U || version == 8U || version == 7U || version == 6U) &&
                            body_fields == 10 &&
                            ReadAthleticProfile(file, &loaded.athletics) &&
                            ReadRoadEncounter(file, &loaded.road_encounter,(uint32_t)version);
@@ -512,6 +515,14 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
             (active == 0 || active == 1) && (returning == 0 || returning == 1);
         loaded.site_travel_active = active == 1;
         loaded.site_returning = returning == 1;
+    }
+    if (current_payload && version >= 10U) {
+        char shop_marker[16] = "";
+        current_payload = fscanf(file, "%15s %d", shop_marker,
+            &loaded.shop_building_index) == 2 &&
+            strcmp(shop_marker, "SHOP") == 0;
+    } else if (current_payload && loaded.scene == CC_CLIENT_SESSION_MARKET) {
+        loaded.shop_building_index = 2;
     }
     if (current_payload) loaded.version = CC_CLIENT_SESSION_VERSION;
     bool version_five_payload = version == 5U && body_fields == 10 &&
@@ -533,6 +544,8 @@ bool CcClientSessionRead(const char *path, CcClientSession *session,
         }
         if (version_one) loaded.opening_step = 2U;
     }
+    if (version < 10U && loaded.scene == CC_CLIENT_SESSION_MARKET)
+        loaded.shop_building_index = 2;
     if (version < 8U && scene > CC_CLIENT_SESSION_DRAGON_SITE) current_payload = false;
     bool valid = current_payload || version_five_payload || version_four ?
         CcClientSessionValidate(&loaded) : ClientSessionValidateBase(&loaded);

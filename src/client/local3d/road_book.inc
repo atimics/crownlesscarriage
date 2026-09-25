@@ -2317,7 +2317,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     camera = CcLocalConversationCameraInternal(
         camera, camera_subject, conversation_partner,
         conversation_partner != NULL, clock, true, target.texture.height);
-    camera = StreetCameraClearVolume(camera);
+    camera = StreetCameraClearWalkingStation(camera);
     if (camera_subject != NULL && !arrival_pan &&
         conversation_partner == NULL) {
         camera = GroundStreetFrameHero(
@@ -2423,7 +2423,6 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawWorldBuildings(place, town_conditions, kingdom, scenery_focus, profile, camera,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
-    WorldBuilding primary_building = ActivePrimaryBuilding();
     DrawCastle(sim, place, kingdom, profile, scenery_focus, camera,
                foreground_reveal_world,
                target.texture.width, target.texture.height, clock);
@@ -2671,6 +2670,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                                    target.texture.height);
     }
 
+    WorldBuilding primary_building = ActivePrimaryBuilding();
     char witness_label[96];
     /* Keep four places for journey, witness and lair labels below. */
     enum { LOCAL_LABEL_CAPACITY = 24, LOCAL_LABEL_DETAIL_LIMIT = LOCAL_LABEL_CAPACITY - 4 };
@@ -2696,16 +2696,19 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                  signs[sign].z}, signs[sign].name, WORLD_TEAL};
         }
     }
-    char primary_hall_label[96];
-    (void)snprintf(primary_hall_label, sizeof(primary_hall_label),
-                   "%s  /  approach, then press F", profile->primary_hall);
-    if (AgentNearLabel(agent, 50.0f, 21.0f, 8.0f)) {
-        labels[count++] = (WorldLabel){{50.0f,
-                                        TerrainFootprintHeight(
-                                            primary_building.footprint) +
-                                            primary_building.height + 0.42f,
-                                        21.0f},
-                                       primary_hall_label, WORLD_GOLD};
+    for (int32_t kind = 0; kind < CC_LOCAL_SHOP_COUNT &&
+                           count < LOCAL_LABEL_DETAIL_LIMIT; ++kind) {
+        const CcLocalShop *shop = CcLocalShopAt(profile, (CcLocalShopKind)kind);
+        if (shop == NULL) continue;
+        CcLocalLanePoint door = CcLocalShopDoor(profile, shop);
+        if (!AgentNearLabel(agent, door.x, door.z, 7.0f)) continue;
+        const CcLocalPlaceBuilding *front = &profile->building[shop->building_index];
+        Rectangle footprint = shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT ?
+            primary_building.footprint :
+            (Rectangle){front->x, front->z, front->width, front->depth};
+        labels[count++] = (WorldLabel){{door.x,
+            TerrainFootprintHeight(footprint) + fminf(front->height * 0.72f, 3.45f) + 0.48f,
+            door.z}, shop->name, ShopSignColor(shop->kind)};
     }
     bool carriage_targeted = agent != NULL &&
         agent->world_target == CC_LOCAL_WORLD_TARGET_CARRIAGE;
@@ -2932,11 +2935,53 @@ static Color InteriorWallColor(const CcLocalPlaceProfile *profile,
 }
 
 static void DrawInteriorServiceMark(const CcLocalPlaceProfile *profile,
-                                    Color accent)
+                                    const CcLocalShop *shop, Color accent)
 {
     if (profile == NULL) return;
     const float z = 0.586f;
     const float x = 6.55f;
+    if (shop != NULL) {
+        switch (shop->kind) {
+            case CC_LOCAL_SHOP_BAKERY:
+                for (int32_t loaf = -1; loaf <= 1; ++loaf) {
+                    DrawSmallSphere((Vector3){x + (float)loaf * 0.36f,
+                                               1.48f, z}, 0.17f, accent);
+                }
+                break;
+            case CC_LOCAL_SHOP_STONECUTTER:
+                DrawBox((Vector3){x - 0.27f, 1.38f, z},
+                        (Vector3){0.48f, 0.35f, 0.05f}, accent);
+                DrawBox((Vector3){x + 0.26f, 1.58f, z},
+                        (Vector3){0.48f, 0.35f, 0.05f}, accent);
+                break;
+            case CC_LOCAL_SHOP_SMITH:
+                DrawBox((Vector3){x, 1.51f, z},
+                        (Vector3){1.05f, 0.20f, 0.05f}, accent);
+                DrawBox((Vector3){x, 1.25f, z},
+                        (Vector3){0.22f, 0.44f, 0.05f}, accent);
+                break;
+            case CC_LOCAL_SHOP_GRAIN_MERCHANT:
+                for (int32_t stalk = -1; stalk <= 1; ++stalk) {
+                    DrawBox((Vector3){x + (float)stalk * 0.28f, 1.48f, z},
+                            (Vector3){0.10f, 0.80f, 0.05f}, accent);
+                }
+                break;
+            case CC_LOCAL_SHOP_MINE_SUPPLIER:
+                DrawBox((Vector3){x - 0.30f, 1.33f, z},
+                        (Vector3){0.44f, 0.32f, 0.05f}, accent);
+                DrawBox((Vector3){x + 0.20f, 1.55f, z},
+                        (Vector3){0.55f, 0.48f, 0.05f}, accent);
+                break;
+            default:
+                DrawBox((Vector3){x, 1.48f, z},
+                        (Vector3){0.96f, 0.58f, 0.05f}, accent);
+                DrawBox((Vector3){x, 1.48f, z + 0.012f},
+                        (Vector3){0.58f, 0.31f, 0.06f},
+                        ShadeColor(accent, 0.72f));
+                break;
+        }
+        return;
+    }
     switch (profile->function) {
         case CC_SETTLEMENT_FARMING:
             for (int32_t stalk = -1; stalk <= 1; ++stalk) {
@@ -2998,9 +3043,10 @@ static void DrawInteriorServiceMark(const CcLocalPlaceProfile *profile,
 Vector3 CcLocalWarehouseGoodPosition(CcGood good)
 {
     if (good < 0 || good >= CC_GOOD_COUNT) return (Vector3){0};
-    return (Vector3){MARKET_SHELF_FOOTPRINT.x + 0.40f + (float)((int32_t)good % 7) * 0.57f,
-        0.23f + (float)((int32_t)good / 7) * 0.82f,
-        (int32_t)good < 7 ? 1.65f : 1.02f};
+    CcGood bay_good = good == CC_GOOD_RAW_STONE ? CC_GOOD_STONE : good;
+    return (Vector3){MARKET_SHELF_FOOTPRINT.x + 0.40f + (float)((int32_t)bay_good % 7) * 0.57f,
+        0.23f + (float)((int32_t)bay_good / 7) * 0.82f,
+        (int32_t)bay_good < 7 ? 1.65f : 1.02f};
 }
 
 int32_t CcLocalWarehousePileCountInternal(const CcSettlement *place, CcGood good)
@@ -3009,9 +3055,10 @@ int32_t CcLocalWarehousePileCountInternal(const CcSettlement *place, CcGood good
     return place->stock[good] < 3 ? place->stock[good] : 3;
 }
 
-static void DrawWarehouseStock(const CcSettlement *place)
+static void DrawWarehouseStock(const CcSettlement *place, const CcLocalShop *shop)
 {
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (shop != NULL && !CcLocalShopSells(shop, (CcGood)good)) continue;
         Vector3 bay = CcLocalWarehouseGoodPosition((CcGood)good);
         int32_t piles = CcLocalWarehousePileCountInternal(place, (CcGood)good);
         for (int32_t pile = 0; pile < piles; ++pile) {
@@ -3026,9 +3073,26 @@ static void DrawWarehouseStock(const CcSettlement *place)
     }
 }
 
-void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
-                           float clock, RenderTexture2D target,
-                           Rectangle destination)
+static void DrawSpecialistCounterStock(const CcSettlement *place,
+                                       const CcLocalShop *shop)
+{
+    if (place == NULL || shop == NULL) return;
+    int32_t shown = 0;
+    for (int32_t good = 0; good < CC_GOOD_COUNT && shown < 3; ++good) {
+        if (!CcLocalShopSells(shop, (CcGood)good) || place->stock[good] <= 0) continue;
+        DrawEconomicCargoUnit((CcGood)good, (Vector3){0},
+            (Vector3){MARKET_COUNTER_FOOTPRINT.x + 0.42f +
+                          (float)shown * 0.62f,
+                      1.00f,
+                      MARKET_COUNTER_FOOTPRINT.y + 0.36f},
+            (Vector3){0.42f, 0.32f, 0.29f}, 0.0f);
+        ++shown;
+    }
+}
+
+void CcLocalDrawShopInterior3D(const CcSim *sim, const CcLocalAgent *agent,
+                               float clock, RenderTexture2D target,
+                               Rectangle destination, const CcLocalShop *shop)
 {
     CcLocalBindPlace(sim);
     const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
@@ -3037,7 +3101,8 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForSettlement(place);
     Color kingdom = KingdomColor3D(sim, place->kingdom_id);
-    Color identity = PlaceIdentityAccent(profile, kingdom);
+    Color identity = shop != NULL ? ShopSignColor(shop->kind) :
+        PlaceIdentityAccent(profile, kingdom);
     Color wall = InteriorWallColor(profile, kingdom);
     Camera3D camera = LocalCamera(true, agent->position);
     RememberPresentedCamera(CC_LOCAL_SCENE_MARKET, camera, agent,
@@ -3094,7 +3159,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
             ShadeColor(wall, 0.66f));
     DrawBox((Vector3){6.55f, 2.21f, 0.535f},
             (Vector3){2.24f, 0.10f, 0.065f}, identity);
-    DrawInteriorServiceMark(profile, identity);
+    DrawInteriorServiceMark(profile, shop, identity);
     DrawBox((Vector3){MARKET_COUNTER_FOOTPRINT.x +
                       MARKET_COUNTER_FOOTPRINT.width * 0.5f,
                       0.46f,
@@ -3130,6 +3195,7 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
             (Vector3){MARKET_COUNTER_FOOTPRINT.width + 0.12f, 0.10f,
                       MARKET_COUNTER_FOOTPRINT.height + 0.12f},
             BlendColor(WORLD_WOOD_LIGHT, identity, 0.18f));
+    DrawSpecialistCounterStock(place, shop);
 
     float shelf_x = MARKET_SHELF_FOOTPRINT.x + MARKET_SHELF_FOOTPRINT.width * 0.5f;
     for (int32_t side = 0; side < 2; ++side) {
@@ -3162,10 +3228,12 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     DrawBox((Vector3){4.48f, 0.050f, 2.36f},
             (Vector3){1.84f, 0.045f, 0.11f}, identity);
 
-    DrawWarehouseStock(place);
-    CcNpcAppearance keeper = profile->function == CC_SETTLEMENT_MARKET ?
+    DrawWarehouseStock(place, shop);
+    CcNpcAppearance keeper = profile->function == CC_SETTLEMENT_MARKET &&
+                             (shop == NULL || shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT) ?
         CcNpcMaraAppearance() :
-        CcNpcAppearanceGenerate(profile->keeper_seed,
+        CcNpcAppearanceGenerate(profile->keeper_seed +
+                                (shop != NULL ? (uint32_t)shop->kind * 733U : 0U),
                                 InteriorKeeperRole(profile->function),
                                 identity);
     if (!CcSettlementIsAbandoned(place)) DrawNpcAppearanceFigure3D(
@@ -3183,16 +3251,19 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);
-    WorldLabel warehouse_label = {{3.22f, 2.07f, 0.73f}, "Warehouse", WORLD_GOLD};
+    WorldLabel warehouse_label = {{3.22f, 2.07f, 0.73f},
+        shop != NULL ? shop->name : "Warehouse", WORLD_GOLD};
     DrawLabels(&warehouse_label, 1, camera, destination);
     WorldLabel labels[3];
     int32_t label_count = 0;
     if (AgentNearLabel(agent, MARKET_PEOPLE[0].x,
                        MARKET_PEOPLE[0].y, 5.0f)) {
         labels[label_count++] = (WorldLabel){
-            {6.55f, 2.05f, 1.60f}, profile->keeper_name, identity};
+            {6.55f, 2.05f, 1.60f},
+            shop != NULL ? shop->keeper_name : profile->keeper_name, identity};
         labels[label_count++] = (WorldLabel){
-            {6.55f, 2.36f, 0.62f}, profile->interior_service, WORLD_MUTED};
+            {6.55f, 2.36f, 0.62f},
+            shop != NULL ? shop->service_name : profile->interior_service, WORLD_MUTED};
     }
     if (AgentNearLabel(agent, 1.55f, 6.54f, 3.5f)) {
         labels[label_count++] = (WorldLabel){
@@ -3224,6 +3295,13 @@ void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                        agent->limb_rig.control_authority * 100.0f),
             destination, 18, 18, 10, WORLD_TEAL);
     }
+}
+
+void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
+                           float clock, RenderTexture2D target,
+                           Rectangle destination)
+{
+    CcLocalDrawShopInterior3D(sim, agent, clock, target, destination, NULL);
 }
 
 void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent,

@@ -2,6 +2,7 @@
 #define CROWNLESS_LOCAL3D_H
 
 #include "client/cc_npc_appearance.h"
+#include "client/cc_local_shops.h"
 #include "client/cc_local_viewport.h"
 #include "client/cc_soundscape.h"
 #include "locomotion/cc_limb.h"
@@ -741,6 +742,9 @@ void CcLocalDrawMarket3D(const CcSim *sim, const CcLocalAgent *agent, float cloc
 void CcLocalDrawInterior3D(const CcSim *sim, const CcLocalAgent *agent,
                            float clock, RenderTexture2D target,
                            Rectangle destination);
+void CcLocalDrawShopInterior3D(const CcSim *sim, const CcLocalAgent *agent,
+                               float clock, RenderTexture2D target,
+                               Rectangle destination, const CcLocalShop *shop);
 Vector2 CcLocalMove(Vector2 current, Vector2 delta, bool market_interior);
 
 typedef struct CcLocalPresentedPerson {

@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 const {chromium} = require(process.env.CC_PLAYWRIGHT_MODULE || 'playwright');
+const {gameControls} = require('./game_controls.cjs');
 
 async function main() {
   const root = path.resolve(process.argv[2]);
@@ -80,12 +81,15 @@ async function main() {
     await page.waitForFunction(() => Module.crownlessScreen === 'playing', undefined, {timeout: 45000});
     await layout(`${stage} town`);
     const frame = await page.evaluate(() => Module.crownlessTouchFrame);
-    if (frame.scene !== 'trade' && !frame.reading.includes('Granary keeper')) {
-      await tap('Enter Granary hall', `${stage} town`);
-      await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Granary keeper'),
-        undefined, {timeout: 30000});
+    if (frame.scene !== 'trade' && !frame.buttons.some(button => /Trade .*Baker/.test(button.label))) {
+      const controls = gameControls(page, true);
+      assert(await controls.pageTo('Enter Bakery'), `${stage}: the town tray gives the bakery a page`);
+      await controls.button('Enter Bakery').tap();
+      await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
+        .some(button => /Trade .*Baker/.test(button.label)),
+      undefined, {timeout: 150000});
     }
-    if (frame.scene !== 'trade') await tap(/Trade .*Granary keeper/, `${stage} keeper`);
+    if (frame.scene !== 'trade') await tap(/Trade .*Baker/, `${stage} keeper`);
     await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
       undefined, {timeout: 30000});
     return layout(`${stage} trade`);
@@ -151,7 +155,7 @@ async function main() {
       confirmedQuote: '8 crowns for 2 Bread', receipt: 'Purse 42 to 34; cargo 0 to 2 Bread',
       reloaded: 'Purse 34; carriage holds 2 Bread'
     }, null, 2) + '\n');
-    console.log('Landscape touch action panel, Granary trade, save, and reload passed at 844x390');
+    console.log('Landscape touch action panel, Bakery trade, save, and reload passed at 844x390');
   } finally {
     await context.close();
     await browser.close();

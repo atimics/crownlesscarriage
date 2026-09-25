@@ -86,6 +86,7 @@ static int RunOvenCourtInputRegression(void)
     local.trade_presented_total = quote.total;
     local.trade_presented_reward = quote.reward;
     local.trade_presented_promise_id = quote.promise_id;
+    local.trade_presented_shop_building_index = local.shop_building_index;
     CcMoney coins = CcSimTrackedGold(&sim);
     int32_t wheat = CcSimTrackedGood(&sim, CC_GOOD_WHEAT);
     OVEN_KEY(KEY_ENTER);
