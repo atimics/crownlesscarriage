@@ -412,7 +412,8 @@ typedef struct HeardFrom {
     int32_t confidence;
     bool witnessed;
     bool named;
-    char who[CC_GATE_VOICE_CLAUSE_CAPACITY];
+    /* "Tamsin Reed of Thornford" at most: two names and a joining word. */
+    char who[2 * CC_NAME_CAPACITY + 8];
 } HeardFrom;
 
 /* Add the last story clause with its hedge and, when there is one, who said
@@ -495,7 +496,10 @@ static bool RenderEventFirst(const CcCoreAccount *account, const CcGateVoiceFact
         bool first1 = strncmp(variants[1], lead, length) == 0;
         if (!first0 && first1) pick = 1;
     }
-    (void)snprintf(text, capacity, "%s", variants[pick]);
+    size_t length = strlen(variants[pick]);
+    if (length >= capacity) length = capacity - 1U;
+    memcpy(text, variants[pick], length);
+    text[length] = '\0';
     return true;
 }
 
