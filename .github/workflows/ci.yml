@@ -139,6 +139,37 @@ jobs:
       - name: Validate style pack manifests
         run: python3 tools/validate_style_packs.py
 
+  native-tests:
+    name: Native test suite (headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite development files
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Configure
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCC_BUILD_CLIENT=OFF
+          -DCC_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # The matrix below re-runs this same non-client suite (plus the full
+  # client/graphics suite in the `client` job) on every release tag, across
+  # both build types and operating systems, as a release-verification pass.
+  # `native-tests` above is the everyday PR gate: it has no test-selection
+  # regex, so every test that does not need the graphics client runs on
+  # every pull request. Tests gated behind CC_BUILD_CLIENT (client input,
+  # rendering, and browser/capture tests) are not built here; those are
+  # covered by this tag-only `headless`/`client` matrix and by the
+  # narrower, path- or regex-filtered pull_request workflows
+  # (four-town-scenes.yml, oven-court.yml, town-skies.yml,
+  # carriage-overview.yml, continuous-road-travel.yml,
+  # underroad-portability.yml, web.yml).
   headless:
     name: Headless ${{ matrix.build_type }} / ${{ matrix.os }}
     if: startsWith(github.ref, 'refs/tags/')
