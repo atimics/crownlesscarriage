@@ -1,5 +1,6 @@
 #include "client/cc_local_place.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -647,6 +648,42 @@ int main(void)
     if (CarriageRoutePlans() != 0) return 1;
     if (CanonicalRegionProfiles() != 0) return 1;
     if (StableDistinctTerrain() != 0) return 1;
+    for (int32_t town = CC_SETTLEMENT_FARMING;
+         town <= CC_SETTLEMENT_DUNGEON_TOWN; ++town) {
+        const CcLocalPlaceProfile *profile =
+            CcLocalPlaceProfileForFunction((CcSettlementFunction)town);
+        CHECK(profile->lane_count >= 8 &&
+              profile->lane_count <= CC_LOCAL_LANE_CAPACITY);
+        CHECK(profile->carriage_lane_count == 3);
+        int32_t doors = 0;
+        for (int32_t building = 0; building < profile->building_count; ++building)
+            doors += profile->building[building].door ? 1 : 0;
+        CHECK(doors >= 9);
+        CcLocalLanePoint previous = {0};
+        for (int32_t span = 0; span < profile->carriage_lane_count; ++span) {
+            const CcLocalCarriageLane *route = &profile->carriage_lane[span];
+            CHECK(route->lane >= 0 && route->lane < profile->lane_count);
+            const CcLocalLane *lane = &profile->lane[route->lane];
+            CHECK(route->end_point > 0 && route->end_point < lane->point_count);
+            CcLocalLanePoint start = lane->point[0];
+            if (span == 0) {
+                CHECK(fabsf(start.x - 96.0f) < 0.001f);
+                CHECK(fabsf(start.z - 36.0f) < 0.001f);
+            } else {
+                CHECK(hypotf(start.x - previous.x,
+                             start.z - previous.z) < 0.001f);
+            }
+            previous = lane->point[route->end_point];
+        }
+        CHECK(hypotf(previous.x - 37.4f, previous.z - 51.2f) < 0.001f);
+        for (int32_t other = CC_SETTLEMENT_FARMING; other < town; ++other) {
+            const CcLocalPlaceProfile *earlier =
+                CcLocalPlaceProfileForFunction((CcSettlementFunction)other);
+            CcLocalLanePoint a = CcLocalLaneSample(&profile->lane[0], 0.5f);
+            CcLocalLanePoint b = CcLocalLaneSample(&earlier->lane[0], 0.5f);
+            CHECK(hypotf(a.x - b.x, a.z - b.z) > 0.5f);
+        }
+    }
     (void)puts("local place profile tests passed");
     return 0;
 }

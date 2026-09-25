@@ -240,7 +240,7 @@ static void TestCurvedVillageRoads(void)
                          arrival[i].y - departure[count - 1 - i].y) < 0.001f);
         CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET,
             arrival[i].x, arrival[i].y) == CC_SOUND_STEP_DIRT);
-        if (i == 0 || i >= count - 16) continue;
+        if (i == 0) continue;
         float run = hypotf(arrival[i].x - arrival[i - 1].x,
                            arrival[i].y - arrival[i - 1].y);
         float rise = fabsf(CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y) -
@@ -252,6 +252,8 @@ static void TestCurvedVillageRoads(void)
                 CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y));
             CC_CHECK(false);
         }
+        if (arrival[i].x <= 40.25f &&
+            arrival[i].y >= 47.25f && arrival[i].y <= 55.15f) continue;
         Vector3 start = {arrival[i - 1].x,
             CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y),
             arrival[i - 1].y};
@@ -364,7 +366,8 @@ static void TestSilverwickRoadPlan(void)
             CC_CHECK(hypotf(arrival[i].x - departure[count - 1 - i].x,
                             arrival[i].y - departure[count - 1 - i].y) < 0.001f);
             if (i == 0) continue;
-            if (i < count - 16) {
+            if (!(arrival[i].x <= 40.25f &&
+                  arrival[i].y >= 47.25f && arrival[i].y <= 55.15f)) {
                 Vector3 start = {arrival[i - 1].x,
                     CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y), arrival[i - 1].y};
                 Vector3 end = {arrival[i].x,
@@ -452,7 +455,8 @@ static void TestAuthoredTownRoutes(void)
                         towns[town], rise / run, arrival[i].x, arrival[i].y);
                     CC_CHECK(false);
                 }
-                if (i >= count - 16) continue;
+                if (arrival[i].x <= 40.25f &&
+                    arrival[i].y >= 47.25f && arrival[i].y <= 55.15f) continue;
                 Vector3 start = {arrival[i - 1].x,
                     CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y),
                     arrival[i - 1].y};

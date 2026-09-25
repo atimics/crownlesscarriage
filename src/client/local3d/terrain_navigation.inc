@@ -930,10 +930,9 @@ static float TerrainTownLaneHeight(float x, float z)
         gate = fmaxf(gate, TerrainNaturalHeight(83.5f, 34.0f)) + 0.18f;
     }
     float inward = fmaxf(84.0f - x, 0.0f);
-    float rise = active_place_function == CC_SETTLEMENT_CAPITAL ? 0.065f :
-                 active_place_function == CC_SETTLEMENT_FORTRESS ? 0.045f :
-                 0.038f;
-    return gate + inward * rise + (36.0f - z) * 0.012f;
+    float descent = active_place_function == CC_SETTLEMENT_CAPITAL ? 0.070f :
+                    0.035f;
+    return gate - inward * descent + (36.0f - z) * 0.012f;
 }
 
 static void TerrainGradeAuthoredTown(void)
@@ -952,14 +951,25 @@ static void TerrainGradeAuthoredTown(void)
             float z = (float)row * CC_TERRAIN_CELL_SIZE;
             float elevation = 0.0f;
             float inset = TerrainLaneInset(x, z, &elevation);
-            if (inset < -3.0f) continue;
-            float weight = TerrainSmooth01((inset + 3.0f) / 3.0f);
+            if (inset < -12.0f) continue;
+            float weight = TerrainSmooth01((inset + 12.0f) / 12.0f);
             int32_t slot = TerrainIndex(column, row);
             street_terrain_height[slot] +=
                 (elevation - street_terrain_height[slot]) * weight;
         }
     }
+    TerrainGradePad((Rectangle){32.0f, 43.0f, 28.0f, 25.0f},
+                    TerrainTownLaneHeight(42.0f, 55.0f), 10.0f);
     TerrainGradeBuildingPlots();
+    for (int32_t building = 0; building < ActiveWorldBuildingCount(); ++building) {
+        Rectangle plot = ActiveWorldBuildingAt(building).footprint;
+        float front_z = plot.y + plot.height + 1.55f;
+        Rectangle frontage = {plot.x - 1.25f, plot.y - 1.0f,
+                              plot.width + 2.50f, plot.height + 3.75f};
+        TerrainGradePad(frontage,
+                        TerrainTownLaneHeight(plot.x + plot.width * 0.5f,
+                                              front_z), 7.0f);
+    }
     for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
         Rectangle pad = PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
         TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.35f);
