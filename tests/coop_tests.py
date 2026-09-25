@@ -814,7 +814,7 @@ class CoopTests(unittest.TestCase):
         self.worlds.tick(now + 100)
         self.assertEqual(self.worlds.view(self.id, self.a)['state']['tick'], 30)
 
-    def test_tick_yields_to_two_players_between_three_worlds(self):
+    def test_tick_yields_to_two_players_after_skipped_worlds(self):
         worlds = [self.id, '2' * 32, '3' * 32]
         routes = {}
         for world in worlds[1:]:
@@ -838,14 +838,25 @@ class CoopTests(unittest.TestCase):
                 self.worlds.seen[(world, member)] = now
             return now
 
-        between_worlds = threading.Event()
-        resume_tick = threading.Event()
+        paused_world = '0' * 32
+        deleted_world = '0' * 31 + '1'
+        self.create_world(paused_world)
+        self.create_world(deleted_world)
+        self.worlds.owner_action(paused_world, self.a, 'pause')
+        ordered = [row['id'] for row in self.worlds.db.execute('SELECT id FROM worlds ORDER BY id')]
+        self.assertEqual(ordered[:2], [paused_world, deleted_world])
+
+        between_worlds = [threading.Event(), threading.Event()]
+        resume_tick = [threading.Event(), threading.Event()]
+        yields = [0]
         real_sleep = time.sleep
         def staged_yield(seconds):
-            if seconds == 0 and not between_worlds.is_set():
-                between_worlds.set()
-                if not resume_tick.wait(3):
-                    raise AssertionError('Player view did not run between world ticks')
+            if seconds == 0 and yields[0] < len(between_worlds):
+                index = yields[0]
+                yields[0] += 1
+                between_worlds[index].set()
+                if not resume_tick[index].wait(3):
+                    raise AssertionError('Player request did not run between world ticks')
             else:
                 real_sleep(seconds)
 
@@ -853,14 +864,21 @@ class CoopTests(unittest.TestCase):
         with patch('server.time.sleep', staged_yield):
             with ThreadPoolExecutor(max_workers=2) as workers:
                 ticking = workers.submit(self.worlds.tick, now)
-                self.assertTrue(between_worlds.wait(3))
+                self.assertTrue(between_worlds[0].wait(3),
+                                'Paused world must yield before the next world')
+                try:
+                    self.worlds.owner_action(deleted_world, self.a, 'delete')
+                finally:
+                    resume_tick[0].set()
+                self.assertTrue(between_worlds[1].wait(3),
+                                'Deleted world must yield before the next world')
                 try:
                     seen = workers.submit(self.worlds.view, self.id, self.b).result(timeout=3)
                     self.assertEqual(seen['id'], self.id)
                     self.assertFalse(ticking.done(),
                                      'Player view must finish between world ticks')
                 finally:
-                    resume_tick.set()
+                    resume_tick[1].set()
                 ticking.result(timeout=3)
 
         started = threading.Event()

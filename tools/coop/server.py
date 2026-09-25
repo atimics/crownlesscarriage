@@ -523,55 +523,57 @@ class Worlds:
         now = time.monotonic() if now is None else now
         wall = time.time() if wall_now is None else wall_now
         with self.lock:
-            world_ids = [row["id"] for row in self.db.execute("SELECT id FROM worlds")]
+            world_ids = [row["id"] for row in self.db.execute("SELECT id FROM worlds ORDER BY id")]
         for index, world in enumerate(world_ids):
-            # Let a waiting player request run between worlds. Re-read the row
-            # after reacquiring the lock because an owner may have changed it.
-            with self.lock:
-                row = self.db.execute("SELECT paused FROM worlds WHERE id=?", (world,)).fetchone()
-                if row is None:
-                    continue
-                previous = self.last_tick.get(world, now)
-                online = any(w == world and now - seen < 15 for (w, _), seen in self.seen.items())
-                ticks = min(60, int(max(0, now - previous) * 60))
-                try:
-                    with self.transaction():
-                        owed, _ = self.account_away(world, wall, paused=bool(row["paused"]))
-                        if row["paused"] or world in self.failed:
-                            self.last_tick[world] = now
-                            continue
-                        saved = self.db.execute("SELECT state,view,revision FROM worlds WHERE id=?", (world,)).fetchone()
-                        before = json.loads(saved["view"])
-                        days = min(int(owed), 8 * 365, 2147000000 - before["day"])
-                        if days > 0:
-                            with self.engine.open(saved=saved["state"]) as sim:
-                                remaining = days
-                                while remaining:
-                                    batch = min(remaining, 365)
-                                    sim.advance_away(batch)
-                                    remaining -= batch
-                                self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
-                                                (sim.save(), json.dumps(sim.snapshot()), world))
-                                self.db.execute("UPDATE away_clocks SET owed_days=owed_days-? WHERE world=?", (days, world))
-                        elif online and ticks > 0 and not self.travel_stopped(world, before) and before["journey"]["active"] and before["journey"]["phase"] in (1, 3):
-                            with self.engine.open(saved=saved["state"]) as sim:
-                                if before["journey"].get("road_site"):
-                                    ticks = max(1, ticks // 2)
-                                context = self.session_context(world, saved)
-                                scale = max((pose.get("travel_scale", 1)
-                                    for (w, member), pose in self.poses.items()
-                                    if w == world and now - pose["seen"] < 0.4
-                                    and pose["context"] == context
-                                    and not self.member_dead(world, member)), default=1)
-                                sim.advance(ticks, scale)
-                                self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1 WHERE id=?",
-                                                (sim.save(), json.dumps(sim.snapshot()), world))
-                    self.last_tick[world] = now
-                except Exception:
-                    self.failed.add(world)
-                    logging.exception("World %s needs recovery", world)
-            if index + 1 < len(world_ids):
-                time.sleep(0)
+            try:
+                # Let a waiting player request run between worlds. Re-read the row
+                # after reacquiring the lock because an owner may have changed it.
+                with self.lock:
+                    row = self.db.execute("SELECT paused FROM worlds WHERE id=?", (world,)).fetchone()
+                    if row is None:
+                        continue
+                    previous = self.last_tick.get(world, now)
+                    online = any(w == world and now - seen < 15 for (w, _), seen in self.seen.items())
+                    ticks = min(60, int(max(0, now - previous) * 60))
+                    try:
+                        with self.transaction():
+                            owed, _ = self.account_away(world, wall, paused=bool(row["paused"]))
+                            if row["paused"] or world in self.failed:
+                                self.last_tick[world] = now
+                                continue
+                            saved = self.db.execute("SELECT state,view,revision FROM worlds WHERE id=?", (world,)).fetchone()
+                            before = json.loads(saved["view"])
+                            days = min(int(owed), 8 * 365, 2147000000 - before["day"])
+                            if days > 0:
+                                with self.engine.open(saved=saved["state"]) as sim:
+                                    remaining = days
+                                    while remaining:
+                                        batch = min(remaining, 365)
+                                        sim.advance_away(batch)
+                                        remaining -= batch
+                                    self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
+                                                    (sim.save(), json.dumps(sim.snapshot()), world))
+                                    self.db.execute("UPDATE away_clocks SET owed_days=owed_days-? WHERE world=?", (days, world))
+                            elif online and ticks > 0 and not self.travel_stopped(world, before) and before["journey"]["active"] and before["journey"]["phase"] in (1, 3):
+                                with self.engine.open(saved=saved["state"]) as sim:
+                                    if before["journey"].get("road_site"):
+                                        ticks = max(1, ticks // 2)
+                                    context = self.session_context(world, saved)
+                                    scale = max((pose.get("travel_scale", 1)
+                                        for (w, member), pose in self.poses.items()
+                                        if w == world and now - pose["seen"] < 0.4
+                                        and pose["context"] == context
+                                        and not self.member_dead(world, member)), default=1)
+                                    sim.advance(ticks, scale)
+                                    self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1 WHERE id=?",
+                                                    (sim.save(), json.dumps(sim.snapshot()), world))
+                        self.last_tick[world] = now
+                    except Exception:
+                        self.failed.add(world)
+                        logging.exception("World %s needs recovery", world)
+            finally:
+                if index + 1 < len(world_ids):
+                    time.sleep(0)
 
     def delete_world(self, world, token):
         with self.lock:
