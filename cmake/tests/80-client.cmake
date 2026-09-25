@@ -173,6 +173,11 @@ if(CC_BUILD_CLIENT)
     cc_strict_warnings(terrain_tests)
     add_test(NAME seeded_hilly_terrain COMMAND terrain_tests)
 
+    add_executable(town_shop_routes_tests tests/town_shop_routes_tests.c)
+    target_link_libraries(town_shop_routes_tests PRIVATE crownless_local_renderer)
+    cc_strict_warnings(town_shop_routes_tests)
+    add_test(NAME town_shop_walks COMMAND town_shop_routes_tests)
+
 endif()
 
 if(TARGET renderer_regression_tests)

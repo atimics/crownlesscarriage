@@ -213,7 +213,7 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
     if (request->capture_road_fork || request->capture_map_case || request->capture_dragon_hoard_map) {
         sim->player.location_id = sim->settlements[1].id;
     }
-    if (request->capture_town || request->capture_town_arrival) {
+    if (request->capture_town || request->capture_town_arrival || request->capture_shop) {
         sim->player.location_id = sim->settlements[request->capture_town_index].id;
     }
     if (request->capture_town_state) {
@@ -503,7 +503,7 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
             scene->local->world_carriage.camera_heading_yaw = scene->local->world_carriage.heading_yaw;
         }
     }
-    if (request->capture && !request->capture_world && !request->capture_interior &&
+    if (request->capture && !request->capture_world && !request->capture_interior && !request->capture_shop &&
         !request->capture_walk_cycle &&
         !request->capture_jump && !request->capture_defense && !request->capture_downclimb &&
         !request->capture_navigation && !request->capture_limbs && !request->capture_dojo &&
@@ -683,6 +683,26 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
 
 static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *scene)
 {
+    if (request->capture_shop) {
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+            CcSimSettlement(scene->sim, scene->sim->player.location_id));
+        const CcLocalShop *shop = CcLocalShopForGood(profile, request->capture_shop_good);
+        if (shop == NULL) return false;
+        CcLocalLanePoint approach = CcLocalShopApproach(profile, shop);
+        scene->local->adventure_ui = true;
+        scene->local->course.automatic_alarm = false;
+        RepositionHero(scene->local, request->capture_shop_front ?
+            (Vector2){approach.x, approach.z} : (Vector2){6.55f, 3.15f},
+            !request->capture_shop_front);
+        scene->local->shop_building_index = shop->building_index;
+        scene->local->trade_mode = 0;
+        scene->local->trade_good = request->capture_shop_good;
+        scene->local->trade_quantity = 2;
+        *scene->view = request->capture_shop_front || request->capture_shop_interior ?
+            VIEW_LOCAL : VIEW_TRADE;
+        *scene->return_view = VIEW_LOCAL;
+        return true;
+    }
     if (request->capture_road_carriage) {
         int32_t opening = OpeningSituationIndex(scene->sim);
         const CcSituation *offer = opening >= 0 ? &scene->sim->situations[opening] : NULL;
