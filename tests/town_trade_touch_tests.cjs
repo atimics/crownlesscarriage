@@ -33,8 +33,8 @@ async function main() {
       undefined, {timeout: 120000});
   }
 
-  async function chooseBakery(controls) {
-    for (let page = 0; page < 4; ++page) {
+  async function chooseBakery(controls, page) {
+    for (let attempt = 0; attempt < 4; ++attempt) {
       const buttons = await controls.buttons();
       if (buttons.some(button => button.label === 'Enter Bakery')) {
         await controls.button('Enter Bakery').tap();
@@ -42,7 +42,12 @@ async function main() {
       }
       assert(buttons.some(button => button.label === 'More objects'),
         'The town tray must give a page to the bakery');
+      const before = await page.evaluate(() => Module.crownlessTouchFrame.revision);
       await controls.button('More objects').tap();
+      // Read the next page only after the tray has redrawn; a slow renderer can
+      // still show the old page, and a second tap would skip past the bakery.
+      await page.waitForFunction(revision =>
+        Module.crownlessTouchFrame.revision !== revision, before, {timeout: 15000});
     }
     assert.fail('The town tray must list the bakery');
   }
@@ -50,7 +55,7 @@ async function main() {
   async function enterTrade(page) {
     const controls = gameControls(page, true);
     if (await page.evaluate(() => Module.crownlessTouchFrame.scene !== 'trade')) {
-      if (!await controls.button(/^Trade .*Baker/).read()) await chooseBakery(controls);
+      if (!await controls.button(/^Trade .*Baker/).read()) await chooseBakery(controls, page);
       await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
         .some(button => /^Trade .*Baker/.test(button.label)),
       undefined, {timeout: 45000});
@@ -79,7 +84,7 @@ async function main() {
 
     await fs.mkdir(path.join(output, name), {recursive: true});
     await page.screenshot({path: path.join(output, name, 'town.png')});
-    await chooseBakery(controls);
+    await chooseBakery(controls, page);
     await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
       .some(button => /^Trade .*Baker/.test(button.label)),
     undefined, {timeout: 45000});
