@@ -83,6 +83,7 @@ static void SetupShipment(CcSim *sim)
     from->consumption[CC_GOOD_BREAD] = 5;
     to->hunger = 90;
     to->reserve_target[CC_GOOD_WHEAT] = 40;
+    to->population = 2287;
     for (int i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carrier = &sim->royal_carriages[i];
         carrier->next_dispatch_day = 13;
@@ -111,6 +112,11 @@ static void CheckShipments(void)
                 sim.royal_carriages[i].next_dispatch_day = 13;
         }
         CcMoney gold = CcSimTrackedGold(&sim);
+        CcMoney payer_before = sim.settlements[1].market_coins;
+        CcMoney supplier_before = sim.settlements[0].market_coins;
+        int32_t population_before = sim.settlements[1].population;
+        int32_t hunger_before = sim.settlements[1].hunger;
+        int32_t supplier_stock_before = sim.settlements[0].stock[CC_GOOD_WHEAT];
         CcSimAdvanceDays(&sim, 1);
         int loads = 0, quantity = 0;
         CcId shipment_id = 0;
@@ -131,21 +137,46 @@ static void CheckShipments(void)
         CC_CHECK(CcSimTrackedGold(&sim) == gold);
         if (scenario != 1) continue;
         CC_CHECK(quantity > 0);
+        CC_CHECK(population_before > 0 && hunger_before >= 65);
+        CC_CHECK(sim.settlements[1].market_coins < payer_before);
+        CC_CHECK(sim.settlements[0].market_coins > supplier_before);
+        CC_CHECK(sim.settlements[0].stock[CC_GOOD_WHEAT] < supplier_stock_before);
+        CC_CHECK(quantity <= supplier_stock_before - sim.settlements[0].stock[CC_GOOD_WHEAT]);
         CC_CHECK(sim.settlements[0].stock[CC_GOOD_WHEAT] >= 60);
         CC_CHECK(sim.settlements[1].stock[CC_GOOD_WHEAT] == 0);
+        const CcShipment *shipment = NULL;
+        const CcRoyalCarriage *carrier = NULL;
+        for (int i = 0; i < sim.shipment_count; ++i)
+            if (sim.shipments[i].id == shipment_id) shipment = &sim.shipments[i];
+        for (int i = 0; i < sim.royal_carriage_count; ++i)
+            if (sim.royal_carriages[i].active_shipment_id == shipment_id)
+                carrier = &sim.royal_carriages[i];
+        CC_CHECK(shipment != NULL && shipment->good == CC_GOOD_WHEAT &&
+            shipment->quantity == quantity && shipment->origin_id == sim.settlements[0].id &&
+            shipment->final_destination_id == sim.settlements[1].id);
+        const CcRoute *route = shipment != NULL ? CcSimRoute(&sim, shipment->route_id) : NULL;
+        CC_CHECK(route != NULL && route->from_id == sim.settlements[0].id &&
+            route->to_id == sim.settlements[1].id);
+        CC_CHECK(carrier != NULL && carrier->mode == CC_ROYAL_CARRIAGE_DELIVERING &&
+            carrier->active_shipment_id == shipment_id && carrier->route_id == shipment->route_id &&
+            carrier->target_id == sim.settlements[1].id);
         CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
         CC_CHECK(CcSaveWrite(path, &sim, error, sizeof(error)));
         CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         bool arrived = false;
+        CcNutritionAccounting nutrition = {0};
         for (int day = 0; day < 14; ++day) {
-            CcSimAdvanceDays(&sim, 1);
+            CcSimAdvanceDaysWithNutritionAccounting(&sim, 1, &nutrition);
             for (int i = 0; i < sim.shipment_count; ++i)
                 if (sim.shipments[i].id == shipment_id &&
                     sim.shipments[i].status == CC_SHIPMENT_ARRIVED) arrived = true;
         }
         CcSimAdvanceDays(&restored, 14);
         CC_CHECK(arrived);
+        CC_CHECK(nutrition.towns[1].civilian_units[CC_GOOD_WHEAT] > 0);
+        CC_CHECK(sim.settlements[1].hunger < hunger_before);
+        CC_CHECK(sim.settlements[1].population > 0);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
     }
