@@ -237,6 +237,13 @@ static void CapturePonyGait(const char *directory)
         Camera3D camera = {.position = Vector3Add(focus, (Vector3){5,2,3}),
             .target = focus, .up = {0,1,0}, .fovy = 3.3f,
             .projection = CAMERA_ORTHOGRAPHIC};
+        /* Drawing no longer publishes: this test owns the publish step, the
+           same way the production update path does. */
+        RoadHorsePlacement placements[2];
+        int32_t placement_count = RoadHorsePlacements(&sim, base, 0.0f, false,
+            CC_LOCAL_SCENE_ROAD, 1.0f, placements);
+        PublishRoadHorseTargets(placements, placement_count,
+            RoadHorseRigGait(0.72f), clock, 0.0f, CC_LOCAL_SCENE_ROAD);
         CcLocalCreatureGaitsFixedStepInternal(1.0f / 60.0f);
         BeginTextureMode(target);
         ClearBackground((Color){24,28,34,255});
@@ -245,7 +252,7 @@ static void CapturePonyGait(const char *directory)
         composition.light_profile = ART_LIGHT_CLEAR_MARKET;
         composition.focal_point = focus;
         BeginWorldLighting(camera, &composition);
-        DrawRoadHorseTeam(&sim, base, clock, 0.72f, distance, 0.0f,
+        DrawRoadHorseTeam(&sim, base, 0.72f, distance, 0.0f,
                           0.0f, 0.0f, false, CC_LOCAL_SCENE_ROAD, 1.0f);
         EndWorldLighting();
         EndMode3D();

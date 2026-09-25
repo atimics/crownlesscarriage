@@ -334,9 +334,6 @@ typedef struct LocalState {
     CcMinePhase mine_view_phase;
     float mine_cooldown;
     int32_t mine_target_x, mine_target_y;
-    CcGood mine_good;
-    int32_t mine_quantity;
-    bool mine_inventory_expanded;
     /* Mine routes and named uses are local presentation state.  They are
        rebuilt after loading and never become campaign-facing state. */
     int32_t mine_intent_target;
@@ -1386,9 +1383,6 @@ static void ResetLocalState(LocalState *local)
     local->mine_cooldown = 0.0f;
     local->mine_target_x = -1;
     local->mine_target_y = -1;
-    local->mine_good = CC_GOOD_BREAD;
-    local->mine_quantity = 1;
-    local->mine_inventory_expanded = false;
     local->mine_intent_target = 0;
     local->mine_intent_revision = -1;
     memset(local->mine_known, 0, sizeof(local->mine_known));
@@ -12529,6 +12523,35 @@ int main(int argc, char **argv)
                 CcLocalOpenWorldCarriageScaleInternal(&sim, &local.world_carriage));
         }
 
+        /* The remaining local-only road scenes (fork, encounter/combat/
+           parley, remote site, town-street convoy) still draw a hitched
+           team, but the open-world and travelling cases above already own
+           their targets. Publish each one here, once, from the same state
+           its own draw call below will use, so those draw calls can stay
+           read-only. Each publisher no-ops when its scene is not the one
+           actually active this frame. */
+        if (!local.open_world && (view == VIEW_ROADS ||
+                ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
+                 return_view == VIEW_ROADS))) {
+            CcLocalRoadForkHorseTargetsInternal(
+                &sim, selected, local.fork_turn_progress, clock);
+        }
+        {
+            bool road_scene_travelling = local.road_choice_active ||
+                local.journey_travel_active;
+            bool road_scene_active = view == VIEW_ENCOUNTER ||
+                (road_scene_travelling &&
+                 local.convoy.phase == CC_LOCAL_CONVOY_ROAD) ||
+                local.journey_combat_active || local.journey_parley_active;
+            if (road_scene_active && !road_scene_travelling) {
+                CcLocalRoadEncounterHorseTargetsInternal(&sim, clock);
+            }
+        }
+        CcLocalRoadSiteHorseTargetsInternal(&sim, local.site_kind,
+            local.site_travel_active, local.site_returning,
+            local.site_travel_progress, clock);
+        CcLocalRoadConvoyHorseTargetsInternal(&sim, &local.convoy, clock);
+
         bool map_visible = view == VIEW_MAP ||
             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
              return_view == VIEW_MAP);
@@ -12583,7 +12606,9 @@ int main(int argc, char **argv)
                     map_textures.collectible_atlas);
             DrawSettlementPanel(&sim, selected);
         } else {
-            if (CcCaptureDrawScene(&capture_request, &sim, clock,
+            if (sim.mine.phase != CC_MINE_NONE) {
+                /* DrawMineScene presents this frame below. */
+            } else if (CcCaptureDrawScene(&capture_request, &sim, clock,
                                    local_target, local_bounds)) {
                 /* The capture hook drew its review scene. */
             } else if (local.open_world && !local.market_interior) {
@@ -12621,7 +12646,7 @@ int main(int argc, char **argv)
                                     &local.convoy, clock,
                                     local_target, local_bounds);
             }
-            if (presentation.local_panels &&
+            if (sim.mine.phase == CC_MINE_NONE && presentation.local_panels &&
                 view != VIEW_ENCOUNTER) {
                 if (view == VIEW_LOCAL && sim.pony_company.encounter < 0) {
                     DrawLocalMovementReticle(&local, local_bounds);
@@ -12653,8 +12678,12 @@ int main(int argc, char **argv)
             float opacity = message_age > 1.6f ?
                 1.0f - (message_age - 1.6f) / 0.6f : 1.0f;
             float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
-            float toast_y = (float)GetScreenHeight() -
-                (view == VIEW_SITUATIONS ? 128.0f : 107.0f);
+            /* The context action tray starts 94px above the bottom edge
+               (see ContextActionBounds); a 107px toast offset let its 28px
+               panel dip 15px into the tray whenever a card was showing at
+               the same time as a message ("Creature settlement." over the
+               local-site action cards, for instance). 128px clears it. */
+            float toast_y = (float)GetScreenHeight() - 128.0f;
             DrawRectangleRounded((Rectangle){x, toast_y,
                                               (float)width, 28.0f},
                                  0.22f, 5,

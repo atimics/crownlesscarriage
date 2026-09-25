@@ -32,11 +32,11 @@ static void ReadyForDeepWyrm(CcSim *sim)
     sim->dragon.hoard = 5000;
     sim->dragon.hoard_goods[CC_GOOD_GOLD] = 10;
     sim->dragon.hoard_goods[CC_GOOD_GEMS] = 10;
-    sim->dragon.age_days = 500 * 365;
+    sim->dragon.age_days = 1200 * 365;
     sim->dragon.body_condition = 50;
     sim->dragon.memory_integrity = 100;
     sim->dragon.territory_stability = 100;
-    sim->dragon.crown_continuity_days = 250 * 365;
+    sim->dragon.crown_continuity_days = 850 * 365;
     sim->dragon_cult.devotion = 100;
 }
 
@@ -291,11 +291,11 @@ int main(void)
     deep_wyrm.dragon.hoard = 5000;
     deep_wyrm.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
     deep_wyrm.dragon.hoard_goods[CC_GOOD_GEMS] = 10;
-    deep_wyrm.dragon.age_days = 500 * 365 - 1;
+    deep_wyrm.dragon.age_days = 1200 * 365 - 1;
     deep_wyrm.dragon.body_condition = 50;
     deep_wyrm.dragon.memory_integrity = 100;
     deep_wyrm.dragon.territory_stability = 100;
-    deep_wyrm.dragon.crown_continuity_days = 250 * 365;
+    deep_wyrm.dragon.crown_continuity_days = 850 * 365;
     deep_wyrm.dragon_cult.devotion = 100;
     CcSimAdvanceDays(&deep_wyrm, 1);
     CC_CHECK(deep_wyrm.dragon.crown_strength >= 60);
@@ -306,11 +306,11 @@ int main(void)
     wyrm.dragon.hoard = 5000;
     wyrm.dragon.hoard_goods[CC_GOOD_GOLD] = 10;
     wyrm.dragon.hoard_goods[CC_GOOD_GEMS] = 10;
-    wyrm.dragon.age_days = 500 * 365 - 1;
+    wyrm.dragon.age_days = 1200 * 365 - 1;
     wyrm.dragon.body_condition = 50;
     wyrm.dragon.memory_integrity = 100;
     wyrm.dragon.territory_stability = 100;
-    wyrm.dragon.crown_continuity_days = 250 * 365;
+    wyrm.dragon.crown_continuity_days = 850 * 365;
     wyrm.dragon.crown_strength = 60;
     wyrm.dragon_cult.devotion = 100;
     CcSimAdvanceDays(&wyrm, 1);
@@ -334,7 +334,7 @@ int main(void)
     brood.dragon.body_condition = 100;
     brood.dragon.memory_integrity = 100;
     brood.dragon.territory_stability = 100;
-    brood.dragon.crown_continuity_days = 250 * 365;
+    brood.dragon.crown_continuity_days = 850 * 365;
     brood.dragon.brood_cooldown_days = 1;
     brood.dragon_cult.devotion = 100;
     brood.goblins.lair_stock[CC_GOOD_FOOD] = 100;
@@ -364,7 +364,7 @@ int main(void)
 
     static CcSim stockpile;
     CcSimInit(&stockpile, UINT32_C(0x570c901e));
-    stockpile.dragon.age_days = 500 * 365;
+    stockpile.dragon.age_days = 1200 * 365;
     stockpile.dragon.regional_influence = 80;
     stockpile.dragon_campaign.pledged_kingdom_mask = UINT32_C(7);
     for (int32_t i = 0; i < stockpile.settlement_count; ++i) {
@@ -699,6 +699,16 @@ int main(void)
     stages.dragon.territory_stability = 100;
     stages.dragon.memory_integrity = 100;
     stages.dragon.brood_cooldown_days = 1000;
+    static CcSim legacy_stages;
+    legacy_stages = stages; legacy_stages.schema_version = 114U;
+    CcSimAdvanceDays(&legacy_stages, 1);
+    CC_CHECK(legacy_stages.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    stages.dragon.age_days = 1200 * 365;
+    CcSimAdvanceDays(&stages, 1);
+    CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_CROWNED);
+    stages.dragon.crown_continuity_days = 800 * 365;
     CcSimAdvanceDays(&stages, 1);
     CC_CHECK(stages.dragon.life_stage == CC_DRAGON_STAGE_DEEP_WYRM);
 

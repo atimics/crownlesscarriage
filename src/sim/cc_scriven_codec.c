@@ -99,3 +99,44 @@ uint64_t CcScrivenHash(const CcScrivenState *state)
     for (size_t i = 0; i < size; ++i) { hash ^= bytes[i]; hash *= UINT64_C(1099511628211); }
     return hash;
 }
+
+static void CrownNote(Wire *w, CcScrivenNote *n)
+{
+    U64(w, &n->dragon_id); U64(w, &n->author_id); U64(w, &n->place_id); U64(w, &n->source_book_id);
+    I32(w, &n->day); I32(w, &n->kind); I32(w, &n->value); Bytes(w, n->text, sizeof(n->text));
+}
+static void CrownState(Wire *w, CcCrownCalendar *s)
+{
+    int32_t version = 1; I32(w, &version);
+    if (version != 1) { w->ok = false; return; }
+    for (int i = 0; i < CC_SCRIVEN_AGES; ++i) CrownNote(w, &s->sightings[i]);
+    CrownNote(w, &s->company_sighting);
+    for (int i = 0; i < 32; ++i) Finding(w, &s->almanacs[i]);
+    for (int i = 0; i < 6; ++i) Finding(w, &s->local[i]);
+    Finding(w, &s->company);
+    for (int i = 0; i < CC_SCRIVEN_BOOKS; ++i) U64(w, &s->book_editions[i]);
+    I32(w, &s->sighting_count); I32(w, &s->editions);
+}
+size_t CcCrownCalendarEncode(const CcCrownCalendar *state, uint8_t *bytes, size_t capacity)
+{
+    if (state == NULL || bytes == NULL) return 0;
+    CcCrownCalendar copy = *state;
+    Wire w = {.out = bytes, .size = capacity, .ok = true}; CrownState(&w, &copy);
+    return w.ok ? w.at : 0;
+}
+bool CcCrownCalendarDecode(CcCrownCalendar *state, const uint8_t *bytes, size_t length)
+{
+    if (state == NULL || bytes == NULL) return false;
+    CcCrownCalendar copy = {0};
+    Wire w = {.in = bytes, .size = length, .ok = true}; CrownState(&w, &copy);
+    if (!w.ok || w.at != length) return false;
+    *state = copy; return true;
+}
+uint64_t CcCrownCalendarHash(const CcCrownCalendar *state)
+{
+    uint8_t bytes[CC_SCRIVEN_WIRE_CAPACITY];
+    size_t size = CcCrownCalendarEncode(state, bytes, sizeof(bytes));
+    uint64_t hash = UINT64_C(1469598103934665603);
+    for (size_t i = 0; i < size; ++i) { hash ^= bytes[i]; hash *= UINT64_C(1099511628211); }
+    return hash;
+}

@@ -206,7 +206,7 @@ static void CheckJourneySaves(void)
             CcMineInitializeLoad(&sim);
         }
         if (version < 105U) CC_CHECK(CcRoadMigrateLegacyJourney(&sim));
-        if (version < 114U) CcCensusInit(&sim);
+        if (version < 117U) CcCensusInit(&sim);
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
         (void)remove(path);
     }
