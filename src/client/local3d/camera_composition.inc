@@ -813,43 +813,169 @@ static const StreetCameraShot *StreetCameraShotAt(int32_t shot)
 
 /* Town cameras stand in the scene; a wall is not a licence to lift the
    camera above its roof. Find the nearest clear ground-level station instead. */
-static bool StreetCameraStationClear(Vector3 station)
+static bool StreetCameraStationClear(Vector3 station, bool arrival)
 {
+    float building_margin = arrival ? 3.2f : 0.8f;
+    float structure_margin = arrival ? 1.2f : 0.8f;
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
         Vector2 local = BuildingUnrotatedPoint(i, station.x, station.z);
-        if (TerrainDistanceToRectangle(local.x, local.y, building.footprint) < 0.8f &&
+        if (TerrainDistanceToRectangle(local.x, local.y, building.footprint) < building_margin &&
             station.y < TerrainFootprintHeight(building.footprint) + building.height + 0.8f)
             return false;
     }
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
         WorldStructure structure = ActiveCompoundStructureAt(i);
-        if (TerrainDistanceToRectangle(station.x, station.z, structure.footprint) < 0.8f &&
+        if (TerrainDistanceToRectangle(station.x, station.z, structure.footprint) < structure_margin &&
             station.y < TerrainFootprintHeight(structure.footprint) + structure.height + 0.5f)
             return false;
+    }
+    if (!arrival) return true;
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
+        WorldTreePlacement tree = ActiveWorldTreeAt(i);
+        float dx = station.x - tree.position.x;
+        float dz = station.z - tree.position.y;
+        float minimum = active_place_function == CC_SETTLEMENT_FARMING ?
+            5.0f : 2.8f;
+        if (dx * dx + dz * dz < minimum * minimum) return false;
     }
     return true;
 }
 
-static Camera3D StreetCameraClearVolume(Camera3D camera)
+static bool StreetCameraSightClear(Vector3 station, Vector3 subject)
+{
+    float span = Vector3Distance(station, subject);
+    if (span < 2.0f) return true;
+    int32_t samples = (int32_t)ceilf(span / 0.75f);
+    if (samples < 3) samples = 3;
+    for (int32_t sample = 1; sample < samples; ++sample) {
+        float amount = (float)sample / (float)samples;
+        Vector3 point = Vector3Lerp(station, subject, amount);
+        if (point.y < CcLocalTerrainHeightAt(point.x, point.z) + 0.20f)
+            return false;
+        for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+            WorldBuilding building = ActiveWorldBuildingAt(i);
+            Vector2 local = BuildingUnrotatedPoint(i, point.x, point.z);
+            if (TerrainDistanceToRectangle(local.x, local.y,
+                                           building.footprint) < 0.08f &&
+                point.y < TerrainFootprintHeight(building.footprint) +
+                          building.height + 2.50f) return false;
+        }
+        for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+            WorldStructure structure = ActiveCompoundStructureAt(i);
+            if (TerrainDistanceToRectangle(point.x, point.z,
+                                           structure.footprint) < 0.08f &&
+                point.y < TerrainFootprintHeight(structure.footprint) +
+                          structure.height + 0.40f) return false;
+        }
+        for (int32_t i = 0;
+             i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
+            WorldTreePlacement tree = ActiveWorldTreeAt(i);
+            float trunk_top, crown_bottom, crown_top, trunk_radius, crown_radius;
+            WorldTreeVisibilityShape(tree.family, &trunk_top, &crown_bottom,
+                                     &crown_top, &trunk_radius, &crown_radius);
+            float radius = crown_radius *
+                (active_place_function == CC_SETTLEMENT_FARMING ? 1.24f : 1.0f);
+            float dx = point.x - tree.position.x;
+            float dz = point.z - tree.position.y;
+            float root = CcLocalTerrainHeightAt(tree.position.x, tree.position.y);
+            float distance_squared = dx * dx + dz * dz;
+            if ((distance_squared < radius * radius &&
+                 point.y > root + crown_bottom &&
+                 point.y < root + crown_top) ||
+                (distance_squared < trunk_radius * trunk_radius &&
+                 point.y < root + trunk_top)) return false;
+        }
+    }
+    return true;
+}
+
+static Camera3D StreetCameraClearVolume(Camera3D camera, Vector3 subject)
+{
+    static struct {
+        bool valid;
+        CcSettlementFunction place;
+        int32_t shot;
+        Vector3 requested;
+        Vector3 subject;
+        Vector3 target;
+        Vector3 station;
+        bool check_aim;
+    } last_clear;
+    float eye = CombatClamp(camera.position.y - CcLocalTerrainHeightAt(
+        camera.position.x, camera.position.z), 1.8f, 4.0f);
+    Vector3 station = camera.position;
+    station.y = CcLocalTerrainHeightAt(station.x, station.z) + eye;
+    bool check_aim = Vector3Distance(camera.target, subject) < 8.0f;
+    if (last_clear.valid && last_clear.place == active_place_function &&
+        last_clear.shot == street_camera_rig.shot &&
+        last_clear.check_aim == check_aim &&
+        Vector3Distance(last_clear.requested, station) < 1.0f &&
+        Vector3Distance(last_clear.subject, subject) < 1.0f &&
+        Vector3Distance(last_clear.target, camera.target) < 1.0f) {
+        camera.position = last_clear.station;
+        return camera;
+    }
+    Vector3 requested = station;
+    if (!StreetCameraStationClear(station, true) ||
+        !StreetCameraSightClear(station, subject) ||
+        (check_aim && !StreetCameraSightClear(station, camera.target))) {
+        bool found = false;
+        for (int32_t ring = 1; ring <= 16 && !found; ++ring) {
+            for (int32_t side = 0; side < 24; ++side) {
+                float angle = (float)side * (2.0f * PI / 24.0f);
+                Vector3 candidate = {station.x + cosf(angle) * (float)ring,
+                    0.0f, station.z + sinf(angle) * (float)ring};
+                if (candidate.x < 1.0f || candidate.x > CC_LOCAL_WORLD_WIDTH - 1.0f ||
+                    candidate.z < 1.0f || candidate.z > CC_LOCAL_WORLD_DEPTH - 1.0f ||
+                    hypotf(candidate.x - subject.x, candidate.z - subject.z) < 5.0f)
+                    continue;
+                candidate.y = CcLocalTerrainHeightAt(candidate.x, candidate.z) + eye;
+                if (!StreetCameraStationClear(candidate, true) ||
+                    !StreetCameraSightClear(candidate, subject) ||
+                    (check_aim && !StreetCameraSightClear(candidate, camera.target)))
+                    continue;
+                station = candidate;
+                found = true;
+                break;
+            }
+        }
+    }
+    last_clear.valid = true;
+    last_clear.place = active_place_function;
+    last_clear.shot = street_camera_rig.shot;
+    last_clear.requested = requested;
+    last_clear.subject = subject;
+    last_clear.target = camera.target;
+    last_clear.station = station;
+    last_clear.check_aim = check_aim;
+    camera.position = station;
+    return camera;
+}
+
+/* Walking shots retain their authored tracking. The fuller sight search is
+   reserved for the arrival view, where the carriage is the fixed subject. */
+static Camera3D StreetCameraClearWalkingStation(Camera3D camera)
 {
     float eye = CombatClamp(camera.position.y - CcLocalTerrainHeightAt(
         camera.position.x, camera.position.z), 1.8f, 4.0f);
     Vector3 station = camera.position;
     station.y = CcLocalTerrainHeightAt(station.x, station.z) + eye;
-    if (!StreetCameraStationClear(station)) {
-        bool found = false;
-        for (int32_t ring = 1; ring <= 12 && !found; ++ring) {
+    if (!StreetCameraStationClear(station, false)) {
+        for (int32_t ring = 1; ring <= 12; ++ring) {
+            bool found = false;
             for (int32_t side = 0; side < 16; ++side) {
                 float angle = (float)side * (2.0f * PI / 16.0f);
                 Vector3 candidate = {station.x + cosf(angle) * (float)ring,
                     0.0f, station.z + sinf(angle) * (float)ring};
                 candidate.y = CcLocalTerrainHeightAt(candidate.x, candidate.z) + eye;
-                if (!StreetCameraStationClear(candidate)) continue;
+                if (!StreetCameraStationClear(candidate, false)) continue;
                 station = candidate;
                 found = true;
                 break;
             }
+            if (found) break;
         }
     }
     camera.position = station;
@@ -1161,9 +1287,11 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     Camera3D camera = PerspectiveCameraComposed(
         street_camera_rig.displayed_target,
         street_camera_rig.displayed_offset, 40.0f);
-    camera = StreetCameraClearVolume(camera);
-    camera.fovy = 2.0f * atanf(street_camera_rig.displayed_fovy * 0.5f /
-        Vector3Distance(camera.position, camera.target)) * RAD2DEG;
+    camera = StreetCameraClearWalkingStation(camera);
+    camera.fovy = CombatClamp(
+        2.0f * atanf(street_camera_rig.displayed_fovy * 0.5f /
+                     Vector3Distance(camera.position, camera.target)) * RAD2DEG,
+        18.0f, 85.0f);
     if (agent != NULL) {
         Vector3 hero = {focus.x, focus.y + 1.05f, focus.z};
         camera = FixedCameraRigFrameHero(
@@ -1173,7 +1301,7 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
            vertical drift from screen-plane pans over uneven town ground. */
         camera.position.y = CcLocalTerrainHeightAt(
             camera.position.x, camera.position.z) + composition->camera_offset.y;
-        camera = StreetCameraClearVolume(camera);
+        camera = StreetCameraClearWalkingStation(camera);
         Vector3 before_guard = camera.target;
         Vector3 before_station = camera.position;
         camera = GroundStreetFrameHero(
@@ -1188,6 +1316,10 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
         street_camera_rig.framing_from = Vector3Add(street_camera_rig.framing_from, guard);
         street_camera_rig.framing_destination = Vector3Add(street_camera_rig.framing_destination, guard);
     }
+    float level_span = hypotf(camera.position.x - camera.target.x,
+                              camera.position.z - camera.target.z);
+    camera.target.y = fmaxf(camera.target.y,
+        camera.position.y - tanf(21.8f * DEG2RAD) * level_span);
     street_camera_rig.output_camera = camera;
     street_camera_rig.output_hero_position = focus;
     street_camera_rig.output_valid = true;
@@ -1243,7 +1375,8 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         .fovy = 43.0f + (32.0f - 43.0f) * pull_out,
         .projection = CAMERA_PERSPECTIVE,
     };
-    camera = StreetCameraClearVolume(camera);
+    camera = StreetCameraClearVolume(camera,
+        Vector3Add(convoy->town_position, (Vector3){0.0f, 1.55f, 0.0f}));
 
     Vector3 arrival_offset = Vector3Subtract(camera.position, camera.target);
     float arrival_span = 2.0f * Vector3Length(arrival_offset) *
