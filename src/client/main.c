@@ -12653,8 +12653,12 @@ int main(int argc, char **argv)
             float opacity = message_age > 1.6f ?
                 1.0f - (message_age - 1.6f) / 0.6f : 1.0f;
             float x = ((float)GetScreenWidth() - (float)width) * 0.5f;
-            float toast_y = (float)GetScreenHeight() -
-                (view == VIEW_SITUATIONS ? 128.0f : 107.0f);
+            /* The context action tray starts 94px above the bottom edge
+               (see ContextActionBounds); a 107px toast offset let its 28px
+               panel dip 15px into the tray whenever a card was showing at
+               the same time as a message ("Creature settlement." over the
+               local-site action cards, for instance). 128px clears it. */
+            float toast_y = (float)GetScreenHeight() - 128.0f;
             DrawRectangleRounded((Rectangle){x, toast_y,
                                               (float)width, 28.0f},
                                  0.22f, 5,
