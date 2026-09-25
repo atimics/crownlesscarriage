@@ -336,7 +336,8 @@ int main(void)
     CC_CHECK(CC_GOOD_PAPER == 11);
     CC_CHECK(CC_GOOD_ROTTEN_MEAT == 12);
     CC_CHECK(CC_GOOD_ROTTEN_GRAIN == 13);
-    CC_CHECK(CC_GOOD_COUNT == 14);
+    CC_CHECK(CC_GOOD_RAW_STONE == 14);
+    CC_CHECK(CC_GOOD_COUNT == 15);
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
         const CcGoodDefinition *definition = CcGoodDefinitionFor(
             (CcGood)good);

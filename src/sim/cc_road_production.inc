@@ -21,6 +21,7 @@ bool CcRoadSiteRecipe(const CcRoadSite *site, CcProductionRecipe *recipe)
             break;
         case CC_ROAD_SITE_ROAD_CREW:
             recipe->work_only = true;
+            recipe->output = CC_GOOD_COUNT;
             recipe->inputs[0].units = 2;
             recipe->work_per_batch = 3;
             break;

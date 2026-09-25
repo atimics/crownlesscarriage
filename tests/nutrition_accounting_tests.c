@@ -113,7 +113,7 @@ int main(void)
     char fixture_error[256];
     CC_CHECK(CcSaveRead(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-53-generator-25-nutrition.ccsave",
         &observed, fixture_error, sizeof(fixture_error)));
-    observed.schema_version = 53U;
+    CcTestStampLegacyGoods(&observed, 53U);
     observed.next_entity_serial -= CcCensusIssuedIdCount(&observed.census);
     control = observed;
     daily = observed;

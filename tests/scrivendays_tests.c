@@ -2,6 +2,7 @@
 #include "sim/cc_census.h"
 #include "sim/cc_archive_volumes_internal.h"
 #include "persistence/cc_save.h"
+#include "test_support.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -356,13 +357,18 @@ static bool CrownCodecAndLegacy(void)
         bytes[i]^=1; CHECK(CcCrownCalendarDecode(&recovered,bytes,length));
         CHECK(CcCrownCalendarHash(&recovered)!=expected); bytes[i]^=1;
     }
-    CcSimInit(&sim,42); sim.schema_version=114; CcSimAdvanceDays(&sim,364);
+    CcSimInit(&sim,42); CcTestStampLegacyGoods(&sim,114U);
+    sim.next_entity_serial -= CcCensusIssuedIdCount(&sim.census);
+    sim.census = (CcCensus){0};
+    CcSimAdvanceDays(&sim,364);
     CHECK(CcSimHash(&sim)==UINT64_C(13544121058959254427)); /* Captured from schema 114 code. */
     unsigned char *data=NULL; size_t size=0;
     CHECK(CcSaveEncode(&sim,&data,&size,error,sizeof(error)));
     CHECK(CcSaveDecode(data,size,&copy,error,sizeof(error))); CcSaveFreeBuffer(data);
     CHECK(copy.schema_version==CC_SIM_SCHEMA_VERSION && copy.crown_calendar.editions==0);
-    copy.schema_version=114; CHECK(CcSimHash(&copy)==CcSimHash(&sim));
+    CcTestStampLegacyGoods(&copy,114U);
+    copy.next_entity_serial -= CcCensusIssuedIdCount(&copy.census);
+    CHECK(CcSimHash(&copy)==CcSimHash(&sim));
     return true;
 }
 static bool Codec(void)
