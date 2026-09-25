@@ -1813,10 +1813,10 @@ static int RunAdventureTradeTermsRegression(void)
     TERMS_CHECK(strstr(local.receipt, "grain fund") != NULL,
         "Funding must show its receipt.");
     uint64_t meeting_hash = CcSimHash(&sim);
-    queued_key_press[KEY_SIX] = true;
+    queued_key_press[KEY_FIVE] = true;
     (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
     ClientInputClearPressed();
-    TERMS_CHECK(local.trade_mode == 5, "The sixth trade tab must open the road meeting.");
+    TERMS_CHECK(local.trade_mode == 5, "The fifth grain merchant tab must open the road meeting.");
     queued_key_press[KEY_ENTER] = true;
     (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
     ClientInputClearPressed();
