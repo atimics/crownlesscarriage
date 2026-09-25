@@ -138,7 +138,10 @@ async function createPage() {
     },
     indexedDB,
     navigator: {locks: lockManager},
-    crypto: {randomUUID: () => "page-" + pageCounter},
+    crypto: {
+      randomUUID: () => "page-" + pageCounter,
+      getRandomValues: values => globalThis.crypto.getRandomValues(values)
+    },
     addRunDependency() {},
     removeRunDependency() { ready(); },
     addEventListener(name, listener) { listeners.set(name, listener); },
