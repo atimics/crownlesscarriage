@@ -104,7 +104,9 @@ async function main() {
           `${name}: town tray lists the bakery`);
         await controls.button('More objects').tap();
       }
-      await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'), undefined, {timeout: 30000});
+      await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
+        .some(button => /^Trade .*Baker/.test(button.label)),
+      undefined, {timeout: 45000});
       await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade', undefined, {timeout: 30000});
       const trade = await validateButtons(page, `${name} Bakery trade`);
