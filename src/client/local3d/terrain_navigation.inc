@@ -866,9 +866,9 @@ static void TerrainGradeLaneVillage(void)
     float west = TerrainSampleGrid(street_terrain_height, 83.5f, 34.0f);
     float east = TerrainSampleGrid(street_terrain_height, 96.0f, 34.0f);
     float bridge = fmaxf(west, east) + 0.18f;
-    TerrainGradeEastWestRamp((Rectangle){81, 31.75f, 2.5f, 4.5f},
-        TerrainSampleGrid(street_terrain_height, 81, 34), bridge);
-    TerrainGradeEastWestRamp((Rectangle){83.5f, 31.75f, 12.5f, 4.5f}, bridge, bridge);
+    TerrainGradeEastWestRamp((Rectangle){75.0f, 32.0f, 8.5f, 6.5f},
+        TerrainSampleGrid(street_terrain_height, 75.0f, 38.0f), bridge);
+    TerrainGradeEastWestRamp((Rectangle){83.5f, 30.50f, 12.5f, 8.0f}, bridge, bridge);
 }
 
 static void TerrainGradeSilverwick(void)
