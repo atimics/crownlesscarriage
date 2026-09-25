@@ -627,7 +627,9 @@ EM_JS(int, ClientBrowserHeapBytes, (), {
 #pragma clang diagnostic pop
 #endif
 
+#if defined(CC_CLIENT_SELF_TESTS)
 static const Vector2 LOCAL_MARKET = {CC_LOCAL_MARKET_X, CC_LOCAL_MARKET_Z};
+#endif
 static const Vector2 LOCAL_CARRIAGE = {CC_LOCAL_CARRIAGE_X,
                                       CC_LOCAL_CARRIAGE_Z};
 static const Vector2 LOCAL_CARRIAGE_BAY = {
@@ -12778,8 +12780,8 @@ int main(int argc, char **argv)
                                   &local.convoy, clock,
                                   local_target, local_bounds);
             } else if (local.market_interior) {
-                CcLocalDrawInterior3D(&sim, &local.agent, clock,
-                                      local_target, local_bounds);
+                CcLocalDrawShopInterior3D(&sim, &local.agent, clock,
+                    local_target, local_bounds, LocalActiveShop(&sim, &local));
             } else {
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course,
                                     view == VIEW_CHARACTER,
