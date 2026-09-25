@@ -215,7 +215,12 @@ static void TestCurvedVillageRoads(void)
             Vector3 corrected, normal;
             CC_CHECK(!CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
                 start, end, 0.24f, &corrected, &normal));
-            CC_CHECK(CcLocalTerrainNormalAt(point.x, point.z).y > 0.82f);
+            float up = CcLocalTerrainNormalAt(point.x, point.z).y;
+            if (up <= 0.82f) {
+                fprintf(stderr, "Thornford lane %d steep at %.2f %.2f: %.3f\n",
+                    lane, point.x, point.z, up);
+                CC_CHECK(false);
+            }
             previous = point;
         }
     }
@@ -227,6 +232,7 @@ static void TestCurvedVillageRoads(void)
     CC_CHECK(count > 2);
     CC_CHECK(CcLocalTownCarriagePath(false, departure, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY) == count);
     CC_CHECK(fabsf(arrival[0].x - CC_LOCAL_TOWN_GATE_X) < 0.001f);
+    CC_CHECK(fabsf(arrival[0].y - CC_LOCAL_TOWN_GATE_Z) < 0.001f);
     CC_CHECK(fabsf(arrival[count - 1].x - CC_LOCAL_CARRIAGE_X) < 0.001f);
     CC_CHECK(fabsf(arrival[count - 1].y - CC_LOCAL_CARRIAGE_Z) < 0.001f);
     for (int32_t i = 0; i < count; ++i) {
@@ -234,6 +240,27 @@ static void TestCurvedVillageRoads(void)
                          arrival[i].y - departure[count - 1 - i].y) < 0.001f);
         CC_CHECK(CcLocalFootstepSurfaceAt(CC_LOCAL_SCENE_STREET,
             arrival[i].x, arrival[i].y) == CC_SOUND_STEP_DIRT);
+        if (i == 0 || i >= count - 16) continue;
+        float run = hypotf(arrival[i].x - arrival[i - 1].x,
+                           arrival[i].y - arrival[i - 1].y);
+        float rise = fabsf(CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y) -
+            CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y));
+        if (run <= 0.0f || rise / run > 0.16f) {
+            fprintf(stderr, "Thornford cart grade %.3f at %.2f %.2f: %.2f to %.2f\n",
+                rise / run, arrival[i].x, arrival[i].y,
+                CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y),
+                CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y));
+            CC_CHECK(false);
+        }
+        Vector3 start = {arrival[i - 1].x,
+            CcLocalTerrainHeightAt(arrival[i - 1].x, arrival[i - 1].y),
+            arrival[i - 1].y};
+        Vector3 end = {arrival[i].x,
+            CcLocalTerrainHeightAt(arrival[i].x, arrival[i].y),
+            arrival[i].y};
+        Vector3 corrected, normal;
+        CC_CHECK(!CcLocalMoveCapsuleInternal(CC_LOCAL_SCENE_STREET,
+            start, end, 1.25f, &corrected, &normal));
     }
     CcLocalBindPlace(NULL);
 }
