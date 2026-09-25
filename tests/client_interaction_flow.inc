@@ -1684,9 +1684,109 @@ static int RunAdventureShopFilterRegression(void)
     return 0;
 }
 
+static int RunAdventureSupplyQuoteRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char message[256] = "";
+#define SUPPLY_CHECK(condition, text) do { if (!(condition)) return ClientRegressionFailure(text); } while (0)
+    CcSimInit(&sim, 42U);
+    CcLocalBindPlace(&sim);
+    ResetLocalState(&local);
+    local.adventure_ui = true;
+    local.market_interior = true;
+    const CcSettlement *town = CcSimSettlement(&sim, sim.player.location_id);
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(town);
+    const CcLocalShop *grain = CcLocalShopAt(profile, CC_LOCAL_SHOP_GRAIN_MERCHANT);
+    const CcLocalShop *bakery = CcLocalShopAt(profile, CC_LOCAL_SHOP_BAKERY);
+    SUPPLY_CHECK(grain != NULL && bakery != NULL, "The grain source and bakery buyer need local doors.");
+    local.shop_building_index = grain->building_index;
+    local.trade_good = CC_GOOD_WHEAT;
+    local.trade_quantity = 2;
+    local.trade_mode = 0;
+    CcSupplyOffer wheat_offer = CcSimSupplyOffer(&sim, CC_GOOD_WHEAT);
+    AdventureQuote source = AdventureTradeQuote(&sim, &local);
+    SUPPLY_CHECK(source.available && source.command.kind == CC_COMMAND_TRADE_SUPPLY &&
+        source.command.amount == 2 && source.command.target_id == town->id &&
+        source.total == 2 * wheat_offer.source_unit_price,
+        "The grain merchant quotes the paid Wheat source offer.");
+    CcMoney purse = sim.player.coins;
+    int32_t bread = town->stock[CC_GOOD_BREAD];
+    local.trade_quote_presented = true;
+    local.trade_presented_command = source.command;
+    local.trade_presented_total = source.total;
+    local.trade_presented_shop_building_index = grain->building_index;
+    ClientView view = VIEW_TRADE;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    SUPPLY_CHECK(sim.player.cargo[CC_GOOD_WHEAT] == 2 &&
+        sim.player.coins == purse - source.total &&
+        strstr(local.receipt, "Bought 2 Wheat") != NULL,
+        "The quoted grain purchase uses the authoritative paid command.");
+    local.shop_building_index = bakery->building_index;
+    local.trade_mode = 1;
+    local.trade_confirmed = false;
+    AdventureQuote buyer = AdventureTradeQuote(&sim, &local);
+    SUPPLY_CHECK(buyer.available && buyer.command.kind == CC_COMMAND_TRADE_SUPPLY &&
+        buyer.command.amount == -2 && buyer.total == 2 * wheat_offer.delivery_unit_price,
+        "The bakery quotes payment for Wheat in the carriage.");
+    uint64_t bought_hash = CcSimHash(&sim);
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    SUPPLY_CHECK(CcSimHash(&sim) == bought_hash &&
+        strstr(local.receipt, "quote changed") != NULL,
+        "A source quote cannot authorize a bakery delivery.");
+    local.trade_presented_command = buyer.command;
+    local.trade_presented_total = buyer.total;
+    local.trade_presented_shop_building_index = bakery->building_index;
+    queued_key_press[KEY_ENTER] = true;
+    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
+    ClientInputClearPressed();
+    SUPPLY_CHECK(sim.player.cargo[CC_GOOD_WHEAT] == 0 &&
+        sim.player.coins == purse - source.total + buyer.total &&
+        CcSimSettlement(&sim, town->id)->stock[CC_GOOD_BREAD] == bread + 2 &&
+        CcSimSupplyOffer(&sim, CC_GOOD_WHEAT).remaining == wheat_offer.remaining - 2 &&
+        strstr(local.receipt, "Delivered 2 Wheat") != NULL,
+        "Bakery input delivery pays the quoted reward and fills its finite order.");
+
+    const CcLocalShop *mine = NULL;
+    const CcLocalShop *stonecutter = NULL;
+    for (int32_t i = 0; i < sim.settlement_count; ++i) {
+        profile = CcLocalPlaceProfileForSettlement(&sim.settlements[i]);
+        mine = CcLocalShopAt(profile, CC_LOCAL_SHOP_MINE_SUPPLIER);
+        if (mine != NULL) {
+            stonecutter = CcLocalShopAt(profile, CC_LOCAL_SHOP_STONECUTTER);
+            sim.player.location_id = sim.settlements[i].id;
+            sim.carriage.location_id = sim.player.location_id;
+            break;
+        }
+    }
+    SUPPLY_CHECK(mine != NULL && stonecutter != NULL,
+        "Silverwick needs a mine supplier and stonecutter.");
+    local.shop_building_index = mine->building_index;
+    local.trade_mode = 0;
+    local.trade_good = CC_GOOD_RAW_STONE;
+    local.trade_quantity = 1;
+    local.trade_confirmed = false;
+    source = AdventureTradeQuote(&sim, &local);
+    SUPPLY_CHECK(source.available && source.command.kind == CC_COMMAND_TRADE_SUPPLY &&
+        source.total == 3, "The mine supplier sells raw stone at the haul price.");
+    local.shop_building_index = stonecutter->building_index;
+    local.trade_mode = 1;
+    buyer = AdventureTradeQuote(&sim, &local);
+    SUPPLY_CHECK(buyer.command.kind == CC_COMMAND_TRADE_SUPPLY && buyer.total == 6 &&
+        !buyer.available, "The stonecutter waits for raw stone cargo.");
+#undef SUPPLY_CHECK
+    return 0;
+}
+
 static int RunAdventureTradeTermsRegression(void)
 {
     int shop_result = RunAdventureShopFilterRegression();
+    if (shop_result != 0) return shop_result;
+    shop_result = RunAdventureSupplyQuoteRegression();
     if (shop_result != 0) return shop_result;
     static CcSim sim;
     static LocalState local;

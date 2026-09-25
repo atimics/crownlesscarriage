@@ -1341,13 +1341,28 @@ static bool LocalShopHandlesSpoiledCargo(const CcLocalShop *shop, CcGood good)
           good == CC_GOOD_ROTTEN_GRAIN));
 }
 
+static bool LocalShopSupplySource(const CcLocalShop *shop, CcGood good)
+{
+    return shop != NULL &&
+        ((shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT && good == CC_GOOD_WHEAT) ||
+         (shop->kind == CC_LOCAL_SHOP_MINE_SUPPLIER && good == CC_GOOD_RAW_STONE));
+}
+
+static bool LocalShopSupplyBuyer(const CcLocalShop *shop, CcGood good)
+{
+    return shop != NULL &&
+        ((shop->kind == CC_LOCAL_SHOP_BAKERY && good == CC_GOOD_WHEAT) ||
+         (shop->kind == CC_LOCAL_SHOP_STONECUTTER && good == CC_GOOD_RAW_STONE));
+}
+
 static CcGood LocalShopNextGood(const CcSim *sim, const CcLocalShop *shop,
     int mode, CcGood current, int direction)
 {
     for (int32_t step = 1; step <= CC_GOOD_COUNT; ++step) {
         int32_t good = ((int32_t)current + direction * step +
             CC_GOOD_COUNT * 2) % CC_GOOD_COUNT;
-        if (CcLocalShopSells(shop, (CcGood)good) ||
+        if ((mode == 0 && CcLocalShopSells(shop, (CcGood)good)) ||
+            (mode == 1 && CcLocalShopBuys(shop, (CcGood)good)) ||
             (mode == 1 && LocalShopHandlesSpoiledCargo(shop, (CcGood)good) &&
              sim->player.cargo[good] > 0)) return (CcGood)good;
     }
@@ -5523,6 +5538,19 @@ static ContextActionSet BuildContextActions(
                         set.items[slot].amount = -1;
                     }
                 }
+                for (int32_t cargo_good = 0;
+                     cargo_good < CC_GOOD_COUNT; ++cargo_good) {
+                    if (!CcLocalShopBuys(shop, (CcGood)cargo_good) ||
+                        CcLocalShopSells(shop, (CcGood)cargo_good) ||
+                        sim->player.cargo[cargo_good] <= 0) continue;
+                    int32_t slot = set.count;
+                    AddContextAction(&set, CONTEXT_ACTION_SELL_CARGO,
+                        TextFormat("Deliver 1 %s", CcGoodName((CcGood)cargo_good)));
+                    if (set.count > slot) {
+                        set.items[slot].good = (CcGood)cargo_good;
+                        set.items[slot].amount = -1;
+                    }
+                }
             }
         }
         if (local->open_world_market) {
@@ -7289,6 +7317,7 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
     if (journal != NULL) {
         switch (command.kind) {
             case CC_COMMAND_TRADE:
+            case CC_COMMAND_TRADE_SUPPLY:
             case CC_COMMAND_BUY_MAP:
             case CC_COMMAND_SELL_MAP:
             case CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE:
@@ -7299,11 +7328,14 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
             default: break;
         }
     }
-    if (command.kind == CC_COMMAND_TRADE) {
+    if (command.kind == CC_COMMAND_TRADE ||
+        command.kind == CC_COMMAND_TRADE_SUPPLY) {
         CcMoney change = sim->player.coins - coins_before;
         (void)snprintf(message, message_capacity,
             "%s %d %s. %s%" PRId64 " crowns. Purse: %" PRId64 ".%s",
-            command.amount > 0 ? "Bought" : "Sold", abs(command.amount),
+            command.amount > 0 ? "Bought" :
+                command.kind == CC_COMMAND_TRADE_SUPPLY ? "Delivered" : "Sold",
+            abs(command.amount),
             CcGoodName(command.good), change >= 0 ? "+" : "", change,
             sim->player.coins,
             promise_before != 0U && CcSimAcceptedSituation(sim) == NULL ?
@@ -11283,11 +11315,15 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 }
             } else if (context_action == CONTEXT_ACTION_BUY_CARGO ||
                        context_action == CONTEXT_ACTION_SELL_CARGO) {
-                if (CcLocalShopSells(shop, pressed_action.good) ||
-                    (context_action == CONTEXT_ACTION_SELL_CARGO &&
-                     LocalShopHandlesSpoiledCargo(shop, pressed_action.good))) {
+                bool buying = pressed_action.amount > 0;
+                if ((buying && CcLocalShopSells(shop, pressed_action.good)) ||
+                    (!buying && CcLocalShopBuys(shop, pressed_action.good))) {
+                  bool supply = buying ?
+                      LocalShopSupplySource(shop, pressed_action.good) :
+                      LocalShopSupplyBuyer(shop, pressed_action.good);
                   CcCommand trade = {
-                    .kind = CC_COMMAND_TRADE,
+                    .kind = supply ? CC_COMMAND_TRADE_SUPPLY : CC_COMMAND_TRADE,
+                    .target_id = supply ? town->id : 0U,
                     .good = pressed_action.good,
                     .amount = pressed_action.amount
                 };
@@ -11298,9 +11334,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
             for (int32_t good = 0; good < 9; ++good) {
                 if (!ClientKeyPressed(KEY_ONE + good)) continue;
-                if (!CcLocalShopSells(shop, (CcGood)good)) continue;
+                if (shift ? !CcLocalShopBuys(shop, (CcGood)good) :
+                    !CcLocalShopSells(shop, (CcGood)good)) continue;
+                bool supply = shift ?
+                    LocalShopSupplyBuyer(shop, (CcGood)good) :
+                    LocalShopSupplySource(shop, (CcGood)good);
                 CcCommand trade = {
-                    .kind = CC_COMMAND_TRADE,
+                    .kind = supply ? CC_COMMAND_TRADE_SUPPLY : CC_COMMAND_TRADE,
+                    .target_id = supply ? town->id : 0U,
                     .good = (CcGood)good,
                     .amount = shift ? -1 : 1
                 };
