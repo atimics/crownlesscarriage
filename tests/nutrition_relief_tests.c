@@ -1,5 +1,6 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_food_economy_internal.h"
+#include "sim/cc_census.h"
 #include "test_support.h"
 
 #include <stdio.h>
@@ -84,6 +85,7 @@ static void SetupShipment(CcSim *sim)
     to->hunger = 90;
     to->reserve_target[CC_GOOD_WHEAT] = 40;
     to->population = 2287;
+    CcCensusReconcile(sim);
     for (int i = 0; i < sim->royal_carriage_count; ++i) {
         CcRoyalCarriage *carrier = &sim->royal_carriages[i];
         carrier->next_dispatch_day = 13;
