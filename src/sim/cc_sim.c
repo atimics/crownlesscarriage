@@ -698,11 +698,10 @@ static void GatherPinnedEvents(const CcSim *sim, CcId incoming_parent,
     }
     if (sim->schema_version >= 117U) {
         for (int i = 0; i < CC_PERSONAL_WANTS; ++i) {
-            PinEvent(set, sim->wants.wants[i].cause_event_id);
-            PinEvent(set, sim->wants.wants[i].outcome_event_id);
+            const CcPersonalWant *want = &sim->wants.wants[i];
+            if (want->known_day > 0 && want->status == CC_WANT_ACTIVE)
+                PinEvent(set, want->cause_event_id);
         }
-        for (int i = 0; i < CC_BELONGINGS; ++i)
-            PinEvent(set, sim->wants.items[i].cause_event_id);
     }
     PinEvent(set, incoming_parent);
     PinEvent(set, sim->journey.parent_event_id);
@@ -20624,7 +20623,6 @@ bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_
         CcSimPeopleEnterSettlement(sim);
         CcCensusReconcile(sim);
     }
-    if (ok) CcWantsAdvance(sim);
     /* A recovered legacy overload allowance is a one-time relief valve. It
        stays reserved for the pending pack merge while a mine visit is
        still open (the pack has not merged into cargo yet, so cargo alone

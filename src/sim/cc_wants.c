@@ -255,17 +255,14 @@ static void SeedBelongings(CcSim *sim)
 void CcWantsInit(CcSim *sim)
 {
     if (sim == NULL || sim->schema_version < 117U || sim->wants.initialized) return;
-    /* Preserve the old world's identity while loading. The first live step
-       gives its residents belongings and requests from their current stock. */
+    /* The first direct question starts personal requests. Further changes
+       follow the live world, with this state stored in the campaign. */
     sim->wants = (CcWantsState){.initialized = 1, .last_day = sim->current_day};
 }
 void CcWantsAdvance(CcSim *sim)
 {
     if (sim == NULL || sim->schema_version < 117U || !sim->wants.initialized) return;
-    if (sim->wants.initialized == 1) {
-        sim->wants.initialized = 2;
-        SeedBelongings(sim);
-    }
+    if (sim->wants.initialized == 1) return;
     bool new_day = sim->wants.last_day != sim->current_day;
     sim->wants.last_day = sim->current_day;
     for (int i = 0; i < CC_BELONGINGS; ++i) {
@@ -403,6 +400,11 @@ bool CcWantsPlan(const CcSim *sim, const CcCommand *cmd, char *reason, size_t ca
         (cmd->actor_id != 0 && cmd->actor_id != sim->player.id)) return Fail(reason, capacity, "Choose a current personal request.");
     if (sim->journey.active || sim->mine.phase != CC_MINE_NONE || sim->dungeon_expedition.active)
         return Fail(reason, capacity, "Meet at a town to exchange items.");
+    if (cmd->amount == CC_WANT_DISCOVER) {
+        if (sim->wants.initialized != 1 || !Present(sim, CcSimCharacter(sim, cmd->target_id)))
+            return Fail(reason, capacity, "Choose a person's current item request.");
+        return true;
+    }
     if (cmd->amount == CC_WANT_TAKE || cmd->amount == CC_WANT_LEAVE) {
         const CcBelonging *item = CcWantsItem(sim, cmd->target_id);
         const CcCustodyEntry *e = ItemEntry(sim, item);
@@ -453,10 +455,12 @@ bool CcWantsPlan(const CcSim *sim, const CcCommand *cmd, char *reason, size_t ca
     const CcCustodyEntry *e = ItemEntry(sim, item);
     if (w->item_id != 0 && (e == NULL || e->holder.kind != CC_CUSTODY_PLAYER || e->holder.id != sim->player.id))
         return Fail(reason, capacity, "Bring the named item in the satchel.");
+    if (w->kind == CC_WANT_MEAL && p->hungry_days == 0)
+        return Fail(reason, capacity, "This person has eaten. Check back another day.");
     if (w->kind == CC_WANT_REPAIR_IRON) {
         const CcPersonalWant *parent = CcWantsFind(sim, w->parent_id);
         const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
-        if (parent == NULL || parent->status != CC_WANT_ACTIVE || town == NULL ||
+        if (parent == NULL || parent->status != CC_WANT_ACTIVE || p->occupation != CC_OCCUPATION_SMITH || town == NULL ||
             town->population == 0 || !CcSettlementHasService(town, CC_SERVICE_SMITHY) ||
             town->stock[CC_GOOD_TOOLS] == 0 || item->repair_iron >= CC_SIM_MAX_UNITS)
             return Fail(reason, capacity, "Find the smith at a working smithy with tools.");
@@ -469,8 +473,9 @@ bool CcWantsPlan(const CcSim *sim, const CcCommand *cmd, char *reason, size_t ca
     if (sim->player.cargo[w->good] < w->quantity) return Fail(reason, capacity, "Bring the requested goods in the carriage.");
     if (w->kind == CC_WANT_WORK_SUPPLIES) {
         const CcSettlement *town = CcSimSettlement(sim, w->home_id);
-        if (town == NULL || p->current_settlement_id != w->home_id ||
-            town->stock[w->good] > CC_SIM_MAX_UNITS - w->quantity)
+        if (town != NULL && town->stock[w->good] >= w->quantity)
+            return Fail(reason, capacity, "The workplace has its supplies. Check back another day.");
+        if (town == NULL || p->current_settlement_id != w->home_id)
             return Fail(reason, capacity, "Deliver these supplies at the person's workplace.");
     }
     return true;
@@ -478,6 +483,21 @@ bool CcWantsPlan(const CcSim *sim, const CcCommand *cmd, char *reason, size_t ca
 bool CcWantsApply(CcSim *sim, const CcCommand *cmd, char *message, size_t capacity)
 {
     if (!CcWantsPlan(sim, cmd, message, capacity)) return false;
+    if (cmd->amount == CC_WANT_DISCOVER) {
+        sim->wants.initialized = 2;
+        SeedBelongings(sim);
+        CcWantsAdvance(sim);
+        for (int i = 0; i < CC_PERSONAL_WANTS; ++i) {
+            const CcPersonalWant *w = &sim->wants.wants[i];
+            if (w->person_id == cmd->target_id && w->parent_id == 0 && w->status == CC_WANT_ACTIVE) {
+                CcCommand learn = {.kind = CC_COMMAND_PERSONAL_WANT, .target_id = w->id,
+                    .secondary_id = (uint64_t)w->revision, .amount = CC_WANT_LEARN};
+                return CcWantsApply(sim, &learn, message, capacity);
+            }
+        }
+        (void)snprintf(message, capacity, "I have what I need today. Ask the other workers about their tools and supplies.");
+        return true;
+    }
     if (cmd->amount == CC_WANT_TAKE || cmd->amount == CC_WANT_LEAVE) {
         const CcBelonging *item = CcWantsItem(sim, cmd->target_id);
         CcCustodyHolder to = cmd->amount == CC_WANT_TAKE ?
@@ -553,6 +573,12 @@ int32_t CcWantsOffers(const CcSim *sim, CcId person, CcWantOffer *offers, int32_
 {
     if (sim == NULL || offers == NULL || capacity <= 0 || sim->schema_version < 117U) return 0;
     int count = 0;
+    if (person != 0 && sim->wants.initialized == 1) {
+        Offer(sim, &offers[count++], (CcCommand){.kind = CC_COMMAND_PERSONAL_WANT,
+            .target_id = person, .amount = CC_WANT_DISCOVER}, "What do you need?",
+            "Ask about tools, food, and work supplies.");
+        return count;
+    }
     for (int i = 0; i < CC_PERSONAL_WANTS && count < capacity && person != 0; ++i) {
         const CcPersonalWant *w = &sim->wants.wants[i];
         if (w->status != CC_WANT_ACTIVE || w->person_id != person) continue;

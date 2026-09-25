@@ -15,7 +15,7 @@ typedef enum CcWantStatus {
     CC_WANT_ACTIVE = 1, CC_WANT_FULFILLED, CC_WANT_SETTLED, CC_WANT_CLOSED
 } CcWantStatus;
 typedef enum CcWantAction {
-    CC_WANT_LEARN = 1, CC_WANT_TAKE, CC_WANT_GIVE, CC_WANT_LEAVE
+    CC_WANT_LEARN = 1, CC_WANT_TAKE, CC_WANT_GIVE, CC_WANT_LEAVE, CC_WANT_DISCOVER
 } CcWantAction;
 
 typedef struct CcPersonalWant {

@@ -1,3 +1,4 @@
+#include "sim/cc_wants.h"
 #include "multiplayer/cc_coop.h"
 #include "multiplayer/cc_coop_commands.h"
 #include "persistence/cc_save.h"
@@ -91,6 +92,18 @@ bool CcCoopApply(CcSim *sim, const char *action, CcId target,
         amount < -CC_SIM_MAX_UNITS || amount > CC_SIM_MAX_UNITS) {
         if (error != NULL && capacity > 0U) (void)snprintf(error, capacity, "Choose an available company action.");
         return false;
+    }
+    /* The host checks the company's action_revision before this bridge.
+       Resolve the item revision from that accepted world snapshot. */
+    if (command.kind == CC_COMMAND_PERSONAL_WANT) {
+        if (command.amount == CC_WANT_TAKE || command.amount == CC_WANT_LEAVE) {
+            const CcBelonging *item = CcWantsItem(sim, command.target_id);
+            const CcCustodyEntry *entry = item != NULL ? CcCustodyFind(&sim->custody, item->custody_id) : NULL;
+            command.secondary_id = entry != NULL ? entry->revision : 0;
+        } else {
+            const CcPersonalWant *want = CcWantsFind(sim, command.target_id);
+            command.secondary_id = want != NULL ? (uint64_t)want->revision : 0;
+        }
     }
     CcSim *candidate = malloc(sizeof(*candidate));
     if (candidate == NULL) return false;

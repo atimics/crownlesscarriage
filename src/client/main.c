@@ -319,6 +319,7 @@ typedef struct LocalState {
     bool district_map_open;
     int32_t selected_district;
     int32_t selected_dwelling;
+    float want_scroll;
     int32_t trade_mode;
     CcGood trade_good;
     int32_t trade_quantity;
@@ -4885,11 +4886,11 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (local->adventure_ui && view == VIEW_CHARACTER && local->conversation_situation_id == 0U) {
-        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         if (CcOvenCourtCanDiscuss(sim, local->conversation_character_id))
             AddDetailedContextAction(&set, CONTEXT_ACTION_OVEN_QUESTION,
                 "What do the ovens need?", TextFormat("%d", set.count + 1),
                 "ASK ABOUT THE LOCAL TALLY", true, false);
+        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         const CcCharacter *contact=CcSimMineEvidenceContact(sim);
         bool jory=contact != NULL && contact->id == local->conversation_character_id;
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
@@ -5121,7 +5122,6 @@ static ContextActionSet BuildContextActions(
         return set;
     }
     if (view == VIEW_CHARACTER) {
-        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         const CcSituation *situation = CcSimSituation(
             sim, local->conversation_situation_id);
         const CcCharacter *character = CcSimCharacter(
@@ -5130,6 +5130,7 @@ static ContextActionSet BuildContextActions(
             AddDetailedContextAction(&set, CONTEXT_ACTION_OVEN_QUESTION,
                 "What do the ovens need?", TextFormat("%d", set.count + 1),
                 "ASK ABOUT THE LOCAL TALLY", true, false);
+        AddPersonalWantActions(&set, sim, local->conversation_character_id);
         const CcCharacter *contact=CcSimMineEvidenceContact(sim);
         bool jory=character != NULL && contact != NULL && character->id == contact->id;
         if (jory && sim->mine.lead_event_id == 0U && CcSimMineLeadSupported(sim))
@@ -7567,7 +7568,10 @@ static bool ApplyCommand(CcJournal *journal, CcSim *sim, CcCommand command,
         return true;
     }
     if (command.kind == CC_COMMAND_PERSONAL_WANT) {
-        if (command.amount == CC_WANT_LEARN)
+        if (command.amount == CC_WANT_DISCOVER) {
+            if (!CcWantsPersonText(sim, command.target_id, message, message_capacity))
+                (void)snprintf(message, message_capacity, "I have what I need today. Ask the other workers about their tools and supplies.");
+        } else if (command.amount == CC_WANT_LEARN)
             (void)CcWantsRequestText(sim, command.target_id, message, message_capacity);
         else (void)snprintf(message, message_capacity, "%s",
             command.amount == CC_WANT_TAKE ? "The item is in your satchel." :
@@ -10233,7 +10237,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 local->conversation_want_person = local->conversation_character_id;
                 if (pressed_action.command.amount == CC_WANT_LEARN)
                     (void)CcWantsRequestText(sim, pressed_action.command.target_id, message, message_capacity);
-                const char *reply = pressed_action.command.amount == CC_WANT_LEARN ? message :
+                const char *reply = (pressed_action.command.amount == CC_WANT_LEARN ||
+                    pressed_action.command.amount == CC_WANT_DISCOVER) ? message :
                     pressed_action.command.amount == CC_WANT_TAKE ? "Take care of it. The request is in your company book." :
                     "Thank you. This will help.";
                 (void)snprintf(local->conversation_line, sizeof(local->conversation_line), "%s", reply);

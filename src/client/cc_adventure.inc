@@ -1507,6 +1507,7 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         if (AdventureHit(AdventureBookPageBounds(panel,page))) {
             local->book_page=page;
             local->book_offset=0;
+            local->want_scroll=0.0f;
             return true;
         }
     }
@@ -1532,7 +1533,7 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         local->book_page = 2;
         local->book_offset=0;
     }
-    if (ClientKeyPressed(KEY_SIX)) { local->book_page = 5; local->book_offset = 0; }
+    if (ClientKeyPressed(KEY_SIX)) { local->book_page = 5; local->book_offset = 0; local->want_scroll = 0.0f; }
     if (local->book_page == 5) HandleAdventureWants(journal, sim, local, message, message_capacity);
     if (ClientKeyPressed(KEY_FIVE)) { local->book_page = 4; local->book_offset = 0; }
     if (local->book_page == 4) HandleAdventureCalendar(journal, sim, local, message, message_capacity);

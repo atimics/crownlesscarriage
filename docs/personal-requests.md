@@ -15,7 +15,8 @@ the person's purse and stays reserved until the request ends.
 
 ## Playing
 
-Speak to a person and choose their item request. It enters the Company Book's
+Speak to a person and choose "What do you need?" to begin. Later requests follow
+the changing world. Choose a person's item request to enter it in the Company Book's
 Requests page. A repair also records the smith's request for iron.
 
 Collect an item from town stores through Requests. Borrow a worn tool from its
@@ -44,9 +45,9 @@ Commands carry a revision so an old action can be refreshed from the current
 world. The same command and offer rules serve conversations, the book, the text
 client, replay, and shared play.
 
-Older saves first keep their historical world identity. Their first live step
-creates personal requests from the loaded town stocks and living people. The
-fixed Deep Wyrm campaign checks its recorded identity before this step.
+World setup keeps its historical identity. The first direct question creates
+personal requests from the loaded town stocks and living people. This choice
+is saved. The fixed Deep Wyrm campaign keeps its recorded starting identity.
 
 The current bounds are 32 request records, 16 named belongings, and four carried
 belongings. Supply requests can keep appearing as people and stocks change.

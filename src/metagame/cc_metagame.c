@@ -1991,7 +1991,10 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                 return false;
             }
             if (!ApplyCommand(metagame, &offers[index].command, output, output_capacity)) return false;
-            if (offers[index].command.amount == CC_WANT_LEARN)
+            if (offers[index].command.amount == CC_WANT_DISCOVER) {
+                if (!CcWantsPersonText(&metagame->sim, offers[index].command.target_id, output, output_capacity))
+                    Append(output, output_capacity, "I have what I need today. Ask the other workers about their tools and supplies.\n");
+            } else if (offers[index].command.amount == CC_WANT_LEARN)
                 (void)CcWantsRequestText(&metagame->sim, offers[index].command.target_id, output, output_capacity);
             else Append(output, output_capacity, "%s: done.\n", offers[index].label);
         } else {
@@ -2891,7 +2894,7 @@ static void DescribeAgentActions(const CcMetagame *metagame,
            "Send exactly one command on the next line. Available command families:\n"
            "  look, people, talk NUMBER, rumors, charters, roads, council, causes, notes, cargo, status\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
-           "  relief pickup|stow\n"
+           "  relief pickup|stow, wants, want NUMBER\n"
            "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"
            "  archive-map NUMBER, retrieve-map NUMBER\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"

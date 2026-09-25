@@ -60,6 +60,25 @@ static Rectangle WantBookActionBounds(Rectangle panel, int index)
     return (Rectangle){panel.x + 24.0f, panel.y + panel.height - 150.0f + (float)index * 44.0f,
         panel.width - 48.0f, 36.0f};
 }
+static Rectangle WantBookTextBounds(Rectangle panel)
+{
+    return (Rectangle){panel.x + 28.0f, panel.y + 128.0f, panel.width - 56.0f,
+        fmaxf(24.0f, panel.height - 322.0f)};
+}
+static Rectangle WantBookScrollBounds(Rectangle panel, bool down)
+{
+    return (Rectangle){panel.x + 24.0f + (down ? (panel.width - 48.0f) / 2.0f : 0.0f),
+        panel.y + panel.height - 184.0f, (panel.width - 48.0f) / 2.0f, 28.0f};
+}
+static float WantBookMaximumScroll(const WantBookCard *card, Rectangle pane)
+{
+    int size = AdventureTextSize(15), width = (int)pane.width;
+    int height = AdventureText(card->title, 0, 0, width, size + 2, CC_GOLD, false) + 10;
+    height += AdventureText(card->text, 0, 0, width, size, INK, false) + 10;
+    if (card->count > 0 && !card->actions[0].ready)
+        height += AdventureText(card->actions[0].detail, 0, 0, width, size - 1, TEAL, false);
+    return fmaxf(0.0f, (float)height - pane.height);
+}
 static void DrawAdventureWants(const CcSim *sim, const LocalState *local)
 {
     Rectangle panel = AdventurePanel();
@@ -67,18 +86,25 @@ static void DrawAdventureWants(const CcSim *sim, const LocalState *local)
     WantBookCard card;
     int count = WantBookCards(sim, local->book_offset, &card);
     if (count > 0 && local->book_offset >= count) (void)WantBookCards(sim, count - 1, &card);
-    int x = (int)panel.x + 28, y = (int)panel.y + 128, width = (int)panel.width - 56;
-    int size = AdventureTextSize(15);
-    BeginScissorMode(x, y, width, (int)panel.height - 288);
     if (count == 0) {
-        (void)AdventureWrap("Ask people what they need. Their requests appear here. You can also collect belongings from town stores and leave carried items there.", x, y, width, size, INK);
-    } else {
+        (void)snprintf(card.title, sizeof(card.title), "People and belongings");
+        (void)snprintf(card.text, sizeof(card.text), "Ask people what they need. Their requests appear here. Collect belongings from town stores and leave carried items there.");
+    }
+    Rectangle pane = WantBookTextBounds(panel);
+    float maximum = WantBookMaximumScroll(&card, pane);
+    float scroll = fmaxf(0.0f, fminf(local->want_scroll, maximum));
+    int x = (int)pane.x, y = (int)(pane.y - scroll), width = (int)pane.width;
+    int size = AdventureTextSize(15);
+    BeginScissorMode((int)pane.x, (int)pane.y, width, (int)pane.height);
+    {
         y += AdventureWrap(card.title, x, y, width, size + 2, CC_GOLD) + 10;
         y += AdventureWrap(card.text, x, y, width, size, INK) + 10;
         if (card.count > 0 && !card.actions[0].ready)
             (void)AdventureWrap(card.actions[0].detail, x, y, width, size - 1, TEAL);
     }
     EndScissorMode();
+    AdventureButton(WantBookScrollBounds(panel, false), "Read up  PgUp", scroll > 0.0f, false);
+    AdventureButton(WantBookScrollBounds(panel, true), "Read down  PgDn", scroll < maximum, false);
     for (int i = 0; i < card.count; ++i)
         AdventureButton(WantBookActionBounds(panel, i), card.actions[i].label, card.actions[i].ready, false);
     AdventureButton(AdventureBookMineStepBounds(panel, 0), "Previous request", count > 1, false);
@@ -89,18 +115,32 @@ static void HandleAdventureWants(CcJournal *journal, CcSim *sim, LocalState *loc
     Rectangle panel = AdventurePanel();
     WantBookCard card;
     int count = WantBookCards(sim, local->book_offset, &card);
-    if (count <= 0) { local->book_offset = 0; return; }
-    if (local->book_offset >= count) {
+    if (count <= 0) {
+        local->book_offset = 0;
+        (void)snprintf(card.title, sizeof(card.title), "People and belongings");
+        (void)snprintf(card.text, sizeof(card.text), "Ask people what they need. Their requests appear here. Collect belongings from town stores and leave carried items there.");
+    }
+    if (count > 0 && local->book_offset >= count) {
         local->book_offset = count - 1;
         (void)WantBookCards(sim, local->book_offset, &card);
     }
-    if (ClientKeyPressed(KEY_UP) || AdventureHit(AdventureBookMineStepBounds(panel, 0)))
+    Rectangle pane = WantBookTextBounds(panel);
+    float change = 0.0f;
+    if (ClientKeyPressed(KEY_PAGE_UP) || AdventureHit(WantBookScrollBounds(panel, false))) change -= pane.height * 0.75f;
+    if (ClientKeyPressed(KEY_PAGE_DOWN) || AdventureHit(WantBookScrollBounds(panel, true))) change += pane.height * 0.75f;
+    if (CheckCollisionPointRec(ClientPointerPosition(), pane)) change -= GetMouseWheelMove() * 54.0f;
+    local->want_scroll = fmaxf(0.0f, fminf(local->want_scroll + change, WantBookMaximumScroll(&card, pane)));
+    if (count <= 0) return;
+    if (ClientKeyPressed(KEY_UP) || AdventureHit(AdventureBookMineStepBounds(panel, 0))) {
         local->book_offset = (local->book_offset + count - 1) % count;
-    else if (ClientKeyPressed(KEY_DOWN) || AdventureHit(AdventureBookMineStepBounds(panel, 1)))
+        local->want_scroll = 0.0f;
+    } else if (ClientKeyPressed(KEY_DOWN) || AdventureHit(AdventureBookMineStepBounds(panel, 1))) {
         local->book_offset = (local->book_offset + 1) % count;
-    else for (int i = 0; i < card.count; ++i)
+        local->want_scroll = 0.0f;
+    } else for (int i = 0; i < card.count; ++i)
         if (card.actions[i].ready && AdventureHit(WantBookActionBounds(panel, i))) {
             (void)ApplyCommand(journal, sim, card.actions[i].command, message, capacity);
+            local->want_scroll = 0.0f;
             break;
         }
 }
