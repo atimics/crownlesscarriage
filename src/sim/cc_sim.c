@@ -16676,6 +16676,35 @@ static void AdvanceArchiveRecruitTraining(CcSim *sim)
         0, o->person_id, o->trainer_id, o->person_id, 0, o->labor_days, text);
 }
 
+typedef struct CcCensusSources {
+    int32_t settlement_count;
+    CcId settlement_ids[CC_MAX_SETTLEMENTS];
+    int32_t populations[CC_MAX_SETTLEMENTS];
+    int32_t named_count;
+    CcId named_ids[CC_MAX_CHARACTER_RECORDS];
+    CcId named_homes[CC_MAX_CHARACTER_RECORDS];
+    int32_t named_birth_days[CC_MAX_CHARACTER_RECORDS];
+} CcCensusSources;
+
+static void CaptureCensusSources(const CcSim *sim, CcCensusSources *sources)
+{
+    memset(sources, 0, sizeof(*sources));
+    sources->settlement_count = sim->settlement_count;
+    for (int32_t i = 0; i < sim->settlement_count; ++i) {
+        sources->settlement_ids[i] = sim->settlements[i].id;
+        sources->populations[i] = sim->settlements[i].population;
+    }
+    for (int32_t i = 0; i < sim->character_count; ++i) {
+        const CcCharacter *character = &sim->characters[i];
+        if (character->birth_day > sim->current_day ||
+            character->death_day <= sim->current_day) continue;
+        int32_t slot = sources->named_count++;
+        sources->named_ids[slot] = character->id;
+        sources->named_homes[slot] = character->home_settlement_id;
+        sources->named_birth_days[slot] = character->birth_day;
+    }
+}
+
 void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
     CcNutritionAccounting *accounting, CcSmithyAccounting *smithy,
     CcRoadProductionAccounting *sites)
@@ -16685,6 +16714,9 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         days > CC_SIM_MAX_DAY - sim->current_day) return;
     int32_t next_situation_expiry = NextSituationExpiryDay(sim);
     for (int32_t day = 0; day < days; ++day) {
+        CcCensusSources census_before, census_after;
+        if (sim->schema_version >= 114U)
+            CaptureCensusSources(sim, &census_before);
         sim->current_day += 1;
         if (sim->schema_version >= 26U) AdvanceCharacterLifecycles(sim);
         if (sim->schema_version >= 85U && sim->archive_staff.active) {
@@ -16771,7 +16803,12 @@ void CcSimAdvanceDaysWithProductionAccounting(CcSim *sim, int32_t days,
         DeliverDelayedEchoIfReady(sim);
         AdvanceGoblinPolitics(sim);
         CcScrivenAdvance(sim);
-        CcCensusReconcile(sim);
+        if (sim->schema_version >= 114U) {
+            CaptureCensusSources(sim, &census_after);
+            if (memcmp(&census_before, &census_after,
+                       sizeof(census_before)) != 0)
+                CcCensusReconcile(sim);
+        }
     }
 }
 
