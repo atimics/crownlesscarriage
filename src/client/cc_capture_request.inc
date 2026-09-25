@@ -296,17 +296,23 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         if (argc < 5) {
             (void)fprintf(
                 stderr,
-                "capture town arrival requires an index from 0 to 5, progress from 0 to 1, and a frame path.\n");
+                "capture town arrival requires an index from 0 to 5, progress from 0 to 1 (or \"establishing\"), and a frame path.\n");
             return false;
         }
         char *index_end = NULL;
         char *progress_end = NULL;
         long parsed_index = strtol(argv[2], &index_end, 10);
-        float parsed_progress = strtof(argv[3], &progress_end);
+        /* "establishing": the town's own establishing still, with the
+           carriage where that shot was composed to hold it. */
+        bool establishing = strcmp(argv[3], "establishing") == 0;
+        float parsed_progress = establishing ? -1.0f :
+            strtof(argv[3], &progress_end);
+        if (establishing) progress_end = argv[3] + strlen(argv[3]);
         if (index_end == argv[2] || *index_end != '\0' ||
             parsed_index < 0 || parsed_index >= 6 ||
             progress_end == argv[3] || *progress_end != '\0' ||
-            parsed_progress < 0.0f || parsed_progress > 1.0f) {
+            (!establishing &&
+             (parsed_progress < 0.0f || parsed_progress > 1.0f))) {
             (void)fprintf(stderr,
                           "capture town arrival values are invalid.\n");
             return false;

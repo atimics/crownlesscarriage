@@ -937,7 +937,8 @@ uint32_t CcLocalPlaceTerrainSeed(uint32_t world_seed,
 void CcReturnSceneCuesBuild(const CcReturnDigest *digest, CcReturnSceneCues *cues)
 {
     if (cues == NULL) return;
-    *cues = (CcReturnSceneCues){.service_lost_kind = -1};
+    *cues = (CcReturnSceneCues){.service_lost_kind = -1,
+                                .boarded_building = -1};
     if (digest == NULL || digest->first_visit) return;
     int32_t taken = 0;
     for (int32_t i = 0; i < digest->change_count && taken < 3; ++i) {

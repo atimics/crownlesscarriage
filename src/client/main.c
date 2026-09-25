@@ -1503,7 +1503,8 @@ static void ResetLocalState(LocalState *local)
         .town_position = {CC_LOCAL_CARRIAGE_X, 0.0f,
                           CC_LOCAL_CARRIAGE_Z}
     };
-    local->return_scene = (CcReturnSceneCues){.service_lost_kind = -1};
+    local->return_scene = (CcReturnSceneCues){
+        .service_lost_kind = -1, .boarded_building = -1};
 
     CcLocalAgentInit(
         &local->agent,
@@ -7770,6 +7771,23 @@ static bool HandleExpedition(CcJournal *journal, CcSim *sim,
     return true;
 }
 
+/* The Return, milestone 2: look at what changed since the company left
+   and stand its props in the town -- once when the carriage rolls through
+   the gate (so the establishing shot already shows it) and again when it
+   parks, both on the update path. CcReturnDigestBuild only reads sim;
+   CcReturnSceneCuesBuild only reads the digest; CcLocalReturnStagingPlace
+   only writes the cues. Draw code never calls any of them. */
+static void StageReturnScene(const CcSim *sim, LocalState *local)
+{
+    local->return_scene = (CcReturnSceneCues){
+        .service_lost_kind = -1, .boarded_building = -1};
+    CcReturnDigest digest;
+    if (CcReturnDigestBuild(sim, sim->player.location_id, &digest)) {
+        CcReturnSceneCuesBuild(&digest, &local->return_scene);
+        CcLocalReturnStagingPlace(sim, &local->return_scene);
+    }
+}
+
 static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
                                    int32_t *selected, char *message,
                                    size_t message_capacity)
@@ -7777,14 +7795,7 @@ static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
     *selected = FirstOutgoingRouteIndex(sim);
     LeaveOpenWorld(local);
     ResetLocalStatePreservingAthletics(local);
-    /* The Return, milestone 2: the moment the carriage parks is the moment
-       to look at what changed since the company left -- once, here, on the
-       update path. CcReturnDigestBuild only reads sim; CcReturnSceneCues
-       Build only reads the digest. Draw code never calls either. */
-    CcReturnDigest digest;
-    if (CcReturnDigestBuild(sim, sim->player.location_id, &digest)) {
-        CcReturnSceneCuesBuild(&digest, &local->return_scene);
-    }
+    StageReturnScene(sim, local);
     (void)snprintf(message, message_capacity,
                    "The carriage is parked in town.");
 }
@@ -10831,6 +10842,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (!sim->journey.active && local->open_world &&
                 local->arrival.phase == CC_CLIENT_ARRIVAL_TOWN) {
                 BeginTownArrivalState(local);
+                StageReturnScene(sim, local);
             }
             bool enter_pressed = ClientKeyPressed(KEY_ENTER);
             if (HandleTownArrivalAction(

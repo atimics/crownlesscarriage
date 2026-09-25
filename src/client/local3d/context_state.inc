@@ -133,6 +133,24 @@ static void DrawVisibleNpcFigure3D(Vector3 position, float size_hint,
                                    float yaw, uint32_t seed, CcNpcRole role,
                                    Color accent, float phase,
                                    CcTraversalMode mode, Vector3 focus);
+static void DrawVisibleNpcPoseFigure3D(
+    Vector3 position, float size_hint, float yaw, uint32_t seed,
+    CcNpcRole role, Color accent, float phase, CcTraversalMode mode,
+    int32_t fixed_pose, Vector3 focus);
+/* Fire on the town (authored_places.inc): char, ash and ember tones, and
+   the burn helpers the landmark and room-detail draws share with the
+   building pass further down. */
+static const Color TOWN_CHAR = {34, 28, 26, 255};
+static const Color TOWN_ASH = {58, 52, 50, 255};
+static const Color TOWN_EMBER = {176, 64, 28, 255};
+static uint32_t TownFireHash(uint32_t value);
+static float TownPlotBurn(const CcSettlement *place, Rectangle footprint,
+                          uint32_t salt);
+static void DrawFireScorch(Rectangle footprint, float burn, uint32_t seed);
+static void DrawGuttedBuildingShell(Rectangle footprint, float height,
+                                    Color wall, uint32_t seed);
+static void DrawScorchedBuildingMarks(Rectangle footprint, float height,
+                                      float burn, uint32_t seed);
 typedef struct WorldLabel {
     Vector3 point;
     const char *text;

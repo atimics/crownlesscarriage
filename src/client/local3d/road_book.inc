@@ -2470,7 +2470,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         reset_reveals, reveal_dt, 0.18f, 5.0f);
     DrawRoomLandmarks(place, kingdom, profile, scenery_focus,
                       gate_reveal.amount);
-    DrawPlaceLandmarks(kingdom, scenery_focus);
+    DrawPlaceLandmarks(place, kingdom, scenery_focus);
     DrawReturnArrivalStaging(sim, place, return_scene, scenery_focus, clock);
     if (SceneryPointVisible(47.35f, 31.05f, scenery_focus)) {
         DrawJourneyAftermath3D(sim, place);

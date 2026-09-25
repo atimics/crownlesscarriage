@@ -238,8 +238,17 @@ static void TestConvoyDrawReadOnly(void)
         .active = true, .fire = true, .new_ruler = true,
         .empty_market = true, .empty_market_goods_mask = 3U,
         .hunger = true, .bandit_camp = true, .service_lost = true,
-        .service_lost_kind = CC_SERVICE_MARKET,
+        .service_lost_kind = CC_SERVICE_SMITHY,
     };
+    /* Placement is the update path's job; do it once, then draw. The
+       town must be burned for the smoke to have somewhere to rise from. */
+    CcSettlement *town = &sim.settlements[0];
+    sim.player.location_id = town->id;
+    town->fire_damage = 60;
+    CcLocalReturnStagingPlace(&sim, &cues);
+    if (!cues.placed || cues.crowd_count <= 0 || cues.stall_count <= 0 ||
+        cues.smoke_count <= 0)
+        RequireRenderer(false, "return-scene staging placed no props");
     CcReturnSceneCues cues_before = cues;
     uint64_t sim_hash_before = CcSimHash(&sim);
     RenderTexture2D target = LoadRenderTexture(320, 180);

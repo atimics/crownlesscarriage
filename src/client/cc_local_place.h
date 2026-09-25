@@ -197,6 +197,18 @@ CcLocalLanePoint CcLocalLaneSample(const CcLocalLane *lane, float progress);
    code only ever reads a CcReturnSceneCues it was handed, it never builds
    one itself. Knowledge the company was already told or witnessed is left
    for the gate voice (milestone 3), not staged here. */
+/* Where one staged prop stands, in town ground coordinates, and which way
+   it faces (radians, the town's forward = (sin, cos) convention). */
+typedef struct CcReturnStagePoint {
+    float x;
+    float z;
+    float yaw;
+} CcReturnStagePoint;
+
+#define CC_RETURN_CROWD_CAPACITY 7
+#define CC_RETURN_STALL_CAPACITY 3
+#define CC_RETURN_SMOKE_CAPACITY 3
+
 typedef struct CcReturnSceneCues {
     bool active;        /* at least one cue below is set */
     bool fire;
@@ -207,6 +219,27 @@ typedef struct CcReturnSceneCues {
     bool bandit_camp;
     bool service_lost;
     int32_t service_lost_kind; /* a CcService, or -1 */
+
+    /* Placement, filled once on the update path by
+       CcLocalReturnStagingPlace (cc_local3d.h) after the cues are built;
+       draw code only reads it. Unplaced cues draw nothing. The roadside
+       market stalls are placed on every visit (with the town's wares on
+       them) so an emptied market has something to be compared against. */
+    bool placed;
+    int32_t crowd_count;           /* hungry figures by the gate */
+    CcReturnStagePoint crowd[CC_RETURN_CROWD_CAPACITY];
+    int32_t stall_count;           /* the roadside market by the gate */
+    CcReturnStagePoint stall[CC_RETURN_STALL_CAPACITY];
+    bool stalls_bare;              /* nothing left to sell */
+    bool stall_boarded;            /* the first stall is a boarded booth */
+    int32_t smoke_count;           /* columns over burned buildings */
+    CcReturnStagePoint smoke[CC_RETURN_SMOKE_CAPACITY];
+    int32_t boarded_building;      /* the lost service's building, or -1 */
+    CcReturnStagePoint banner;
+    CcReturnStagePoint camp;
+    /* Kept clear of every staged prop: the spot by the gate where the gate
+       voice (milestone 3) stands its speaker. */
+    CcReturnStagePoint speaker;
 } CcReturnSceneCues;
 
 void CcReturnSceneCuesBuild(const CcReturnDigest *digest, CcReturnSceneCues *cues);

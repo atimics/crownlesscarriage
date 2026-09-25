@@ -1309,13 +1309,32 @@ static void DrawEastRoomFocus(float hunger, Color kingdom,
     }
 }
 
-static void DrawEastWindmill(Color kingdom, float hunger)
+static void DrawEastWindmill(Color kingdom, float hunger, float burn)
 {
     const float x = 81.4f;
     const float z = 47.0f;
     Color tower = BlendColor(WORLD_STONE_LIGHT,
                              WORLD_ROAD, hunger * 0.50f);
     Color timber = BlendColor(WORLD_WOOD, kingdom, 0.16f);
+    if (burn > 0.0f) {
+        /* Burned: a blackened stone stump, the cap gone, two charred sail
+           stocks left hanging. */
+        tower = BlendColor(tower, TOWN_CHAR, 0.35f + 0.45f * burn);
+        float stump = 3.45f * (1.0f - 0.35f * burn);
+        DrawCylinder((Vector3){x, 0.05f, z}, 0.74f + 0.34f * 0.35f * burn,
+                     1.08f, stump, 12, tower);
+        DrawCylinder((Vector3){x, 0.05f + stump - 1.0f, z},
+                     0.76f + 0.34f * 0.35f * burn, 0.80f, 1.02f, 12, TOWN_CHAR);
+        for (int32_t blade = 0; blade < 2; ++blade) {
+            rlPushMatrix();
+            rlTranslatef(x, stump - 0.2f, z + 0.80f);
+            rlRotatef(-38.0f + (float)blade * 104.0f, 0.0f, 0.0f, 1.0f);
+            DrawBox((Vector3){0.0f, 0.62f, 0.0f},
+                    (Vector3){0.16f, 1.24f, 0.10f}, TOWN_CHAR);
+            rlPopMatrix();
+        }
+        return;
+    }
     DrawCylinder((Vector3){x, 0.05f, z}, 0.74f, 1.08f, 3.45f, 12, tower);
     DrawCylinder((Vector3){x, 3.50f, z}, 0.08f, 0.92f, 0.82f, 12, timber);
     DrawCylinderEx((Vector3){x, 3.28f, z + 0.36f},
@@ -1478,7 +1497,8 @@ static void DrawPlaceLandmark(const CcLocalPlaceLandmark *landmark,
     }
 }
 
-static void DrawPlaceLandmarks(Color kingdom, Vector3 focus)
+static void DrawPlaceLandmarks(const CcSettlement *place, Color kingdom,
+                               Vector3 focus)
 {
     for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
         const CcLocalPlaceLandmark *landmark = ActivePlaceLandmarkAt(i);
@@ -1487,7 +1507,22 @@ static void DrawPlaceLandmarks(Color kingdom, Vector3 focus)
         if (!SceneryFootprintVisible(footprint, focus)) continue;
         rlPushMatrix();
         rlTranslatef(0.0f, TerrainFootprintHeight(footprint), 0.0f);
-        DrawPlaceLandmark(landmark, kingdom);
+        /* Landmarks burn like the buildings around them. */
+        uint32_t salt = UINT32_C(0x1a00) + (uint32_t)i;
+        float burn = TownPlotBurn(place, footprint, salt);
+        uint32_t fire_seed = TownFireHash(salt ^ (place != NULL ?
+                                                  (uint32_t)place->id : 0U));
+        if (burn > 0.0f) DrawFireScorch(footprint, burn, fire_seed);
+        if (burn >= 0.75f) {
+            DrawGuttedBuildingShell(footprint, landmark->height,
+                                    WORLD_STONE_SHADOW, fire_seed);
+        } else {
+            DrawPlaceLandmark(landmark, kingdom);
+            if (burn > 0.0f) {
+                DrawScorchedBuildingMarks(footprint, landmark->height, burn,
+                                          fire_seed);
+            }
+        }
         rlPopMatrix();
     }
 }
@@ -1545,109 +1580,9 @@ static void DrawRoomLandmarks(const CcSettlement *place, Color kingdom,
     if (RoomDetailPointVisible(81.4f, 47.0f, focus)) {
         rlPushMatrix();
         rlTranslatef(0.0f, CcLocalTerrainHeightAt(81.4f, 47.0f), 0.0f);
-        DrawEastWindmill(kingdom, hunger);
+        DrawEastWindmill(kingdom, hunger, TownPlotBurn(
+            place, (Rectangle){80.3f, 45.9f, 2.2f, 2.2f}, UINT32_C(0x3d11)));
         rlPopMatrix();
-    }
-}
-
-/* The Return, milestone 2 (docs/design/the-return.md): stage the arrival
-   shot's cues. `cues` is built once on the update path (FinishTownArrival
-   State in main.c) from the digest's top unknown changes; this function
-   only ever reads it -- no sim access, no state of its own, so drawing it
-   twice from the same cues leaves nothing changed. Fire, the hungry crowd
-   and the kingdom's colour already read live settlement state everywhere
-   else in this file; this only adds the one new, additive prop each cue
-   still needs, near the shared gate every town's arrival passes through. */
-static void DrawReturnArrivalStaging(const CcSim *sim, const CcSettlement *place,
-                                     const CcReturnSceneCues *cues,
-                                     Vector3 focus, float clock)
-{
-    if (cues == NULL || !cues->active || place == NULL || sim == NULL) return;
-    /* Every town's carriage crosses the same physical approach (the shared
-       arrival_path in SetConvoyTownPose, main.c); only the authored camera
-       that watches it differs per profile. So each prop is placed a few
-       strides from `focus` -- the arrival camera's own gaze point -- rather
-       than at a fixed world coordinate that would only line up for one
-       town. Offsets spread the props to both sides of the road so they
-       read as roadside dressing, not a wall in the company's path. */
-    float fx = focus.x, fz = focus.z;
-    if (cues->fire) {
-        /* Smoke at the gate, only for the arrival where the digest says
-           the fire is new news -- never a standing plume over old damage
-           (see the note in town_sky.inc's TownSkyPalette). */
-        Vector3 base = TerrainWorldPoint(fx + 1.0f, fz + 10.0f);
-        for (int32_t puff = 0; puff < 3; ++puff) {
-            float rise = fmodf(clock * 0.20f + (float)puff * 0.34f, 1.0f);
-            DrawScenerySphere(
-                (Vector3){base.x, base.y + 3.6f + rise * 1.6f, base.z},
-                0.30f + rise * 0.22f,
-                Fade((Color){126, 126, 128, 255}, 0.60f * (1.0f - rise)));
-        }
-    }
-    if (cues->new_ruler) {
-        /* A second, unweathered banner beside the road: a fresh ruler or a
-           fresh kingdom, either way a cloth that has not seen a season yet.
-           CcHeraldryForKingdom already reads KingdomColor3D's colours. */
-        float x = fx + 2.0f, z = fz + 5.4f;
-        CcHeraldryStyle fresh = CcHeraldryForKingdom(sim, place->kingdom_id);
-        fresh.wear = 0;
-        DrawHeraldryBanner3D(fresh,
-            (Vector3){x, CcLocalTerrainHeightAt(x, z), z}, 20.0f, 0.55f, clock);
-    }
-    if (cues->service_lost) {
-        /* A shuttered booth by the road: boards nailed across a doorway,
-           the same treatment an abandoned town's fronts get. */
-        float x = fx + 3.2f, z = fz + 5.4f;
-        float y = CcLocalTerrainHeightAt(x, z);
-        DrawBox((Vector3){x, y + 0.60f, z},
-                (Vector3){1.15f, 1.20f, 0.85f}, WORLD_WOOD_SHADOW);
-        for (int32_t board = 0; board < 3; ++board) {
-            DrawTiltedBox(
-                (Vector3){x, y + 0.42f + (float)board * 0.34f, z + 0.44f},
-                (Vector3){1.30f, 0.16f, 0.05f}, (Vector3){0.0f, 0.0f, 1.0f},
-                (board & 1) == 0 ? 9.0f : -9.0f, WORLD_INK);
-        }
-    }
-    if (cues->empty_market) {
-        /* A bare roadside stall: goods_mask already told us the market has
-           nothing to sell, so the table by the road carries nothing. */
-        float x = fx + 4.4f, z = fz + 5.4f;
-        float y = CcLocalTerrainHeightAt(x, z);
-        for (int32_t leg = 0; leg < 4; ++leg) {
-            float lx = x + ((leg & 1) ? 0.60f : -0.60f);
-            float lz = z + ((leg & 2) ? 0.30f : -0.30f);
-            DrawBox((Vector3){lx, y + 0.27f, lz},
-                    (Vector3){0.10f, 0.54f, 0.10f}, WORLD_WOOD_SHADOW);
-        }
-        DrawBox((Vector3){x, y + 0.56f, z},
-                (Vector3){1.55f, 0.10f, 0.85f}, WORLD_WOOD);
-    }
-    if (cues->hunger) {
-        /* One more hungry figure, this one waiting right by the road,
-           rather than only further in with the rest of the street. */
-        float x = fx + 3.2f, z = fz + 6.6f;
-        DrawVisibleNpcFigure3D(
-            TerrainWorldPoint(x, z), 0.88f, 2.10f,
-            UINT32_C(0x72747e05), CC_NPC_ROLE_REFUGEE, WORLD_DANGER,
-            clock * 0.55f, CC_TRAVERSAL_IDLE, focus);
-    }
-    if (cues->bandit_camp) {
-        /* Tents and a smoke column on the horizon beyond the walls: a camp
-           the company did not have to fight to see. */
-        Vector3 ridge = TerrainWorldPoint(fx + 6.0f, fz + 22.0f);
-        DrawTiltedBox((Vector3){ridge.x - 1.1f, ridge.y + 0.55f, ridge.z},
-                      (Vector3){1.35f, 1.05f, 1.05f}, (Vector3){0.0f, 1.0f, 0.0f},
-                      18.0f, (Color){96, 78, 54, 255});
-        DrawTiltedBox((Vector3){ridge.x + 1.3f, ridge.y + 0.48f, ridge.z + 0.6f},
-                      (Vector3){1.10f, 0.92f, 0.92f}, (Vector3){0.0f, 1.0f, 0.0f},
-                      -12.0f, (Color){84, 68, 47, 255});
-        for (int32_t puff = 0; puff < 3; ++puff) {
-            float rise = fmodf(clock * 0.28f + (float)puff * 0.33f, 1.0f);
-            DrawScenerySphere(
-                (Vector3){ridge.x + 0.2f, ridge.y + 1.10f + rise * 1.6f, ridge.z + 0.1f},
-                0.24f + rise * 0.20f,
-                Fade((Color){150, 150, 150, 255}, 0.55f * (1.0f - rise)));
-        }
     }
 }
 
@@ -4234,6 +4169,875 @@ static void DrawSpecialistShopFront(const CcLocalPlaceProfile *profile,
     }
 }
 
+/* Fire on the town itself (docs/design/the-return.md). A town's fire_damage
+   (0..100, set by dragon retaliation, lowered by masons) decides how much of
+   it is burned; which buildings burn is a fixed, per-town order, so every
+   view of the same town agrees. The fire spreads from the approach road:
+   plots nearest the gate every arrival passes through burn first, with a
+   small hashed jitter per town so the front is not a perfect circle.
+   Returns 0 (untouched) to 1 (a gutted shell). Pure: reads the settlement. */
+static uint32_t TownFireHash(uint32_t value)
+{
+    value ^= value >> 16;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16;
+    return value;
+}
+
+static float TownFireOrderKey(const CcSettlement *place, uint32_t salt,
+                              int32_t index, Rectangle footprint)
+{
+    float cx = footprint.x + footprint.width * 0.5f;
+    float cz = footprint.y + footprint.height * 0.5f;
+    uint32_t h = TownFireHash(((uint32_t)place->id ^ salt) * UINT32_C(131) +
+                              (uint32_t)index);
+    return hypotf(cx - CC_LOCAL_TOWN_GATE_X, cz - CC_LOCAL_TOWN_GATE_Z) +
+           (float)(h % 600U) / 100.0f;
+}
+
+static float TownFireBurnForRank(const CcSettlement *place, int32_t rank,
+                                 int32_t count)
+{
+    if (place == NULL || place->fire_damage <= 0 || count <= 0) return 0.0f;
+    /* At 80% damage every building has caught; each needs 25 more points
+       past its own threshold to be gutted. */
+    float threshold = ((float)rank + 0.5f) / (float)count * 80.0f;
+    float burn = ((float)place->fire_damage - threshold) / 25.0f;
+    return fmaxf(0.0f, fminf(1.0f, burn));
+}
+
+static float TownBuildingBurn(const CcSettlement *place, int32_t index)
+{
+    if (place == NULL || place->fire_damage <= 0) return 0.0f;
+    int32_t count = ActiveWorldBuildingCount();
+    float mine = TownFireOrderKey(place, 0U, index,
+                                  ActiveWorldBuildingAt(index).footprint);
+    int32_t rank = 0;
+    for (int32_t other = 0; other < count; ++other) {
+        if (other == index) continue;
+        float theirs = TownFireOrderKey(place, 0U, other,
+                                        ActiveWorldBuildingAt(other).footprint);
+        if (theirs < mine || (theirs == mine && other < index)) ++rank;
+    }
+    return TownFireBurnForRank(place, rank, count);
+}
+
+/* Stone keeps its shape in a fire; walls, towers and halls only scorch. */
+static float TownStructureBurn(const CcSettlement *place, int32_t index)
+{
+    if (place == NULL || place->fire_damage <= 0) return 0.0f;
+    int32_t count = ActiveCompoundStructureCount();
+    float mine = TownFireOrderKey(place, UINT32_C(0x5c0a), index,
+                                  ActiveCompoundStructureAt(index).footprint);
+    int32_t rank = 0;
+    for (int32_t other = 0; other < count; ++other) {
+        if (other == index) continue;
+        float theirs = TownFireOrderKey(
+            place, UINT32_C(0x5c0a), other,
+            ActiveCompoundStructureAt(other).footprint);
+        if (theirs < mine || (theirs == mine && other < index)) ++rank;
+    }
+    return fminf(0.7f, TownFireBurnForRank(place, rank, count));
+}
+
+
+/* Any other plot (a landmark, the east windmill) burns in the same order
+   as the buildings around it: ranked by its own distance from the gate. */
+static float TownPlotBurn(const CcSettlement *place, Rectangle footprint,
+                          uint32_t salt)
+{
+    if (place == NULL || place->fire_damage <= 0) return 0.0f;
+    int32_t count = ActiveWorldBuildingCount();
+    float mine = TownFireOrderKey(place, salt, (int32_t)(salt & 0xffU),
+                                  footprint);
+    int32_t rank = 0;
+    for (int32_t other = 0; other < count; ++other) {
+        if (TownFireOrderKey(place, 0U, other,
+                             ActiveWorldBuildingAt(other).footprint) < mine)
+            ++rank;
+    }
+    return TownFireBurnForRank(place, rank, count);
+}
+
+/* Ash and scorch on the ground around a burned plot, in the plot's frame. */
+static void DrawFireScorch(Rectangle footprint, float burn, uint32_t seed)
+{
+    float grow = 0.6f + burn * 1.4f;
+    int32_t blots = 6;
+    for (int32_t blot = 0; blot < blots; ++blot) {
+        uint32_t h = TownFireHash(seed + (uint32_t)blot * UINT32_C(977));
+        float u = (float)(h & 0xffU) / 255.0f;
+        float v = (float)((h >> 8) & 0xffU) / 255.0f;
+        float size_x = footprint.width * (0.40f + 0.35f * u) + grow;
+        float size_z = footprint.height * (0.40f + 0.35f * v) + grow;
+        float cx = footprint.x + footprint.width * (0.15f + 0.7f * v);
+        float cz = footprint.y + footprint.height * (0.15f + 0.7f * u);
+        DrawTiltedBox((Vector3){cx, 0.035f + (float)blot * 0.004f, cz},
+                      (Vector3){size_x, 0.04f, size_z},
+                      (Vector3){0.0f, 1.0f, 0.0f},
+                      (float)(h >> 16 & 0x3fU) - 32.0f,
+                      blot % 2 == 0 ? TOWN_CHAR : TOWN_ASH);
+    }
+}
+
+/* A building the fire gutted: broken wall stumps with blackened tops, empty
+   window holes, a few charred rafters (some fallen) and no roof. Drawn in
+   the plot's frame in place of its architecture. */
+static void DrawGuttedBuildingShell(Rectangle footprint, float height,
+                                    Color wall, uint32_t seed)
+{
+    const float thick = 0.34f;
+    float x0 = footprint.x, z0 = footprint.y;
+    float w = footprint.width, d = footprint.height;
+    Color stump = BlendColor(wall, TOWN_CHAR, 0.55f);
+    for (int32_t side = 0; side < 4; ++side) {
+        bool along_x = side < 2;
+        float length = along_x ? w : d;
+        int32_t pieces = (int32_t)fmaxf(2.0f, ceilf(length / 1.25f));
+        float piece = length / (float)pieces;
+        for (int32_t i = 0; i < pieces; ++i) {
+            uint32_t h = TownFireHash(seed + (uint32_t)(side * 64 + i));
+            float jag = (float)(h & 0xffU) / 255.0f;
+            /* Corners stand tallest; the middles of long walls fell in. */
+            bool corner = i == 0 || i == pieces - 1;
+            float top = height * (corner ? 0.62f + 0.30f * jag :
+                                            0.22f + 0.48f * jag);
+            float along = (float)i * piece + piece * 0.5f;
+            Vector3 center = along_x ?
+                (Vector3){x0 + along, top * 0.5f,
+                          side == 0 ? z0 + d - thick * 0.5f : z0 + thick * 0.5f} :
+                (Vector3){side == 2 ? x0 + thick * 0.5f : x0 + w - thick * 0.5f,
+                          top * 0.5f, z0 + along};
+            Vector3 size = along_x ? (Vector3){piece + 0.02f, top, thick} :
+                                     (Vector3){thick, top, piece + 0.02f};
+            DrawBox(center, size, stump);
+            /* the soot line: the upper part of every stump is black */
+            float soot = fminf(top, 0.55f + top * 0.35f);
+            Vector3 soot_center = center;
+            soot_center.y = top - soot * 0.5f + 0.01f;
+            Vector3 soot_size = size;
+            soot_size.y = soot;
+            if (along_x) {
+                soot_size.z += 0.03f;
+                soot_size.x -= 0.01f;
+            } else {
+                soot_size.x += 0.03f;
+                soot_size.z -= 0.01f;
+            }
+            DrawBox(soot_center, soot_size, TOWN_CHAR);
+            /* an empty window hole where the wall still stands high enough */
+            if (side == 0 && top > 1.9f && (i % 2) == 1) {
+                DrawBox((Vector3){center.x, 1.45f,
+                                  center.z + thick * 0.5f + 0.02f},
+                        (Vector3){piece * 0.46f, 0.80f, 0.05f}, BLACK);
+            }
+        }
+    }
+    /* Charred rafters: some still span the walls, the rest fell in. */
+    int32_t rafters = (int32_t)fmaxf(3.0f, floorf(w / 1.8f));
+    for (int32_t r = 0; r < rafters; ++r) {
+        uint32_t h = TownFireHash(seed + UINT32_C(4099) + (uint32_t)r);
+        float jag = (float)(h & 0xffU) / 255.0f;
+        float rx = x0 + w * ((float)r + 0.5f) / (float)rafters;
+        if (r % 3 == 1) {
+            DrawTiltedBox((Vector3){rx, height * 0.30f, z0 + d * 0.5f},
+                          (Vector3){0.20f, 0.22f, d * 0.95f},
+                          (Vector3){1.0f, 0.0f, 0.0f},
+                          (jag < 0.5f ? 1.0f : -1.0f) * (18.0f + 14.0f * jag),
+                          TOWN_CHAR);
+        } else if (r % 3 == 0) {
+            DrawBox((Vector3){rx, height * (0.60f + 0.08f * jag), z0 + d * 0.5f},
+                    (Vector3){0.20f, 0.22f, d + 0.10f}, TOWN_CHAR);
+        }
+    }
+    /* Rubble and ash heaped inside. */
+    for (int32_t heap = 0; heap < 5; ++heap) {
+        uint32_t h = TownFireHash(seed + UINT32_C(8191) + (uint32_t)heap);
+        float u = (float)(h & 0xffU) / 255.0f;
+        float v = (float)((h >> 8) & 0xffU) / 255.0f;
+        DrawTiltedBox((Vector3){x0 + w * (0.2f + 0.6f * u), 0.18f,
+                                z0 + d * (0.2f + 0.6f * v)},
+                      (Vector3){0.9f + u, 0.36f + 0.3f * v, 0.7f + v},
+                      (Vector3){0.0f, 1.0f, 0.0f}, 40.0f * u,
+                      heap % 2 == 0 ? TOWN_ASH : ShadeColor(stump, 0.8f));
+    }
+    /* Embers still glow in the heap nearest the door. */
+    DrawBox((Vector3){x0 + w * 0.5f, 0.30f, z0 + d * 0.62f},
+            (Vector3){0.55f, 0.10f, 0.40f}, TOWN_EMBER);
+}
+
+/* A building the fire caught but did not gut: soot streaks climbing the
+   front, soot under the eaves, and a burned-through hole in the roof with
+   rafters showing. Drawn in the plot's frame over its architecture. */
+static void DrawScorchedBuildingMarks(Rectangle footprint, float height,
+                                      float burn, uint32_t seed)
+{
+    float x0 = footprint.x, z0 = footprint.y;
+    float w = footprint.width, d = footprint.height;
+    int32_t streaks = (int32_t)fmaxf(2.0f, floorf(w / 1.6f));
+    for (int32_t i = 0; i < streaks; ++i) {
+        uint32_t h = TownFireHash(seed + (uint32_t)i);
+        float jag = (float)(h & 0xffU) / 255.0f;
+        float sx = x0 + w * ((float)i + 0.5f) / (float)streaks;
+        float bottom = height * (0.25f + 0.2f * jag);
+        float top = height * 0.98f;
+        DrawBox((Vector3){sx, (bottom + top) * 0.5f, z0 + d + 0.05f},
+                (Vector3){w / (float)streaks * (0.45f + 0.3f * burn),
+                          top - bottom, 0.06f}, TOWN_CHAR);
+    }
+    /* soot along the eaves all round */
+    DrawBox((Vector3){x0 + w * 0.5f, height * 0.88f, z0 + d * 0.5f},
+            (Vector3){w + 0.08f, height * 0.24f, d + 0.08f}, TOWN_CHAR);
+    /* the roof hole, with three rafters across it */
+    float hole_x = x0 + w * (0.30f + 0.4f * (float)(seed & 0xffU) / 255.0f);
+    float hole_w = w * (0.25f + 0.25f * burn);
+    DrawBox((Vector3){hole_x, height + 0.95f, z0 + d * 0.5f},
+            (Vector3){hole_w, 1.1f, d * 0.55f}, BLACK);
+    for (int32_t r = -1; r <= 1; ++r) {
+        DrawBox((Vector3){hole_x + (float)r * hole_w * 0.34f, height + 1.55f,
+                          z0 + d * 0.5f},
+                (Vector3){0.16f, 0.18f, d * 0.72f}, TOWN_CHAR);
+    }
+}
+
+/* The Return, milestone 2 (docs/design/the-return.md): the arrival shot's
+   staged props. Placement (Place*, below) runs once on the update path,
+   from CcLocalReturnStagingPlace, and writes positions into the cues; the
+   Draw* functions only read them -- no sim writes, no state of their own,
+   so drawing twice from the same cues changes nothing. Everything stands
+   along the first strides of the carriage path, the part of town every
+   establishing shot looks down (TownEstablishingCamera), and each group has
+   its own small function so the gate voice (milestone 3) can find and keep
+   clear of it. */
+
+/* A point `distance` along the arrival path and `side` across it (positive
+   is the carriage's left, as in TownEstablishingStation). */
+static Vector2 ReturnStageAlongPath(float distance, float side, Vector2 *heading)
+{
+    Vector2 direction;
+    Vector2 point = TownArrivalPathPoint(distance, &direction);
+    if (heading != NULL) *heading = direction;
+    return Vector2Add(point, Vector2Scale(
+        (Vector2){direction.y, -direction.x}, side));
+}
+
+static bool ReturnStageSpotClear(Vector2 spot, float radius,
+                                 const CcReturnSceneCues *cues)
+{
+    if (spot.x < 1.0f || spot.x > CC_LOCAL_WORLD_WIDTH - 1.0f ||
+        spot.y < 1.0f || spot.y > CC_LOCAL_WORLD_DEPTH - 1.0f) return false;
+    for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
+        Vector2 local = BuildingUnrotatedPoint(i, spot.x, spot.y);
+        if (TerrainDistanceToRectangle(local.x, local.y,
+                ActiveWorldBuildingAt(i).footprint) < radius) return false;
+    }
+    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+        if (TerrainDistanceToRectangle(spot.x, spot.y,
+                ActiveCompoundStructureAt(i).footprint) < radius) return false;
+    }
+    for (int32_t i = 0;
+         i < (int32_t)(sizeof(WORLD_TREES) / sizeof(WORLD_TREES[0])); ++i) {
+        WorldTreePlacement tree = ActiveWorldTreeAt(i);
+        if (Vector2Distance(spot, tree.position) < radius + 0.8f) return false;
+    }
+    /* On the same ground as the road beside it: not down in a ravine or a
+       river bed, not up a bank. */
+    {
+        Vector2 nearest = TownArrivalPathPoint(0.0f, NULL);
+        float best = FLT_MAX;
+        for (float d = 0.0f; d <= 30.0f; d += 1.0f) {
+            Vector2 point = TownArrivalPathPoint(d, NULL);
+            float distance = Vector2Distance(spot, point);
+            if (distance < best) {
+                best = distance;
+                nearest = point;
+            }
+        }
+        if (fabsf(CcLocalTerrainHeightAt(spot.x, spot.y) -
+                  CcLocalTerrainHeightAt(nearest.x, nearest.y)) > 0.7f)
+            return false;
+    }
+    /* Off the carriage road: the team has to get through. */
+    for (float d = 0.0f; d <= 30.0f; d += 1.0f) {
+        if (Vector2Distance(spot, TownArrivalPathPoint(d, NULL)) <
+            radius + 2.1f) return false;
+    }
+    /* Props already stood keep their room. */
+    if (cues != NULL) {
+        for (int32_t i = 0; i < cues->stall_count; ++i) {
+            if (Vector2Distance(spot, (Vector2){cues->stall[i].x,
+                                                cues->stall[i].z}) <
+                radius + 1.5f) return false;
+        }
+        for (int32_t i = 0; i < cues->crowd_count; ++i) {
+            if (Vector2Distance(spot, (Vector2){cues->crowd[i].x,
+                                                cues->crowd[i].z}) <
+                radius + 0.4f) return false;
+        }
+    }
+    /* The gate voice's speaker keeps its spot. */
+    if (cues != NULL && Vector2Distance(
+            spot, (Vector2){cues->speaker.x, cues->speaker.z}) < radius + 1.4f)
+        return false;
+    return true;
+}
+
+/* The nearest clear spot to (distance, side), stepping across the road
+   side first, then along it. False when there is none nearby: the prop is
+   then left out rather than stood in a wall or a river. */
+static bool ReturnStageFindSpot(float distance, float side, float radius,
+                                const CcReturnSceneCues *cues, Vector2 *found)
+{
+    float outward = side >= 0.0f ? 1.0f : -1.0f;
+    static const float steps[] = {0.0f, 0.8f, -0.6f, 1.6f, -1.2f, 2.4f, 3.2f};
+    for (int32_t along = 0; along < 7; ++along) {
+        float shift = (float)((along + 1) / 2) * 1.5f *
+                      ((along & 1) != 0 ? 1.0f : -1.0f);
+        if (distance + shift < 0.5f) continue;
+        for (int32_t step = 0; step < 7; ++step) {
+            Vector2 spot = ReturnStageAlongPath(
+                distance + shift, side + outward * steps[step], NULL);
+            if (ReturnStageSpotClear(spot, radius, cues)) {
+                *found = spot;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static float ReturnStageWrapAngle(float angle)
+{
+    while (angle > PI) angle -= 2.0f * PI;
+    while (angle < -PI) angle += 2.0f * PI;
+    return angle;
+}
+
+/* Facing: toward where the establishing lens stands, so faces and stall
+   fronts read in the arrival shot. */
+static float ReturnStageYawToward(Vector2 from, Vector3 toward)
+{
+    return atan2f(toward.x - from.x, toward.z - from.y);
+}
+
+static void PlaceReturnSpeakerSpot(CcReturnSceneCues *cues, float lens_side)
+{
+    /* Inside the gate past the market stalls, on the far side of the road
+       from the lens. */
+    Vector2 spot = ReturnStageAlongPath(8.0f, lens_side >= 0.0f ? -3.4f : 3.4f,
+                                        NULL);
+    cues->speaker = (CcReturnStagePoint){spot.x, spot.y, 0.0f};
+}
+
+static void PlaceReturnGateCrowd(CcReturnSceneCues *cues, float lens_side,
+                                 Vector3 lens)
+{
+    /* A knot of hungry people waiting at the gate, on the lens's own side
+       of the road where nothing stands between them and the lens. */
+    float side = lens_side >= 0.0f ? 3.4f : -3.4f;
+    static const float along[CC_RETURN_CROWD_CAPACITY] = {
+        8.0f, 9.0f, 10.2f, 8.6f, 11.2f, 9.8f, 12.2f};
+    static const float out[CC_RETURN_CROWD_CAPACITY] = {
+        0.0f, 0.9f, 0.2f, 1.9f, 1.1f, 2.6f, 0.4f};
+    cues->crowd_count = 0;
+    for (int32_t i = 0; i < CC_RETURN_CROWD_CAPACITY; ++i) {
+        float outward = side >= 0.0f ? out[i] : -out[i];
+        Vector2 spot;
+        if (!ReturnStageFindSpot(along[i], side + outward, 0.35f, cues,
+                                 &spot)) continue;
+        float yaw = ReturnStageYawToward(spot, lens) +
+                    ((float)(i % 3) - 1.0f) * 0.45f;
+        cues->crowd[cues->crowd_count++] =
+            (CcReturnStagePoint){spot.x, spot.y, yaw};
+    }
+}
+
+static void PlaceReturnMarketStalls(CcReturnSceneCues *cues, float lens_side,
+                                    Vector3 lens, bool boarded)
+{
+    /* The gate market: stalls just inside the gate across the road from
+       the lens, the nearest things in the establishing shot, fronts turned
+       toward it. When the market itself closed, the nearest stall is a
+       boarded booth. */
+    float side = lens_side >= 0.0f ? -3.4f : 3.4f;
+    static const float along[CC_RETURN_STALL_CAPACITY] = {1.6f, 4.4f, 12.5f};
+    cues->stall_count = 0;
+    for (int32_t i = 0; i < CC_RETURN_STALL_CAPACITY; ++i) {
+        Vector2 heading;
+        Vector2 spot;
+        if (!ReturnStageFindSpot(along[i], side, 0.8f, cues, &spot)) continue;
+        (void)ReturnStageAlongPath(along[i], 0.0f, &heading);
+        /* Face the road, turned a little toward the lens. */
+        float to_road = atan2f(-heading.y * (side >= 0.0f ? 1.0f : -1.0f),
+                               heading.x * (side >= 0.0f ? 1.0f : -1.0f));
+        float to_lens = ReturnStageYawToward(spot, lens);
+        float yaw = to_road + ReturnStageWrapAngle(to_lens - to_road) * 0.45f;
+        cues->stall[cues->stall_count++] =
+            (CcReturnStagePoint){spot.x, spot.y, yaw};
+    }
+    cues->stall_boarded = boarded;
+}
+
+/* Where a ground point falls across the establishing frame: -1 at the
+   left edge, +1 at the right, beyond that out of shot (or behind). */
+static float ReturnStageFrameX(Camera3D lens, Vector2 point)
+{
+    Vector3 forward = Vector3Subtract(lens.target, lens.position);
+    forward.y = 0.0f;
+    forward = Vector3Normalize(forward);
+    Vector3 right = {-forward.z, 0.0f, forward.x};
+    Vector3 to = {point.x - lens.position.x, 0.0f, point.y - lens.position.z};
+    float ahead = Vector3DotProduct(to, forward);
+    if (ahead < 1.0f) return 9.0f;
+    float half_width = tanf(lens.fovy * 0.5f * DEG2RAD) *
+                       ((float)CcArtWidth() / (float)CcArtHeight());
+    return Vector3DotProduct(to, right) / ahead / half_width;
+}
+
+static void PlaceReturnSmoke(const CcSettlement *place, CcReturnSceneCues *cues,
+                             Camera3D lens)
+{
+    /* Smoke rises from the worst-burned plots (buildings and landmarks)
+       the establishing lens sees, preferring the open middle and left of
+       the frame over the right edge, where the arrival panel sits. */
+    cues->smoke_count = 0;
+    int32_t building_count = ActiveWorldBuildingCount();
+    int32_t chosen[CC_RETURN_SMOKE_CAPACITY];
+    for (int32_t i = 0; i < CC_RETURN_SMOKE_CAPACITY; ++i) chosen[i] = -1;
+    for (int32_t pick = 0; pick < CC_RETURN_SMOKE_CAPACITY; ++pick) {
+        float best = 0.0f;
+        for (int32_t i = 0; i < building_count + CC_LOCAL_PLACE_LANDMARK_COUNT;
+             ++i) {
+            bool taken = false;
+            for (int32_t c = 0; c < pick; ++c) taken = taken || chosen[c] == i;
+            if (taken) continue;
+            Rectangle f;
+            float burn;
+            if (i < building_count) {
+                f = ActiveWorldBuildingAt(i).footprint;
+                burn = TownBuildingBurn(place, i);
+            } else {
+                const CcLocalPlaceLandmark *landmark =
+                    ActivePlaceLandmarkAt(i - building_count);
+                if (landmark == NULL) continue;
+                f = PlaceLandmarkFootprint(landmark);
+                burn = TownPlotBurn(place, f, UINT32_C(0x1a00) +
+                                    (uint32_t)(i - building_count));
+            }
+            if (burn <= 0.0f) continue;
+            Vector2 center = {f.x + f.width * 0.5f, f.y + f.height * 0.5f};
+            float frame_x = ReturnStageFrameX(lens, center);
+            if (frame_x < -0.95f || frame_x > 0.45f) continue;
+            float distance = Vector2Distance(
+                center, (Vector2){lens.position.x, lens.position.z});
+            float score = burn * 100.0f - distance * 0.5f -
+                          fabsf(frame_x) * 20.0f;
+            /* keep columns apart so they read as separate fires */
+            for (int32_t c = 0; c < cues->smoke_count; ++c) {
+                if (Vector2Distance(center, (Vector2){cues->smoke[c].x,
+                                                      cues->smoke[c].z}) < 7.0f)
+                    score -= 60.0f;
+            }
+            if (score > best) {
+                best = score;
+                chosen[pick] = i;
+            }
+        }
+        if (chosen[pick] < 0) break;
+        Rectangle f = chosen[pick] < building_count ?
+            ActiveWorldBuildingAt(chosen[pick]).footprint :
+            PlaceLandmarkFootprint(
+                ActivePlaceLandmarkAt(chosen[pick] - building_count));
+        cues->smoke[cues->smoke_count++] = (CcReturnStagePoint){
+            f.x + f.width * 0.5f, f.y + f.height * 0.5f,
+            (float)cues->smoke_count};
+    }
+    if (cues->smoke_count == 0) {
+        /* No burned plot in view: smoke still rises beyond the gate. */
+        Vector2 spot = ReturnStageAlongPath(30.0f, -6.0f, NULL);
+        cues->smoke[cues->smoke_count++] =
+            (CcReturnStagePoint){spot.x, spot.y, 0.0f};
+    }
+}
+
+static int32_t ReturnServiceBuilding(const CcSettlement *place,
+                                     const CcLocalPlaceProfile *profile,
+                                     int32_t service)
+{
+    CcLocalShopKind kind = CC_LOCAL_SHOP_COUNT;
+    switch (service) {
+    case CC_SERVICE_BAKERY: kind = CC_LOCAL_SHOP_BAKERY; break;
+    case CC_SERVICE_SMITHY: kind = CC_LOCAL_SHOP_SMITH; break;
+    case CC_SERVICE_GRANARY:
+    case CC_SERVICE_MILL: kind = CC_LOCAL_SHOP_GRAIN_MERCHANT; break;
+    case CC_SERVICE_MINE: kind = CC_LOCAL_SHOP_MINE_SUPPLIER; break;
+    case CC_SERVICE_CARTOGRAPHER: kind = CC_LOCAL_SHOP_STATIONER; break;
+    default: break;
+    }
+    int32_t building = profile->primary_building;
+    if (kind != CC_LOCAL_SHOP_COUNT) {
+        const CcLocalShop *shop = CcLocalShopAt(profile, kind);
+        if (shop != NULL) building = shop->building_index;
+    }
+    if (building < 0 || building >= ActiveWorldBuildingCount()) return -1;
+    /* A gutted shell has nothing left to board up. */
+    return TownBuildingBurn(place, building) >= 0.75f ? -1 : building;
+}
+
+void CcLocalReturnStagingPlace(const CcSim *sim, CcReturnSceneCues *cues)
+{
+    if (sim == NULL || cues == NULL) return;
+    cues->placed = false;
+    cues->crowd_count = 0;
+    cues->stall_count = 0;
+    cues->smoke_count = 0;
+    cues->boarded_building = -1;
+    cues->stalls_bare = false;
+    cues->stall_boarded = false;
+    CcLocalBindPlace(sim);
+    const CcSettlement *place = CcSimSettlement(sim, sim->player.location_id);
+    if (place == NULL) return;
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(place);
+    Camera3D lens = TownEstablishingCamera();
+    float lens_side = TownEstablishingStationFor(active_place_function).side;
+    PlaceReturnSpeakerSpot(cues, lens_side);
+    if (cues->active && cues->hunger) {
+        PlaceReturnGateCrowd(cues, lens_side, lens.position);
+    }
+    /* The roadside market stands by the gate on every visit, so a bare
+       one can be told from a busy one: the stalls show the town's own
+       stock until the market is empty or gone. */
+    bool market_closed = cues->active && cues->service_lost &&
+        cues->service_lost_kind == (int32_t)CC_SERVICE_MARKET;
+    PlaceReturnMarketStalls(cues, lens_side, lens.position, market_closed);
+    cues->stalls_bare = market_closed || (cues->active && cues->empty_market);
+    if (cues->active && cues->fire) PlaceReturnSmoke(place, cues, lens);
+    if (cues->active && cues->service_lost) {
+        cues->boarded_building = ReturnServiceBuilding(
+            place, profile, cues->service_lost_kind);
+    }
+    {
+        Vector2 spot;
+        if (!ReturnStageFindSpot(4.0f, lens_side >= 0.0f ? 3.0f : -3.0f,
+                                 0.4f, cues, &spot)) {
+            spot = ReturnStageAlongPath(4.0f, lens_side >= 0.0f ? 3.0f : -3.0f,
+                                        NULL);
+        }
+        cues->banner = (CcReturnStagePoint){spot.x, spot.y,
+            ReturnStageYawToward(spot, lens.position)};
+    }
+    {
+        Vector2 spot = ReturnStageAlongPath(34.0f, lens_side >= 0.0f ? -9.0f : 9.0f,
+                                            NULL);
+        cues->camp = (CcReturnStagePoint){spot.x, spot.y, 0.0f};
+    }
+    cues->placed = true;
+}
+
+/* -- Drawing: reads the cues only. ------------------------------------- */
+
+/* A hungry figure: thin through the body, head and shoulders dropped.
+   Some stand bent over, some kneel in the dust, one lies curled on a mat. */
+static void DrawReturnHungryFigure(CcReturnStagePoint at, int32_t index,
+                                   Vector3 focus, float clock)
+{
+    Vector3 ground = TerrainWorldPoint(at.x, at.z);
+    int32_t posture = index % 4 == 3 ? 2 : (index % 3 == 1 ? 1 : 0);
+    if (index == 5) posture = 3;
+    float hunch = posture == 1 ? 30.0f : 22.0f + (float)(index % 2) * 6.0f;
+    float sink = posture == 1 ? 0.46f : 0.0f;
+    rlPushMatrix();
+    rlTranslatef(ground.x, ground.y - sink, ground.z);
+    rlRotatef(at.yaw * RAD2DEG, 0.0f, 1.0f, 0.0f);
+    if (posture == 3) {
+        /* lying on one side, knees drawn up */
+        rlTranslatef(0.0f, 0.22f, 0.0f);
+        rlRotatef(84.0f, 0.0f, 0.0f, 1.0f);
+        DrawBox((Vector3){-0.12f, 0.2f, 0.0f}, (Vector3){0.10f, 1.8f, 0.9f},
+                (Color){88, 76, 60, 255});
+    } else {
+        rlRotatef(hunch, 1.0f, 0.0f, 0.0f);
+    }
+    rlScalef(0.72f, 0.95f, 0.72f);
+    rlRotatef(-at.yaw * RAD2DEG, 0.0f, 1.0f, 0.0f);
+    rlTranslatef(-ground.x, -ground.y, -ground.z);
+    static const Color rags[] = {
+        {92, 84, 72, 255}, {74, 70, 66, 255}, {104, 90, 70, 255}};
+    DrawVisibleNpcPoseFigure3D(
+        ground, 0.86f, at.yaw, UINT32_C(0x72747e05) + (uint32_t)index * 97U,
+        index % 4 == 1 ? CC_NPC_ROLE_LABORER : CC_NPC_ROLE_REFUGEE,
+        rags[index % 3], clock * 0.35f + (float)index, CC_TRAVERSAL_IDLE,
+        posture == 0 ? CC_NPC_ARCHETYPE_REACT_POSE : 0, focus);
+    rlPopMatrix();
+}
+
+static void DrawReturnGateCrowd(const CcReturnSceneCues *cues, Vector3 focus,
+                                float clock)
+{
+    for (int32_t i = 0; i < cues->crowd_count; ++i) {
+        DrawReturnHungryFigure(cues->crowd[i], i, focus, clock);
+    }
+    /* Empty bowls at their feet. */
+    for (int32_t i = 0; i < cues->crowd_count; i += 2) {
+        CcReturnStagePoint at = cues->crowd[i];
+        Vector3 ground = TerrainWorldPoint(at.x + sinf(at.yaw) * 0.45f,
+                                           at.z + cosf(at.yaw) * 0.45f);
+        DrawCylinder((Vector3){ground.x, ground.y + 0.01f, ground.z},
+                     0.17f, 0.12f, 0.09f, 8, WORLD_WOOD_SHADOW);
+    }
+}
+
+/* A market stall in its own frame: +z is the front (the customer side). */
+static void DrawReturnStallFrame(Color cloth_a, Color cloth_b, bool boarded,
+                                 bool bare)
+{
+    const float width = 2.2f, depth = 1.1f, table = 0.86f, post = 2.25f;
+    Color wood = WORLD_WOOD;
+    Color dark = WORLD_WOOD_SHADOW;
+    for (int32_t leg = 0; leg < 4; ++leg) {
+        float lx = (leg & 1) ? width * 0.5f - 0.07f : -width * 0.5f + 0.07f;
+        float lz = (leg & 2) ? depth * 0.5f - 0.07f : -depth * 0.5f + 0.07f;
+        float tall = (leg & 2) ? post : post + 0.35f;
+        DrawBox((Vector3){lx, tall * 0.5f, lz}, (Vector3){0.12f, tall, 0.12f},
+                dark);
+    }
+    /* A striped canopy sloping down toward the front. */
+    for (int32_t stripe = 0; stripe < 6; ++stripe) {
+        float sx = -width * 0.5f + width * ((float)stripe + 0.5f) / 6.0f;
+        DrawTiltedBox((Vector3){sx, post + 0.22f, 0.05f},
+                      (Vector3){width / 6.0f + 0.01f, 0.06f, depth + 0.55f},
+                      (Vector3){1.0f, 0.0f, 0.0f}, 16.0f,
+                      stripe % 2 == 0 ? cloth_a : cloth_b);
+    }
+    /* A scalloped valance hanging from the front edge. */
+    for (int32_t flap = 0; flap < 6; ++flap) {
+        float sx = -width * 0.5f + width * ((float)flap + 0.5f) / 6.0f;
+        DrawBox((Vector3){sx, post - 0.06f, depth * 0.5f + 0.30f},
+                (Vector3){width / 6.0f - 0.03f, 0.26f, 0.04f},
+                flap % 2 == 0 ? cloth_b : cloth_a);
+    }
+    if (boarded) {
+        /* The booth's front shut up: a counter wall, planks across it, and
+           two more nailed in an X. */
+        DrawBox((Vector3){0.0f, post * 0.5f, depth * 0.5f - 0.04f},
+                (Vector3){width - 0.1f, post - 0.1f, 0.08f}, dark);
+        for (int32_t plank = 0; plank < 4; ++plank) {
+            DrawBox((Vector3){0.0f, 0.35f + (float)plank * 0.48f,
+                              depth * 0.5f + 0.03f},
+                    (Vector3){width + 0.1f, 0.20f, 0.05f},
+                    plank % 2 == 0 ? WORLD_WOOD_LIGHT : wood);
+        }
+        for (int32_t cross = -1; cross <= 1; cross += 2) {
+            DrawTiltedBox((Vector3){0.0f, post * 0.48f, depth * 0.5f + 0.08f},
+                          (Vector3){width * 1.08f, 0.20f, 0.05f},
+                          (Vector3){0.0f, 0.0f, 1.0f}, (float)cross * 38.0f,
+                          WORLD_WOOD_LIGHT);
+        }
+        return;
+    }
+    DrawBox((Vector3){0.0f, table, 0.0f}, (Vector3){width, 0.09f, depth},
+            WORLD_WOOD_LIGHT);
+    DrawBox((Vector3){0.0f, table - 0.17f, depth * 0.5f - 0.03f},
+            (Vector3){width, 0.26f, 0.05f}, wood);
+    if (!bare) return;
+    /* A bare table: nothing on it but an upturned basket, and an empty
+       crate knocked over in the dirt in front. */
+    DrawCylinder((Vector3){-0.55f, table + 0.05f, -0.1f}, 0.22f, 0.28f, 0.20f,
+                 8, dark);
+    DrawTiltedBox((Vector3){0.95f, 0.22f, depth * 0.5f + 0.45f},
+                  (Vector3){0.55f, 0.40f, 0.45f}, (Vector3){0.0f, 0.0f, 1.0f},
+                  74.0f, wood);
+}
+
+/* The town's own wares on a stall table, read from its stock: produce and
+   goods the market still has. Drawn in the stall's frame. */
+static void DrawReturnStallWares(const CcSettlement *place, int32_t stall)
+{
+    static const struct { CcGood good; Color color; bool round; } WARES[] = {
+        {CC_GOOD_BREAD, {196, 142, 76, 255}, true},
+        {CC_GOOD_WHEAT, {222, 190, 102, 255}, false},
+        {CC_GOOD_MEAT, {158, 58, 52, 255}, true},
+        {CC_GOOD_WOOL, {226, 220, 204, 255}, true},
+        {CC_GOOD_WOOD, {128, 88, 52, 255}, false},
+        {CC_GOOD_TOOLS, {120, 124, 132, 255}, false},
+        {CC_GOOD_STONE, {150, 146, 140, 255}, false},
+        {CC_GOOD_PAPER, {236, 230, 210, 255}, false},
+        {CC_GOOD_IRON, {88, 90, 98, 255}, false},
+    };
+    int32_t placed = 0;
+    int32_t skip = stall * 3;
+    for (int32_t w = 0; w < (int32_t)(sizeof(WARES) / sizeof(WARES[0])) &&
+                        placed < 3; ++w) {
+        if (place->stock[WARES[w].good] <= 0) continue;
+        if (skip-- > 0) continue;
+        float x = -0.65f + (float)placed * 0.65f;
+        /* a heaped basket or a stacked crate of it */
+        DrawBox((Vector3){x, 0.98f, 0.0f}, (Vector3){0.52f, 0.16f, 0.52f},
+                WORLD_WOOD_SHADOW);
+        for (int32_t heap = 0; heap < 3; ++heap) {
+            Vector3 at = {x - 0.12f + (float)(heap % 2) * 0.22f,
+                          1.12f + (float)(heap / 2) * 0.12f,
+                          -0.08f + (float)heap * 0.08f};
+            if (WARES[w].round) {
+                DrawSmallSphere(at, 0.14f, WARES[w].color);
+            } else {
+                DrawBox(at, (Vector3){0.22f, 0.14f, 0.18f}, WARES[w].color);
+            }
+        }
+        ++placed;
+    }
+}
+
+static void DrawReturnMarketStalls(const CcSettlement *place,
+                                   const CcReturnSceneCues *cues)
+{
+    Color faded_red = BlendColor(WORLD_DANGER, CC_VISUAL_PALETTE.parchment.light, 0.30f);
+    Color cream = CC_VISUAL_PALETTE.parchment.light;
+    for (int32_t i = 0; i < cues->stall_count; ++i) {
+        CcReturnStagePoint at = cues->stall[i];
+        Vector3 ground = TerrainWorldPoint(at.x, at.z);
+        rlPushMatrix();
+        rlTranslatef(ground.x, ground.y, ground.z);
+        rlRotatef(at.yaw * RAD2DEG, 0.0f, 1.0f, 0.0f);
+        bool boarded = cues->stall_boarded && i == 0;
+        DrawReturnStallFrame(i % 2 == 0 ? faded_red :
+                                 BlendColor(WORLD_TEAL, cream, 0.35f),
+                             cream, boarded, cues->stalls_bare);
+        if (!boarded && !cues->stalls_bare) DrawReturnStallWares(place, i);
+        rlPopMatrix();
+    }
+}
+
+/* A column of smoke, stylised: a stack of puffs, black and dense at the
+   base, thinning and paling as it climbs and leans with the wind. */
+static void DrawReturnSmokeColumn(CcReturnStagePoint at, float clock)
+{
+    Vector3 base = TerrainWorldPoint(at.x, at.z);
+    const int32_t puffs = 14;
+    const float rise_height = 16.0f;
+    for (int32_t puff = 0; puff < puffs; ++puff) {
+        float cycle = fmodf(clock * 0.05f + (float)puff / (float)puffs +
+                            at.yaw * 0.37f, 1.0f);
+        /* Each puff keeps its own small wobble so the column billows. */
+        uint32_t h = TownFireHash((uint32_t)puff * UINT32_C(2654435761) +
+                                  (uint32_t)(at.yaw * 17.0f));
+        float wobble_x = ((float)(h & 0xffU) / 255.0f - 0.5f) * 1.4f;
+        float wobble_z = ((float)((h >> 8) & 0xffU) / 255.0f - 0.5f) * 1.4f;
+        float height = 0.8f + cycle * rise_height;
+        float lean = cycle * 2.6f;
+        float radius = 0.75f + cycle * 1.9f;
+        Color dense = {16, 14, 14, 255};
+        Color thin = {74, 70, 72, 255};
+        DrawScenerySphere((Vector3){base.x + lean + wobble_x * cycle,
+                                    base.y + height,
+                                    base.z + wobble_z * cycle},
+                          radius, BlendColor(dense, thin, cycle));
+    }
+    /* The fire's glow still at the foot of the column. */
+    DrawScenerySphere((Vector3){base.x, base.y + 0.5f, base.z}, 0.8f,
+                      TOWN_EMBER);
+}
+
+/* Boards nailed over the lost service's own front door and windows, drawn
+   in that building's plot frame (the same transform DrawWorldBuildings
+   uses), so the real shop reads as shut. */
+static void DrawReturnBoardedFront(const CcLocalPlaceProfile *profile,
+                                   int32_t index)
+{
+    WorldBuilding building = ActiveWorldBuildingAt(index);
+    Rectangle f = building.footprint;
+    rlPushMatrix();
+    rlTranslatef(0.0f, TerrainFootprintHeight(f), 0.0f);
+    RotateBuildingPlot(f, profile->building_yaw_degrees[index]);
+    float front = f.y + f.height + 0.14f;
+    float door_x = f.x + f.width * 0.5f;
+    float door_w = fminf(f.width * 0.34f, 2.4f);
+    float door_h = fminf(building.height * 0.62f, 2.7f);
+    /* the door: dark behind, planks across, an X over it */
+    DrawBox((Vector3){door_x, door_h * 0.5f, front - 0.04f},
+            (Vector3){door_w, door_h, 0.05f}, WORLD_INK);
+    for (int32_t plank = 0; plank < 4; ++plank) {
+        DrawBox((Vector3){door_x, 0.40f + (float)plank * door_h * 0.24f, front},
+                (Vector3){door_w + 0.35f, 0.22f, 0.06f},
+                plank % 2 == 0 ? WORLD_WOOD_LIGHT : WORLD_WOOD);
+    }
+    float diagonal = atan2f(door_h, door_w) * RAD2DEG;
+    float length = hypotf(door_w, door_h) + 0.2f;
+    for (int32_t cross = -1; cross <= 1; cross += 2) {
+        DrawTiltedBox((Vector3){door_x, door_h * 0.5f, front + 0.05f},
+                      (Vector3){length, 0.22f, 0.05f},
+                      (Vector3){0.0f, 0.0f, 1.0f}, (float)cross * diagonal,
+                      WORLD_WOOD_LIGHT);
+    }
+    /* the windows either side: one board each way */
+    for (int32_t side = -1; side <= 1; side += 2) {
+        float wx = door_x + (float)side * f.width * 0.32f;
+        for (int32_t cross = -1; cross <= 1; cross += 2) {
+            DrawTiltedBox((Vector3){wx, building.height * 0.70f, front + 0.02f},
+                          (Vector3){1.3f, 0.18f, 0.05f},
+                          (Vector3){0.0f, 0.0f, 1.0f}, (float)cross * 32.0f,
+                          WORLD_WOOD_LIGHT);
+        }
+    }
+    rlPopMatrix();
+}
+
+static void DrawReturnFreshBanner(const CcSim *sim, const CcSettlement *place,
+                                  CcReturnStagePoint at, float clock)
+{
+    /* A second, unweathered banner by the gate: a fresh ruler or a fresh
+       kingdom, either way a cloth that has not seen a season yet. */
+    CcHeraldryStyle fresh = CcHeraldryForKingdom(sim, place->kingdom_id);
+    fresh.wear = 0;
+    DrawHeraldryBanner3D(fresh, TerrainWorldPoint(at.x, at.z),
+                         at.yaw * RAD2DEG, 0.85f, clock);
+}
+
+static void DrawReturnBanditCamp(CcReturnStagePoint at, float clock)
+{
+    /* Tents and a campfire column on the rise beyond the road: a camp the
+       company did not have to fight to see. */
+    Vector3 ridge = TerrainWorldPoint(at.x, at.z);
+    DrawTiltedBox((Vector3){ridge.x - 1.1f, ridge.y + 0.55f, ridge.z},
+                  (Vector3){1.35f, 1.05f, 1.05f}, (Vector3){0.0f, 1.0f, 0.0f},
+                  18.0f, (Color){96, 78, 54, 255});
+    DrawTiltedBox((Vector3){ridge.x + 1.3f, ridge.y + 0.48f, ridge.z + 0.6f},
+                  (Vector3){1.10f, 0.92f, 0.92f}, (Vector3){0.0f, 1.0f, 0.0f},
+                  -12.0f, (Color){84, 68, 47, 255});
+    for (int32_t puff = 0; puff < 6; ++puff) {
+        float rise = fmodf(clock * 0.10f + (float)puff / 6.0f, 1.0f);
+        DrawScenerySphere(
+            (Vector3){ridge.x + 0.2f + rise * 1.2f,
+                      ridge.y + 1.1f + rise * 5.0f, ridge.z + 0.1f},
+            0.35f + rise * 0.7f,
+            Fade((Color){70, 66, 64, 255}, 0.80f * (1.0f - rise * 0.6f)));
+    }
+}
+
+static void DrawReturnArrivalStaging(const CcSim *sim, const CcSettlement *place,
+                                     const CcReturnSceneCues *cues,
+                                     Vector3 focus, float clock)
+{
+    if (cues == NULL || !cues->placed || place == NULL || sim == NULL) return;
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(place);
+    if (cues->stall_count > 0) DrawReturnMarketStalls(place, cues);
+    if (!cues->active) return;
+    if (cues->fire) {
+        for (int32_t i = 0; i < cues->smoke_count; ++i) {
+            DrawReturnSmokeColumn(cues->smoke[i], clock);
+        }
+    }
+    if (cues->new_ruler) DrawReturnFreshBanner(sim, place, cues->banner, clock);
+    if (cues->service_lost && cues->boarded_building >= 0 &&
+        cues->boarded_building < ActiveWorldBuildingCount()) {
+        DrawReturnBoardedFront(profile, cues->boarded_building);
+    }
+    if (cues->hunger) DrawReturnGateCrowd(cues, focus, clock);
+    if (cues->bandit_camp) DrawReturnBanditCamp(cues->camp, clock);
+}
+
 static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
                                Color kingdom, Vector3 focus,
                                const CcLocalPlaceProfile *profile,
@@ -4273,30 +5077,45 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
         rlTranslatef(0.0f, building_base, 0.0f);
         RotateBuildingPlot(building.footprint, profile->building_yaw_degrees[i]);
         bool farming = profile->function == CC_SETTLEMENT_FARMING;
-        static const int32_t fire_rank[] = {4, 2, 0, 1, 6, 5, 3, 7, 2, 4, 5};
         bool market = profile->function == CC_SETTLEMENT_MARKET;
         bool mining = profile->function == CC_SETTLEMENT_MINING;
-        bool burnt = (farming || market || mining) && i < 11 &&
-                     place->fire_damage > fire_rank[i] * 12 + 8;
+        float burn = TownBuildingBurn(place, i);
+        bool burnt = burn > 0.0f;
+        bool gutted = burn >= 0.75f;
+        uint32_t fire_seed = TownFireHash((uint32_t)place->id * UINT32_C(31) +
+                                          (uint32_t)i);
         Color wall = BuildingWallColor(building.style, profile);
         Color roof = BuildingRoofColor(building.style, kingdom, profile);
         if (burnt) {
-            wall = BlendColor(wall, CC_VISUAL_PALETTE.cool_ink, 0.70f);
-            roof = BlendColor(roof, CC_VISUAL_PALETTE.cool_ink, 0.88f);
+            /* Char, not shade: a warm black that stays black under the
+               dusk and overcast palettes, where the old cool-ink tint
+               read as ordinary evening shadow. */
+            wall = BlendColor(wall, TOWN_CHAR, 0.30f + 0.40f * burn);
+            roof = BlendColor(roof, TOWN_CHAR, 0.65f + 0.35f * burn);
+            DrawFireScorch(building.footprint, burn, fire_seed);
         }
-        DrawSettlementBuilding(&building, wall, roof, profile, i, burnt);
-        if (farming) {
+        if (gutted) {
+            DrawGuttedBuildingShell(building.footprint, building.height,
+                                    wall, fire_seed);
+        } else {
+            DrawSettlementBuilding(&building, wall, roof, profile, i, burnt);
+            if (burnt) {
+                DrawScorchedBuildingMarks(building.footprint, building.height,
+                                          burn, fire_seed);
+            }
+        }
+        if (farming && !gutted) {
             DrawThornfordStores(place, &building, i, burnt, conditions);
             DrawThornfordBuildingLife(&building, conditions, burnt,
-                                      place->last_fire_day > 0 && i < 8 && fire_rank[i] <= 4, i);
+                                      place->last_fire_day > 0 && burnt, i);
         }
-        if (market) {
+        if (market && !gutted) {
             DrawGloamgateShopLife(place, profile, &building, i, burnt, conditions);
         }
-        if (mining) {
+        if (mining && !gutted) {
             DrawSilverwickBuildingLife(place, profile, &building, i, burnt, conditions);
         }
-        DrawSpecialistShopFront(profile, &building, i, burnt);
+        if (!gutted) DrawSpecialistShopFront(profile, &building, i, burnt);
         if (reveal > 0.05f) {
             DrawBuildingRevealCap(
                 building.footprint.x, building.footprint.y,
@@ -4575,6 +5394,19 @@ static Color CompoundStoneColor(const CcLocalPlaceProfile *profile,
     return stone;
 }
 
+/* The soot line a fire leaves on stone: the upper courses of a wall or
+   tower blackened all round. */
+static void DrawScorchedStructureBand(const WorldStructure *structure,
+                                      float burn)
+{
+    Rectangle f = structure->footprint;
+    float band = structure->height * (0.18f + 0.30f * burn);
+    DrawBox((Vector3){f.x + f.width * 0.5f,
+                      structure->height - band * 0.5f + 0.02f,
+                      f.y + f.height * 0.5f},
+            (Vector3){f.width + 0.10f, band, f.height + 0.10f}, TOWN_CHAR);
+}
+
 static void DrawCastle(const CcSim *sim, const CcSettlement *place,
                        Color kingdom, const CcLocalPlaceProfile *profile,
                        Vector3 focus, Camera3D camera,
@@ -4599,13 +5431,24 @@ static void DrawCastle(const CcSim *sim, const CcSettlement *place,
             footprint.x, footprint.y, footprint.width, footprint.height,
             structure.height, stone);
     }
-    for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
+    int32_t structure_count = ActiveCompoundStructureCount();
+    for (int32_t i = 0; i < structure_count; ++i) {
         WorldStructure structure = ActiveCompoundStructureAt(i);
         Color stone = CompoundStoneColor(profile, kingdom, structure.kind);
         float reveal = castle_structure_reveals[i].amount;
         (void)SetObjectForegroundReveal(reveal, reveal_cut_height,
             castle_base + structure.height + 3.5f);
+        float burn = TownStructureBurn(place, i);
+        if (burn > 0.0f) {
+            stone = BlendColor(stone, TOWN_CHAR, 0.25f + 0.45f * burn);
+        }
         DrawConstructedCompoundStructure(&structure, stone, kingdom, profile);
+        if (burn > 0.0f) {
+            DrawScorchedStructureBand(&structure, burn);
+            DrawFireScorch(structure.footprint, burn,
+                           TownFireHash((uint32_t)i * UINT32_C(7919) +
+                                        (uint32_t)place->id));
+        }
     }
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
     {
