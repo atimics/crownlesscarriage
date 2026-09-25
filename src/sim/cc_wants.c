@@ -175,7 +175,7 @@ static void Finish(CcSim *sim, CcPersonalWant *w, CcWantStatus status)
     w->escrow = 0; w->status = (int32_t)status; w->settled_day = sim->current_day; ++w->revision;
     char object[96], text[CC_EVENT_TEXT_CAPACITY]; WantName(sim, w, object, sizeof(object));
     if (status == CC_WANT_FULFILLED)
-        (void)snprintf(text, sizeof(text), "%.31s receives %.95s from the company.", p != NULL ? p->name : "The recipient", object);
+        (void)snprintf(text, sizeof(text), "%.31s receives %.79s from the company.", p != NULL ? p->name : "The recipient", object);
     else (void)snprintf(text, sizeof(text), "The request for %.95s ends.", object);
     const CcEvent *event = CcSimPushEvent(sim,
         status == CC_WANT_FULFILLED ? CC_EVENT_WANT_FULFILLED : CC_EVENT_WANT_CLOSED,
@@ -495,8 +495,10 @@ bool CcWantsApply(CcSim *sim, const CcCommand *cmd, char *message, size_t capaci
             if (sim->wants.items[i].id == item->id) sim->wants.items[i].last_place_id = sim->player.location_id;
         if (cmd->amount == CC_WANT_LEAVE)
             for (int i = 0; i < CC_PERSONAL_WANTS; ++i)
-                if (sim->wants.wants[i].item_id == item->id && sim->wants.wants[i].parent_id == 0)
+                if (sim->wants.wants[i].item_id == item->id && sim->wants.wants[i].parent_id == 0) {
                     sim->wants.wants[i].source_place_id = sim->player.location_id;
+                    ++sim->wants.wants[i].revision;
+                }
         CcId event = CcSimPushEvent(sim, CC_EVENT_BELONGING_MOVED, sim->player.id,
             sim->player.location_id, item->cause_event_id, 1, text)->id;
         Entry(sim, item->custody_id)->last_event_id = event;

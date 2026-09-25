@@ -404,6 +404,7 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->conversation_gossip_source = false;
             local->conversation_report_response = false;
             local->conversation_oven_response = false;
+            local->conversation_want_person = 0;
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
             local->conversation_position = (Vector3){target->x, target->y, target->z};

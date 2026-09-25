@@ -10230,7 +10230,6 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (ApplyCommand(*journal, sim, pressed_action.command, message, message_capacity)) {
                 local->conversation_report_response = false;
                 local->conversation_oven_response = false;
-    local->conversation_want_person = 0;
                 local->conversation_want_person = local->conversation_character_id;
                 if (pressed_action.command.amount == CC_WANT_LEARN)
                     (void)CcWantsRequestText(sim, pressed_action.command.target_id, message, message_capacity);

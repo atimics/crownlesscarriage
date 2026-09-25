@@ -5078,7 +5078,6 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeUnderroadNetwork(sim);
     CcScrivenInit(sim);
     CcWantsInit(sim);
-    CcWantsAdvance(sim);
     CcCensusInit(sim);
 }
 

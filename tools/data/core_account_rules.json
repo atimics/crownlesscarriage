@@ -2638,7 +2638,7 @@
       "challenge": "{0} receives {1} from the company.",
       "emitter": {
         "file": "src/sim/cc_wants.c",
-        "format": "%.31s receives %.95s from the company."
+        "format": "%.31s receives %.79s from the company."
       }
     },
     {
