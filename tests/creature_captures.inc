@@ -192,6 +192,28 @@ static void CaptureCreatures(const char *directory)
         RequireRenderer(ExportImage(sheet, path), "creature review sheet must be written");
         UnloadImage(sheet);
     }
+    /* Skinned goblins through one stride: side view at four gait phases. */
+    const CcCreaturePose stride[] = {
+        CC_CREATURE_POSE_CONTACT_A, CC_CREATURE_POSE_PASSING_A,
+        CC_CREATURE_POSE_CONTACT_B, CC_CREATURE_POSE_PASSING_B,
+    };
+    Image walk = GenImageColor(size * 3, size * 4 + 28, (Color){17, 19, 28, 255});
+    for (int32_t column = 0; column < 3; ++column) {
+        ImageDrawText(&walk, CREATURE_REVIEWS[column].name, column * size + 12,
+                      8, 16, (Color){224, 219, 202, 255});
+        for (int32_t row = 0; row < 4; ++row) {
+            Image shot = CaptureCreatureView(&CREATURE_REVIEWS[column], size,
+                PI * 0.5f, stride[row], false, CC_DRAGON_HAIR_PURPLE);
+            ImageDraw(&walk, shot, (Rectangle){0, 0, (float)size, (float)size},
+                      (Rectangle){(float)(column * size), (float)(row * size + 28),
+                                  (float)size, (float)size}, WHITE);
+            UnloadImage(shot);
+        }
+    }
+    char walk_path[1024];
+    (void)snprintf(walk_path, sizeof(walk_path), "%s/goblins-walk.png", directory);
+    RequireRenderer(ExportImage(walk, walk_path), "goblin stride sheet must be written");
+    UnloadImage(walk);
     Image courts = GenImageColor(size * 3, size * 3 + 28, (Color){17, 19, 28, 255});
     const char *names[] = {"Purple court", "Red court", "Blue court"};
     for (int32_t court = 0; court < CC_DRAGON_HAIR_COLOR_COUNT; ++court) {

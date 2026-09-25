@@ -2,7 +2,7 @@
   "library_version": "0.9.0",
   "art_direction": "silhouette_first_pseudo_pixel_creatures",
   "generation": "offline_curated_procedural_geometry",
-  "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse, cow, and sheep",
+  "runtime_strategy": "one skinned GLB per character posed at runtime (goblins: humanoid skeleton; horse, cow, sheep: quadruped skeleton); dragons still use held poses until their migration (docs/design/unified-characters.md)",
   "coordinate_system": "glTF +Y up, +Z forward",
   "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
   "material_order": [
@@ -40,7 +40,7 @@
       "variant_index": 0,
       "silhouette": "low narrow body, oversized ears and hands",
       "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
+      "gait_contract": "humanoid_runtime_skin",
       "equipment": [
         "pack",
         "hook"
@@ -58,215 +58,30 @@
         "metal",
         "accent",
         "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
       ],
-      "pose": "contact_a",
-      "id": "creature_goblin_scavenger_contact_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_contact_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
+      "skinned": true,
+      "armature": "RIG_goblin_scavenger",
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
       ],
-      "pose": "down_a",
-      "id": "creature_goblin_scavenger_down_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_down_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
-      ],
-      "pose": "passing_a",
-      "id": "creature_goblin_scavenger_passing_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_passing_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
-      ],
-      "pose": "up_a",
-      "id": "creature_goblin_scavenger_up_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_up_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
-      ],
-      "pose": "contact_b",
-      "id": "creature_goblin_scavenger_contact_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_contact_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
-      ],
-      "pose": "down_b",
-      "id": "creature_goblin_scavenger_down_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_down_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
-      ],
-      "pose": "passing_b",
-      "id": "creature_goblin_scavenger_passing_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_passing_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_scavenger",
-      "variant_index": 0,
-      "silhouette": "low narrow body, oversized ears and hands",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "pack",
-        "hook"
-      ],
-      "pose": "up_b",
-      "id": "creature_goblin_scavenger_up_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_scavenger_up_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
+      "skeleton": "humanoid"
     },
     {
       "family": "goblin",
@@ -274,7 +89,7 @@
       "variant_index": 1,
       "silhouette": "forward armored wedge with a high spear",
       "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
+      "gait_contract": "humanoid_runtime_skin",
       "equipment": [
         "helmet",
         "armor",
@@ -293,223 +108,30 @@
         "metal",
         "accent",
         "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
       ],
-      "pose": "contact_a",
-      "id": "creature_goblin_raider_contact_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_contact_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
+      "skinned": true,
+      "armature": "RIG_goblin_raider",
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
       ],
-      "pose": "down_a",
-      "id": "creature_goblin_raider_down_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_down_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
-      ],
-      "pose": "passing_a",
-      "id": "creature_goblin_raider_passing_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_passing_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
-      ],
-      "pose": "up_a",
-      "id": "creature_goblin_raider_up_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_up_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
-      ],
-      "pose": "contact_b",
-      "id": "creature_goblin_raider_contact_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_contact_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
-      ],
-      "pose": "down_b",
-      "id": "creature_goblin_raider_down_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_down_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
-      ],
-      "pose": "passing_b",
-      "id": "creature_goblin_raider_passing_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_passing_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_raider",
-      "variant_index": 1,
-      "silhouette": "forward armored wedge with a high spear",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "helmet",
-        "armor",
-        "spear"
-      ],
-      "pose": "up_b",
-      "id": "creature_goblin_raider_up_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_raider_up_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
+      "skeleton": "humanoid"
     },
     {
       "family": "goblin",
@@ -517,7 +139,7 @@
       "variant_index": 2,
       "silhouette": "broad burdened carrier framing a bright offering",
       "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
+      "gait_contract": "humanoid_runtime_skin",
       "equipment": [
         "offering",
         "harness"
@@ -535,215 +157,30 @@
         "metal",
         "accent",
         "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
       ],
-      "pose": "contact_a",
-      "id": "creature_goblin_tribute_bearer_contact_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_contact_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
+      "skinned": true,
+      "armature": "RIG_goblin_tribute_bearer",
+      "bones": [
+        "root",
+        "pelvis",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R"
       ],
-      "pose": "down_a",
-      "id": "creature_goblin_tribute_bearer_down_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_down_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
-      ],
-      "pose": "passing_a",
-      "id": "creature_goblin_tribute_bearer_passing_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_passing_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
-      ],
-      "pose": "up_a",
-      "id": "creature_goblin_tribute_bearer_up_a_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_up_a_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
-      ],
-      "pose": "contact_b",
-      "id": "creature_goblin_tribute_bearer_contact_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_contact_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
-      ],
-      "pose": "down_b",
-      "id": "creature_goblin_tribute_bearer_down_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_down_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
-      ],
-      "pose": "passing_b",
-      "id": "creature_goblin_tribute_bearer_passing_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_passing_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
-    },
-    {
-      "family": "goblin",
-      "variant": "goblin_tribute_bearer",
-      "variant_index": 2,
-      "silhouette": "broad burdened carrier framing a bright offering",
-      "runtime_morphology": "biped",
-      "gait_contract": "npc_stepped",
-      "equipment": [
-        "offering",
-        "harness"
-      ],
-      "pose": "up_b",
-      "id": "creature_goblin_tribute_bearer_up_b_v01",
-      "export": "assets/exports/creatures/creature_goblin_tribute_bearer_up_b_v01.glb",
-      "material_order": [
-        "skin",
-        "secondary",
-        "hide",
-        "cloth",
-        "leather",
-        "horn",
-        "metal",
-        "accent",
-        "eye"
-      ]
+      "skeleton": "humanoid"
     },
     {
       "family": "horse",
@@ -793,7 +230,8 @@
         "hoof.HR",
         "tail.root",
         "tail"
-      ]
+      ],
+      "skeleton": "quadruped"
     },
     {
       "family": "cow",
@@ -842,7 +280,8 @@
         "hoof.HR",
         "tail.root",
         "tail"
-      ]
+      ],
+      "skeleton": "quadruped"
     },
     {
       "family": "dragon",
@@ -871,7 +310,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -900,7 +340,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -929,7 +370,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -958,7 +400,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -987,7 +430,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1015,7 +459,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1043,7 +488,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1071,7 +517,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1099,7 +546,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1127,7 +575,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1155,7 +604,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1183,7 +633,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1211,7 +662,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1239,7 +691,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1267,7 +720,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1295,7 +749,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1323,7 +778,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1351,7 +807,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1379,7 +836,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "dragon",
@@ -1407,7 +865,8 @@
         "metal",
         "accent",
         "eye"
-      ]
+      ],
+      "skeleton": "none"
     },
     {
       "family": "sheep",
@@ -1457,7 +916,8 @@
         "hoof.HR",
         "tail.root",
         "tail"
-      ]
+      ],
+      "skeleton": "quadruped"
     }
   ]
 }

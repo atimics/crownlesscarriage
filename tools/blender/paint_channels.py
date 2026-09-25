@@ -75,17 +75,22 @@ def add_indexed_paint_channels(
     *,
     surface_labels: bool = False,
     value_offset: float = 0.0,
+    value_overrides: Sequence[float] | None = None,
 ) -> bpy.types.ByteColorAttribute:
     mesh = obj.data
     if len(polygon_indices) != len(mesh.polygons):
         raise RuntimeError(f"{obj.name} paint indices do not match polygons")
+    if value_overrides is not None and \
+            len(value_overrides) != len(mesh.polygons):
+        raise RuntimeError(f"{obj.name} paint values do not match polygons")
     for existing in tuple(mesh.color_attributes):
         if existing.name == "COLOR_0":
             mesh.color_attributes.remove(existing)
     attribute = mesh.color_attributes.new(
         name="COLOR_0", type="FLOAT_COLOR", domain="CORNER")
     palette_count = len(semantic_names)
-    for polygon, semantic_index in zip(mesh.polygons, polygon_indices):
+    for polygon_index, (polygon, semantic_index) in enumerate(
+            zip(mesh.polygons, polygon_indices)):
         if semantic_index < 0 or semantic_index >= palette_count:
             raise RuntimeError(f"{obj.name} has invalid paint semantic index")
         palette = (float(semantic_index) + 0.5) / float(palette_count)
@@ -93,6 +98,8 @@ def add_indexed_paint_channels(
         value = face_value(polygon, semantic)
         if value_offset:
             value = max(0.25, min(0.75, value + value_offset))
+        if value_overrides is not None and value_overrides[polygon_index] > 0.0:
+            value = value_overrides[polygon_index]
         fold = semantic_fold_strength(semantic)
         surface = surface_class(semantic)
         alpha = (SURFACE_CLASSES.index(surface) + 0.5) / 8.0 \

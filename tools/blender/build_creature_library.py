@@ -25,11 +25,6 @@ PREVIEW_PATH = ROOT / "assets" / "previews" / "creatures" / "creature_family_she
 MANIFEST_PATH = ROOT / "assets" / "creature_manifest.json"
 LIBRARY_VERSION = "0.9.0"
 
-BIPED_POSES = (
-    "idle",
-    "contact_a", "down_a", "passing_a", "up_a",
-    "contact_b", "down_b", "passing_b", "up_b",
-)
 DRAGON_POSES = ("idle", "stalk_a", "stalk_b", "threat", "rest")
 
 QUADRUPED_BONES = (
@@ -148,13 +143,13 @@ class CreatureSpec:
 CREATURES = (
     CreatureSpec("goblin", "goblin_scavenger", 0,
                  "low narrow body, oversized ears and hands",
-                 "biped", "npc_stepped", ("pack", "hook")),
+                 "biped", "humanoid_runtime_skin", ("pack", "hook")),
     CreatureSpec("goblin", "goblin_raider", 1,
                  "forward armored wedge with a high spear",
-                 "biped", "npc_stepped", ("helmet", "armor", "spear")),
+                 "biped", "humanoid_runtime_skin", ("helmet", "armor", "spear")),
     CreatureSpec("goblin", "goblin_tribute_bearer", 2,
                  "broad burdened carrier framing a bright offering",
-                 "biped", "npc_stepped", ("offering", "harness")),
+                 "biped", "humanoid_runtime_skin", ("offering", "harness")),
     CreatureSpec("horse", "horse", 3,
                  "colorful storybook pony with big eyes and a ribbon mane",
                  "quadruped", "quadruped_runtime_skin",
@@ -188,9 +183,16 @@ CREATURES = (
 def poses_for(spec: CreatureSpec) -> tuple[str, ...]:
     if spec.family == "dragon":
         return DRAGON_POSES
-    if spec.runtime_morphology == "quadruped":
-        return ("idle",)
-    return BIPED_POSES
+    return ("idle",)
+
+
+def skeleton_for(spec: CreatureSpec) -> str:
+    """The skeleton family of docs/design/unified-characters.md."""
+    if spec.family == "goblin":
+        return "humanoid"
+    if spec.family in ("horse", "cow", "sheep"):
+        return "quadruped"
+    return "none"
 
 
 def reset_scene() -> None:
@@ -442,110 +444,480 @@ def pose_phase(pose: str) -> float:
     return phases[pose]
 
 
+HUMANOID_BONES = (
+    ("root", None),
+    ("pelvis", "root"),
+    ("spine", "pelvis"),
+    ("chest", "spine"),
+    ("neck", "chest"),
+    ("head", "neck"),
+    ("upper_arm.L", "chest"),
+    ("forearm.L", "upper_arm.L"),
+    ("hand.L", "forearm.L"),
+    ("upper_arm.R", "chest"),
+    ("forearm.R", "upper_arm.R"),
+    ("hand.R", "forearm.R"),
+    ("thigh.L", "pelvis"),
+    ("shin.L", "thigh.L"),
+    ("foot.L", "shin.L"),
+    ("thigh.R", "pelvis"),
+    ("shin.R", "thigh.R"),
+    ("foot.R", "shin.R"),
+)
+
+# The idle output of CcHumanoidPoseFromBipedRig for the goblin body plans in
+# src/locomotion/cc_character_skin.c, in glTF model space (+y up, +z
+# forward). Regenerate with `character_skin_tests --print-bind`; the C test
+# and the validator hold the two sides together.
+GOBLIN_BIND = {
+    "pelvis": (0.0000, 0.7800, 0.0000),
+    "spine": (0.0000, 0.9600, 0.0000),
+    "chest": (0.0000, 1.1400, 0.0000),
+    "neck": (0.0000, 1.3200, 0.0000),
+    "head": (0.0000, 1.4200, 0.0200),
+    "hip.L": (-0.1400, 0.7800, 0.0200),
+    "knee.L": (-0.1809, 0.4125, 0.2395),
+    "ankle.L": (-0.1700, 0.0000, 0.0600),
+    "toe.L": (-0.1700, 0.0000, 0.2600),
+    "shoulder.L": (-0.2600, 1.1600, 0.0000),
+    "elbow.L": (-0.3207, 0.9072, 0.0000),
+    "hand.L": (-0.3207, 0.6604, 0.0398),
+    "hip.R": (0.1400, 0.7800, 0.0200),
+    "knee.R": (0.1809, 0.4125, 0.2395),
+    "ankle.R": (0.1700, 0.0000, 0.0600),
+    "toe.R": (0.1700, 0.0000, 0.2600),
+    "shoulder.R": (0.2600, 1.1600, 0.0000),
+    "elbow.R": (0.3207, 0.9072, 0.0000),
+    "hand.R": (0.3207, 0.6604, 0.0398),
+}
+# The hand-drawn goblins read bright through the world shader. The skinned
+# character shader is darker, so the goblin paint sits one value step up.
+GOBLIN_VALUE_LIFT = 0.25
+GOBLIN_CARRIER_ARMS = {
+    "elbow.L": (-0.3400, 0.8300, 0.0800),
+    "hand.L": (-0.2700, 0.8600, 0.3900),
+    "elbow.R": (0.3400, 0.8300, 0.0800),
+    "hand.R": (0.2700, 0.8600, 0.3900),
+}
+
+
+def gl(x: float, y: float, z: float) -> Vector:
+    """A glTF model-space point (+y up, +z forward) in Blender axes."""
+    return Vector((x, -z, y))
+
+
+def goblin_joints(spec: CreatureSpec) -> dict[str, Vector]:
+    joints = dict(GOBLIN_BIND)
+    if spec.variant == "goblin_tribute_bearer":
+        joints.update(GOBLIN_CARRIER_ARMS)
+    return {name: gl(*point) for name, point in joints.items()}
+
+
+def humanoid_bone_points(
+    joints: dict[str, Vector],
+) -> dict[str, tuple[Vector, Vector]]:
+    def extend(start: Vector, end: Vector, length: float) -> Vector:
+        return start + (start - end).normalized() * length
+
+    points: dict[str, tuple[Vector, Vector]] = {
+        "root": (Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.18))),
+        "pelvis": (joints["pelvis"], joints["spine"]),
+        "spine": (joints["spine"], joints["chest"]),
+        "chest": (joints["chest"], joints["neck"]),
+        "neck": (joints["neck"], joints["head"]),
+        "head": (joints["head"],
+                 extend(joints["head"], joints["neck"], 0.18)),
+    }
+    for side in ("L", "R"):
+        shoulder = joints[f"shoulder.{side}"]
+        elbow = joints[f"elbow.{side}"]
+        hand = joints[f"hand.{side}"]
+        points[f"upper_arm.{side}"] = (shoulder, elbow)
+        points[f"forearm.{side}"] = (elbow, hand)
+        points[f"hand.{side}"] = (hand, extend(hand, elbow, 0.16))
+        points[f"thigh.{side}"] = (joints[f"hip.{side}"],
+                                   joints[f"knee.{side}"])
+        points[f"shin.{side}"] = (joints[f"knee.{side}"],
+                                  joints[f"ankle.{side}"])
+        points[f"foot.{side}"] = (joints[f"ankle.{side}"],
+                                  joints[f"toe.{side}"])
+    return points
+
+
+def bind_to(obj: bpy.types.Object, bone: str) -> bpy.types.Object:
+    obj["cc_deform_bone"] = bone
+    return obj
+
+
+def add_tube(name: str, points: tuple[Vector, ...],
+             radii: tuple[float, ...], semantic: str,
+             collection: bpy.types.Collection, spec: CreatureSpec,
+             part: str, *, sides: int = 6) -> bpy.types.Object:
+    """One closed tube through shared rings, like DrawCreatureTube."""
+    vertices: list[tuple[float, float, float]] = []
+    faces: list[tuple[int, ...]] = []
+    helper = Vector((0.0, 0.0, 1.0))
+    for index, (point, radius) in enumerate(zip(points, radii)):
+        following = points[min(index + 1, len(points) - 1)]
+        previous = points[max(index - 1, 0)]
+        tangent = (following - previous).normalized()
+        axis = helper if abs(tangent.dot(helper)) < 0.90 else \
+            Vector((1.0, 0.0, 0.0))
+        right = tangent.cross(axis).normalized()
+        up = right.cross(tangent).normalized()
+        for side in range(sides):
+            angle = math.tau * float(side) / float(sides)
+            vertex = point + right * math.cos(angle) * max(radius, 0.002)
+            vertex += up * math.sin(angle) * max(radius, 0.002)
+            vertices.append(tuple(vertex))
+    for ring in range(len(points) - 1):
+        for side in range(sides):
+            following = (side + 1) % sides
+            a = ring * sides
+            b = (ring + 1) * sides
+            faces.append((a + side, a + following, b + following, b + side))
+    faces.append(tuple(reversed(range(sides))))
+    last = (len(points) - 1) * sides
+    faces.append(tuple(range(last, last + sides)))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    assign(obj, semantic, spec)
+    tag(obj, spec, part)
+    return obj
+
+
+def add_panel(name: str, points: tuple[Vector, ...], thickness: float,
+              semantic: str, collection: bpy.types.Collection,
+              spec: CreatureSpec, part: str) -> bpy.types.Object:
+    """A thin flat plate through three or more points (ears, pennant)."""
+    normal = (points[1] - points[0]).cross(points[2] - points[0])
+    normal = normal.normalized() * thickness * 0.5
+    count = len(points)
+    vertices = [tuple(point - normal) for point in points]
+    vertices += [tuple(point + normal) for point in points]
+    faces: list[tuple[int, ...]] = [
+        tuple(reversed(range(count))),
+        tuple(range(count, count * 2)),
+    ]
+    for index in range(count):
+        following = (index + 1) % count
+        faces.append((index, following, count + following, count + index))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    assign(obj, semantic, spec)
+    tag(obj, spec, part)
+    return obj
+
+
 def build_goblin(spec: CreatureSpec,
                  collection: bpy.types.Collection) -> None:
-    phase = pose_phase(spec.pose)
-    moving = spec.pose != "idle"
-    cycle = math.sin(phase * math.tau) if moving else 0.0
-    lift_left = max(0.0, math.sin(phase * math.tau)) * 0.13 if moving else 0.0
-    lift_right = max(0.0, -math.sin(phase * math.tau)) * 0.13 if moving else 0.0
-    bob = -0.035 * abs(math.sin(phase * math.tau)) if moving else 0.0
-    forward = 0.20 * cycle
-    root = Vector((0.0, 0.0, bob))
+    """One skinned goblin in its bind pose.
 
-    hip_l = root + Vector((-0.13, 0.015, 0.63))
-    hip_r = root + Vector((0.13, 0.015, 0.63))
-    foot_l = root + Vector((-0.15, -forward, 0.08 + lift_left))
-    foot_r = root + Vector((0.15, forward, 0.08 + lift_right))
-    knee_l = (hip_l + foot_l) * 0.5 + Vector((-0.035, -0.10, 0.02))
-    knee_r = (hip_r + foot_r) * 0.5 + Vector((0.035, -0.10, 0.02))
-    chest = root + Vector((0.0, -0.055, 0.93))
-    shoulder_l = root + Vector((-0.23, -0.075, 0.98))
-    shoulder_r = root + Vector((0.23, -0.075, 0.98))
-    hand_l = root + Vector((-0.31, forward * 0.85 - 0.05, 0.47))
-    hand_r = root + Vector((0.31, -forward * 0.85 - 0.05, 0.47))
-    elbow_l = (shoulder_l + hand_l) * 0.5 + Vector((-0.055, -0.045, 0.0))
-    elbow_r = (shoulder_r + hand_r) * 0.5 + Vector((0.055, -0.045, 0.0))
+    The shapes follow the hand-drawn C rig this mesh replaces (DrawGoblinRig
+    before the unified-characters migration): same offsets from the pelvis,
+    chest and head, same radii, same palette slots. Hair and the neck scarf
+    use the accent slot, which the runtime fills with the dragon court color.
+    """
+    joints = goblin_joints(spec)
+    pelvis = joints["pelvis"]
+    chest = joints["chest"]
+    neck_ring = pelvis + gl(0.0, 0.58, 0.0)
+    head = pelvis + gl(0.0, 0.76, 0.025)
 
-    add_ellipsoid("GOBLIN_Torso", chest, (0.27, 0.20, 0.31), "cloth",
-                  collection, spec, "torso")
-    add_box("GOBLIN_Belt", root + Vector((0.0, -0.01, 0.68)),
-            (0.35, 0.22, 0.10), "leather", collection, spec, "belt")
-    add_segment("GOBLIN_Thigh_L", hip_l, knee_l, 0.105, 0.085, "cloth",
-                collection, spec, "thigh_left")
-    add_segment("GOBLIN_Shin_L", knee_l, foot_l, 0.080, 0.060, "skin",
-                collection, spec, "shin_left")
-    add_segment("GOBLIN_Thigh_R", hip_r, knee_r, 0.105, 0.085, "cloth",
-                collection, spec, "thigh_right")
-    add_segment("GOBLIN_Shin_R", knee_r, foot_r, 0.080, 0.060, "skin",
-                collection, spec, "shin_right")
-    add_box("GOBLIN_Foot_L", foot_l + Vector((0.0, -0.06, 0.0)),
-            (0.20, 0.30, 0.10), "leather", collection, spec, "foot_left")
-    add_box("GOBLIN_Foot_R", foot_r + Vector((0.0, -0.06, 0.0)),
-            (0.20, 0.30, 0.10), "leather", collection, spec, "foot_right")
-    add_segment("GOBLIN_UpperArm_L", shoulder_l, elbow_l, 0.085, 0.070,
-                "cloth", collection, spec, "upper_arm_left")
-    add_segment("GOBLIN_Forearm_L", elbow_l, hand_l, 0.074, 0.057,
-                "skin", collection, spec, "forearm_left")
-    add_segment("GOBLIN_UpperArm_R", shoulder_r, elbow_r, 0.085, 0.070,
-                "cloth", collection, spec, "upper_arm_right")
-    add_segment("GOBLIN_Forearm_R", elbow_r, hand_r, 0.074, 0.057,
-                "skin", collection, spec, "forearm_right")
-    add_ellipsoid("GOBLIN_Hand_L", hand_l, (0.090, 0.072, 0.11), "skin",
-                  collection, spec, "hand_left")
-    add_ellipsoid("GOBLIN_Hand_R", hand_r, (0.090, 0.072, 0.11), "skin",
-                  collection, spec, "hand_right")
+    def at(base: Vector, x: float, y: float, z: float) -> Vector:
+        return base + gl(x, y, z)
 
-    head = root + Vector((0.0, -0.09, 1.26))
-    add_ellipsoid("GOBLIN_Head", head, (0.24, 0.20, 0.23), "skin",
-                  collection, spec, "head", subdivisions=2)
-    add_cone("GOBLIN_Ear_L", head + Vector((-0.27, 0.01, 0.015)),
-             0.13, 0.34, "skin", collection, spec, "ear_left",
-             rotation=(0.0, -math.pi * 0.5, 0.0), vertices=3)
-    add_cone("GOBLIN_Ear_R", head + Vector((0.27, 0.01, 0.015)),
-             0.13, 0.34, "skin", collection, spec, "ear_right",
-             rotation=(0.0, math.pi * 0.5, 0.0), vertices=3)
-    add_cone("GOBLIN_Nose", head + Vector((0.0, -0.22, -0.025)),
-             0.075, 0.20, "secondary", collection, spec, "nose",
-             rotation=(math.pi * 0.5, 0.0, 0.0), vertices=5)
-    add_ellipsoid("GOBLIN_Eye_L", head + Vector((-0.082, -0.185, 0.055)),
-                  (0.036, 0.021, 0.045), "eye", collection, spec, "eye_left")
-    add_ellipsoid("GOBLIN_Eye_R", head + Vector((0.082, -0.185, 0.055)),
-                  (0.036, 0.021, 0.045), "eye", collection, spec, "eye_right")
+    # Pelvis, torso, neck.
+    bind_to(add_box("GOBLIN_Belt", at(pelvis, 0.0, 0.10, 0.0),
+                    (0.38, 0.28, 0.22), "leather", collection, spec, "belt"),
+            "pelvis")
+    bind_to(add_box("GOBLIN_Buckle", at(pelvis, 0.0, 0.11, 0.158),
+                    (0.09, 0.024, 0.085), "horn", collection, spec,
+                    "buckle", bevel=0.004), "pelvis")
+    bind_to(add_segment("GOBLIN_Torso", pelvis + gl(0.0, 0.06, 0.0), chest,
+                        0.21, 0.26, "cloth", collection, spec, "torso",
+                        sides=8), "spine")
+    bind_to(add_segment("GOBLIN_Shoulders", chest, neck_ring, 0.21, 0.10,
+                        "cloth", collection, spec, "shoulders", sides=8),
+            "chest")
+    bind_to(add_ellipsoid("GOBLIN_Scarf", neck_ring, (0.145, 0.13, 0.066),
+                          "accent", collection, spec, "scarf"), "chest")
 
-    if spec.variant == "goblin_scavenger":
-        add_ellipsoid("GOBLIN_ScavengerPack",
-                      root + Vector((0.0, 0.20, 0.91)),
-                      (0.25, 0.17, 0.30), "hide", collection, spec, "pack")
-        add_segment("GOBLIN_HookHandle", hand_r,
-                    hand_r + Vector((0.02, -0.05, -0.34)),
-                    0.030, 0.027, "leather", collection, spec, "hook_handle")
-        add_cone("GOBLIN_Hook", hand_r + Vector((0.02, -0.07, -0.40)),
-                 0.070, 0.16, "metal", collection, spec, "hook",
-                 rotation=(math.pi * 0.5, 0.0, 0.0), vertices=5)
-    elif spec.variant == "goblin_raider":
-        add_box("GOBLIN_ChestArmor", chest + Vector((0.0, -0.19, 0.015)),
-                (0.39, 0.055, 0.33), "metal", collection, spec, "armor")
-        add_cone("GOBLIN_Helmet", head + Vector((0.0, 0.0, 0.20)),
-                 0.23, 0.28, "metal", collection, spec, "helmet", vertices=7)
-        spear_bottom = hand_r + Vector((0.02, 0.02, -0.38))
-        spear_top = hand_r + Vector((-0.02, -0.02, 0.92))
-        add_segment("GOBLIN_Spear", spear_bottom, spear_top,
-                    0.028, 0.024, "leather", collection, spec, "spear")
-        add_cone("GOBLIN_SpearHead", spear_top + Vector((0.0, 0.0, 0.09)),
-                 0.070, 0.22, "metal", collection, spec, "spear_head")
+    # Head and face.
+    face_parts: list[bpy.types.Object] = []
+    face_parts.append(add_ellipsoid("GOBLIN_Head", head, (0.25, 0.22, 0.24),
+                                    "skin", collection, spec, "head",
+                                    subdivisions=2))
+    face_parts.append(add_ellipsoid("GOBLIN_Jaw", at(head, 0.0, -0.105, 0.12),
+                                    (0.19, 0.15, 0.115), "skin", collection,
+                                    spec, "jaw"))
+    face_parts.append(add_ellipsoid("GOBLIN_Nose", at(head, 0.0, -0.015, 0.235),
+                                    (0.059, 0.08, 0.10), "skin", collection,
+                                    spec, "nose"))
+    face_parts.append(add_ellipsoid("GOBLIN_NoseTip", at(head, 0.0, -0.07, 0.30),
+                                    (0.073, 0.076, 0.055), "skin",
+                                    collection, spec, "nose_tip"))
+    for side, label in ((-1.0, "L"), (1.0, "R")):
+        ear_root = at(head, side * 0.18, 0.075, 0.0)
+        ear_tip = at(head, side * 0.48, 0.12 if side < 0 else 0.18, -0.055)
+        ear_bottom = at(head, side * 0.19, -0.09, -0.03)
+        face_parts.append(add_panel(
+            f"GOBLIN_Ear_{label}", (ear_root, ear_tip, ear_bottom), 0.018,
+            "skin", collection, spec, f"ear_{label.lower()}"))
+        face_parts.append(add_segment(
+            f"GOBLIN_EarRim_{label}", ear_root, ear_tip, 0.036, 0.009,
+            "skin", collection, spec, f"ear_rim_{label.lower()}", sides=5))
+        ear_inner = at(head, side * 0.25, 0.025, 0.008)
+        face_parts.append(add_panel(
+            f"GOBLIN_EarInner_{label}",
+            (ear_inner, ear_inner.lerp(ear_tip, 0.79),
+             ear_inner.lerp(ear_bottom, 0.65)),
+            0.022, "secondary", collection, spec,
+            f"ear_inner_{label.lower()}"))
+        eye = at(head, side * 0.104, 0.04, 0.206)
+        face_parts.append(add_ellipsoid(
+            f"GOBLIN_EyeSocket_{label}", eye, (0.061, 0.031, 0.048),
+            "secondary", collection, spec, f"eye_socket_{label.lower()}"))
+        iris = eye + gl(0.0, 0.0, 0.018)
+        face_parts.append(add_ellipsoid(
+            f"GOBLIN_Iris_{label}", iris, (0.048, 0.020, 0.035), "eye",
+            collection, spec, f"iris_{label.lower()}"))
+        pupil = iris + gl(0.0, 0.0, 0.018)
+        pupil_obj = add_ellipsoid(
+            f"GOBLIN_Pupil_{label}", pupil, (0.016, 0.008, 0.026),
+            "leather", collection, spec, f"pupil_{label.lower()}")
+        pupil_obj["cc_paint_value"] = 0.25
+        face_parts.append(pupil_obj)
+        face_parts.append(add_segment(
+            f"GOBLIN_Brow_{label}", at(head, side * 0.05, 0.085, 0.226),
+            at(head, side * 0.19, 0.12, 0.17), 0.029, 0.021, "secondary",
+            collection, spec, f"brow_{label.lower()}", sides=5))
+        mouth = add_segment(
+            f"GOBLIN_Mouth_{label}", at(head, side * 0.14, -0.14, 0.218),
+            at(head, 0.0, -0.158, 0.265), 0.014, 0.012, "leather",
+            collection, spec, f"mouth_{label.lower()}", sides=5)
+        mouth["cc_paint_value"] = 0.25
+        face_parts.append(mouth)
+        tusk = at(head, side * 0.098, -0.16, 0.258)
+        face_parts.append(add_segment(
+            f"GOBLIN_Tusk_{label}", tusk, tusk + gl(side * 0.013, 0.068, 0.016),
+            0.021, 0.003, "horn", collection, spec,
+            f"tusk_{label.lower()}", sides=5))
+    add_goblin_hair(spec, collection, head, face_parts)
+    for obj in face_parts:
+        bind_to(obj, "head")
+
+    # Arms.
+    for side, label in ((-1.0, "L"), (1.0, "R")):
+        shoulder = joints[f"shoulder.{label}"]
+        elbow = joints[f"elbow.{label}"]
+        hand = joints[f"hand.{label}"]
+        lower = label.lower()
+        bind_to(add_ellipsoid(f"GOBLIN_Shoulder_{label}", shoulder,
+                              (0.085, 0.085, 0.085), "cloth", collection,
+                              spec, f"shoulder_{lower}"),
+                f"upper_arm.{label}")
+        bind_to(add_segment(f"GOBLIN_UpperArm_{label}", shoulder, elbow,
+                            0.085, 0.068, "cloth", collection, spec,
+                            f"upper_arm_{lower}", sides=7),
+                f"upper_arm.{label}")
+        bind_to(add_ellipsoid(f"GOBLIN_Elbow_{label}", elbow,
+                              (0.066, 0.066, 0.066), "skin", collection,
+                              spec, f"elbow_{lower}"), f"forearm.{label}")
+        bind_to(add_segment(f"GOBLIN_Forearm_{label}", elbow, hand,
+                            0.068, 0.055, "skin", collection, spec,
+                            f"forearm_{lower}", sides=7),
+                f"forearm.{label}")
+        bind_to(add_segment(f"GOBLIN_Cuff_{label}", elbow.lerp(hand, 0.78),
+                            hand, 0.071, 0.065, "leather", collection, spec,
+                            f"cuff_{lower}", sides=6), f"forearm.{label}")
+        bind_to(add_ellipsoid(f"GOBLIN_Hand_{label}", hand,
+                              (0.078, 0.078, 0.078), "skin", collection,
+                              spec, f"hand_{lower}"), f"hand.{label}")
+
+    # Legs, from DrawCreatureMuscleLimbs' goblin branch.
+    for label in ("L", "R"):
+        hip = joints[f"hip.{label}"]
+        knee = joints[f"knee.{label}"]
+        ankle = joints[f"ankle.{label}"]
+        lower = label.lower()
+        bind_to(add_segment(f"GOBLIN_Thigh_{label}", hip, knee, 0.098,
+                            0.078, "cloth", collection, spec,
+                            f"thigh_{lower}", sides=7), f"thigh.{label}")
+        bind_to(add_ellipsoid(f"GOBLIN_Knee_{label}", knee,
+                              (0.080, 0.080, 0.080), "cloth", collection,
+                              spec, f"knee_{lower}"), f"shin.{label}")
+        bind_to(add_segment(f"GOBLIN_Shin_{label}", knee,
+                            ankle + gl(0.0, 0.04, 0.0), 0.076, 0.058,
+                            "skin", collection, spec, f"shin_{lower}",
+                            sides=7), f"shin.{label}")
+        bind_to(add_box(f"GOBLIN_Boot_{label}", ankle + gl(0.0, 0.05, 0.06),
+                        (0.22, 0.30, 0.10), "leather", collection, spec,
+                        f"boot_{lower}"), f"foot.{label}")
+
+    hand_r = joints["hand.R"]
+    if spec.variant == "goblin_raider":
+        bind_to(add_ellipsoid("GOBLIN_Helmet", at(head, 0.0, 0.21, -0.01),
+                              (0.26, 0.245, 0.13), "metal", collection, spec,
+                              "helmet"), "head")
+        bind_to(add_box("GOBLIN_ChestArmor", at(chest, 0.0, 0.0, 0.17),
+                        (0.38, 0.07, 0.30), "metal", collection, spec,
+                        "armor"), "chest")
+        bind_to(add_ellipsoid("GOBLIN_Pauldron", at(chest, -0.28, 0.025, 0.0),
+                              (0.14, 0.16, 0.105), "metal", collection, spec,
+                              "pauldron"), "chest")
+        spear_bottom = at(hand_r, 0.0, -0.42, 0.0)
+        spear_tip = at(hand_r, 0.0, 1.16, 0.0)
+        bind_to(add_segment("GOBLIN_Spear", spear_bottom, spear_tip, 0.025,
+                            0.018, "leather", collection, spec, "spear",
+                            sides=6), "hand.R")
+        bind_to(add_segment("GOBLIN_SpearHead", spear_tip,
+                            at(spear_tip, 0.0, 0.24, 0.0), 0.075, 0.002,
+                            "metal", collection, spec, "spear_head",
+                            sides=5), "hand.R")
+        bind_to(add_panel("GOBLIN_Pennant",
+                          (spear_tip, at(spear_tip, -0.23, -0.10, 0.0),
+                           at(spear_tip, 0.0, -0.21, 0.0)),
+                          0.012, "accent", collection, spec, "pennant"),
+                "hand.R")
+    elif spec.variant == "goblin_tribute_bearer":
+        bind_to(add_box("GOBLIN_Offering", at(chest, 0.0, -0.22, 0.30),
+                        (0.48, 0.38, 0.38), "accent", collection, spec,
+                        "offering", bevel=0.02), "chest")
+        bind_to(add_box("GOBLIN_OfferingBand", at(chest, 0.0, -0.22, 0.505),
+                        (0.10, 0.025, 0.40), "horn", collection, spec,
+                        "offering_band", bevel=0.004), "chest")
     else:
-        offering = root + Vector((0.0, -0.35, 0.72))
-        add_box("GOBLIN_Offering", offering, (0.44, 0.34, 0.31), "accent",
-                collection, spec, "offering", bevel=0.025)
-        add_box("GOBLIN_OfferingBand", offering + Vector((0.0, -0.18, 0.0)),
-                (0.12, 0.025, 0.33), "horn", collection, spec, "offering_band")
-        add_segment("GOBLIN_Harness_L", shoulder_l,
-                    offering + Vector((-0.16, 0.12, 0.12)),
-                    0.026, 0.026, "leather", collection, spec, "harness_left")
-        add_segment("GOBLIN_Harness_R", shoulder_r,
-                    offering + Vector((0.16, 0.12, 0.12)),
-                    0.026, 0.026, "leather", collection, spec, "harness_right")
+        bind_to(add_box("GOBLIN_Pack", at(chest, 0.0, -0.04, -0.20),
+                        (0.40, 0.18, 0.42), "secondary", collection, spec,
+                        "pack"), "chest")
+        bind_to(add_segment("GOBLIN_Bedroll", at(chest, -0.23, 0.20, -0.24),
+                            at(chest, 0.23, 0.20, -0.24), 0.10, 0.10,
+                            "hide", collection, spec, "bedroll", sides=8),
+                "chest")
+        bind_to(add_segment("GOBLIN_Strap", at(chest, -0.18, 0.19, 0.05),
+                            at(pelvis, 0.14, 0.16, 0.17), 0.029, 0.029,
+                            "leather", collection, spec, "strap", sides=5),
+                "chest")
+        hook_bottom = at(hand_r, 0.0, -0.25, 0.02)
+        hook_bend = at(hook_bottom, 0.0, -0.08, 0.11)
+        hook_tip = at(hook_bottom, 0.0, 0.04, 0.16)
+        bind_to(add_segment("GOBLIN_HookHandle", hand_r, hook_bottom, 0.024,
+                            0.022, "leather", collection, spec,
+                            "hook_handle", sides=6), "hand.R")
+        bind_to(add_segment("GOBLIN_HookBend", hook_bottom, hook_bend, 0.024,
+                            0.020, "metal", collection, spec, "hook_bend",
+                            sides=6), "hand.R")
+        bind_to(add_segment("GOBLIN_HookTip", hook_bend, hook_tip, 0.020,
+                            0.005, "metal", collection, spec, "hook_tip",
+                            sides=6), "hand.R")
+
+
+def add_goblin_hair(spec: CreatureSpec, collection: bpy.types.Collection,
+                    head: Vector, parts: list[bpy.types.Object]) -> None:
+    """Accent-slot hair, from the hand-drawn DrawGoblinHair shapes."""
+    crest = spec.variant == "goblin_raider"
+    bunches = spec.variant == "goblin_tribute_bearer"
+
+    def at(x: float, y: float, z: float) -> Vector:
+        return head + gl(x, y, z)
+
+    parts.append(add_ellipsoid(
+        "GOBLIN_HairCap", at(0.0, 0.20, -0.025),
+        (0.12 if crest else 0.245, 0.20, 0.11 if bunches else 0.16),
+        "accent", collection, spec, "hair_cap"))
+    if bunches:
+        for side, label in ((-1.0, "L"), (1.0, "R")):
+            parts.append(add_ellipsoid(
+                f"GOBLIN_HairBunch_{label}", at(side * 0.22, 0.37, -0.055),
+                (0.20, 0.19, 0.23), "accent", collection, spec,
+                f"hair_bunch_{label.lower()}"))
+            local = ((side * 0.20, 0.37, -0.06), (side * 0.31, 0.60, -0.08),
+                     (side * 0.21, 0.79, -0.07), (side * 0.09, 0.78, 0.005),
+                     (side * 0.09, 0.67, 0.025))
+            parts.append(add_tube(
+                f"GOBLIN_HairTwist_{label}", tuple(at(*p) for p in local),
+                (0.145, 0.16, 0.115, 0.060, 0.003), "accent", collection,
+                spec, f"hair_twist_{label.lower()}", sides=7))
+        return
+    roots = ((-0.16, 0.15, -0.04), (0.16, 0.15, -0.04),
+             (-0.10, 0.22, -0.04), (0.10, 0.22, -0.04),
+             (0.00, 0.24, -0.06), (-0.10, 0.18, 0.10),
+             (0.10, 0.18, 0.10))
+    tips = ((-0.35, 0.49, -0.13), (0.40, 0.51, -0.12),
+            (-0.02, 0.78, -0.10), (0.39, 0.67, -0.16),
+            (0.23, 0.91, -0.13), (-0.13, 0.57, 0.10),
+            (0.29, 0.59, 0.10))
+    radii = (0.11, 0.13, 0.068, 0.003)
+    lock_scale = 0.72 if crest else 1.0
+    for lock in range(5 if crest else 7):
+        root = Vector(roots[lock])
+        tip = Vector(tips[lock])
+        if crest:
+            root = Vector((0.0, 0.27, 0.16 - lock * 0.085))
+            tip = Vector((0.018, 1.02 - lock * 0.09, -0.13 - lock * 0.095))
+        local = (root, root.lerp(tip, 0.34), root.lerp(tip, 0.72), tip)
+        parts.append(add_tube(
+            f"GOBLIN_HairLock_{lock}", tuple(at(*p) for p in local),
+            tuple(radius * lock_scale for radius in radii), "accent",
+            collection, spec, f"hair_lock_{lock}", sides=6))
+
+
+def skin_humanoid(collection: bpy.types.Collection,
+                  spec: CreatureSpec,
+                  bone_points: dict[str, tuple[Vector, Vector]],
+                  ) -> bpy.types.Object:
+    """Rigid one-bone weights for every part, from its cc_deform_bone tag."""
+    armature_data = bpy.data.armatures.new(f"RIG_{spec.variant}")
+    rig = bpy.data.objects.new(f"RIG_{spec.variant}", armature_data)
+    collection.objects.link(rig)
+    rig.show_in_front = True
+    rig["cc_asset_id"] = spec.asset_id
+    rig["cc_rig_contract"] = "CcHumanoidSkinPose"
+    rig["cc_skeleton"] = "humanoid"
+    rig["cc_bone_count"] = len(HUMANOID_BONES)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit_bones: dict[str, bpy.types.EditBone] = {}
+    for name, _parent in HUMANOID_BONES:
+        bone = armature_data.edit_bones.new(name)
+        bone.head, bone.tail = bone_points[name]
+        bone.use_deform = True
+        edit_bones[name] = bone
+    for name, parent in HUMANOID_BONES:
+        if parent is not None:
+            edit_bones[name].parent = edit_bones[parent]
+            edit_bones[name].use_connect = False
+    bpy.ops.object.mode_set(mode="OBJECT")
+    rig.select_set(False)
+
+    for obj in tuple(collection.objects):
+        if obj.type != "MESH":
+            continue
+        bone_name = obj.get("cc_deform_bone")
+        if bone_name not in edit_bones:
+            raise RuntimeError(
+                f"{spec.variant} part {obj.name} has no deform bone")
+        apply_modifiers(obj)
+        obj.vertex_groups.clear()
+        group = obj.vertex_groups.new(name=bone_name)
+        group.add(tuple(range(len(obj.data.vertices))), 1.0, "REPLACE")
+        modifier = obj.modifiers.new("CC_HumanoidSkin", "ARMATURE")
+        modifier.object = rig
+        world = obj.matrix_world.copy()
+        obj.parent = rig
+        obj.matrix_parent_inverse = rig.matrix_world.inverted()
+        obj.matrix_world = world
+    return rig
 
 
 def quadruped_stride(spec: CreatureSpec) -> dict[str, float]:
@@ -1662,12 +2034,27 @@ def consolidate(collection: bpy.types.Collection,
         raise RuntimeError(f"{spec.variant} generated no meshes")
     for obj in objects:
         apply_modifiers(obj)
+    # A part may pin its paint value (pupils, mouth lines stay dark). Carry
+    # the pin through the join as a face attribute; 0 means "use normals".
+    pinned_values = any("cc_paint_value" in obj for obj in objects)
+    if pinned_values:
+        for obj in objects:
+            attribute = obj.data.attributes.new(
+                "cc_paint_value", "FLOAT", "FACE")
+            value = float(obj.get("cc_paint_value", 0.0))
+            for index in range(len(obj.data.polygons)):
+                attribute.data[index].value = value
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:
         obj.select_set(True)
     bpy.context.view_layer.objects.active = objects[0]
     bpy.ops.object.join()
     joined = objects[0]
+    value_overrides = None
+    if pinned_values:
+        attribute = joined.data.attributes["cc_paint_value"]
+        value_overrides = [item.value for item in attribute.data]
+        joined.data.attributes.remove(attribute)
     old_materials = list(joined.data.materials)
     old_names = [material.name if material else "" for material in old_materials]
     canonical: dict[str, int] = {}
@@ -1677,7 +2064,9 @@ def consolidate(collection: bpy.types.Collection,
     polygon_materials = [canonical[old_names[polygon.material_index]]
                          for polygon in joined.data.polygons]
     paint_channels.add_indexed_paint_channels(
-        joined, polygon_materials, MATERIAL_ORDER)
+        joined, polygon_materials, MATERIAL_ORDER,
+        value_offset=GOBLIN_VALUE_LIFT if spec.family == "goblin" else 0.0,
+        value_overrides=value_overrides)
     joined.data.materials.clear()
     if INDEXED_MATERIAL is None:
         raise RuntimeError("indexed creature material was not initialized")
@@ -1699,7 +2088,8 @@ def consolidate(collection: bpy.types.Collection,
             armatures[0].object = rig
             for redundant in armatures[1:]:
                 joined.modifiers.remove(redundant)
-        joined["cc_skin_contract"] = "CcQuadrupedPose"
+        joined["cc_skin_contract"] = str(
+            rig.get("cc_rig_contract", "CcQuadrupedPose"))
     return joined
 
 
@@ -1865,8 +2255,15 @@ def build() -> None:
             if pose == "idle":
                 preview_sources.append(
                     (spec, duplicate_preview_parts(collection, spec)))
-            rig = skin_quadruped(collection, spec) \
-                if spec.family in ("horse", "cow", "sheep") else None
+            skeleton = skeleton_for(spec)
+            if skeleton == "quadruped":
+                rig = skin_quadruped(collection, spec)
+            elif skeleton == "humanoid":
+                rig = skin_humanoid(
+                    collection, spec,
+                    humanoid_bone_points(goblin_joints(spec)))
+            else:
+                rig = None
             model = consolidate(collection, spec, rig)
             path = export_model(model, spec, rig)
             model.hide_render = True
@@ -1880,9 +2277,12 @@ def build() -> None:
             if rig is not None:
                 rig.hide_render = True
                 rig.hide_set(True)
+                bones = HUMANOID_BONES if skeleton == "humanoid" else \
+                    QUADRUPED_BONES
                 entry["skinned"] = True
                 entry["armature"] = rig.name
-                entry["bones"] = [name for name, _parent in QUADRUPED_BONES]
+                entry["bones"] = [name for name, _parent in bones]
+            entry["skeleton"] = skeleton
             manifest_entries.append(entry)
 
     referenced = {ROOT / str(entry["export"]) for entry in manifest_entries}
@@ -1894,7 +2294,7 @@ def build() -> None:
         "library_version": LIBRARY_VERSION,
         "art_direction": "silhouette_first_pseudo_pixel_creatures",
         "generation": "offline_curated_procedural_geometry",
-        "runtime_strategy": "held poses for goblins and dragons; runtime skins for horse, cow, and sheep",
+        "runtime_strategy": "one skinned GLB per character posed at runtime (goblins: humanoid skeleton; horse, cow, sheep: quadruped skeleton); dragons still use held poses until their migration (docs/design/unified-characters.md)",
         "coordinate_system": "glTF +Y up, +Z forward",
         "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
         "material_order": list(MATERIAL_ORDER),

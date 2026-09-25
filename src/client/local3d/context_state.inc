@@ -15,6 +15,7 @@
 #include "client/cc_style_pack.h"
 #include "world/cc_world.h"
 
+#include "locomotion/cc_character_skin.h"
 #include "locomotion/cc_creature.h"
 #include "locomotion/cc_humanoid_skin.h"
 #include "locomotion/cc_multileg.h"

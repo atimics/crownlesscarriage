@@ -11,6 +11,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import ast
+
 from inspect_glb import accessor_first_values, accessor_values, collect_stats, parse_glb
 from generate_creature_catalog import OUTPUT_PATH, render_catalog
 
@@ -31,11 +33,6 @@ EXPECTED_VARIANTS = (
     "sheep",
 )
 EXPECTED_FAMILIES = ("goblin", "dragon", "animal")
-EXPECTED_STEPPED_POSES = (
-    "idle",
-    "contact_a", "down_a", "passing_a", "up_a",
-    "contact_b", "down_b", "passing_b", "up_b",
-)
 EXPECTED_DRAGON_POSES = ("idle", "stalk_a", "stalk_b", "threat", "rest")
 EXPECTED_QUADRUPED_BONES = (
     "root", "body", "chest", "neck", "head",
@@ -45,6 +42,29 @@ EXPECTED_QUADRUPED_BONES = (
     "upper_leg.HR", "lower_leg.HR", "hoof.HR",
     "tail.root", "tail",
 )
+EXPECTED_HUMANOID_BONES = (
+    "root", "pelvis", "spine", "chest", "neck", "head",
+    "upper_arm.L", "forearm.L", "hand.L",
+    "upper_arm.R", "forearm.R", "hand.R",
+    "thigh.L", "shin.L", "foot.L",
+    "thigh.R", "shin.R", "foot.R",
+)
+# Skinned characters share the 32-matrix skinned shaders
+# (assets/shaders/world_lit_skinned.vs, boneMatrices[32]).
+MAX_SKIN_BONES = 32
+EXPECTED_SKELETON = {
+    "goblin_scavenger": "humanoid",
+    "goblin_raider": "humanoid",
+    "goblin_tribute_bearer": "humanoid",
+    "horse": "quadruped",
+    "cow": "quadruped",
+    "sheep": "quadruped",
+}
+SKELETON_BONES = {
+    "humanoid": EXPECTED_HUMANOID_BONES,
+    "quadruped": EXPECTED_QUADRUPED_BONES,
+}
+BUILDER_PATH = Path(__file__).resolve().parent / "build_creature_library.py"
 EXPECTED_MATERIALS = ("MAT_CREATURE_INDEXED",)
 EXPECTED_PALETTE = (
     "skin", "secondary", "hide", "cloth", "leather",
@@ -63,9 +83,9 @@ EXPECTED_MORPHOLOGY = {
     "sheep": "quadruped",
 }
 EXPECTED_GAIT = {
-    "goblin_scavenger": "npc_stepped",
-    "goblin_raider": "npc_stepped",
-    "goblin_tribute_bearer": "npc_stepped",
+    "goblin_scavenger": "humanoid_runtime_skin",
+    "goblin_raider": "humanoid_runtime_skin",
+    "goblin_tribute_bearer": "humanoid_runtime_skin",
     "horse": "quadruped_runtime_skin",
     "cow": "quadruped_runtime_skin",
     "dragon": "dragon_authored",
@@ -75,7 +95,8 @@ EXPECTED_GAIT = {
     "sheep": "quadruped_runtime_skin",
 }
 HEIGHT_LIMITS = {
-    "goblin": (1.05, 1.70),
+    # Head to the tip of the hair crest; the body alone is about 1.8m.
+    "goblin": (1.60, 2.70),
     "horse": (1.15, 2.00),
     "cow": (1.15, 1.90),
     "sheep": (0.75, 1.45),
@@ -98,12 +119,94 @@ def expected_pairs() -> tuple[tuple[str, str], ...]:
     for variant in EXPECTED_VARIANTS:
         if variant.startswith("dragon"):
             poses = EXPECTED_DRAGON_POSES
-        elif variant in ("horse", "cow", "sheep"):
-            poses = ("idle",)
         else:
-            poses = EXPECTED_STEPPED_POSES
+            poses = ("idle",)
         pairs.extend((variant, pose) for pose in poses)
     return tuple(pairs)
+
+
+def builder_constant(name: str) -> dict:
+    """Read a literal table from the Blender builder without importing bpy."""
+    tree = ast.parse(BUILDER_PATH.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                isinstance(target, ast.Name) and target.id == name
+                for target in node.targets):
+            return ast.literal_eval(node.value)
+    raise KeyError(name)
+
+
+def joint_world_heads(document: dict, joints: list[int]) -> dict[str, tuple]:
+    """World-space head of every skin joint (translation and rotation only)."""
+    nodes = document.get("nodes", [])
+    parent = {child: index for index, node in enumerate(nodes)
+              for child in node.get("children", [])}
+
+    def multiply(a, b):
+        ax, ay, az, aw = a
+        bx, by, bz, bw = b
+        return (aw * bx + ax * bw + ay * bz - az * by,
+                aw * by - ax * bz + ay * bw + az * bx,
+                aw * bz + ax * by - ay * bx + az * bw,
+                aw * bw - ax * bx - ay * by - az * bz)
+
+    def rotate(q, v):
+        x, y, z, w = q
+        t = (2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
+             2 * (x * v[1] - y * v[0]))
+        return (v[0] + w * t[0] + y * t[2] - z * t[1],
+                v[1] + w * t[1] + z * t[0] - x * t[2],
+                v[2] + w * t[2] + x * t[1] - y * t[0])
+
+    cache: dict[int, tuple] = {}
+
+    def world(index: int):
+        if index in cache:
+            return cache[index]
+        node = nodes[index]
+        translation = tuple(node.get("translation", (0.0, 0.0, 0.0)))
+        rotation = tuple(node.get("rotation", (0.0, 0.0, 0.0, 1.0)))
+        if index in parent:
+            parent_translation, parent_rotation = world(parent[index])
+            offset = rotate(parent_rotation, translation)
+            result = (tuple(a + b for a, b in zip(parent_translation, offset)),
+                      multiply(parent_rotation, rotation))
+        else:
+            result = (translation, rotation)
+        cache[index] = result
+        return result
+
+    return {nodes[index].get("name", ""): world(index)[0] for index in joints}
+
+
+def humanoid_bind_failures(variant: str, document: dict,
+                           joints: list[int]) -> list[str]:
+    """The humanoid bind pose must equal the runtime idle mapping.
+
+    CcHumanoidPoseFromBipedRig poses the skin from the creature rig. Its idle
+    output is GOBLIN_BIND in the builder; tests/character_skin_tests.c prints
+    the same table, so a change on one side shows up here."""
+    bind = dict(builder_constant("GOBLIN_BIND"))
+    if variant == "goblin_tribute_bearer":
+        bind.update(builder_constant("GOBLIN_CARRIER_ARMS"))
+    heads = joint_world_heads(document, joints)
+    expected = {
+        "pelvis": bind["pelvis"], "spine": bind["spine"],
+        "chest": bind["chest"], "neck": bind["neck"], "head": bind["head"],
+    }
+    for side in ("L", "R"):
+        expected[f"upper_arm.{side}"] = bind[f"shoulder.{side}"]
+        expected[f"forearm.{side}"] = bind[f"elbow.{side}"]
+        expected[f"hand.{side}"] = bind[f"hand.{side}"]
+        expected[f"thigh.{side}"] = bind[f"hip.{side}"]
+        expected[f"shin.{side}"] = bind[f"knee.{side}"]
+        expected[f"foot.{side}"] = bind[f"ankle.{side}"]
+    failures = []
+    for name, point in expected.items():
+        head = heads.get(name)
+        if head is None or max(abs(a - b) for a, b in zip(head, point)) > 0.002:
+            failures.append(f"{variant}: bone {name} is not at its bind joint")
+    return failures
 
 
 def validate() -> int:
@@ -186,13 +289,19 @@ def validate() -> int:
                                    abs(sample[1] - sample[2]) < 0.01):
                 failures.append(
                     f"{variant}: COLOR_0 has no authored value/fold channels")
-        skinned = variant in ("horse", "cow", "sheep")
+        skeleton = EXPECTED_SKELETON.get(variant, "none")
+        skinned = skeleton != "none"
+        expected_bones = SKELETON_BONES.get(skeleton, ())
         if bool(entry.get("skinned")) != skinned:
             failures.append(f"{variant}: wrong skinned contract")
+        if entry.get("skeleton") != skeleton:
+            failures.append(f"{variant}: wrong skeleton family")
         skins = document.get("skins", [])
         if skinned:
-            if tuple(entry.get("bones", ())) != EXPECTED_QUADRUPED_BONES:
+            if tuple(entry.get("bones", ())) != expected_bones:
                 failures.append(f"{variant}: manifest bone contract changed")
+            if len(expected_bones) > MAX_SKIN_BONES:
+                failures.append(f"{variant}: more bones than the shaders hold")
             if len(skins) != 1:
                 failures.append(f"{variant}: expected exactly one skin")
             else:
@@ -201,14 +310,20 @@ def validate() -> int:
                     nodes[index].get("name", "")
                     for index in skins[0].get("joints", [])
                 )
-                if (len(joint_names) != len(EXPECTED_QUADRUPED_BONES) or
-                        set(joint_names) != set(EXPECTED_QUADRUPED_BONES)):
+                if (len(joint_names) != len(expected_bones) or
+                        set(joint_names) != set(expected_bones)):
                     failures.append(
                         f"{variant}: exported bone contract {joint_names!r}")
+                if skeleton == "humanoid":
+                    failures.extend(humanoid_bind_failures(
+                        variant, document, skins[0].get("joints", [])))
             if any("JOINTS_0" not in primitive.get("attributes", {}) or
                    "WEIGHTS_0" not in primitive.get("attributes", {})
                    for primitive in primitives):
                 failures.append(f"{variant}: skin weights are missing")
+            if any("JOINTS_1" in primitive.get("attributes", {})
+                   for primitive in primitives):
+                failures.append(f"{variant}: more than 4 weights per vertex")
             for primitive in primitives:
                 attributes = primitive.get("attributes", {})
                 if "JOINTS_0" not in attributes or "WEIGHTS_0" not in attributes:
@@ -221,7 +336,7 @@ def validate() -> int:
                 for joint, weight in zip(joints, weights):
                     if (any(not math.isfinite(w) or w < 0.0 for w in weight)
                             or abs(sum(weight) - 1.0) > 0.001
-                            or any(w > 0.0 and not 0 <= j < len(EXPECTED_QUADRUPED_BONES)
+                            or any(w > 0.0 and not 0 <= j < len(expected_bones)
                                    for j, w in zip(joint, weight))):
                         failures.append(f"{variant}: invalid vertex skin weights")
                         break

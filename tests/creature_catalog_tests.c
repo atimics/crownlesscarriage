@@ -31,6 +31,25 @@ int main(void)
            "cow uses one runtime-driven skin");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_SHEEP) == 1,
            "sheep uses one runtime-driven skin");
+    for (int32_t goblin = CC_CREATURE_GOBLIN_SCAVENGER;
+         goblin <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER; ++goblin) {
+        const CcCreatureDefinition *definition =
+            CcCreatureDefinitionAt((CcCreatureVariant)goblin);
+        EXPECT(CcCreaturePoseCount((CcCreatureVariant)goblin) == 1,
+               "each goblin uses one runtime-driven skin");
+        EXPECT(definition->skinned &&
+                   strcmp(definition->skeleton, "humanoid") == 0,
+               "goblins use the humanoid skeleton family");
+        EXPECT(CcCreatureSteppedPose((CcCreatureVariant)goblin, 1.0f, true) ==
+                   CC_CREATURE_POSE_IDLE,
+               "a walking goblin keeps its single skinned asset");
+    }
+    EXPECT(strcmp(CcCreatureDefinitionAt(CC_CREATURE_HORSE)->skeleton,
+                  "quadruped") == 0,
+           "horse uses the quadruped skeleton family");
+    EXPECT(strcmp(CcCreatureDefinitionAt(CC_CREATURE_DRAGON)->skeleton,
+                  "none") == 0,
+           "dragons keep held poses until their migration");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_DRAGON) == 5,
            "dragon has its authored pose set");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_DRAGON_WHELP) == 5,

@@ -51,6 +51,11 @@ target_link_libraries(humanoid_skin_tests PRIVATE crownless_locomotion)
 cc_strict_warnings(humanoid_skin_tests)
 add_test(NAME blender_humanoid_skin_contract COMMAND humanoid_skin_tests)
 
+add_executable(character_skin_tests tests/character_skin_tests.c)
+target_link_libraries(character_skin_tests PRIVATE crownless_locomotion)
+cc_strict_warnings(character_skin_tests)
+add_test(NAME unified_character_skin_contract COMMAND character_skin_tests)
+
 add_executable(quadruped_skin_tests tests/quadruped_skin_tests.c)
 target_link_libraries(quadruped_skin_tests PRIVATE crownless_locomotion)
 cc_strict_warnings(quadruped_skin_tests)
