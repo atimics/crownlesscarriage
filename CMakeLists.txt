@@ -437,6 +437,8 @@ if(CC_BUILD_CLIENT)
         src/client/cc_heraldry.h
         src/client/cc_overlay.c
         src/client/cc_npc_appearance.c
+        src/client/cc_style_pack.c
+        src/client/cc_style_pack.h
         src/client/cc_local3d.c
         src/client/cc_local_runtime.c
         src/client/cc_local_renderer_stats.c
@@ -588,6 +590,21 @@ if(CC_BUILD_CLIENT)
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.vs"
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.fs"
         )
+        # Style packs: CcStylePackLoad() reads style.json (and, for a pack
+        # that ships its own shaders, the pack's shaders/ directory)
+        # synchronously at the very top of main(), before the first frame,
+        # the same way the shared assets/shaders/*.vs/*.fs above are loaded
+        # synchronously during CcLocalRendererInit(). Both need to be part
+        # of the startup data package rather than a lazily-fetched asset,
+        # or the emscripten build would try to read a file that has not
+        # arrived over the network yet.
+        file(GLOB CC_WEB_STYLE_PACK_MANIFEST_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/stylepacks/*/style.json"
+        )
+        file(GLOB CC_WEB_STYLE_PACK_SHADER_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/stylepacks/*/shaders/*.vs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/stylepacks/*/shaders/*.fs"
+        )
         file(GLOB CC_WEB_ECONOMIC_CARGO_ASSET_SOURCES CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/economy_cargo_*.glb"
         )
@@ -598,6 +615,8 @@ if(CC_BUILD_CLIENT)
             ${CC_WEB_NPC_ASSET_SOURCES}
             ${CC_WEB_WORLD_KIT_ASSET_SOURCES}
             ${CC_WEB_SHADER_ASSET_SOURCES}
+            ${CC_WEB_STYLE_PACK_MANIFEST_SOURCES}
+            ${CC_WEB_STYLE_PACK_SHADER_SOURCES}
             ${CC_WEB_ECONOMIC_CARGO_ASSET_SOURCES}
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/exports/glb/carriage_base_v01.glb"
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/economic_goods_v01.png"

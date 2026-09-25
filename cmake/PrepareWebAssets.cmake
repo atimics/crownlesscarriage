@@ -130,6 +130,46 @@ if(prepare_startup)
         )
         file(WRITE "${asset_output}/shaders/${shader_name}" "${shader_text}")
     endforeach()
+
+    # Style packs (assets/stylepacks/<id>/): CcStylePackLoad() reads
+    # style.json synchronously at startup, so every pack's manifest ships
+    # in the startup package, not as a lazy-fetched asset. A pack's own
+    # shaders/ (a pack only needs one if it changes a shader classic did
+    # not -- see sierra_pixel) get the same #version 330 -> #version 300 es
+    # rewrite as assets/shaders/ above, since WebGL2 needs GLSL ES. A
+    # manifest that reuses the shared assets/shaders/ files via a relative
+    # "../../shaders/x" path needs nothing extra here; that folder is
+    # already staged above. This globs pack directories rather than naming
+    # them, so a new pack under assets/stylepacks/ needs no CMake change.
+    file(GLOB stylepack_manifest_sources
+        "${asset_source}/stylepacks/*/style.json"
+    )
+    foreach(manifest IN LISTS stylepack_manifest_sources)
+        get_filename_component(pack_dir "${manifest}" DIRECTORY)
+        get_filename_component(pack_id "${pack_dir}" NAME)
+        file(COPY "${manifest}"
+             DESTINATION "${asset_output}/stylepacks/${pack_id}")
+    endforeach()
+    file(GLOB stylepack_shader_sources
+        "${asset_source}/stylepacks/*/shaders/*.vs"
+        "${asset_source}/stylepacks/*/shaders/*.fs"
+    )
+    foreach(shader IN LISTS stylepack_shader_sources)
+        get_filename_component(shader_name "${shader}" NAME)
+        get_filename_component(shaders_dir "${shader}" DIRECTORY)
+        get_filename_component(pack_dir "${shaders_dir}" DIRECTORY)
+        get_filename_component(pack_id "${pack_dir}" NAME)
+        file(READ "${shader}" shader_text)
+        string(REGEX REPLACE
+            "^#version 330[\r\n]+"
+            "#version 300 es\n\nprecision highp float;\nprecision highp int;\n"
+            shader_text
+            "${shader_text}"
+        )
+        file(WRITE
+            "${asset_output}/stylepacks/${pack_id}/shaders/${shader_name}"
+            "${shader_text}")
+    endforeach()
 endif()
 
 if(prepare_lazy)

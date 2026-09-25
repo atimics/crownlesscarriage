@@ -123,6 +123,21 @@ jobs:
               -fauto-bind-uniforms -fshader-stage=fragment \
               "$shader" -o "/tmp/$(basename "$shader").spv"
           done
+      - name: Compile style pack shaders
+        run: |
+          shopt -s nullglob
+          for shader in assets/stylepacks/*/shaders/*.vs; do
+            glslc --target-env=opengl -fauto-map-locations \
+              -fauto-bind-uniforms -fshader-stage=vertex \
+              "$shader" -o "/tmp/$(basename "$(dirname "$(dirname "$shader")")")-$(basename "$shader").spv"
+          done
+          for shader in assets/stylepacks/*/shaders/*.fs; do
+            glslc --target-env=opengl -fauto-map-locations \
+              -fauto-bind-uniforms -fshader-stage=fragment \
+              "$shader" -o "/tmp/$(basename "$(dirname "$(dirname "$shader")")")-$(basename "$shader").spv"
+          done
+      - name: Validate style pack manifests
+        run: python3 tools/validate_style_packs.py
 
   headless:
     name: Headless ${{ matrix.build_type }} / ${{ matrix.os }}

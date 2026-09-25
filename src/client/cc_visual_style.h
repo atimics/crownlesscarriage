@@ -49,67 +49,98 @@ typedef struct CcVisualPalette {
     CcStyleRamp contraband;
     CcStyleRamp people_skin;
     CcCharacterPalette crownless;
+    /* Step 2 of the style-pack seam: named effect colors that used to be
+       inline (Color){...} literals in local3d/actor_rendering.inc. Classic's
+       values below are copied verbatim from those literals, so routing them
+       through the palette changes nothing on screen. */
+    Color contact_shadow_soft;
+    Color contact_shadow_strong;
+    Color road_dust;
+    Color footstep_print;
+    Color robot_chassis_teal;
+    Color robot_chassis_gold;
+    Color robot_limb_dark;
+    Color robot_skin_bronze;
 } CcVisualPalette;
 
+/* The compile-time classic palette. This is the fallback used whenever no
+   style pack is loaded, a pack fails validation, or a pack simply omits the
+   optional "palette" section of its manifest. A style pack may replace the
+   runtime copy below (g_cc_active_palette); it never edits this macro. */
+#define CC_VISUAL_PALETTE_CLASSIC_INIT { \
+    .cool_ink = {17, 16, 25, 255}, \
+    .warm_ink = {33, 23, 26, 255}, \
+    .background = {17, 16, 25, 255}, \
+    .panel = {28, 21, 24, 244}, \
+    .panel_deep = {20, 15, 20, 244}, \
+    .panel_hover = {51, 38, 37, 248}, \
+    .bar_track = {62, 52, 49, 255}, \
+    .ink = {226, 216, 193, 255}, \
+    .muted = {164, 154, 137, 255}, \
+    \
+    .teal = {{32, 75, 74, 255}, {63, 132, 125, 255}, \
+             {98, 180, 168, 255}}, \
+    .gold = {{93, 67, 31, 255}, {154, 113, 48, 255}, \
+             {216, 173, 83, 255}}, \
+    .danger = {{66, 36, 43, 255}, {139, 55, 62, 255}, \
+               {209, 93, 81, 255}}, \
+    .violet = {{38, 31, 49, 255}, {89, 74, 104, 255}, \
+               {166, 132, 173, 255}}, \
+    \
+    .earth = {{60, 41, 48, 255}, {112, 72, 56, 255}, \
+              {167, 111, 79, 255}}, \
+    .road = {{81, 72, 63, 255}, {173, 143, 80, 255}, \
+             {208, 182, 110, 255}}, \
+    .wood = {{48, 31, 36, 255}, {88, 53, 42, 255}, \
+             {145, 96, 61, 255}}, \
+    .stone = {{47, 44, 61, 255}, {85, 74, 97, 255}, \
+              {131, 120, 143, 255}}, \
+    .grass = {{23, 45, 46, 255}, {42, 67, 54, 255}, \
+              {72, 102, 70, 255}}, \
+    .foliage = {{28, 57, 51, 255}, {37, 91, 70, 255}, \
+                {67, 131, 94, 255}}, \
+    .crop = {{92, 81, 46, 255}, {141, 120, 59, 255}, \
+             {184, 155, 76, 255}}, \
+    .metal = {{48, 52, 63, 255}, {104, 114, 125, 255}, \
+              {173, 177, 173, 255}}, \
+    .parchment = {{69, 58, 50, 255}, {129, 112, 74, 255}, \
+                  {201, 182, 132, 255}}, \
+    .contraband = {{53, 35, 63, 255}, {107, 69, 111, 255}, \
+                   {172, 124, 172, 255}}, \
+    \
+    .people_skin = {{86, 53, 44, 255}, {154, 120, 96, 255}, \
+                    {229, 184, 148, 255}}, \
+    \
+    .crownless = { \
+        .skin_shadow = {111, 75, 57, 255}, \
+        .skin = {177, 131, 93, 255}, \
+        .skin_light = {205, 157, 111, 255}, \
+        .hair = {27, 31, 32, 255}, \
+        .underlayer = {47, 108, 106, 255}, \
+        .outer = {111, 48, 55, 255}, \
+        .trousers = {40, 48, 57, 255}, \
+        .leather = {82, 50, 35, 255}, \
+        .metal = {139, 55, 62, 255}, \
+        .accent = {224, 169, 59, 255}, \
+        .panel_ink = {43, 32, 29, 255}, \
+    }, \
+    \
+    .contact_shadow_soft = {2, 7, 10, 98}, \
+    .contact_shadow_strong = {2, 7, 10, 115}, \
+    .road_dust = {150, 125, 86, 255}, \
+    .footstep_print = {67, 59, 48, 116}, \
+    .robot_chassis_teal = {42, 128, 136, 255}, \
+    .robot_chassis_gold = {223, 173, 67, 255}, \
+    .robot_limb_dark = {54, 66, 71, 255}, \
+    .robot_skin_bronze = {221, 174, 118, 255}, \
+}
 
-static const CcVisualPalette CC_VISUAL_PALETTE = {
-    .cool_ink = {17, 16, 25, 255},
-    .warm_ink = {33, 23, 26, 255},
-    .background = {17, 16, 25, 255},
-    .panel = {28, 21, 24, 244},
-    .panel_deep = {20, 15, 20, 244},
-    .panel_hover = {51, 38, 37, 248},
-    .bar_track = {62, 52, 49, 255},
-    .ink = {226, 216, 193, 255},
-    .muted = {164, 154, 137, 255},
-
-    .teal = {{32, 75, 74, 255}, {63, 132, 125, 255},
-             {98, 180, 168, 255}},
-    .gold = {{93, 67, 31, 255}, {154, 113, 48, 255},
-             {216, 173, 83, 255}},
-    .danger = {{66, 36, 43, 255}, {139, 55, 62, 255},
-               {209, 93, 81, 255}},
-    .violet = {{38, 31, 49, 255}, {89, 74, 104, 255},
-               {166, 132, 173, 255}},
-
-    .earth = {{60, 41, 48, 255}, {112, 72, 56, 255},
-              {167, 111, 79, 255}},
-    .road = {{81, 72, 63, 255}, {173, 143, 80, 255},
-             {208, 182, 110, 255}},
-    .wood = {{48, 31, 36, 255}, {88, 53, 42, 255},
-             {145, 96, 61, 255}},
-    .stone = {{47, 44, 61, 255}, {85, 74, 97, 255},
-              {131, 120, 143, 255}},
-    .grass = {{23, 45, 46, 255}, {42, 67, 54, 255},
-              {72, 102, 70, 255}},
-    .foliage = {{28, 57, 51, 255}, {37, 91, 70, 255},
-                {67, 131, 94, 255}},
-    .crop = {{92, 81, 46, 255}, {141, 120, 59, 255},
-             {184, 155, 76, 255}},
-    .metal = {{48, 52, 63, 255}, {104, 114, 125, 255},
-              {173, 177, 173, 255}},
-    .parchment = {{69, 58, 50, 255}, {129, 112, 74, 255},
-                  {201, 182, 132, 255}},
-    .contraband = {{53, 35, 63, 255}, {107, 69, 111, 255},
-                   {172, 124, 172, 255}},
-
-    .people_skin = {{86, 53, 44, 255}, {154, 120, 96, 255},
-                    {229, 184, 148, 255}},
-
-    .crownless = {
-        .skin_shadow = {111, 75, 57, 255},
-        .skin = {177, 131, 93, 255},
-        .skin_light = {205, 157, 111, 255},
-        .hair = {27, 31, 32, 255},
-        .underlayer = {47, 108, 106, 255},
-        .outer = {111, 48, 55, 255},
-        .trousers = {40, 48, 57, 255},
-        .leather = {82, 50, 35, 255},
-        .metal = {139, 55, 62, 255},
-        .accent = {224, 169, 59, 255},
-        .panel_ink = {43, 32, 29, 255},
-    },
-};
+/* The live palette every CC_STYLE_* macro reads. A single definition lives
+   in cc_style_pack.c so main.c and the local3d renderer (a separate
+   translation unit) see the same values; CcStylePackLoad() is the only
+   code that writes to it, once, before either TU starts drawing. */
+extern CcVisualPalette g_cc_active_palette;
+#define CC_VISUAL_PALETTE (g_cc_active_palette)
 
 
 #define CC_STYLE_BACKGROUND (CC_VISUAL_PALETTE.background)
@@ -176,5 +207,14 @@ static const CcVisualPalette CC_VISUAL_PALETTE = {
 #define CC_STYLE_HERO_METAL (CC_VISUAL_PALETTE.crownless.metal)
 #define CC_STYLE_HERO_ACCENT (CC_VISUAL_PALETTE.crownless.accent)
 #define CC_STYLE_HERO_PANEL_INK (CC_VISUAL_PALETTE.crownless.panel_ink)
+#define CC_STYLE_CONTACT_SHADOW_SOFT (CC_VISUAL_PALETTE.contact_shadow_soft)
+#define CC_STYLE_CONTACT_SHADOW_STRONG \
+    (CC_VISUAL_PALETTE.contact_shadow_strong)
+#define CC_STYLE_ROAD_DUST (CC_VISUAL_PALETTE.road_dust)
+#define CC_STYLE_FOOTSTEP_PRINT (CC_VISUAL_PALETTE.footstep_print)
+#define CC_STYLE_ROBOT_CHASSIS_TEAL (CC_VISUAL_PALETTE.robot_chassis_teal)
+#define CC_STYLE_ROBOT_CHASSIS_GOLD (CC_VISUAL_PALETTE.robot_chassis_gold)
+#define CC_STYLE_ROBOT_LIMB_DARK (CC_VISUAL_PALETTE.robot_limb_dark)
+#define CC_STYLE_ROBOT_SKIN_BRONZE (CC_VISUAL_PALETTE.robot_skin_bronze)
 
 #endif

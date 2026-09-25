@@ -12,6 +12,7 @@
 #include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
+#include "client/cc_style_pack.h"
 #include "world/cc_world.h"
 
 #include "locomotion/cc_creature.h"

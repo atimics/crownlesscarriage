@@ -36,17 +36,12 @@ static RenderTexture2D pony_portraits[CC_PONY_COUNT + 1];
 #define CC_BRIDGE_CHECKPOINT_ASSET \
     "assets/exports/glb/environment_bridge_checkpoint_v01.glb"
 #define CC_BRIDGE_CHECKPOINT_MESH_BUDGET 96
-#define CC_STYLE_GRADE_SHADER "assets/shaders/style_grade.fs"
-#define CC_WORLD_LIGHT_VERTEX_SHADER "assets/shaders/world_lit.vs"
-#define CC_WORLD_LIGHT_SKINNED_VERTEX_SHADER \
-    "assets/shaders/world_lit_skinned.vs"
-#define CC_WORLD_LIGHT_FRAGMENT_SHADER "assets/shaders/world_lit.fs"
-#define CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER \
-    "assets/shaders/painted_environment.fs"
-#define CC_TREE_FOLIAGE_FRAGMENT_SHADER "assets/shaders/tree_foliage.fs"
-#define CC_HERO_PIXEL_FRAGMENT_SHADER "assets/shaders/hero_pixel.fs"
-#define CC_HERO_INK_STRENGTH 0.52f
-#define CC_NPC_INDEXED_FRAGMENT_SHADER "assets/shaders/npc_indexed.fs"
+/* Shader paths, hero ink strength and material ink used to be hard-coded
+   macros here. They now come from the active style pack (g_cc_active_
+   style_pack, loaded by CcStylePackLoad() before CcLocalRendererInit()
+   runs) so a pack can replace the game's look without a recompile -- see
+   docs/design/style-packs.md. classic's compiled-in fallback values (used
+   if no pack loads at all) live in cc_style_pack.c. */
 #define CC_NPC_ARCHETYPE_MATERIAL_COUNT 9
 #define CC_NPC_ARCHETYPE_LOCOMOTION_POSE_COUNT 8
 #define CC_NPC_ARCHETYPE_WORK_POSE 9
@@ -1565,10 +1560,7 @@ static void SetIndexedPalette(
         palette[index * 4 + 2] = (float)colors[index].b / 255.0f;
         palette[index * 4 + 3] = (float)colors[index].a / 255.0f;
     }
-    static const float material_ink[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
-        0.52f, 0.88f, 0.62f, 0.58f, 0.68f,
-        0.76f, 0.46f, 0.60f, 0.96f,
-    };
+    const float *material_ink = g_cc_active_style_pack.material_ink;
     SetShaderValueV(visual_style.npc, visual_style.npc_palette_location,
                     palette, SHADER_UNIFORM_VEC4,
                     CC_NPC_ARCHETYPE_MATERIAL_COUNT);
@@ -3385,7 +3377,7 @@ static CharacterLightingStyle LoadCharacterLightingStyle(
         style.shader, "characterRimTint");
     style.rim_strength_location = GetShaderLocation(
         style.shader, "characterRimStrength");
-    float ink_strength = CC_HERO_INK_STRENGTH;
+    float ink_strength = g_cc_active_style_pack.hero_ink_strength;
     SetShaderValue(style.shader, style.ink_strength_location,
                    &ink_strength, SHADER_UNIFORM_FLOAT);
     float colors_are_albedo = vertex_colors ? 1.0f : 0.0f;
@@ -3399,7 +3391,7 @@ static CharacterLightingStyle LoadCharacterLightingStyle(
 static void LoadVisualStyle(void)
 {
     char grade_path[1024];
-    if (!ResolveAssetPath(CC_STYLE_GRADE_SHADER, grade_path,
+    if (!ResolveAssetPath(g_cc_active_style_pack.grade_fragment_shader, grade_path,
                           sizeof(grade_path))) {
         TraceLog(LOG_WARNING, "STYLE: grade shader was not found");
     } else {
@@ -3428,9 +3420,9 @@ static void LoadVisualStyle(void)
 
     char vertex_path[1024];
     char fragment_path[1024];
-    if (!ResolveAssetPath(CC_WORLD_LIGHT_VERTEX_SHADER, vertex_path,
+    if (!ResolveAssetPath(g_cc_active_style_pack.world_vertex_shader, vertex_path,
                           sizeof(vertex_path)) ||
-        !ResolveAssetPath(CC_WORLD_LIGHT_FRAGMENT_SHADER, fragment_path,
+        !ResolveAssetPath(g_cc_active_style_pack.world_fragment_shader, fragment_path,
                           sizeof(fragment_path))) {
         TraceLog(LOG_WARNING, "STYLE: world light shaders were not found");
         return;
@@ -3482,17 +3474,28 @@ static void LoadVisualStyle(void)
     visual_style.weather_wetness_location = GetShaderLocation(
         visual_style.world, "weatherWetness");
     visual_style.world_ready = true;
+    /* Step 3 of the style-pack seam: sierra_pixel turns on the ordered
+       dither already present (but unused) in world_lit.fs through this
+       uniform; classic's shader does not declare it, so GetShaderLocation
+       returns -1 and SetShaderValue is a harmless no-op. */
+    {
+        int32_t dither_location =
+            GetShaderLocation(visual_style.world, "ditherStrength");
+        SetShaderValue(visual_style.world, dither_location,
+                       &g_cc_active_style_pack.dither_strength,
+                       SHADER_UNIFORM_FLOAT);
+    }
 
     char skinned_vertex_path[1024] = {0};
     bool skinned_vertex_ready = ResolveAssetPath(
-        CC_WORLD_LIGHT_SKINNED_VERTEX_SHADER, skinned_vertex_path,
+        g_cc_active_style_pack.skinned_vertex_shader, skinned_vertex_path,
         sizeof(skinned_vertex_path));
     if (!skinned_vertex_ready) {
         TraceLog(LOG_WARNING, "STYLE: skinned vertex shader was not found");
     }
 
     char painted_fragment_path[1024];
-    if (ResolveAssetPath(CC_PAINTED_ENVIRONMENT_FRAGMENT_SHADER,
+    if (ResolveAssetPath(g_cc_active_style_pack.painted_environment_fragment_shader,
                          painted_fragment_path,
                          sizeof(painted_fragment_path))) {
         PaintedEnvironmentStyle *painted =
@@ -3534,6 +3537,13 @@ static void LoadVisualStyle(void)
             painted->foreground_reveal_location = GetShaderLocation(
                 painted->shader, "foregroundReveal");
             painted->ready = true;
+            {
+                int32_t dither_location = GetShaderLocation(
+                    painted->shader, "ditherStrength");
+                SetShaderValue(painted->shader, dither_location,
+                               &g_cc_active_style_pack.dither_strength,
+                               SHADER_UNIFORM_FLOAT);
+            }
         } else {
             painted->shader = (Shader){0};
             TraceLog(LOG_WARNING,
@@ -3545,7 +3555,7 @@ static void LoadVisualStyle(void)
     }
 
     char foliage_fragment_path[1024];
-    if (ResolveAssetPath(CC_TREE_FOLIAGE_FRAGMENT_SHADER,
+    if (ResolveAssetPath(g_cc_active_style_pack.tree_foliage_fragment_shader,
                          foliage_fragment_path,
                          sizeof(foliage_fragment_path))) {
         visual_style.foliage = LoadShader(vertex_path,
@@ -3586,7 +3596,7 @@ static void LoadVisualStyle(void)
     }
 
     char hero_fragment_path[1024];
-    if (ResolveAssetPath(CC_HERO_PIXEL_FRAGMENT_SHADER, hero_fragment_path,
+    if (ResolveAssetPath(g_cc_active_style_pack.hero_fragment_shader, hero_fragment_path,
                          sizeof(hero_fragment_path))) {
         visual_style.character = LoadCharacterLightingStyle(
             vertex_path, hero_fragment_path, true);
@@ -3599,7 +3609,7 @@ static void LoadVisualStyle(void)
     }
 
     char npc_fragment_path[1024];
-    if (ResolveAssetPath(CC_NPC_INDEXED_FRAGMENT_SHADER, npc_fragment_path,
+    if (ResolveAssetPath(g_cc_active_style_pack.npc_fragment_shader, npc_fragment_path,
                          sizeof(npc_fragment_path))) {
         visual_style.npc = LoadShader(vertex_path, npc_fragment_path);
         if (IsShaderValid(visual_style.npc)) {
