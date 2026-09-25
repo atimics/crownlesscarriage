@@ -33,6 +33,18 @@ static int CheckTown(CcSettlementFunction function)
         CHECK(isfinite(door.x) && isfinite(door.z));
         CHECK(isfinite(approach.x) && isfinite(approach.z));
         CHECK(fabsf(hypotf(approach.x - door.x, approach.z - door.z) - 1.43f) < 0.001f);
+        const CcLocalPlaceBuilding *building =
+            &profile->building[shop->building_index];
+        float yaw = profile->building_yaw_degrees[shop->building_index] *
+                    (3.14159265358979323846f / 180.0f);
+        float dx = door.x - (building->x + building->width * 0.5f);
+        float dz = door.z - (building->z + building->depth * 0.5f);
+        float local_x = cosf(yaw) * dx - sinf(yaw) * dz;
+        float local_z = sinf(yaw) * dx + cosf(yaw) * dz;
+        float visible_door_x = function == CC_SETTLEMENT_DUNGEON_TOWN ?
+            building->width * ((shop->building_index & 1) != 0 ? 0.16f : -0.16f) : 0.0f;
+        CHECK(fabsf(local_x - visible_door_x) < 0.001f);
+        CHECK(fabsf(local_z - building->depth * 0.5f - 0.12f) < 0.001f);
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             if (CcLocalShopSells(shop, (CcGood)good)) {
                 CHECK(++goods_seen[good] == 1);
