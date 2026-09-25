@@ -933,10 +933,18 @@ void CcLocalTownStatus(const CcSim *sim, CcId town, char *text, size_t capacity)
                 homes += district->dwelling_count;
                 ++districts;
             }
+            const CcCensusDistrict *centre = NULL;
+            for (int32_t i = 0; i < sim->census.district_count; ++i)
+                if (sim->census.districts[i].settlement_id == town) {
+                    centre = &sim->census.districts[i];
+                    break;
+                }
             (void)snprintf(text, capacity,
-                "%d residents across %d districts / %d homes / %d visitor%s / %d food rations%s",
-                place->population, districts, homes, visitors,
-                visitors == 1 ? "" : "s", food,
+                "%.24s: %d people / %d homes | %d residents across %d districts / %d homes / %d food%s",
+                centre != NULL ? centre->name : "Town centre",
+                centre != NULL ? CcCensusDistrictPopulation(sim, centre->id) : 0,
+                centre != NULL ? centre->dwelling_count : 0,
+                place->population, districts, homes, food,
                 place->hunger >= 40 ? " / Hungry town" : "");
         } else {
             (void)snprintf(text, capacity,

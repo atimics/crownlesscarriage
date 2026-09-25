@@ -74,7 +74,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 117
+#define CC_SIM_SCHEMA_VERSION 118
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -2395,6 +2395,10 @@ void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
                                              CcNutritionAccounting *accounting);
+typedef void (*CcSimDayObserver)(const CcSim *sim, void *context);
+void CcSimAdvanceDaysObserved(CcSim *sim, int32_t days,
+                              CcNutritionAccounting *accounting,
+                              CcSimDayObserver observer, void *context);
 void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
                                      CcNutritionAccounting *nutrition,
                                      CcSmithyAccounting *smithy);

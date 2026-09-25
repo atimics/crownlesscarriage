@@ -14,6 +14,8 @@
 #include "client/cc_visual_style.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_census.h"
+#include "sim/cc_census_layout.h"
 #include "sim/cc_production.h"
 #include "sim/cc_road_position.h"
 #include "sim/cc_mine.h"
@@ -308,6 +310,9 @@ typedef struct LocalState {
     Vector3 conversation_position;
     int32_t book_page;
     int32_t book_offset;
+    bool district_map_open;
+    int32_t selected_district;
+    int32_t selected_dwelling;
     int32_t trade_mode;
     CcGood trade_good;
     int32_t trade_quantity;
@@ -6469,7 +6474,10 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
                         CC_MAP_COLLECTION_COUNT),
              958, 171, 10, MUTED);
     if (map == NULL) {
-        CcOverlayDrawText("NO MAP", 958, 143, 15, MUTED);
+        CcOverlayDrawText("NO ROUTE MAP", 958, 193, 15, MUTED);
+        if (here != NULL && sim->schema_version >= 114U)
+            CcOverlayDrawText("D  view the districts", 958, 215, 12, TEAL);
+        CcOverlayDrawText("M  close case", 958, 604, 10, MUTED);
         return;
     }
     const CcRoute *route = CcSimRoute(sim, map->route_id);
@@ -6507,7 +6515,154 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
         }
     }
     CcOverlayDrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
-    CcOverlayDrawText("M  close case   Q situations", 958, 604, 9, MUTED);
+    CcOverlayDrawText("D  districts   M  close case   Q  situations",
+                      958, 604, 9, MUTED);
+}
+
+typedef struct {
+    float scale;
+    float centre_east_m;
+    float centre_north_m;
+} DistrictMapProjection;
+
+static DistrictMapProjection DistrictMapFit(const CcSim *sim, int32_t first)
+{
+    int32_t min_east = 0, max_east = 0, min_north = 0, max_north = 0;
+    for (int32_t i = 0; i < CC_CENSUS_DISTRICTS_PER_TOWN; ++i) {
+        const CcCensusDistrict *district = &sim->census.districts[first + i];
+        CcCensusPoint point;
+        if (CcCensusDistrictCentre(sim, district->id, &point)) {
+            if (point.east_m < min_east) min_east = point.east_m;
+            if (point.east_m > max_east) max_east = point.east_m;
+            if (point.north_m < min_north) min_north = point.north_m;
+            if (point.north_m > max_north) max_north = point.north_m;
+        }
+        for (int32_t home = 0; home < district->dwelling_count; ++home) {
+            if (!CcCensusDwellingEntrance(sim, district->id, home, &point))
+                continue;
+            if (point.east_m < min_east) min_east = point.east_m;
+            if (point.east_m > max_east) max_east = point.east_m;
+            if (point.north_m < min_north) min_north = point.north_m;
+            if (point.north_m > max_north) max_north = point.north_m;
+        }
+    }
+    DistrictMapProjection fit = {
+        .scale = fminf(830.0f / (float)(max_east - min_east + 80),
+                       440.0f / (float)(max_north - min_north + 80)),
+        .centre_east_m = (float)(min_east + max_east) * 0.5f,
+        .centre_north_m = (float)(min_north + max_north) * 0.5f
+    };
+    return fit;
+}
+
+static Vector2 DistrictMapScreenPoint(CcCensusPoint point,
+                                      DistrictMapProjection fit)
+{
+    return (Vector2){475.0f +
+                         ((float)point.east_m - fit.centre_east_m) * fit.scale,
+                     387.0f -
+                         ((float)point.north_m - fit.centre_north_m) * fit.scale};
+}
+
+static void DrawDistrictMap(const CcSim *sim, int32_t selected,
+                            int32_t selected_dwelling)
+{
+    const CcSettlement *town = CcSimSettlement(sim, sim->player.location_id);
+    if (town == NULL || sim->schema_version < 114U) return;
+    int32_t first = -1;
+    for (int32_t i = 0; i < sim->census.district_count;
+         i += CC_CENSUS_DISTRICTS_PER_TOWN)
+        if (sim->census.districts[i].settlement_id == town->id) {
+            first = i;
+            break;
+        }
+    if (first < 0) return;
+    if (selected < 0 || selected >= CC_CENSUS_DISTRICTS_PER_TOWN)
+        selected = 0;
+    DistrictMapProjection fit = DistrictMapFit(sim, first);
+    DrawPanel((Rectangle){28, 76, 895, 574}, PANEL);
+    DrawPanel((Rectangle){938, 82, 322, 538}, PANEL);
+    CcOverlayDrawText(TextFormat("%s / THE DISTRICTS", town->name),
+                      50, 97, 20, INK);
+    CcOverlayDrawText("Each mark is one saved dwelling. Lanes are measured in metres.",
+                      50, 122, 10, MUTED);
+    for (int32_t i = 0; i < CC_CENSUS_ROADS_PER_TOWN; ++i) {
+        CcCensusRoad road;
+        if (!CcCensusRoadAt(sim, town->id, i, &road)) continue;
+        Vector2 a = DistrictMapScreenPoint(road.from, fit);
+        Vector2 turn = DistrictMapScreenPoint(road.corner, fit);
+        Vector2 b = DistrictMapScreenPoint(road.to, fit);
+        DrawLineEx(a, turn, 3.0f, Fade(CC_GOLD, 0.78f));
+        DrawLineEx(turn, b, 3.0f, Fade(CC_GOLD, 0.78f));
+    }
+    for (int32_t i = 0; i < CC_CENSUS_DISTRICTS_PER_TOWN; ++i) {
+        const CcCensusDistrict *district = &sim->census.districts[first + i];
+        for (int32_t home = 0; home < district->dwelling_count; ++home) {
+            CcCensusPoint entrance;
+            if (!CcCensusDwellingEntrance(sim, district->id, home,
+                                          &entrance)) continue;
+            Vector2 marker = DistrictMapScreenPoint(entrance, fit);
+            if (i == selected && home == selected_dwelling)
+                DrawCircleV(marker, 6.0f, CC_GOLD);
+            DrawCircleV(marker, i == selected ? 2.5f : 1.7f,
+                        i == selected ? TEAL : Fade(INK, 0.55f));
+        }
+        CcCensusPoint centre;
+        if (!CcCensusDistrictCentre(sim, district->id, &centre)) continue;
+        Vector2 point = DistrictMapScreenPoint(centre, fit);
+        DrawCircleV(point, i == selected ? 11.0f : 8.0f,
+                    i == selected ? TEAL : INK);
+        CcOverlayDrawText(district->name, (int)point.x + 13,
+                          (int)point.y - 11, 11,
+                          i == selected ? TEAL : INK);
+    }
+    const CcCensusDistrict *chosen = &sim->census.districts[first + selected];
+    CcOverlayDrawText("A TOWN AND ITS ROADS", 958, 103, 12, TEAL);
+    CcOverlayDrawText(chosen->name, 958, 135, 19, INK);
+    CcOverlayDrawText(TextFormat("%d residents / %d homes",
+        CcCensusDistrictPopulation(sim, chosen->id), chosen->dwelling_count),
+        958, 169, 12, INK);
+    CcOverlayDrawText(TextFormat("%d m by road from the centre",
+        CcCensusDistrictPathMeters(sim, sim->census.districts[first].id,
+                                    chosen->id)), 958, 192, 11, MUTED);
+    int32_t shelter = 0, named = 0, occupants = 0;
+    if (selected_dwelling >= 0 &&
+        selected_dwelling < chosen->dwelling_count)
+        CcOverlayDrawText(TextFormat("HOME %d", selected_dwelling + 1),
+                          958, 244, 12, TEAL);
+    else
+        CcOverlayDrawText("SELECT A HOME OR DISTRICT", 958, 244, 10, MUTED);
+    for (int32_t i = 0; i < sim->census.resident_count; ++i) {
+        const CcCensusResident *person = &sim->census.residents[i];
+        if (person->left_day != 0 || person->district_slot != first + selected)
+            continue;
+        if (person->sheltered) ++shelter;
+        if (selected_dwelling >= 0 &&
+            selected_dwelling < chosen->dwelling_count) {
+            if (person->dwelling_slot != selected_dwelling) continue;
+            const CcCharacter *character = CcSimCharacter(sim, person->id);
+            CcOverlayDrawText(character != NULL ? character->name :
+                TextFormat("Resident #%" PRIu64,
+                           person->id & UINT64_C(0x00ffffffffffffff)),
+                958, 271 + occupants * 31, 12, INK);
+            ++occupants;
+            continue;
+        }
+        if (!person->rich_identity || named >= 8) continue;
+        const CcCharacter *character = CcSimCharacter(sim, person->id);
+        if (character == NULL) continue;
+        CcOverlayDrawText(character->name, 958, 271 + named * 24,
+                          12, INK);
+        ++named;
+    }
+    if (selected_dwelling >= 0 && occupants == 0)
+        CcOverlayDrawText("This home is vacant.", 958, 271, 12, MUTED);
+    if (shelter > 0)
+        CcOverlayDrawText(TextFormat("%d people in shelter", shelter),
+                          958, 474, 11, CC_GOLD);
+    CcOverlayDrawText("CLICK  home or district   ARROWS  districts",
+                      958, 552, 9, MUTED);
+    CcOverlayDrawText("D  route maps   M  close case", 958, 578, 10, MUTED);
 }
 
 static void DrawMapHeader(const CcSim *sim)
@@ -10097,6 +10252,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     }
     if (map_requested) {
         if (*view == VIEW_MAP) {
+            local->district_map_open = false;
+            local->selected_dwelling = -1;
             *view = *return_view == VIEW_CARRIAGE ?
                 VIEW_CARRIAGE : VIEW_LOCAL;
             *selected = FirstOutgoingRouteIndex(sim);
@@ -11211,9 +11368,72 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     if (*view == VIEW_MAP) {
         if (ClientKeyPressed(KEY_BACKSPACE) ||
             context_action == CONTEXT_ACTION_CLOSE_VIEW) {
+            local->district_map_open = false;
+            local->selected_dwelling = -1;
             *view = *return_view == VIEW_CARRIAGE ?
                 VIEW_CARRIAGE : VIEW_LOCAL;
             *selected = FirstOutgoingRouteIndex(sim);
+            return;
+        }
+        if (ClientKeyPressed(KEY_D) && sim->schema_version >= 114U &&
+            CcSimSettlement(sim, sim->player.location_id) != NULL) {
+            local->district_map_open = !local->district_map_open;
+            local->selected_district = 0;
+            local->selected_dwelling = -1;
+            return;
+        }
+        if (local->district_map_open) {
+            if (ClientKeyPressed(KEY_RIGHT) || ClientKeyPressed(KEY_DOWN)) {
+                local->selected_district =
+                    (local->selected_district + 1) % CC_CENSUS_DISTRICTS_PER_TOWN;
+                local->selected_dwelling = -1;
+            }
+            if (ClientKeyPressed(KEY_LEFT) || ClientKeyPressed(KEY_UP)) {
+                local->selected_district =
+                    (local->selected_district + CC_CENSUS_DISTRICTS_PER_TOWN - 1) %
+                    CC_CENSUS_DISTRICTS_PER_TOWN;
+                local->selected_dwelling = -1;
+            }
+            if (ClientMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                Vector2 mouse = ClientPointerPosition();
+                for (int32_t i = 0; i < sim->census.district_count;
+                     i += CC_CENSUS_DISTRICTS_PER_TOWN) {
+                    if (sim->census.districts[i].settlement_id !=
+                        sim->player.location_id) continue;
+                    DistrictMapProjection fit = DistrictMapFit(sim, i);
+                    for (int32_t j = 0; j < CC_CENSUS_DISTRICTS_PER_TOWN; ++j) {
+                        CcCensusPoint centre;
+                        if (!CcCensusDistrictCentre(sim,
+                                sim->census.districts[i + j].id,
+                                &centre)) continue;
+                        if (CheckCollisionPointCircle(mouse,
+                                DistrictMapScreenPoint(centre, fit), 14.0f)) {
+                            local->selected_district = j;
+                            local->selected_dwelling = -1;
+                            return;
+                        }
+                    }
+                    float nearest = 7.0f * 7.0f;
+                    for (int32_t j = 0; j < CC_CENSUS_DISTRICTS_PER_TOWN; ++j) {
+                        const CcCensusDistrict *district =
+                            &sim->census.districts[i + j];
+                        for (int32_t home = 0; home < district->dwelling_count;
+                             ++home) {
+                            CcCensusPoint entrance;
+                            if (!CcCensusDwellingEntrance(sim, district->id,
+                                    home, &entrance)) continue;
+                            Vector2 point = DistrictMapScreenPoint(entrance, fit);
+                            float dx = mouse.x - point.x, dy = mouse.y - point.y;
+                            float distance = dx * dx + dy * dy;
+                            if (distance >= nearest) continue;
+                            nearest = distance;
+                            local->selected_district = j;
+                            local->selected_dwelling = home;
+                        }
+                    }
+                    break;
+                }
+            }
             return;
         }
         if (ClientKeyPressed(KEY_RIGHT) || ClientKeyPressed(KEY_DOWN)) {
@@ -12555,7 +12775,7 @@ int main(int argc, char **argv)
         bool map_visible = view == VIEW_MAP ||
             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
              return_view == VIEW_MAP);
-        if (map_visible) {
+        if (map_visible && !local.district_map_open) {
             PrepareMapTextures(&sim, selected, &map_textures);
         }
 #if defined(PLATFORM_WEB)
@@ -12602,9 +12822,14 @@ int main(int argc, char **argv)
             DrawLocalHeader(&sim, &local, view, false);
         } else if (map_visible) {
             DrawMapHeader(&sim);
-            DrawMap(&sim, selected, clock, map_textures.illustrated,
-                    map_textures.collectible_atlas);
-            DrawSettlementPanel(&sim, selected);
+            if (local.district_map_open) {
+                DrawDistrictMap(&sim, local.selected_district,
+                                local.selected_dwelling);
+            } else {
+                DrawMap(&sim, selected, clock, map_textures.illustrated,
+                        map_textures.collectible_atlas);
+                DrawSettlementPanel(&sim, selected);
+            }
         } else {
             if (sim.mine.phase != CC_MINE_NONE) {
                 /* DrawMineScene presents this frame below. */
