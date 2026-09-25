@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 const {chromium} = require(process.env.CC_PLAYWRIGHT_MODULE || 'playwright');
+const {gameControls} = require('./game_controls.cjs');
 
 async function main() {
   const root = path.resolve(process.argv[2]);
@@ -80,15 +81,18 @@ async function main() {
     await page.waitForFunction(() => Module.crownlessScreen === 'playing', undefined, {timeout: 45000});
     await layout(`${stage} town`);
     const frame = await page.evaluate(() => Module.crownlessTouchFrame);
-    if (frame.scene !== 'trade' && !frame.reading.includes('Baker')) {
-      for (let trayPage = 0; trayPage < 4; ++trayPage) {
-        if (await page.locator('#touch-actions .touch-buttons button')
-            .filter({hasText: 'Enter Bakery'}).count()) break;
-        await tap('More objects', `${stage} town shops`);
+    if (frame.scene !== 'trade' && !frame.buttons.some(button => /Trade .*Baker/.test(button.label))) {
+      const controls = gameControls(page, true);
+      for (let trayPage = 0; trayPage < 12; ++trayPage) {
+        if (await controls.button('Enter Bakery').read()) break;
+        assert(await controls.button('More objects').read(),
+          `${stage}: the town tray gives the bakery a page`);
+        await controls.button('More objects').tap();
       }
-      await tap('Enter Bakery', `${stage} town`);
-      await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'),
-        undefined, {timeout: 30000});
+      await controls.button('Enter Bakery').tap();
+      await page.waitForFunction(() => Module.crownlessTouchFrame.buttons
+        .some(button => /Trade .*Baker/.test(button.label)),
+      undefined, {timeout: 45000});
     }
     if (frame.scene !== 'trade') await tap(/Trade .*Baker/, `${stage} keeper`);
     await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
