@@ -20,6 +20,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* This file builds every error message and every resolved shader path by
+ * snprintf-ing one or two CC_STYLE_PATH_MAX (256-byte) strings, plus fixed
+ * explanatory text, into another CC_STYLE_PATH_MAX-or-similarly-sized
+ * buffer. GCC's -Wformat-truncation reasons from the *declared array size*
+ * of each %s argument, not its actual (in every real manifest, much
+ * shorter) contents, so it sees "two 256-byte strings into a 256-byte
+ * buffer" and flags a truncation that will not occur for any pack id or
+ * asset path a person would actually write. Where it could occur (an
+ * absurdly long id or path), the result is still safe: a truncated path
+ * either fails CcStyleResolveAssetPath's existence check or fails the
+ * later strcmp against a known-good value, so the manifest is rejected and
+ * this falls back to classic exactly as any other malformed manifest does
+ * -- never a wrong shader silently loaded. Clang does not implement this
+ * warning, hence the compiler guard. */
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+
 /* ---- shared, cross-translation-unit state --------------------------- */
 
 CcVisualPalette g_cc_active_palette = CC_VISUAL_PALETTE_CLASSIC_INIT;
@@ -1199,7 +1218,14 @@ void CcStylePackLoad(const char *requested_id)
         (requested_id != NULL && requested_id[0] != '\0') ? requested_id
                                                            : "classic";
     CcStylePack pack;
-    char error[256] = {0};
+    /* Generous on purpose: several error messages below embed two
+       CC_STYLE_PATH_MAX (256-byte) strings plus explanatory text (for
+       example "shaders.<role> points at a file that does not exist
+       (<path>)"), and GCC's -Wformat-truncation reasons about the worst
+       case a %s could produce, not the actual (much shorter, in practice)
+       string -- a smaller buffer here builds fine under Clang but fails
+       -Werror under GCC. */
+    char error[1024] = {0};
     bool loaded_cleanly = CcStylePackParseFromDisk(id, &pack, error,
                                                    sizeof(error));
     if (!loaded_cleanly) {
@@ -1232,3 +1258,7 @@ bool CcStylePackLoadedCleanly(void)
 {
     return g_cc_active_style_pack_loaded_cleanly;
 }
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
