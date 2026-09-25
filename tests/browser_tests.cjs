@@ -1042,8 +1042,8 @@ async function main() {
               await controls.button('Park carriage').tap();
               await mobile.waitForTimeout(1000);
             } else if (names.includes('Travel')) {
-              await controls.button('Travel').tap();
-              await mobile.waitForTimeout(300);
+              if (await controls.button('Travel').clickIfVisible())
+                await mobile.waitForTimeout(300);
             } else if (names.includes('1 Not now.')) {
               await controls.button('1 Not now.').tap();
             } else {
