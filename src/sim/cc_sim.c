@@ -20585,6 +20585,18 @@ bool CcSimApply(CcSim *sim, const CcCommand *command, char *error, size_t error_
         CcSimPeopleEnterSettlement(sim);
         CcCensusReconcile(sim);
     }
+    /* A recovered legacy overload allowance is a one-time relief valve. It
+       stays reserved for the pending pack merge while a mine visit is
+       still open (the pack has not merged into cargo yet, so cargo alone
+       already fits before that merge happens). Once the visit is over and
+       the carriage is back at or under its normal capacity, close the
+       allowance so the carriage cannot creep past its true capacity
+       again. */
+    if (ok && sim->mine.phase == CC_MINE_NONE &&
+        sim->player.cargo_overflow_allowance > 0 &&
+        CcPlayerCargoUsed(&sim->player) <= sim->player.cargo_capacity) {
+        sim->player.cargo_overflow_allowance = 0;
+    }
     return ok;
 }
 
@@ -22689,7 +22701,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
     if (CcIdKind(sim->player.id) != CC_ENTITY_PLAYER_COMPANY ||
         CcSimSettlement(sim, sim->player.location_id) == NULL ||
         !nonnegative_cargo ||
-        CcPlayerCargoUsed(&sim->player) > sim->player.cargo_capacity ||
+        CcPlayerCargoUsed(&sim->player) >
+            sim->player.cargo_capacity + sim->player.cargo_overflow_allowance ||
+        sim->player.cargo_overflow_allowance < 0 ||
+        sim->player.cargo_overflow_allowance > CC_MINE_PACK_CAPACITY ||
         sim->player.treasure_cargo_slots != player_treasure_count ||
         sim->player.cargo_capacity < 1 ||
         sim->player.cargo_capacity > CC_SIM_MAX_UNITS ||

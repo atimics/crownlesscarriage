@@ -343,6 +343,75 @@ static void TestMineTrackedRepack(void)
     (void)remove("mine-tracked-repack.ccsave");
 }
 
+static void TestLegacyMineFullCarriageRecovery(void)
+{
+    /* An older game version let a legacy mine save reach disk with a full
+       carriage AND a separately carried haulers' pack: the boarding check
+       (cargo used + pack used > cargo_capacity) then left the migrated
+       player stuck in the mine yard forever. The fix must let this one
+       migrated boarding succeed without permanently enlarging the
+       carriage. */
+    CcSim overloaded,restored;
+    ReadyAtHaulers(&overloaded);
+    int32_t nominal_capacity=overloaded.player.cargo_capacity;
+    int32_t cargo_used=CcPlayerCargoUsed(&overloaded.player);
+    int32_t pack_used=CcMinePackUsed(&overloaded);
+    CC_CHECK(pack_used>0 && pack_used<CC_MINE_PACK_CAPACITY);
+    /* Fill the carriage the rest of the way so it is full while the pack
+       still carries a haulers' load. */
+    overloaded.player.cargo[CC_GOOD_TOOLS]+=nominal_capacity-cargo_used;
+    CC_CHECK(CcPlayerCargoUsed(&overloaded.player)==nominal_capacity);
+    Check(CcSimValidate(&overloaded,error,sizeof(error)));
+    int32_t original_bread=overloaded.player.cargo[CC_GOOD_BREAD];
+    int32_t original_iron=overloaded.player.cargo[CC_GOOD_IRON];
+    int32_t original_tools=overloaded.player.cargo[CC_GOOD_TOOLS];
+    int32_t pack_bread=overloaded.mine.pack[CC_GOOD_BREAD];
+    int32_t pack_iron=overloaded.mine.pack[CC_GOOD_IRON];
+    /* Schema 117 predates this fix; #923 shipped schema 116 and the
+       following census work moved the legacy boundary to 117. */
+    overloaded.schema_version=117U;
+    const char *path="mine-legacy-full-carriage.ccsave";
+    Check(CcSaveWrite(path,&overloaded,error,sizeof(error)));
+    Check(CcSaveRead(path,&restored,error,sizeof(error)));
+    CC_CHECK(restored.schema_version==CC_SIM_SCHEMA_VERSION);
+    /* The permanent carriage capacity must not grow; only a temporary,
+       saved overflow allowance should cover the pending merge. */
+    CC_CHECK(restored.player.cargo_capacity==nominal_capacity);
+    CC_CHECK(restored.player.cargo_overflow_allowance==pack_used);
+    CC_CHECK(restored.mine.phase!=CC_MINE_NONE);
+    CC_CHECK(CcMinePackUsed(&restored)==pack_used);
+    CC_CHECK(restored.player.cargo[CC_GOOD_BREAD]==original_bread &&
+        restored.player.cargo[CC_GOOD_IRON]==original_iron &&
+        restored.player.cargo[CC_GOOD_TOOLS]==original_tools);
+    Check(CcSimValidate(&restored,error,sizeof(error)));
+    /* Board and return to the road: this must not get stuck. */
+    Walk(&restored,5,3); Apply(&restored,CC_COMMAND_MINE_USE,0);
+    Walk(&restored,15,18);
+    Apply(&restored,CC_COMMAND_MINE_USE,0);
+    CC_CHECK(restored.mine.phase==CC_MINE_NONE && CcMinePackUsed(&restored)==0);
+    /* Nothing lost: the whole pack merged into the carriage cargo. */
+    CC_CHECK(restored.player.cargo[CC_GOOD_BREAD]==original_bread+pack_bread &&
+        restored.player.cargo[CC_GOOD_IRON]==original_iron+pack_iron &&
+        restored.player.cargo[CC_GOOD_TOOLS]==original_tools);
+    CC_CHECK(CcPlayerCargoUsed(&restored.player)==nominal_capacity+pack_used);
+    /* Still over the normal capacity, so the allowance must still be open. */
+    CC_CHECK(restored.player.cargo_overflow_allowance==pack_used);
+    Check(CcSimValidate(&restored,error,sizeof(error)));
+    /* Finish the return leg, sell the excess at the destination town, and
+       confirm the carriage capacity is back to normal once the overflow
+       is gone. */
+    FinishJourney(&restored);
+    CC_CHECK(!restored.journey.active);
+    CcCommand sale={.kind=CC_COMMAND_TRADE,.good=CC_GOOD_TOOLS,
+        .amount=-pack_used};
+    Check(CcSimApply(&restored,&sale,error,sizeof(error)));
+    CC_CHECK(CcPlayerCargoUsed(&restored.player)==nominal_capacity);
+    CC_CHECK(restored.player.cargo_capacity==nominal_capacity);
+    CC_CHECK(restored.player.cargo_overflow_allowance==0);
+    Check(CcSimValidate(&restored,error,sizeof(error)));
+    (void)remove(path);
+}
+
 static void TestMineCargoReconciliation(void)
 {
     CcSim partial,lost;
@@ -1085,6 +1154,7 @@ int main(int argc,char **argv)
     TestReliefCratePersistence();
     TestMineCargoReconciliation();
     TestMineTrackedRepack();
+    TestLegacyMineFullCarriageRecovery();
     (void)remove(path);(void)remove("mine-replay.ccsave");
     (void)remove("mine-load-replay.ccsave");
     (void)remove("mine-load-roundtrip-103.ccsave");

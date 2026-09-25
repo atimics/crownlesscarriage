@@ -298,7 +298,8 @@ static bool StowMinePack(CcSim *sim, char *error, size_t capacity)
             return Fail(error,capacity,"The carried mine manifest is invalid.");
         carried[entry->good]+=(int32_t)entry->quantity;
     }
-    if (CcPlayerCargoUsed(&sim->player)+CcMinePackUsed(sim) > sim->player.cargo_capacity)
+    if (CcPlayerCargoUsed(&sim->player)+CcMinePackUsed(sim) >
+        sim->player.cargo_capacity+sim->player.cargo_overflow_allowance)
         return Fail(error,capacity,"Make room in the carriage for the carried pack.");
     for (int32_t good=0;good<CC_GOOD_COUNT;++good) {
         if (sim->player.cargo[good] > CC_SIM_MAX_UNITS-sim->mine.pack[good]-carried[good])

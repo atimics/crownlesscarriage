@@ -221,13 +221,16 @@ static bool UpgradeLegacyRuntimeSchema(CcSim *sim,
         legacy_version <= CC_SIM_NEWEST_LEGACY_SCHEMA &&
         sim->generator_version == 25U) {
         /* Older mine visits could save a full carriage and a carried pack.
-         * Keep the entire load when that visit returns to the road. */
+         * Grant just enough temporary overflow to merge the whole load when
+         * that visit returns to the road, instead of permanently enlarging
+         * the carriage. The allowance clears itself once cargo used falls
+         * back to cargo_capacity (see CcSimApply). */
         if (legacy_version >= 59U && sim->mine.phase != CC_MINE_NONE) {
             int32_t cargo=CcPlayerCargoUsed(&sim->player);
             int32_t pack=CcMinePackUsed(sim);
             if (pack > 0 && cargo <= CC_SIM_MAX_UNITS-pack &&
                 cargo+pack > sim->player.cargo_capacity)
-                sim->player.cargo_capacity=cargo+pack;
+                sim->player.cargo_overflow_allowance=cargo+pack-sim->player.cargo_capacity;
         }
         /* Schema 47 adds bandit war camps (camp_settlement_id, default
          * 0 = no camp). Schema 48 adds told-story bits (gossip_carrier.told_player,

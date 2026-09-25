@@ -2080,6 +2080,12 @@ typedef struct CcPlayerCompany {
     CcRouteKnowledge route_knowledge[CC_MAX_ROUTES];
     CcSettlementKnowledge settlement_knowledge[CC_MAX_SETTLEMENTS];
     CcId accepted_situation_id;
+    /* Schema 119: a temporary allowance above cargo_capacity. Legacy mine
+       saves could hold a full carriage and a separate carried pack; the
+       migration grants exactly enough allowance to merge the pack without
+       losing it, instead of permanently enlarging the carriage. It clears
+       itself once cargo used falls back to cargo_capacity. */
+    int32_t cargo_overflow_allowance;
 } CcPlayerCompany;
 
 typedef enum CcMinePhase {
