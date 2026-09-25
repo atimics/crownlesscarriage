@@ -5,7 +5,7 @@
 
 /* Index order follows CcLocalShopKind. Index 2 is the existing service hall. */
 static const CcLocalShop SHOPS[6][CC_LOCAL_SHOP_COUNT] = {
-#define SHOPS_FOR_TOWN(a,b,c,d,e,f,g,h,i, grain_keeper) { \
+#define SHOPS_FOR_TOWN(a,b,c,d,e,f,g,h,i,mine, grain_keeper) { \
     {CC_LOCAL_SHOP_BAKERY,a,"Bakery","Baker","Fresh bread"}, \
     {CC_LOCAL_SHOP_BUTCHER,b,"Butcher","Butcher","Fresh meat"}, \
     {CC_LOCAL_SHOP_GRAIN_MERCHANT,c,"Grain merchant",grain_keeper,"Wheat and town promises"}, \
@@ -14,14 +14,15 @@ static const CcLocalShop SHOPS[6][CC_LOCAL_SHOP_COUNT] = {
     {CC_LOCAL_SHOP_TIMBER_MERCHANT,f,"Timber merchant","Timber merchant","Wood"}, \
     {CC_LOCAL_SHOP_CLOTHIER,g,"Clothier","Clothier","Wool"}, \
     {CC_LOCAL_SHOP_STONECUTTER,h,"Stonecutter","Stonecutter","Cut stone"}, \
-    {CC_LOCAL_SHOP_STATIONER,i,"Stationer","Stationer","Paper"} \
+    {CC_LOCAL_SHOP_STATIONER,i,"Stationer","Stationer","Paper"}, \
+    {CC_LOCAL_SHOP_MINE_SUPPLIER,mine,"Mine supply office","Quarry clerk","Raw stone"} \
 }
-    SHOPS_FOR_TOWN(6,4,2,5,7,0,1,3,8,"Edda — Granary keeper"),
-    SHOPS_FOR_TOWN(6,7,2,5,4,10,0,3,1,"Oren — Company clerk"),
-    SHOPS_FOR_TOWN(6,0,2,5,4,3,8,9,1,"Mara — Merchant"),
-    SHOPS_FOR_TOWN(7,6,2,1,4,8,0,3,5,"Seren — Quartermaster"),
-    SHOPS_FOR_TOWN(6,7,2,9,1,5,10,3,8,"Ilyra — Royal factor"),
-    SHOPS_FOR_TOWN(7,0,2,1,4,5,3,6,8,"Vey — Expedition broker")
+    SHOPS_FOR_TOWN(6,4,2,5,7,0,1,3,8,-1,"Edda — Granary keeper"),
+    SHOPS_FOR_TOWN(6,7,2,5,4,10,0,3,1,8,"Oren — Company clerk"),
+    SHOPS_FOR_TOWN(6,0,2,5,4,3,8,9,1,-1,"Mara — Merchant"),
+    SHOPS_FOR_TOWN(7,6,2,1,4,8,0,3,5,-1,"Seren — Quartermaster"),
+    SHOPS_FOR_TOWN(6,7,2,9,1,5,10,3,8,-1,"Ilyra — Royal factor"),
+    SHOPS_FOR_TOWN(7,0,2,1,4,5,3,6,8,-1,"Vey — Expedition broker")
 #undef SHOPS_FOR_TOWN
 };
 
@@ -70,8 +71,24 @@ bool CcLocalShopSells(const CcLocalShop *shop, CcGood good)
         case CC_LOCAL_SHOP_CLOTHIER: return good == CC_GOOD_WOOL;
         case CC_LOCAL_SHOP_STONECUTTER: return good == CC_GOOD_STONE;
         case CC_LOCAL_SHOP_STATIONER: return good == CC_GOOD_PAPER;
+        case CC_LOCAL_SHOP_MINE_SUPPLIER: return good == CC_GOOD_RAW_STONE;
         case CC_LOCAL_SHOP_COUNT: return false;
     }
+    return false;
+}
+
+bool CcLocalShopBuys(const CcLocalShop *shop, CcGood good)
+{
+    if (shop == NULL) return false;
+    if (CcLocalShopSells(shop, good)) return true;
+    if (shop->kind == CC_LOCAL_SHOP_BAKERY && good == CC_GOOD_WHEAT)
+        return true;
+    if (shop->kind == CC_LOCAL_SHOP_STONECUTTER &&
+        good == CC_GOOD_RAW_STONE) return true;
+    if (shop->kind == CC_LOCAL_SHOP_BUTCHER &&
+        good == CC_GOOD_ROTTEN_MEAT) return true;
+    if (shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT &&
+        good == CC_GOOD_ROTTEN_GRAIN) return true;
     return false;
 }
 

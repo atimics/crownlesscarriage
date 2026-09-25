@@ -13,6 +13,7 @@ typedef enum CcLocalShopKind {
     CC_LOCAL_SHOP_CLOTHIER,
     CC_LOCAL_SHOP_STONECUTTER,
     CC_LOCAL_SHOP_STATIONER,
+    CC_LOCAL_SHOP_MINE_SUPPLIER,
     CC_LOCAL_SHOP_COUNT
 } CcLocalShopKind;
 
@@ -32,6 +33,7 @@ const CcLocalShop *CcLocalShopForBuilding(const CcLocalPlaceProfile *profile,
 const CcLocalShop *CcLocalShopForGood(const CcLocalPlaceProfile *profile,
                                      CcGood good);
 bool CcLocalShopSells(const CcLocalShop *shop, CcGood good);
+bool CcLocalShopBuys(const CcLocalShop *shop, CcGood good);
 
 /* The visible door is at the rotated front wall; approach is outside it. */
 CcLocalLanePoint CcLocalShopDoor(const CcLocalPlaceProfile *profile,

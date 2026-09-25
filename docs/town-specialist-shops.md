@@ -3,6 +3,7 @@
 Every town has nine shops. Look for the painted sign above each door. Walk to
 the door and press **F** to enter. Each shop uses the town's current stock and
 prices.
+Silverwick also has a mine supply office near the quarry.
 
 | Shop | Goods |
 | --- | --- |
@@ -15,9 +16,13 @@ prices.
 | Clothier | Wool |
 | Stonecutter | Stone |
 | Stationer | Paper |
+| Silverwick mine supply office | Raw stone |
 
 The main hall's grain merchant also receives town promises. Bread belongs at
-the bakery; stone belongs at the stonecutter. Bring spoiled meat to the butcher
+the bakery; cut stone belongs at the stonecutter. The grain merchant sells wheat
+to carry to a bakery. Silverwick's mine supply office sells raw stone for a
+stonecutter. Both workshops buy their materials for the town's current orders.
+Bring spoiled meat to the butcher
 or spoiled grain to the grain merchant for the existing sale and disposal terms.
 
 Each town has its own streets around these shops.

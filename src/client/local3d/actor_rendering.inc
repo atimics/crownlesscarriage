@@ -2303,6 +2303,7 @@ static Color CargoBoxColor(CcGood good)
         case CC_GOOD_PAPER: return (Color){214, 200, 159, 255};
         case CC_GOOD_ROTTEN_MEAT: return (Color){83, 91, 61, 255};
         case CC_GOOD_ROTTEN_GRAIN: return (Color){91, 82, 52, 255};
+        case CC_GOOD_RAW_STONE: return WORLD_STONE_SHADOW;
         case CC_GOOD_COUNT: break;
     }
     return WORLD_WOOD;
@@ -2313,7 +2314,8 @@ static Color CargoBoxBandColor(CcGood good)
     if (good == CC_GOOD_FOOD) return WORLD_CROP_LIGHT;
     if (good == CC_GOOD_IRON) return WORLD_METAL_LIGHT;
     if (good == CC_GOOD_WOOD) return WORLD_WOOD_SHADOW;
-    if (good == CC_GOOD_STONE) return WORLD_STONE_LIGHT;
+    if (good == CC_GOOD_STONE || good == CC_GOOD_RAW_STONE)
+        return WORLD_STONE_LIGHT;
     return WORLD_INK;
 }
 
@@ -2321,6 +2323,20 @@ static Color CargoBoxBandColor(CcGood good)
 static void DrawEconomicCargoUnit(CcGood good, Vector3 base, Vector3 floor,
                                   Vector3 cell, float yaw)
 {
+    if (good == CC_GOOD_RAW_STONE) {
+        for (int32_t rock = 0; rock < 3; ++rock) {
+            float side = (float)(rock - 1);
+            DrawOrientedBox(base,
+                (Vector3){floor.x + side * cell.x * 0.24f,
+                          floor.y + cell.y * (rock == 1 ? 0.32f : 0.23f),
+                          floor.z + (rock == 1 ? -0.06f : 0.05f)},
+                (Vector3){cell.x * (rock == 1 ? 0.49f : 0.35f),
+                          cell.y * (rock == 1 ? 0.62f : 0.44f),
+                          cell.z * (rock == 1 ? 0.66f : 0.48f)},
+                yaw, rock == 1 ? WORLD_STONE_SHADOW : WORLD_STONE);
+        }
+        return;
+    }
     EconomicCargoAsset *asset = &economic_cargo_assets[good];
     if (asset->ready) {
         Vector3 size = Vector3Subtract(asset->bounds.max, asset->bounds.min);
