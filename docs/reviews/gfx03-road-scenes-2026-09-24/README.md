@@ -22,71 +22,31 @@ draw site and the publisher cannot drift apart, the same way
 `RoadTravelCarriageBase` already keeps the travelling draw and its publisher
 in step.
 
-## Before / after
+## Frames
 
-All five scenes render pixel-identical before and after the change, except
-`arrival`, which differs by 132 of 972800 pixels even between two runs of the
-*same* (post-change) binary -- a pre-existing, unrelated jitter, not a
-regression.
+This change must not move anything on screen, so the frames below are the
+evidence that it does not. Four scenes rendered byte-identical before and
+after, so only the after frame is kept (SHA-256 prefixes, main `88f13d07`
+compared with this branch):
 
-### Encounter/combat (`--capture-road`)
+| Scene | Flag | Before | After |
+|---|---|---|---|
+| Encounter/combat | `--capture-road` | `d1e1cdc466804605` | `d1e1cdc466804605` |
+| Fork | `--capture-road-fork` | `316997ead9dc1aa3` | `316997ead9dc1aa3` |
+| Pony encounter | `--capture-pony-encounter` | `ad9d5d9a342f769f` | `ad9d5d9a342f769f` |
+| Departure | `--capture-road-departure 0.5` | `a6cc307f416f1602` | `a6cc307f416f1602` |
+| Arrival | `--capture-road-arrival 0.5` | `d03f5c013a9af826` | `dc57fa8e4f94234c` |
 
-Before:
+`arrival` differs by 132 of 972800 pixels. Two runs of the *same* binary
+after this change differ by the same amount, so this is jitter that was
+already there, not a regression. The remote site (goblin cave) has no capture
+that shows its parked carriage; `TestSiteDrawReadOnly` below covers it.
 
-![Before](before-road.png)
-
-After:
-
-![After](after-road.png)
-
-### Fork (`--capture-road-fork`)
-
-Before:
-
-![Before](before-fork.png)
-
-After:
-
-![After](after-fork.png)
-
-### Pony encounter (`--capture-pony-encounter`)
-
-Before:
-
-![Before](before-pony-encounter.png)
-
-After:
-
-![After](after-pony-encounter.png)
-
-### Departure (`--capture-road-departure 0.5`)
-
-Before:
-
-![Before](before-departure.png)
-
-After:
-
-![After](after-departure.png)
-
-### Arrival (`--capture-road-arrival 0.5`)
-
-Before:
-
-![Before](before-arrival.png)
-
-After:
-
-![After](after-arrival.png)
-
-### Remote site (goblin cave, `--capture-creatures goblins`)
-
-No capture flag shows the site's parked carriage directly (the camera frames
-the entrance), so this is included for context rather than as a pixel
-comparison; `TestSiteDrawReadOnly` below is the scene's real regression
-coverage.
-
-![Site](after-site-goblin-cave.png)
+![Encounter](after-road.png)
+![Fork](after-fork.png)
+![Pony encounter](after-pony-encounter.png)
+![Departure](after-departure.png)
+![Arrival](after-arrival.png)
 
 ## Validation
 
