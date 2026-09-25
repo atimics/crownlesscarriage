@@ -1060,42 +1060,38 @@ def add_pony_bridle(spec: CreatureSpec, collection: bpy.types.Collection,
 
 def add_pony_collar(spec: CreatureSpec,
                     collection: bpy.types.Collection, body_z: float) -> None:
-    """A padded breast collar built at the same model-space points the
-    runtime harness in road_book.inc already reads off the neck and chest
-    bones (RoadPonySkinPoint's CC_QUADRUPED_NECK/CC_QUADRUPED_CHEST calls),
-    so the baked collar and the dynamic hitch trace line up on the nose.
-    It is wider than a strap and carries two metal rings, so its darker
-    leather value and the light metal keep it reading at side-view size
-    against the coat instead of thinning into the silhouette.
+    """A padded breast collar sitting low across the chest, not reaching
+    up toward the neck. Earlier drafts put its crest near the runtime
+    harness's own neck-height point; even after pulling that in to sit
+    over the chest instead, a chest-bound collar still swung into the
+    pony encounter's extreme close-up frame, because the encounter pose
+    visibly articulates the chest bone too, not just the neck (confirmed
+    by disabling the collar outright and watching the marks disappear).
+    The body bone -- the root torso segment the saddle pad already binds
+    to without any such trouble -- stays still for that pose, so the
+    whole collar binds there instead. Only the trace point below still
+    has to match the runtime hitch socket exactly, regardless of bone.
 
-    The whole collar binds to the chest bone, including the crest strap
-    that reaches up toward the neck point: a segment cannot follow two
-    different bones at once, and binding its top end to the neck instead
-    let it swing wildly away from the chest end whenever the neck bowed
-    for a close encounter pose, cutting right across the face. The chest
-    barely moves by comparison, so the whole collar stays put on it."""
-    top = Vector((0.0, -0.65, body_z + 0.59))
-    bottom = Vector((0.0, -0.60, body_z - 0.05))
+    It is wider than a strap and carries a metal trace ring, so its
+    darker leather value and the light metal keep it reading at side-view
+    size against the coat instead of thinning into the silhouette."""
+    top = Vector((0.0, -0.18, body_z + 0.14))
+    bottom = Vector((0.0, -0.18, body_z - 0.18))
     for side in (-1.0, 1.0):
         tag_side = "L" if side < 0.0 else "R"
-        collar_side = Vector((side * 0.44, -0.64, body_z + 0.21))
+        collar_side = Vector((side * 0.36, -0.16, body_z - 0.02))
         # The trace socket: identical to the shoulder point road_book.inc
         # already uses for DrawRoadHorseHarness and the hitch trace end.
         trace_point = Vector((side * 0.47, -0.08, body_z + 0.17))
         add_segment(f"PONY_CollarCrest_{tag_side}", top, collar_side,
-                    0.066, 0.060, "leather", collection, spec,
+                    0.062, 0.058, "leather", collection, spec,
                     "collar", sides=8)
         add_segment(f"PONY_CollarThroat_{tag_side}", collar_side, bottom,
-                    0.058, 0.052, "leather", collection, spec,
+                    0.056, 0.052, "leather", collection, spec,
                     "collar", sides=8)
         add_segment(f"PONY_TraceGuide_{tag_side}", collar_side, trace_point,
                     0.036, 0.030, "leather", collection, spec,
                     "collar", sides=6)
-        # A mid-collar hame ring, bright against the leather, so the collar
-        # reads as hardware and not just a dark smear along the coat.
-        add_ellipsoid(f"PONY_CollarRing_{tag_side}", collar_side,
-                      (0.032, 0.032, 0.032), "metal", collection, spec,
-                      "collar", subdivisions=1)
         add_ellipsoid(f"PONY_TraceRing_{tag_side}", trace_point,
                       (0.040, 0.040, 0.040), "metal", collection, spec,
                       "collar", subdivisions=1)
@@ -2102,7 +2098,7 @@ def quadruped_bone_for_part(part: str) -> str:
         "tail": "tail",
         "tail_flow": "tail.root",
         "bridle": "head",
-        "collar": "chest",
+        "collar": "body",
         "saddle_pad": "body",
     }
     if part in direct:
