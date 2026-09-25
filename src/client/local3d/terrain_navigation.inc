@@ -921,6 +921,77 @@ static void TerrainGradeSilverwick(void)
         SilverwickRoadHeight(78.5f, 27.0f), SilverwickRoadHeight(78.5f, 37.0f));
 }
 
+/* The three newer town plans use one shallow cart grade at every junction.
+ * Their local landforms still shape the ground beyond each street shoulder. */
+static float TerrainTownLaneHeight(float x, float z)
+{
+    float gate = TerrainNaturalHeight(96.0f, 36.0f);
+    if (active_place_function == CC_SETTLEMENT_FORTRESS) {
+        gate = fmaxf(gate, TerrainNaturalHeight(83.5f, 34.0f)) + 0.18f;
+    }
+    float inward = fmaxf(84.0f - x, 0.0f);
+    float rise = active_place_function == CC_SETTLEMENT_CAPITAL ? 0.065f :
+                 active_place_function == CC_SETTLEMENT_FORTRESS ? 0.045f :
+                 0.038f;
+    return gate + inward * rise + (36.0f - z) * 0.012f;
+}
+
+static void TerrainGradeAuthoredTown(void)
+{
+    TerrainBuildLanePaths();
+    for (int32_t lane = 0; lane < ActivePlaceProfile()->lane_count; ++lane) {
+        TerrainLanePath *path = &terrain_lanes[lane];
+        for (int32_t i = 0; i < path->count; ++i) {
+            path->height[i] = TerrainTownLaneHeight(path->point[i].x,
+                                                    path->point[i].y);
+        }
+    }
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float elevation = 0.0f;
+            float inset = TerrainLaneInset(x, z, &elevation);
+            if (inset < -3.0f) continue;
+            float weight = TerrainSmooth01((inset + 3.0f) / 3.0f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] +=
+                (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
+    TerrainGradeBuildingPlots();
+    for (int32_t i = 0; i < CC_LOCAL_PLACE_LANDMARK_COUNT; ++i) {
+        Rectangle pad = PlaceLandmarkFootprint(ActivePlaceLandmarkAt(i));
+        TerrainGradePad(pad, TerrainRectangleAverage(pad), 1.35f);
+    }
+    Rectangle keep = ActiveCompoundBounds();
+    TerrainGradePad(keep, TerrainTownLaneHeight(78.5f, 29.0f) + 0.55f,
+                    2.5f);
+    TerrainGradePad(CARRIAGE_FOOTPRINT,
+                    TerrainTownLaneHeight(37.4f, 51.2f), 1.2f);
+    TerrainGradePad(DUNGEON_FOOTPRINT,
+                    TerrainRectangleAverage(DUNGEON_FOOTPRINT), 1.3f);
+    TerrainGradePad((Rectangle){1, 0, 14.6f, 11.1f}, 0.0f, 2.2f);
+    TerrainGradeNorthSouthRamp((Rectangle){7.45f, 10.5f, 1.8f, 16.25f},
+        0.0f, TerrainSampleGrid(street_terrain_height, 8.35f, 26.5f));
+    TerrainGradeNorthSouthRamp((Rectangle){14.65f, 10.5f, 3.5f, 16.6f},
+        0.0f, TerrainSampleGrid(street_terrain_height, 16.4f, 26.85f));
+    /* Restore lane centres after plot grading and keep the bridge deck level. */
+    for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
+        for (int32_t column = 0; column < CC_TERRAIN_COLUMNS; ++column) {
+            float x = (float)column * CC_TERRAIN_CELL_SIZE;
+            float z = (float)row * CC_TERRAIN_CELL_SIZE;
+            float elevation = 0.0f;
+            float inset = TerrainLaneInset(x, z, &elevation);
+            if (inset < -1.2f) continue;
+            float weight = TerrainSmooth01((inset + 1.2f) / 1.2f);
+            int32_t slot = TerrainIndex(column, row);
+            street_terrain_height[slot] +=
+                (elevation - street_terrain_height[slot]) * weight;
+        }
+    }
+}
+
 static void TerrainGenerate(void)
 {
     for (int32_t row = 0; row < CC_TERRAIN_ROWS; ++row) {
@@ -939,6 +1010,11 @@ static void TerrainGenerate(void)
     }
     if (active_place_function == CC_SETTLEMENT_FARMING) {
         TerrainGradeLaneVillage();
+        street_terrain_ready = true;
+        return;
+    }
+    if (active_place_function != CC_SETTLEMENT_MARKET) {
+        TerrainGradeAuthoredTown();
         street_terrain_ready = true;
         return;
     }
