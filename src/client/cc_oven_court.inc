@@ -93,7 +93,7 @@ static void DrawAdventureCourtNotes(const CcSim *sim, const LocalState *local)
         (void)AdventureWrap("This is what the company learned then, not today's remote stock. A received delivery is not proof of recovery.",
             x, y, width, size - 1, MUTED);
     } else {
-        (void)AdventureWrap("No field note here. Inspect the Oven Court tally beside Silverwick's Company store, or ask a present bakery worker.",
+        (void)AdventureWrap("No field note here. Inspect the Oven Court tally beside Silverwick's grain merchant, or ask a present bakery worker.",
             x, y, width, size, MUTED);
     }
     AdventureButton(AdventureBookMineStepBounds(panel, 0), "Earlier note", CcOvenCourtNote(sim, 1) != NULL, local->book_offset == 1);

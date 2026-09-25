@@ -317,7 +317,8 @@ static int RunSituationWitnessCardPriorityRegression(void)
         if (target != NULL && target->character_id == mara->id) mara_shown = true;
         if (AdventureGenericPersonKey(priority.items[i].target)) ++retained;
     }
-    if (priority.count != 4 || !mara_shown || retained != 3)
+    if (priority.count != 5 || !mara_shown || retained != 4 ||
+        priority.items[0].target.object != mara->id)
         return ClientRegressionFailure("Mara's named witness card leads retained generic cards.");
     return 0;
 }
