@@ -563,6 +563,16 @@ static void CheckLegacyJournalMigration(char *error,
     RemoveDatabase(path);
 }
 
+/* Shipped fixtures replay their action journal on load; say why a load
+   failed so a platform difference is visible in CI output. */
+static bool ReadShippedFixture(const char *fixture, CcSim *sim, char *error,
+                               size_t error_capacity)
+{
+    if (CcSaveRead(fixture, sim, error, error_capacity)) return true;
+    fprintf(stderr, "shipped fixture %s did not load: %s\n", fixture, error);
+    return false;
+}
+
 static void CheckSchema4Compatibility(char *error, size_t error_capacity)
 {
     const char *path = "persistence-legacy-v4-test.ccsave";
@@ -2439,7 +2449,7 @@ static void CheckWoodPaperJournalMigration(char *error,
         fixture, "SELECT COUNT(*) FROM action_journal;") == 1);
 
     CcSim restored;
-    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(ReadShippedFixture(fixture, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.current_day == 7);
     CC_CHECK(restored.settlements[1].stock[CC_GOOD_WHEAT] == 98);
@@ -3089,7 +3099,7 @@ static void CheckSchema108ReliefJournalUpgrade(char *error,
         "command_kind=7 AND sim_schema_version=108 AND "
         "post_state_hash='8e20a66f02d57985';") == 1);
     static CcSim restored, reloaded;
-    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(ReadShippedFixture(fixture, &restored, error, error_capacity));
     const CcSituation *relief = CcSimAcceptedSituation(&restored);
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION &&
         relief != NULL && relief->kind == CC_SITUATION_RELIEF_DELIVERY &&
@@ -3127,7 +3137,7 @@ static void CheckSchema109IntroductionJournalUpgrade(char *error,
         "(ordinal=2 AND command_kind=47 AND sim_schema_version=109 AND "
         "post_state_hash='26e89291b46ee3c5');") == 2);
     static CcSim restored, reloaded;
-    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(ReadShippedFixture(fixture, &restored, error, error_capacity));
     const CcCharacter *mara = CcSimCharacter(
         &restored, UINT64_C(1369094286720630837));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
@@ -3162,7 +3172,7 @@ static void CheckSchema110RoadBlockJournalUpgrade(char *error,
         "command_kind=2 AND sim_schema_version=110 AND "
         "post_state_hash='1f5095a1b0263277';") == 1);
     static CcSim restored, reloaded;
-    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(ReadShippedFixture(fixture, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.journey.active);
     CC_CHECK(restored.journey.route_id == UINT64_C(216172782113783818));
@@ -3204,7 +3214,7 @@ static void CheckSchema111WithdrawJournalUpgrade(char *error,
         "command_kind=21 AND sim_schema_version=111 AND "
         "post_state_hash='870d628b353e443f';") == 1);
     static CcSim restored, reloaded;
-    CC_CHECK(CcSaveRead(fixture, &restored, error, error_capacity));
+    CC_CHECK(ReadShippedFixture(fixture, &restored, error, error_capacity));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.current_day == 2);
     CC_CHECK(restored.clock.minute_subticks == CC_WORLD_DAY_SUBTICKS - 60);

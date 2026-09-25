@@ -1,0 +1,5 @@
+add_executable(census_mine_save_tests tests/census_mine_save_tests.c)
+target_link_libraries(census_mine_save_tests PRIVATE crownless_persistence)
+cc_strict_warnings(census_mine_save_tests)
+cc_large_sim_stack(census_mine_save_tests)
+add_test(NAME census_and_mine_state_survive_save COMMAND census_mine_save_tests)
