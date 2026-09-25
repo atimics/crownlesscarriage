@@ -173,7 +173,7 @@ jobs:
       - name: Check daily replay
         run: ctest --test-dir build-events --output-on-failure -R '^scheduled_event_replay$'
       - name: Check a millennium
-        run: ./build-events/crownless_sim_metrics --seed 1 --years 1000 --final-only > /dev/null
+        run: python3 tests/scheduled_events_millennium.py ./build-events/crownless_sim_metrics
 
   long-simulation-sweep:
     name: Long simulation sweep
