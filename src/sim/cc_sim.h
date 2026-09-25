@@ -2394,6 +2394,10 @@ void CcSimUpgradeGrainEconomy(CcSim *sim);
 void CcSimAdvanceDays(CcSim *sim, int32_t days);
 void CcSimAdvanceDaysWithNutritionAccounting(CcSim *sim, int32_t days,
                                              CcNutritionAccounting *accounting);
+typedef void (*CcSimDayObserver)(const CcSim *sim, void *context);
+void CcSimAdvanceDaysObserved(CcSim *sim, int32_t days,
+                              CcNutritionAccounting *accounting,
+                              CcSimDayObserver observer, void *context);
 void CcSimAdvanceDaysWithAccounting(CcSim *sim, int32_t days,
                                      CcNutritionAccounting *nutrition,
                                      CcSmithyAccounting *smithy);

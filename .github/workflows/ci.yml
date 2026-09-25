@@ -158,6 +158,23 @@ jobs:
           --binary build/crownless_sim_metrics
           --first-seed 1 --seeds 32 --years 32 --jobs 4
 
+  scheduled-events:
+    name: Scheduled event replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite development files
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Configure
+        run: cmake -S . -B build-events -DCMAKE_BUILD_TYPE=Release -DCC_BUILD_CLIENT=OFF -DCC_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build-events --target scheduled_events_tests crownless_sim_metrics --parallel 4
+      - name: Check daily replay
+        run: ctest --test-dir build-events --output-on-failure -R '^scheduled_event_replay$'
+      - name: Check a millennium
+        run: ./build-events/crownless_sim_metrics --seed 1 --years 1000 --final-only > /dev/null
+
   long-simulation-sweep:
     name: Long simulation sweep
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
