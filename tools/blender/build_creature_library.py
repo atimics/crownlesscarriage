@@ -1037,6 +1037,89 @@ def add_pony_eye(spec: CreatureSpec, collection: bpy.types.Collection,
     glint.rotation_euler = rotation
 
 
+def add_pony_bridle(spec: CreatureSpec, collection: bpy.types.Collection,
+                    head: Vector) -> None:
+    """A simple, readable headstall: a single strap down the nose bridge,
+    exactly on the centerline between the eyes. Nothing sits off-center:
+    on this chibi head the eyes are wide enough, and the 1.18x face
+    exaggeration spreads x offsets further still, that even a strap kept
+    visibly outside the eye before scaling reads as passing over it after
+    scaling and from a near-front camera. Staying on x=0 the whole way
+    down is what actually keeps it off the eyes, not how wide a margin it
+    is given off-center.
+
+    No buckle accents: two small metal spheres here read as glitchy dark
+    blobs on the cheeks/nose at this resolution rather than hardware, so
+    the strap is left plain. It is the only face-mounted tack; the collar
+    and saddle pad already carry the metal accents."""
+    brow_center = head + Vector((0.0, -0.03, 0.30))
+    nose_center = head + Vector((0.0, -0.535, -0.075))
+    add_segment("PONY_BridleBridge", brow_center, nose_center, 0.020, 0.020,
+                "leather", collection, spec, "bridle", sides=6)
+
+
+def add_pony_collar(spec: CreatureSpec,
+                    collection: bpy.types.Collection, body_z: float) -> None:
+    """A padded breast collar sitting low across the chest, not reaching
+    up toward the neck. Earlier drafts put its crest near the runtime
+    harness's own neck-height point; even after pulling that in to sit
+    over the chest instead, a chest-bound collar still swung into the
+    pony encounter's extreme close-up frame, because the encounter pose
+    visibly articulates the chest bone too, not just the neck (confirmed
+    by disabling the collar outright and watching the marks disappear).
+    The body bone -- the root torso segment the saddle pad already binds
+    to without any such trouble -- stays still for that pose, so the
+    whole collar binds there instead. Only the trace point below still
+    has to match the runtime hitch socket exactly, regardless of bone.
+
+    It is wider than a strap and carries a metal trace ring, so its
+    darker leather value and the light metal keep it reading at side-view
+    size against the coat instead of thinning into the silhouette."""
+    top = Vector((0.0, -0.18, body_z + 0.14))
+    bottom = Vector((0.0, -0.18, body_z - 0.18))
+    for side in (-1.0, 1.0):
+        tag_side = "L" if side < 0.0 else "R"
+        collar_side = Vector((side * 0.36, -0.16, body_z - 0.02))
+        # The trace socket: identical to the shoulder point road_book.inc
+        # already uses for DrawRoadHorseHarness and the hitch trace end.
+        trace_point = Vector((side * 0.47, -0.08, body_z + 0.17))
+        add_segment(f"PONY_CollarCrest_{tag_side}", top, collar_side,
+                    0.062, 0.058, "leather", collection, spec,
+                    "collar", sides=8)
+        add_segment(f"PONY_CollarThroat_{tag_side}", collar_side, bottom,
+                    0.056, 0.052, "leather", collection, spec,
+                    "collar", sides=8)
+        add_segment(f"PONY_TraceGuide_{tag_side}", collar_side, trace_point,
+                    0.036, 0.030, "leather", collection, spec,
+                    "collar", sides=6)
+        add_ellipsoid(f"PONY_TraceRing_{tag_side}", trace_point,
+                      (0.040, 0.040, 0.040), "metal", collection, spec,
+                      "collar", subdivisions=1)
+
+
+def add_pony_saddle_pad(spec: CreatureSpec,
+                        collection: bpy.types.Collection,
+                        body_z: float) -> None:
+    """A back band across the withers, the third readable tack piece, plus
+    a girth strap so it looks fastened rather than resting loose. It sits
+    in the short clear saddle of the back between the shoulder bulge and
+    the haunches, not on top of either one.
+
+    It uses the same leather slot as the collar and hooves rather than
+    cloth, and stays small, so the eye still goes to the collar and the
+    head first: this is the quietest of the three tack pieces, not the
+    loudest."""
+    add_box("PONY_SaddlePad", (0.0, 0.02, body_z + 0.38),
+            (0.40, 0.24, 0.07), "leather", collection, spec, "saddle_pad",
+            bevel=0.018)
+    for side in (-1.0, 1.0):
+        tag_side = "L" if side < 0.0 else "R"
+        add_segment(f"PONY_Girth_{tag_side}",
+                    (side * 0.24, 0.02, body_z + 0.32),
+                    (side * 0.17, 0.02, body_z - 0.22), 0.022, 0.018,
+                    "leather", collection, spec, "saddle_pad", sides=6)
+
+
 def build_quadruped(spec: CreatureSpec,
                     collection: bpy.types.Collection) -> None:
     cow = spec.family == "cow"
@@ -1078,25 +1161,53 @@ def build_quadruped(spec: CreatureSpec,
                               (0.23, 0.26, 0.28), "cloth", collection, spec,
                               "chest" if index == 0 else "barrel")
     elif pony:
-        add_ellipsoid("PONY_RoundRump", (0.0, 0.38, body_z + 0.02),
-                      (0.49, 0.42, 0.44), "skin", collection, spec,
+        add_ellipsoid("PONY_RoundRump", (0.0, 0.38, body_z - 0.02),
+                      (0.51, 0.44, 0.38), "skin", collection, spec,
                       "barrel", subdivisions=2)
+        # Two haunch bulges break the rump into a readable pair of quarters
+        # from behind instead of one smooth ball. They have to stick out
+        # past the round rump's own centerline reach (y 0.38+0.44=0.82) or
+        # they sit recessed inside it and never reach the visible surface.
+        for side in (-1.0, 1.0):
+            add_ellipsoid(f"PONY_Haunch_{'L' if side < 0 else 'R'}",
+                          (side * 0.30, 0.48, body_z - 0.10),
+                          (0.26, 0.36, 0.30), "skin", collection, spec,
+                          "barrel", subdivisions=1)
+        # A thin fold line along the spine ahead of the tail, in the hide
+        # slot -- one step darker than the skin coat, not a flat black
+        # stripe -- so the croup separates from the rest of the back by
+        # value (not only by shape) even from a straight-on rear camera
+        # where shading alone is flat. A sliver sitting just proud of the
+        # rump's own top surface (body_z+0.36 at most) reads reliably the
+        # same way the saddle pad does; an ellipsoid embedded at barrel
+        # height was buried inside the much larger rump/chest masses and
+        # never reached the visible surface. Kept narrow and low on purpose:
+        # a bigger box in a dark slot read as a solid black bar, not a fold.
+        add_box("PONY_CroupRidge", (0.0, 0.32, body_z + 0.39),
+                (0.05, 0.30, 0.05), "hide", collection, spec, "barrel",
+                bevel=0.015)
         add_ellipsoid("PONY_RoundShoulder", (0.0, -0.38, body_z + 0.12),
                       (0.47, 0.40, 0.45), "skin", collection, spec,
                       "chest", subdivisions=2)
 
+    # A wider hind stance than fore reads as a draught animal set to pull,
+    # and keeps the two hind legs from silhouetting into one mass from
+    # behind once the haunches above them are bigger.
+    hind_half_width = half_width + (0.055 if pony else 0.0)
     leg_roots = {
         "fl": Vector((-half_width, front_y, body_z - 0.08)),
         "fr": Vector((half_width, front_y, body_z - 0.08)),
-        "hl": Vector((-half_width, hind_y, body_z - 0.10)),
-        "hr": Vector((half_width, hind_y, body_z - 0.10)),
+        "hl": Vector((-hind_half_width, hind_y, body_z - 0.10)),
+        "hr": Vector((hind_half_width, hind_y, body_z - 0.10)),
     }
     for name, root in leg_roots.items():
         travel = stride[name] * (0.18 if sheep else 0.20 if cow else 0.23)
         lift = stride[f"lift_{name}"]
         hoof = Vector((root.x, root.y - travel, 0.10 + lift))
         direction = -1.0 if name.startswith("f") else 1.0
-        knee = (root + hoof) * 0.5 + Vector((0.0, direction * 0.10, 0.02))
+        hind_leg = name.startswith("h")
+        knee_kick = 0.15 if (pony and hind_leg) else 0.10
+        knee = (root + hoof) * 0.5 + Vector((0.0, direction * knee_kick, 0.02))
         radius = 0.070 if sheep else 0.105 if cow else 0.092
         add_segment(f"CREATURE_UpperLeg_{name.upper()}", root, knee,
                     radius, radius * 0.82,
@@ -1106,6 +1217,26 @@ def build_quadruped(spec: CreatureSpec,
                     radius * 0.78, radius * 0.58,
                     "hide" if pony else "secondary", collection,
                     spec, f"lower_leg_{name}")
+        if pony and hind_leg:
+            # The hock: a joint mass right where the gaskin turns into the
+            # cannon, so the hind leg reads as a bent, working limb instead
+            # of a single straight taper under the rump. Same hide tone as
+            # the rest of the lower leg -- the joint should read by shape,
+            # not by turning the whole limb a different, darker color.
+            add_ellipsoid(f"PONY_Hock_{name.upper()}",
+                          knee + Vector((0.0, direction * 0.02, -0.015)),
+                          (radius * 1.05, radius * 0.95, radius * 0.85),
+                          "hide", collection, spec, f"lower_leg_{name}",
+                          subdivisions=1)
+        if pony:
+            # A short leather sock over the bottom quarter of every leg,
+            # front and hind alike, matching the hoof below it. Slightly
+            # wider than the lower leg's own taper at that point so it
+            # wraps visibly instead of sitting buried inside it.
+            sock_top = knee + (hoof - knee) * 0.76
+            add_segment(f"PONY_Sock_{name.upper()}", sock_top, hoof,
+                        radius * 0.72, radius * 0.66, "leather", collection,
+                        spec, f"lower_leg_{name}", sides=8)
         hoof_size = ((0.12, 0.16, 0.09) if sheep else
                      (0.18, 0.23, 0.12) if cow else
                      (0.17, 0.20, 0.12))
@@ -1196,6 +1327,7 @@ def build_quadruped(spec: CreatureSpec,
                           head + Vector((0.135 * sign, -0.522, -0.10)),
                           (0.037, 0.018, 0.028), "eye", collection, spec, "muzzle")
             add_pony_eye(spec, collection, head, sign, side)
+        add_pony_bridle(spec, collection, head)
         add_pony_lock("PONY_SweptForelock", (
             (0.12, -0.85, body_z + 0.69, 0.07, 0.045),
             (0.10, -0.94, body_z + 0.73, 0.13, 0.055),
@@ -1240,19 +1372,37 @@ def build_quadruped(spec: CreatureSpec,
                     tail_radius * 0.78, tail_radius * 0.46, tail_semantic,
                     collection, spec, "tail")
     if pony:
-        add_pony_lock("PONY_FlowingTail", (
-            (0.0, 0.65, body_z + 0.12, 0.09, 0.075),
-            (0.0, 0.80, body_z + 0.12, 0.16, 0.13),
-            (-0.025, 0.94, body_z + 0.02, 0.19, 0.15),
-            (-0.045, 1.05, body_z - 0.13, 0.20, 0.14),
-            (-0.025, 1.13, body_z - 0.30, 0.18, 0.12),
-            (0.025, 1.18, body_z - 0.46, 0.14, 0.10),
-            (0.08, 1.16, body_z - 0.59, 0.085, 0.06),
-            (0.10, 1.11, body_z - 0.65, 0.012, 0.012),
-        ), collection, spec, "tail_flow")
+        # A fuller dock that starts behind the haunch bulges (not inside
+        # them) so the tail reads as its own shape even from close behind,
+        # instead of the tip alone poking out past the rump.
+        tail_rings = (
+            (0.0, 0.70, body_z + 0.10, 0.115, 0.095),
+            (0.0, 0.84, body_z + 0.10, 0.18, 0.145),
+            (-0.025, 0.97, body_z + 0.00, 0.20, 0.16),
+            (-0.045, 1.07, body_z - 0.14, 0.20, 0.14),
+            (-0.025, 1.14, body_z - 0.31, 0.18, 0.12),
+            (0.025, 1.19, body_z - 0.47, 0.14, 0.10),
+            (0.08, 1.17, body_z - 0.60, 0.085, 0.06),
+            (0.10, 1.12, body_z - 0.66, 0.012, 0.012),
+        )
+        tail_obj = add_pony_lock("PONY_FlowingTail", tail_rings, collection,
+                                 spec, "tail_flow")
+        # Darken the back half of the tail in the eye slot: a guaranteed
+        # dark value (not just geometry) so the tail reads as its own
+        # shape against the coat instead of matching the body's value.
+        tail_obj.data.materials.append(PREVIEW_MATERIALS[(spec.family, "eye")])
+        dark_from_ring = 3
+        tail_sides = 8
+        for face in tail_obj.data.polygons:
+            if (face.index < (len(tail_rings) - 1) * tail_sides and
+                    face.index // tail_sides >= dark_from_ring):
+                face.material_index = 2
+        add_pony_collar(spec, collection, body_z)
+        add_pony_saddle_pad(spec, collection, body_z)
         # Enlarge the whole face together, including its eyes and markings.
         # The head bone stays at the shared gait pivot.
-        head_parts = {"head", "muzzle", "ear_l", "ear_r", "eye_l", "eye_r"}
+        head_parts = {"head", "muzzle", "ear_l", "ear_r", "eye_l", "eye_r",
+                      "bridle"}
         head_scale = Matrix.Diagonal((1.18, 1.12, 1.10, 1.0))
         exaggerate = Matrix.Translation(head) @ head_scale @ Matrix.Translation(-head)
         for obj in collection.objects:
@@ -1947,6 +2097,9 @@ def quadruped_bone_for_part(part: str) -> str:
         "tail_root": "tail.root",
         "tail": "tail",
         "tail_flow": "tail.root",
+        "bridle": "head",
+        "collar": "body",
+        "saddle_pad": "body",
     }
     if part in direct:
         return direct[part]
