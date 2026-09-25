@@ -1903,14 +1903,18 @@ int32_t CcLocalCoursePickPlayerTarget(CcLocalCourse *course,
     if (!PresentedCameraForInput(course->scene, player,
                                  target.texture.width,
                                  target.texture.height, &camera)) {
-        Camera3D base_camera = course->scene == CC_LOCAL_SCENE_ROAD ?
-            RoadCamera(player->position, false, 0.0f, false,
-                       target.texture.height) :
-            CcLocalStreetCameraInternal(player, 0.0f, false,
-                                        target.texture.height);
-        camera = CcLocalCombatCameraInternal(
-            base_camera, player, course, 0.0f, false,
-            target.texture.height);
+        if (course->scene == CC_LOCAL_SCENE_MINE) {
+            camera = CcLocalMineCombatCamera(player,course,0);
+        } else {
+            Camera3D base_camera = course->scene == CC_LOCAL_SCENE_ROAD ?
+                RoadCamera(player->position, false, 0.0f, false,
+                           target.texture.height) :
+                CcLocalStreetCameraInternal(player, 0.0f, false,
+                                            target.texture.height);
+            camera = CcLocalCombatCameraInternal(
+                base_camera, player, course, 0.0f, false,
+                target.texture.height);
+        }
     }
     Ray ray = GetScreenToWorldRayEx(local, camera, target.texture.width,
                                     target.texture.height);

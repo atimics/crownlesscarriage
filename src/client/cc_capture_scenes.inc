@@ -997,19 +997,11 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
         CcCommand visit={.kind=CC_COMMAND_VISIT_MINE,.target_id=site->id};
         if(!CcSimApply(scene->sim,&visit,mine_error,sizeof(mine_error))) return false;
         if(request->capture_mine_yard) {
-            scene->sim->mine.pack[CC_GOOD_BREAD]=2;
-            scene->sim->mine.pack[CC_GOOD_IRON]=1;
-            scene->sim->mine.pack[CC_GOOD_TOOLS]=1;
-            scene->sim->mine.pack[CC_GOOD_GOLD]=1;
-            scene->sim->mine.pack[CC_GOOD_GEMS]=1;
-            scene->sim->mine.pack[CC_GOOD_WOOD]=1;
             scene->sim->player.cargo[CC_GOOD_BREAD]=3;
             scene->sim->player.cargo[CC_GOOD_MEAT]=2;
             scene->sim->player.cargo[CC_GOOD_WOOL]=1;
             scene->sim->player.cargo[CC_GOOD_PAPER]=1;
             scene->sim->player.cargo[CC_GOOD_WEAPONS]=1;
-            scene->local->mine_inventory_expanded=scene->argc>=6&&
-                strcmp(scene->argv[5],"expanded")==0;
         }
         if(request->capture_mine_level) {
             scene->sim->mine.phase=CC_MINE_LEVEL;
@@ -1019,10 +1011,8 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
             scene->local->mine_view_phase=CC_MINE_LEVEL;
             scene->local->mine_facing=request->capture_mine_offer?1:2;
             if(request->capture_mine_offer) {
-                scene->sim->mine.pack[CC_GOOD_BREAD]=2;
-                scene->sim->mine.pack[CC_GOOD_IRON]=6;
                 (void)snprintf(message,message_size,
-                    "Entry ration spent. Two Bread remain for one Gold.");
+                    "The goblin haulers wait in the lower passage.");
             }
             if(request->capture_mine_contest) {
                 scene->sim->mine.contest_active=true;
@@ -1035,7 +1025,7 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
         }
         (*scene->view)=VIEW_LOCAL;
         if(!request->capture_mine_offer&&!request->capture_mine_contest)
-            (void)snprintf(message,message_size,"Follow the mine road. Pack food before entering.");
+            (void)snprintf(message,message_size,"Click the mine mouth to enter.");
     }
     return true;
 }

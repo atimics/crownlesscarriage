@@ -1,19 +1,47 @@
 #include "sim/cc_mine.h"
 
+static Camera3D MineYardCamera(Vector3 position)
+{
+    Vector3 focus={position.x,position.y+.6f,position.z};
+    return PerspectiveCameraComposed(focus,(Vector3){9.0f,9.0f,3.0f},48.0f);
+}
+static Camera3D MineCombatBaseCamera(Vector3 position,int32_t facing)
+{
+    const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
+    facing=((facing%4)+4)%4;
+    Vector3 focus={position.x+.6f*(float)dx[facing],
+                   position.y+1.05f,
+                   position.z+.6f*(float)dy[facing]};
+    Vector3 offset={-2.2f*(float)dx[facing],2.7f,
+                    -2.2f*(float)dy[facing]};
+    return PerspectiveCameraComposed(focus,offset,62.0f);
+}
+
 Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing)
 {
-    if(sim->mine.phase==CC_MINE_LEVEL) {
-        const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
-        facing=((facing%4)+4)%4;
-        Vector3 eye={(float)sim->mine.x,1.15f,(float)sim->mine.y};
-        bool near_haulers=abs(sim->mine.x-sim->mine.source_x)+
-            abs(sim->mine.y-sim->mine.source_y)<=1;
-        return (Camera3D){.position=eye,
-            .target={eye.x+(float)dx[facing],eye.y,eye.z+(float)dy[facing]},
-            .up={0,1,0},.fovy=near_haulers?98.0f:64.0f,
-            .projection=CAMERA_PERSPECTIVE};
-    }
-    return PerspectiveCameraComposed((Vector3){15,0,11},(Vector3){0,10,16},48);
+    if(sim->mine.phase!=CC_MINE_LEVEL)
+        return MineYardCamera((Vector3){(float)sim->mine.x,0.0f,
+                                       (float)sim->mine.y});
+    /* Each chamber keeps its own eye level and lens. Movement still uses the
+       saved mine tile, so a new view always has a matching place to click. */
+    static const struct {float eye,pitch,fovy,back;} shots[6]={
+        {1.52f,-.30f,69.0f,0.0f}, {1.45f,-.24f,66.0f,0.0f},
+        {1.42f,-.28f,68.0f,0.0f}, {1.55f,-.34f,72.0f,0.0f},
+        {1.42f,-.27f,67.0f,0.0f}, {1.50f,-.25f,80.0f,1.2f}
+    };
+    int32_t chamber=CcMineChamber(sim->mine.x,sim->mine.y);
+    float eye=chamber>=0?shots[chamber].eye:1.45f;
+    float pitch=chamber>=0?shots[chamber].pitch:-.30f;
+    float fovy=chamber>=0?shots[chamber].fovy:68.0f;
+    float back=chamber>=0?shots[chamber].back:0.0f;
+    const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
+    facing=((facing%4)+4)%4;
+    Vector3 position={(float)sim->mine.x-(float)dx[facing]*back,eye,
+                      (float)sim->mine.y-(float)dy[facing]*back};
+    return (Camera3D){.position=position,
+        .target={position.x+(float)dx[facing],position.y+pitch,
+                 position.z+(float)dy[facing]},
+        .up={0,1,0},.fovy=fovy,.projection=CAMERA_PERSPECTIVE};
 }
 static void MineBox(float x,float y,float z,float w,float h,float d,Color color)
 {
@@ -22,24 +50,9 @@ static void MineBox(float x,float y,float z,float w,float h,float d,Color color)
 Camera3D CcLocalMineCombatCamera(const CcLocalAgent *agent,
                                 const CcLocalCourse *course,int32_t facing)
 {
-    Camera3D camera={.position={agent->position.x,agent->position.y+1.25f,
-                               agent->position.z},
-                     .up={0,1,0},.fovy=98,.projection=CAMERA_PERSPECTIVE};
-    int32_t selected=agent->combat.target_index;
-    if (selected>=0 && selected<CC_LOCAL_RAIDER_COUNT) {
-        const CcLocalAgent *first=&course->raiders[0];
-        const CcLocalAgent *second=&course->raiders[1];
-        camera.target=(Vector3){(first->position.x+second->position.x)*.5f,
-                                camera.position.y-.10f,
-                                (first->position.z+second->position.z)*.5f};
-    } else {
-        const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
-        facing=((facing%4)+4)%4;
-        camera.target=(Vector3){camera.position.x+(float)dx[facing],
-                                camera.position.y,
-                                camera.position.z+(float)dy[facing]};
-    }
-    return camera;
+    Camera3D base=MineCombatBaseCamera(agent->position,facing);
+    return CcLocalCombatCameraInternal(base,agent,course,(float)GetTime(),
+                                       false,CC_LOCAL_ART_HEIGHT);
 }
 void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
                        const CcLocalCourse *course,int32_t facing,
@@ -48,8 +61,12 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
     PrepareRuntimeAssets(0U);
     bool underground=sim->mine.phase==CC_MINE_LEVEL;
     bool combat=sim->mine.contest_active && course!=NULL && course->mine_encounter;
-    Camera3D camera=combat?CcLocalMineCombatCamera(agent,course,facing):
-        CcLocalMineCamera(sim,facing);
+    Camera3D base=CcLocalMineCamera(sim,facing);
+    Camera3D camera=combat?CcLocalCombatCameraInternal(
+        MineCombatBaseCamera(agent->position,facing),agent,course,(float)GetTime(),
+        true,target.texture.height):base;
+    RememberPresentedCamera(CC_LOCAL_SCENE_MINE,camera,agent,
+                            target.texture.width,target.texture.height);
     ArtComposition art=ROAD_ART_COMPOSITION;
     art.light_profile=underground?ART_LIGHT_INTERIOR_EMBER:ART_LIGHT_STORYBOOK;
     art.focal_point=camera.target;
@@ -71,7 +88,8 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
             if(walk) {
                 Color tint=((x+y)%2)?floor:(Color){179,171,145,255};
                 MineBox((float)x,-.08f,(float)y,.98f,.12f,.98f,tint);
-                MineBox((float)x,2.5f,(float)y,1,.12f,1,(Color){59,61,61,255});
+                if(!combat) MineBox((float)x,2.5f,(float)y,1,.12f,1,
+                                    (Color){59,61,61,255});
             } else if(!(x==15&&y==10&&!sim->mine.bar_open)) {
                 bool edge=CcMineWalkable(sim,CC_MINE_LEVEL,x+1,y)||CcMineWalkable(sim,CC_MINE_LEVEL,x-1,y)||
                     CcMineWalkable(sim,CC_MINE_LEVEL,x,y+1)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y-1);
@@ -117,7 +135,7 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
         for(int i=0;i<cached_crates;++i)
             MineBox(3.5f+(float)i*.6f,.28f,16,.52f,.56f,.66f,
                 (Color){151,91,47,255});
-    } else {
+    } else if(!underground) {
         MineBox(15,-.18f,10,33,.3f,23,(Color){119,144,112,255});
         MineBox(15,.01f,11,5,.05f,19,(Color){183,168,133,255});
         MineBox(15,.02f,10,22,.05f,3,(Color){183,168,133,255});
@@ -147,17 +165,20 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
             if(i<4) MineBox(x+3.5f,1.1f,18,7,.12f,.12f,(Color){116,98,64,255});
         }
     }
-    /* The yard is seen from outside, so the company stands in it. Underground
-       the camera is the company's own eye, and drawing the figure there puts
-       it through the near plane and fills the screen. */
-    if (!underground) {
+    if (combat) {
+        DrawRobotShell(agent);
+        DrawCombatSword(agent);
+        if (agent->combat.target_index>=0 &&
+            agent->combat.target_index<CC_LOCAL_RAIDER_COUNT)
+            DrawSelectedTarget(&course->raiders[agent->combat.target_index]);
+    } else if(!underground) {
         rlPushMatrix();
         rlTranslatef((float)sim->mine.x,-hero.position.y,(float)sim->mine.y);
         DrawRobotShell(&hero);
         DrawCombatSword(&hero);
         rlPopMatrix();
     }
-    if (CcMineCarriedCrates(sim)>0) {
+    if (sim->schema_version<116U && CcMineCarriedCrates(sim)>0) {
         if (underground) {
             const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
             int32_t direction=((facing%4)+4)%4;
