@@ -73,7 +73,7 @@ static Vector3 RoadPonySkinPoint(Vector3 base, float yaw, Vector3 point,
         &creature_models[CC_CREATURE_HORSE][CC_CREATURE_POSE_IDLE];
     if (pony->ready) {
         for (int32_t bone = 0; bone < pony->model.skeleton.boneCount; ++bone) {
-            if (pony->quadruped_bone[bone] != (int32_t)part) continue;
+            if (pony->family_bone[bone] != (int32_t)part) continue;
             Transform bind = pony->model.skeleton.bindPose[bone];
             Transform pose = pony->pose[bone];
             Quaternion rotation = QuaternionMultiply(
@@ -1902,18 +1902,15 @@ static void DrawRemoteSiteEntrance(const CcSim *sim, CcLocalSiteKind site,
             (Vector3){x - 5.1f, 0.0f, z - 1.75f},
             0.0f, 0.68f, clock);
     } else if (site == CC_LOCAL_SITE_GOBLIN_CAVE) {
-        CcCreaturePose scavenger = CcCreatureSteppedPose(
-            CC_CREATURE_GOBLIN_SCAVENGER, clock * 2.1f, true);
-        CcCreaturePose raider = CcCreatureSteppedPose(
-            CC_CREATURE_GOBLIN_RAIDER, clock * 2.5f + PI, true);
-        (void)DrawCreature3D(
-            CC_CREATURE_GOBLIN_SCAVENGER, scavenger,
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_GOBLIN_SCAVENGER, CC_CREATURE_POSE_IDLE,
             (Vector3){x - 5.2f, 0.0f, z - 2.2f}, -0.5f * PI, 1.18f,
-            DragonCourtHairColor(&sim->dragon));
-        (void)DrawCreature3D(
-            CC_CREATURE_GOBLIN_RAIDER, raider,
+            DragonCourtHairColor(&sim->dragon), clock * 2.1f, true, NULL);
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_GOBLIN_RAIDER, CC_CREATURE_POSE_IDLE,
             (Vector3){x - 3.7f, 0.0f, z + 2.4f}, -0.5f * PI, 1.24f,
-            DragonCourtHairColor(&sim->dragon));
+            DragonCourtHairColor(&sim->dragon), clock * 2.5f + PI, true,
+            NULL);
         DrawBox((Vector3){x - 5.0f, 0.42f, z + 0.6f},
                 (Vector3){1.0f, 0.84f, 1.0f}, WORLD_WOOD);
         DrawHeraldryBanner3D(
@@ -2231,18 +2228,15 @@ static void DrawSettlementCreatures(const CcSim *sim,
          goblins->tribute_phase == CC_GOBLIN_TRIBUTE_RETURNING);
     if (raid_at_place && SceneryPointVisible(47.2f, 34.2f,
                                              scenery_focus)) {
-        CcCreaturePose raid_pose = CcCreatureSteppedPose(
-            CC_CREATURE_GOBLIN_RAIDER, clock * 5.0f, true);
-        CcCreaturePose scout_pose = CcCreatureSteppedPose(
-            CC_CREATURE_GOBLIN_SCAVENGER, clock * 5.0f + PI, true);
-        (void)DrawCreature3D(
-            CC_CREATURE_GOBLIN_RAIDER, raid_pose,
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_GOBLIN_RAIDER, CC_CREATURE_POSE_IDLE,
             TerrainWorldPoint(46.7f, 34.0f), 0.62f * PI, 1.02f,
-            DragonCourtHairColor(&sim->dragon));
-        (void)DrawCreature3D(
-            CC_CREATURE_GOBLIN_SCAVENGER, scout_pose,
+            DragonCourtHairColor(&sim->dragon), clock * 5.0f, true, NULL);
+        (void)DrawCreatureGait3D(
+            CC_CREATURE_GOBLIN_SCAVENGER, CC_CREATURE_POSE_IDLE,
             TerrainWorldPoint(48.0f, 34.7f), 0.62f * PI, 0.94f,
-            DragonCourtHairColor(&sim->dragon));
+            DragonCourtHairColor(&sim->dragon), clock * 5.0f + PI, true,
+            NULL);
     }
 
 }

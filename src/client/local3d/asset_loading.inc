@@ -289,12 +289,18 @@ static NpcArchetypeCache npc_archetypes
     [CC_NPC_ROLE_COUNT][CC_NPC_ARCHETYPE_POSE_COUNT] = {0};
 static bool npc_review_exact_yaw = false;
 
+/* One skinned character GLB, posed each frame by its skeleton family's
+   solver (docs/design/unified-characters.md). family_bone maps a model bone
+   to the family's bone enum; rest_frame_inverse is the inverse of the frame
+   the family solver would build for the bone's bind direction. */
 typedef struct CreatureModelCache {
     Model model;
     ModelAnimation animation;
-    Transform pose[CC_QUADRUPED_BONE_COUNT];
+    Transform pose[CC_SKINNED_CHARACTER_MAX_BONES];
     Transform *frames[1];
-    int32_t quadruped_bone[CC_QUADRUPED_BONE_COUNT];
+    int32_t family_bone[CC_SKINNED_CHARACTER_MAX_BONES];
+    Quaternion rest_frame_inverse[CC_SKINNED_CHARACTER_MAX_BONES];
+    CcSkeletonFamily family;
     bool ready;
 } CreatureModelCache;
 
@@ -856,11 +862,13 @@ static Quaternion HeroRotationBetween(Vector3 from, Vector3 to)
     return QuaternionFromAxisAngle(Vector3Normalize(axis), PI);
 }
 
-static Quaternion HumanoidSkinRotation(CcHumanoidSkinBone bone,
-                                        const CcHumanoidSkinBonePose *target,
-                                        Quaternion bind_rotation)
+/* The frame CcHumanoidSkinPoseResolve builds for a bone that points along
+   rest_direction in a body facing +z: y along the bone, x from the body
+   forward (or, for a foot, from the body up). */
+static Quaternion HumanoidRestFrame(CcHumanoidSkinBone bone,
+                                    Vector3 rest_direction)
 {
-    Vector3 up = Vector3Normalize(HERO_REST_DIRECTIONS[bone]);
+    Vector3 up = Vector3Normalize(rest_direction);
     bool foot = bone == CC_HUMANOID_SKIN_FOOT_LEFT ||
                 bone == CC_HUMANOID_SKIN_FOOT_RIGHT;
     Vector3 right = Vector3Normalize(foot ?
@@ -877,12 +885,20 @@ static Quaternion HumanoidSkinRotation(CcHumanoidSkinBone bone,
     rest_frame.m8 = forward.x;
     rest_frame.m9 = forward.y;
     rest_frame.m10 = forward.z;
+    return QuaternionFromMatrix(rest_frame);
+}
+
+static Quaternion HumanoidSkinRotation(CcHumanoidSkinBone bone,
+                                        const CcHumanoidSkinBonePose *target,
+                                        Quaternion bind_rotation)
+{
     Quaternion target_rotation = {
         target->world_rotation.x, target->world_rotation.y,
         target->world_rotation.z, target->world_rotation.w,
     };
     Quaternion delta = QuaternionMultiply(
-        target_rotation, QuaternionInvert(QuaternionFromMatrix(rest_frame)));
+        target_rotation,
+        QuaternionInvert(HumanoidRestFrame(bone, HERO_REST_DIRECTIONS[bone])));
     return QuaternionNormalize(QuaternionMultiply(delta, bind_rotation));
 }
 
@@ -1191,76 +1207,96 @@ static void LoadNpcArchetypes(void)
     }
 }
 
+/* Load one skinned character GLB and check it against its skeleton family:
+   one mesh, a bone count the shaders can hold, and every family bone present
+   exactly once. A model that fails is unloaded and the character is not
+   drawn, with one warning naming the cause. */
+static bool LoadSkinnedCharacter(const char *path, CcSkeletonFamily family,
+                                 CreatureModelCache *cached)
+{
+    int32_t family_bones = CcSkeletonFamilyBoneCount(family);
+    if (cached == NULL || family_bones <= 0) return false;
+    char resolved[1024];
+    if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
+        TraceLog(LOG_WARNING, "CREATURE: %s was not found", path);
+        return false;
+    }
+    Model model = LoadModel(resolved);
+    if (model.meshCount != 1 || model.materialCount < 1 ||
+        model.skeleton.boneCount != family_bones ||
+        model.skeleton.boneCount > CC_SKINNED_CHARACTER_MAX_BONES) {
+        TraceLog(LOG_WARNING,
+                 "CREATURE: invalid %s (%d meshes, %d materials, %d bones; "
+                 "%s skeleton needs %d)",
+                 path, model.meshCount, model.materialCount,
+                 model.skeleton.boneCount, CcSkeletonFamilyName(family),
+                 family_bones);
+        if (model.meshCount > 0) UnloadLocalModel(model);
+        return false;
+    }
+    *cached = (CreatureModelCache){0};
+    cached->model = model;
+    cached->family = family;
+    bool found[CC_SKINNED_CHARACTER_MAX_BONES] = {false};
+    bool valid_skin = true;
+    for (int32_t bone = 0; bone < family_bones; ++bone) {
+        int32_t family_bone = CcSkeletonFamilyBoneFind(
+            family, model.skeleton.bones[bone].name);
+        cached->family_bone[bone] = family_bone;
+        if (family_bone < 0 || found[family_bone]) {
+            valid_skin = false;
+            continue;
+        }
+        found[family_bone] = true;
+        Quaternion bind = model.skeleton.bindPose[bone].rotation;
+        Vector3 rest_direction = Vector3RotateByQuaternion(
+            (Vector3){0.0f, 1.0f, 0.0f}, bind);
+        cached->rest_frame_inverse[bone] = family == CC_SKELETON_HUMANOID ?
+            QuaternionInvert(HumanoidRestFrame(
+                (CcHumanoidSkinBone)family_bone, rest_direction)) :
+            QuaternionIdentity();
+    }
+    for (int32_t bone = 0; bone < family_bones; ++bone) {
+        if (!found[bone]) valid_skin = false;
+    }
+    if (!valid_skin) {
+        TraceLog(LOG_WARNING, "CREATURE: %s has the wrong %s bones", path,
+                 CcSkeletonFamilyName(family));
+        UnloadLocalModel(cached->model);
+        *cached = (CreatureModelCache){0};
+        return false;
+    }
+    cached->frames[0] = cached->pose;
+    cached->animation.boneCount = family_bones;
+    cached->animation.keyframeCount = 1;
+    cached->animation.keyframePoses = cached->frames;
+    (void)snprintf(cached->animation.name, sizeof(cached->animation.name),
+                   "%s-runtime", CcSkeletonFamilyName(family));
+    ReleaseUploadedModelCpuData(&cached->model);
+    cached->ready = true;
+    return true;
+}
+
 static void LoadCreatureModels(void)
 {
     for (int32_t variant = 0; variant < CC_CREATURE_VARIANT_COUNT;
          ++variant) {
         const CcCreatureDefinition *definition = CcCreatureDefinitionAt(
             (CcCreatureVariant)variant);
-        if (definition == NULL || !definition->skinned) {
+        CcSkeletonFamily family = definition != NULL && definition->skinned ?
+            CcSkeletonFamilyFind(definition->skeleton) : CC_SKELETON_NONE;
+        if (family == CC_SKELETON_NONE) {
             TraceLog(LOG_INFO, "CREATURE: %s uses procedural rendering",
                      definition != NULL ? definition->name : "unknown");
             continue;
         }
-        int32_t loaded_count = 0;
-        for (int32_t pose = 0; pose < CC_CREATURE_POSE_COUNT; ++pose) {
-            if (pose != CC_CREATURE_POSE_IDLE) continue;
-            const char *path = CcCreatureAssetPath(
-                (CcCreatureVariant)variant, (CcCreaturePose)pose);
-            if (path == NULL) continue;
-            char resolved[1024];
-            if (!ResolveAssetPath(path, resolved, sizeof(resolved))) {
-                TraceLog(LOG_WARNING, "CREATURE: %s was not found", path);
-                continue;
-            }
-            Model model = LoadModel(resolved);
-            if (model.meshCount != 1 || model.materialCount < 1 ||
-                model.skeleton.boneCount != CC_QUADRUPED_BONE_COUNT) {
-                TraceLog(LOG_WARNING,
-                         "CREATURE: invalid %s (%d meshes, %d materials, %d bones)",
-                         path, model.meshCount, model.materialCount,
-                         model.skeleton.boneCount);
-                if (model.meshCount > 0) UnloadLocalModel(model);
-                continue;
-            }
-            CreatureModelCache *cached = &creature_models[variant][pose];
-            cached->model = model;
-            bool found[CC_QUADRUPED_BONE_COUNT] = {false};
-            bool valid_skin = true;
-            for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
-                int32_t quadruped_bone = CcQuadrupedBoneFind(
-                    model.skeleton.bones[bone].name);
-                cached->quadruped_bone[bone] = quadruped_bone;
-                if (quadruped_bone < 0) {
-                    valid_skin = false;
-                } else {
-                    found[quadruped_bone] = true;
-                }
-            }
-            for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
-                if (!found[bone]) valid_skin = false;
-            }
-            if (!valid_skin) {
-                TraceLog(LOG_WARNING,
-                         "CREATURE: %s has the wrong quadruped bones",
-                         path);
-                UnloadLocalModel(cached->model);
-                *cached = (CreatureModelCache){0};
-                continue;
-            }
-            cached->frames[0] = cached->pose;
-            cached->animation.boneCount = CC_QUADRUPED_BONE_COUNT;
-            cached->animation.keyframeCount = 1;
-            cached->animation.keyframePoses = cached->frames;
-            (void)snprintf(cached->animation.name,
-                           sizeof(cached->animation.name),
-                           "quadruped-runtime");
-            ReleaseUploadedModelCpuData(&cached->model);
-            cached->ready = true;
-            loaded_count += 1;
-        }
-        TraceLog(LOG_INFO, "CREATURE: loaded %s (%d/%d poses)",
-                 definition->name, loaded_count, 1);
+        const char *path = CcCreatureAssetPath((CcCreatureVariant)variant,
+                                               CC_CREATURE_POSE_IDLE);
+        bool loaded = path != NULL && LoadSkinnedCharacter(
+            path, family, &creature_models[variant][CC_CREATURE_POSE_IDLE]);
+        TraceLog(LOG_INFO, "CREATURE: loaded %s %s skin (%d/1)",
+                 definition->name, CcSkeletonFamilyName(family),
+                 loaded ? 1 : 0);
     }
 }
 
@@ -2144,16 +2180,14 @@ static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
                                     const CreatureRenderPalette *palette,
                                     float yaw, float scale, CcCreatureVariant variant)
 {
-    bool goblin = rig->profile == CC_CREATURE_RIG_GOBLIN;
     for (int32_t limb = 0; limb < rig->limb_count; ++limb) {
         const CcCreatureRigLimbPose *leg = &rig->limbs[limb];
-        float base_radius = goblin ? 0.092f :
-            rig->profile == CC_CREATURE_RIG_COW ? 0.115f :
+        float base_radius = rig->profile == CC_CREATURE_RIG_COW ? 0.115f :
             rig->profile == CC_CREATURE_RIG_DRAGON ? 0.142f :
             rig->profile >= CC_CREATURE_RIG_HEXAPOD ? 0.062f : 0.086f;
         base_radius *= scale;
-        Color upper = goblin ? palette->cloth : palette->hide;
-        Color lower = goblin ? palette->skin : palette->secondary;
+        Color upper = palette->hide;
+        Color lower = palette->secondary;
         if (rig->profile == CC_CREATURE_RIG_DRAGON) {
             upper = palette->skin;
             lower = palette->accent;
@@ -2177,13 +2211,7 @@ static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
             }
         }
         Vector3 foot = FromLimbVector(leg->joints[leg->segment_count]);
-        if (goblin) {
-            DrawOrientedBox(foot,
-                            (Vector3){0.0f, 0.025f * scale, 0.06f * scale},
-                            (Vector3){0.22f * scale, 0.10f * scale,
-                                      0.30f * scale},
-                            yaw, palette->leather);
-        } else if (IsDragonCreatureVariant(variant)) {
+        if (IsDragonCreatureVariant(variant)) {
             DrawDragonClaws(foot, yaw, scale, palette);
         } else {
             Color hoof = rig->profile == CC_CREATURE_RIG_DRAGON ?
@@ -2194,166 +2222,6 @@ static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
                                       0.24f * scale},
                             yaw, hoof);
         }
-    }
-}
-
-static void DrawGoblinRig(CcCreatureVariant variant,
-                          const CcCreatureRigPose *rig,
-                          const CreatureRenderPalette *palette,
-                          float yaw, float scale)
-{
-    Vector3 pelvis = FromLimbVector(rig->body);
-    float wave = sinf(rig->phase * 2.0f * PI);
-    Vector3 chest = LocalPoint(pelvis, 0.0f, 0.36f * scale,
-                               0.018f * wave * scale, yaw);
-    Vector3 neck = LocalPoint(pelvis, 0.0f, 0.58f * scale, 0.0f, yaw);
-    Vector3 head = LocalPoint(pelvis, 0.0f, 0.76f * scale, 0.025f * scale, yaw);
-    float muscle = 1.0f + rig->mean_activation * 0.48f;
-    Vector3 hands[2];
-
-    DrawOrientedBox(pelvis, (Vector3){0.0f, 0.10f * scale, 0.0f},
-                    (Vector3){0.38f * scale, 0.22f * scale,
-                              0.28f * scale},
-                    yaw, palette->leather);
-    DrawCylinderEx(pelvis, chest, 0.20f * scale * muscle,
-                   0.25f * scale * muscle, 7, palette->cloth);
-    DrawCylinderEx(chest, neck, 0.20f * scale, 0.10f * scale, 7,
-                   palette->cloth);
-    DrawCreatureEllipsoid(head,
-        (Vector3){0.25f * scale, 0.24f * scale, 0.22f * scale}, yaw, palette->skin);
-    Vector3 jaw = LocalPoint(head, 0, -0.105f * scale, 0.12f * scale, yaw);
-    DrawCreatureEllipsoid(jaw, (Vector3){0.19f * scale, 0.115f * scale, 0.15f * scale},
-                           yaw, palette->skin);
-    Color face_shadow = ShadeColor(palette->skin, 0.54f);
-    Color eye_dark = {20, 27, 17, 255};
-    Vector3 nose = LocalPoint(head, 0, -0.015f * scale, 0.235f * scale, yaw);
-    DrawCreatureEllipsoid(nose, (Vector3){0.059f * scale, 0.10f * scale, 0.08f * scale},
-                           yaw, palette->skin);
-    Vector3 nose_tip = LocalPoint(head, 0, -0.07f * scale, 0.30f * scale, yaw);
-    DrawCreatureEllipsoid(nose_tip, (Vector3){0.073f * scale, 0.055f * scale, 0.076f * scale},
-                           yaw, BlendColor(palette->skin, palette->horn, 0.16f));
-    for (int32_t side = -1; side <= 1; side += 2) {
-        Vector3 ear_root = LocalPoint(
-            head, (float)side * 0.18f * scale, 0.075f * scale, 0.0f, yaw);
-        Vector3 ear_tip = LocalPoint(
-            head, (float)side * 0.48f * scale,
-            (side < 0 ? 0.12f : 0.18f) * scale, -0.055f * scale, yaw);
-        Vector3 ear_bottom = LocalPoint(head, (float)side * 0.19f * scale,
-                                        -0.09f * scale, -0.03f * scale, yaw);
-        DrawDoubleSidedTriangle(ear_root, ear_tip, ear_bottom, palette->skin);
-        DrawCylinderEx(ear_root, ear_tip, 0.036f * scale, 0.009f * scale, 5, palette->skin);
-        Vector3 ear_inner = LocalPoint(head, (float)side * 0.25f * scale,
-                                       0.025f * scale, 0.008f * scale, yaw);
-        DrawDoubleSidedTriangle(ear_inner, Vector3Lerp(ear_inner, ear_tip, 0.79f),
-                                Vector3Lerp(ear_inner, ear_bottom, 0.65f), face_shadow);
-        Vector3 eye = LocalPoint(
-            head, (float)side * 0.104f * scale, 0.04f * scale, 0.206f * scale, yaw);
-        DrawCreatureEllipsoid(eye, (Vector3){0.061f * scale, 0.048f * scale, 0.031f * scale},
-                               yaw, face_shadow);
-        Vector3 iris = LocalPoint(eye, 0, 0, 0.018f * scale, yaw);
-        DrawCreatureEllipsoid(iris, (Vector3){0.048f * scale, 0.035f * scale, 0.020f * scale},
-                               yaw, palette->eye);
-        Vector3 pupil = LocalPoint(iris, 0, 0, 0.018f * scale, yaw);
-        DrawCreatureEllipsoid(pupil, (Vector3){0.016f * scale, 0.026f * scale, 0.008f * scale},
-                               yaw, eye_dark);
-        Vector3 brow_inner = LocalPoint(head, (float)side * 0.05f * scale,
-                                        0.085f * scale, 0.226f * scale, yaw);
-        Vector3 brow_outer = LocalPoint(head, (float)side * 0.19f * scale,
-                                        0.12f * scale, 0.17f * scale, yaw);
-        DrawCylinderEx(brow_inner, brow_outer, 0.029f * scale, 0.021f * scale, 5, face_shadow);
-        Vector3 mouth_corner = LocalPoint(head, (float)side * 0.14f * scale,
-                                          -0.14f * scale, 0.218f * scale, yaw);
-        Vector3 mouth_middle = LocalPoint(head, 0, -0.158f * scale, 0.265f * scale, yaw);
-        DrawCylinderEx(mouth_corner, mouth_middle, 0.012f * scale, 0.010f * scale, 5, eye_dark);
-        Vector3 tusk = LocalPoint(head, (float)side * 0.098f * scale,
-                                  -0.16f * scale, 0.258f * scale, yaw);
-        Vector3 tusk_tip = LocalPoint(tusk, (float)side * 0.013f * scale,
-                                      0.068f * scale, 0.016f * scale, yaw);
-        DrawCylinderEx(tusk, tusk_tip, 0.021f * scale, 0, 5, palette->horn);
-
-        float arm_wave = wave * (float)-side;
-        Vector3 shoulder = LocalPoint(
-            chest, (float)side * 0.26f * scale, 0.02f * scale,
-            0.0f, yaw);
-        Vector3 elbow = LocalPoint(
-            chest, (float)side * 0.32f * scale, -0.23f * scale,
-            arm_wave * 0.11f * scale, yaw);
-        Vector3 hand = LocalPoint(
-            chest, (float)side * 0.31f * scale, -0.48f * scale,
-            arm_wave * 0.18f * scale, yaw);
-        if (variant == CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
-            hand = LocalPoint(chest, (float)side * 0.27f * scale,
-                               -0.28f * scale, 0.39f * scale, yaw);
-            elbow = LocalPoint(chest, (float)side * 0.34f * scale,
-                                -0.31f * scale, 0.08f * scale, yaw);
-        }
-        hands[side < 0 ? 0 : 1] = hand;
-        DrawCylinderEx(shoulder, elbow, 0.082f * scale * muscle,
-                       0.068f * scale, 7, palette->cloth);
-        DrawCylinderEx(elbow, hand, 0.068f * scale,
-                       0.055f * scale, 7, palette->skin);
-        DrawCharacterSphere(hand, 0.078f * scale, palette->skin);
-        Vector3 cuff = Vector3Lerp(elbow, hand, 0.78f);
-        DrawCylinderEx(cuff, hand, 0.071f * scale, 0.065f * scale, 6, palette->leather);
-    }
-    DrawOrientedBox(pelvis, (Vector3){0, 0.11f * scale, 0.158f * scale},
-                    (Vector3){0.09f * scale, 0.085f * scale, 0.024f * scale}, yaw, palette->horn);
-    DrawCreatureEllipsoid(neck, (Vector3){0.145f * scale, 0.066f * scale, 0.13f * scale},
-                           yaw, palette->accent);
-    DrawGoblinHair(variant, head, yaw, scale,
-                   0.035f * wave * rig->movement, palette->hair);
-
-    if (variant == CC_CREATURE_GOBLIN_RAIDER) {
-        Vector3 helmet = LocalPoint(head, 0, 0.21f * scale, -0.01f * scale, yaw);
-        DrawCreatureEllipsoid(helmet, (Vector3){0.26f * scale, 0.13f * scale, 0.245f * scale},
-                               yaw, palette->metal);
-        DrawOrientedBox(chest, (Vector3){0.0f, 0.0f, 0.17f * scale},
-                        (Vector3){0.38f * scale, 0.30f * scale,
-                                  0.07f * scale},
-                        yaw, palette->metal);
-        Vector3 spear_hand = hands[1];
-        Vector3 spear_bottom = LocalPoint(spear_hand, 0, -0.42f * scale, 0, yaw);
-        Vector3 spear_tip = LocalPoint(spear_hand, 0, 1.16f * scale, 0, yaw);
-        DrawCylinderEx(spear_bottom, spear_tip, 0.025f * scale,
-                       0.018f * scale, 6, palette->leather);
-        Vector3 blade_tip = LocalPoint(spear_tip, 0, 0.24f * scale, 0, yaw);
-        DrawCylinderEx(spear_tip, blade_tip, 0.075f * scale, 0.0f, 5,
-                       palette->metal);
-        DrawDoubleSidedTriangle(spear_tip,
-            LocalPoint(spear_tip, -0.23f * scale, -0.10f * scale, 0, yaw),
-            LocalPoint(spear_tip, 0, -0.21f * scale, 0, yaw), palette->accent);
-        Vector3 pauldron = LocalPoint(chest, -0.28f * scale, 0.025f * scale, 0, yaw);
-        DrawCreatureEllipsoid(pauldron, (Vector3){0.14f * scale, 0.105f * scale, 0.16f * scale},
-                               yaw, palette->metal);
-    } else if (variant == CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
-        DrawOrientedBox(chest,
-                        (Vector3){0.0f, -0.22f * scale, 0.30f * scale},
-                        (Vector3){0.48f * scale, 0.38f * scale,
-                                  0.38f * scale},
-                        yaw, palette->accent);
-        DrawOrientedBox(chest,
-                        (Vector3){0.0f, -0.22f * scale, 0.505f * scale},
-                        (Vector3){0.10f * scale, 0.40f * scale,
-                                  0.025f * scale},
-                        yaw, palette->horn);
-    } else {
-        DrawOrientedBox(chest,
-                        (Vector3){0.0f, -0.04f * scale, -0.20f * scale},
-                        (Vector3){0.40f * scale, 0.42f * scale,
-                                  0.18f * scale},
-                        yaw, palette->secondary);
-        Vector3 roll_left = LocalPoint(chest, -0.23f * scale, 0.20f * scale, -0.24f * scale, yaw);
-        Vector3 roll_right = LocalPoint(chest, 0.23f * scale, 0.20f * scale, -0.24f * scale, yaw);
-        DrawCylinderEx(roll_left, roll_right, 0.10f * scale, 0.10f * scale, 7, palette->hide);
-        Vector3 strap_top = LocalPoint(chest, -0.18f * scale, 0.19f * scale, 0.05f * scale, yaw);
-        Vector3 strap_bottom = LocalPoint(pelvis, 0.14f * scale, 0.16f * scale, 0.17f * scale, yaw);
-        DrawCylinderEx(strap_top, strap_bottom, 0.029f * scale, 0.029f * scale, 5, palette->leather);
-        Vector3 hook_bottom = LocalPoint(hands[1], 0, -0.25f * scale, 0.02f * scale, yaw);
-        Vector3 hook_bend = LocalPoint(hook_bottom, 0, -0.08f * scale, 0.11f * scale, yaw);
-        Vector3 hook_tip = LocalPoint(hook_bottom, 0, 0.04f * scale, 0.16f * scale, yaw);
-        DrawCylinderEx(hands[1], hook_bottom, 0.024f * scale, 0.022f * scale, 6, palette->leather);
-        DrawCylinderEx(hook_bottom, hook_bend, 0.024f * scale, 0.020f * scale, 6, palette->metal);
-        DrawCylinderEx(hook_bend, hook_tip, 0.020f * scale, 0.005f * scale, 6, palette->metal);
     }
 }
 
@@ -2937,23 +2805,92 @@ static bool CreatureBoneTranslationSane(Vector3 translation)
 }
 
 static void ReportCreatureBoneBreak(CcCreatureVariant variant,
-                                    int32_t quadruped_bone, bool controlled,
+                                    CcSkeletonFamily family,
+                                    int32_t family_bone, bool controlled,
                                     bool moving, Vector3 translation)
 {
     /* One line per variant+bone. A broken transform repeats every frame and
        the first report is the one that names the cause. */
     static uint64_t reported[CC_CREATURE_VARIANT_COUNT];
     if (variant < 0 || variant >= CC_CREATURE_VARIANT_COUNT) return;
-    if (quadruped_bone < 0 || quadruped_bone >= 64) return;
-    uint64_t bit = (uint64_t)1 << quadruped_bone;
+    if (family_bone < 0 || family_bone >= 64) return;
+    uint64_t bit = (uint64_t)1 << family_bone;
     if ((reported[variant] & bit) != 0) return;
     reported[variant] |= bit;
     TraceLog(LOG_WARNING,
              "CREATURE: variant %d bone %s left its model (%.2f, %.2f, %.2f) "
              "controlled=%d moving=%d; clamped to bind pose",
-             (int)variant, CcQuadrupedBoneName((CcQuadrupedBone)quadruped_bone),
+             (int)variant, CcSkeletonFamilyBoneName(family, family_bone),
              (double)translation.x, (double)translation.y,
              (double)translation.z, (int)controlled, (int)moving);
+}
+
+/* What a family solver asks of one family bone, in model space. A humanoid
+   solver gives the bone's world frame; a quadruped solver gives the turn
+   from its own rest pose. */
+typedef struct SkinnedBoneTarget {
+    Vector3 head;
+    Quaternion rotation;
+} SkinnedBoneTarget;
+
+typedef struct SkinnedCharacterPose {
+    CcSkeletonFamily family;
+    SkinnedBoneTarget bones[CC_SKINNED_CHARACTER_MAX_BONES];
+} SkinnedCharacterPose;
+
+/* The one posing path for every skinned character: write each model bone
+   from its family bone's target, keep the bind pose for a bone the solver
+   broke, and upload the frame. */
+static bool PoseSkinnedCharacter(CreatureModelCache *character,
+                                 const SkinnedCharacterPose *pose,
+                                 CcCreatureVariant variant, bool controlled,
+                                 bool moving)
+{
+    if (character == NULL || !character->ready || pose == NULL ||
+        pose->family != character->family) {
+        return false;
+    }
+    int32_t family_bones = CcSkeletonFamilyBoneCount(character->family);
+    int32_t bone_count = character->model.skeleton.boneCount;
+    if (bone_count != family_bones ||
+        bone_count > CC_SKINNED_CHARACTER_MAX_BONES) {
+        return false;
+    }
+    /* Check the whole mapping before writing any of it. Bailing part way
+       through left the skeleton holding this frame's pose on the bones
+       already written and the previous frame's on the rest, which tears the
+       mesh between them. */
+    for (int32_t bone = 0; bone < bone_count; ++bone) {
+        int32_t family_bone = character->family_bone[bone];
+        if (family_bone < 0 || family_bone >= family_bones) return false;
+    }
+
+    for (int32_t bone = 0; bone < bone_count; ++bone) {
+        int32_t family_bone = character->family_bone[bone];
+        const SkinnedBoneTarget *target = &pose->bones[family_bone];
+        Transform bind = character->model.skeleton.bindPose[bone];
+        Quaternion delta = character->family == CC_SKELETON_HUMANOID ?
+            QuaternionMultiply(target->rotation,
+                               character->rest_frame_inverse[bone]) :
+            target->rotation;
+        Vector3 translation = target->head;
+        Quaternion rotation = QuaternionNormalize(
+            QuaternionMultiply(delta, bind.rotation));
+        if (!CreatureBoneTranslationSane(translation) ||
+            !isfinite(rotation.x) || !isfinite(rotation.y) ||
+            !isfinite(rotation.z) || !isfinite(rotation.w)) {
+            ReportCreatureBoneBreak(variant, character->family, family_bone,
+                                    controlled, moving, translation);
+            translation = bind.translation;
+            rotation = bind.rotation;
+        }
+        character->pose[bone].translation = translation;
+        character->pose[bone].rotation = rotation;
+        character->pose[bone].scale = bind.scale;
+    }
+    UpdateModelAnimation(character->model, character->animation, 0.0f);
+    CcLocalRendererRecordCreatureSkinUpdate(character->model.meshCount);
+    return true;
 }
 
 static bool PoseQuadrupedCreature(CreatureModelCache *creature,
@@ -2961,7 +2898,8 @@ static bool PoseQuadrupedCreature(CreatureModelCache *creature,
                                   bool moving,
                                   const CcCreatureRigPose *controlled_pose)
 {
-    if (creature == NULL || !creature->ready) return false;
+    if (creature == NULL || !creature->ready ||
+        creature->family != CC_SKELETON_QUADRUPED) return false;
     CcQuadrupedMorphology morphology = QuadrupedMorphologyForCreature(variant);
     CcQuadrupedPose rest = {0};
     CcQuadrupedPose target = {0};
@@ -2973,45 +2911,52 @@ static bool PoseQuadrupedCreature(CreatureModelCache *creature,
         CcQuadrupedPoseResolve(morphology, phase, moving, &target);
     }
     if (!rest.valid || !target.valid) return false;
-
-    /* Check the whole mapping before writing any of it. Bailing part way
-       through left the skeleton holding this frame's pose on the bones
-       already written and the previous frame's on the rest, which tears the
-       mesh between them. */
-    for (int32_t bone = 0; bone < creature->model.skeleton.boneCount;
-         ++bone) {
-        int32_t quadruped_bone = creature->quadruped_bone[bone];
-        if (quadruped_bone < 0 ||
-            quadruped_bone >= CC_QUADRUPED_BONE_COUNT) return false;
+    SkinnedCharacterPose pose = {.family = CC_SKELETON_QUADRUPED};
+    for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
+        pose.bones[bone].head = FromLimbVector(target.bones[bone].head);
+        pose.bones[bone].rotation = HeroRotationBetween(
+            FromLimbVector(rest.bones[bone].up),
+            FromLimbVector(target.bones[bone].up));
     }
+    return PoseSkinnedCharacter(creature, &pose, variant, controlled, moving);
+}
 
-    for (int32_t bone = 0; bone < creature->model.skeleton.boneCount;
-         ++bone) {
-        int32_t quadruped_bone = creature->quadruped_bone[bone];
-        const CcQuadrupedBonePose *rest_bone = &rest.bones[quadruped_bone];
-        const CcQuadrupedBonePose *target_bone =
-            &target.bones[quadruped_bone];
-        Quaternion delta = HeroRotationBetween(
-            FromLimbVector(rest_bone->up),
-            FromLimbVector(target_bone->up));
-        Transform bind = creature->model.skeleton.bindPose[bone];
-        Vector3 translation = FromLimbVector(target_bone->head);
-        Quaternion rotation = QuaternionMultiply(delta, bind.rotation);
-        if (!CreatureBoneTranslationSane(translation) ||
-            !isfinite(rotation.x) || !isfinite(rotation.y) ||
-            !isfinite(rotation.z) || !isfinite(rotation.w)) {
-            ReportCreatureBoneBreak(variant, quadruped_bone, controlled,
-                                    moving, translation);
-            translation = bind.translation;
-            rotation = bind.rotation;
-        }
-        creature->pose[bone].translation = translation;
-        creature->pose[bone].rotation = rotation;
-        creature->pose[bone].scale = bind.scale;
+static CcBipedBodyKind BipedBodyForCreature(CcCreatureVariant variant)
+{
+    return variant == CC_CREATURE_GOBLIN_TRIBUTE_BEARER ?
+        CC_BIPED_BODY_GOBLIN_CARRIER : CC_BIPED_BODY_GOBLIN;
+}
+
+/* Pose a two-legged creature skin from its creature rig. The rig is in world
+   space; the skin is posed in model space and drawn at position, yaw and
+   scale, like the quadrupeds. */
+static bool PoseHumanoidCreature(CreatureModelCache *creature,
+                                 CcCreatureVariant variant,
+                                 const CcCreatureRigPose *rig,
+                                 Vector3 position, float yaw, float scale,
+                                 bool controlled, bool moving)
+{
+    if (creature == NULL || !creature->ready ||
+        creature->family != CC_SKELETON_HUMANOID) return false;
+    CcHumanoidPose body;
+    if (!CcHumanoidPoseFromBipedRig(
+            rig, CcBipedBodyPlanFor(BipedBodyForCreature(variant)),
+            ToLimbVector(position), yaw, scale, &body)) {
+        return false;
     }
-    UpdateModelAnimation(creature->model, creature->animation, 0.0f);
-    CcLocalRendererRecordCreatureSkinUpdate(creature->model.meshCount);
-    return true;
+    CcHumanoidSkinPose skin;
+    CcHumanoidSkinPoseResolve(&body, &skin);
+    if (!skin.valid) return false;
+    SkinnedCharacterPose pose = {.family = CC_SKELETON_HUMANOID};
+    for (int32_t bone = 0; bone < CC_HUMANOID_SKIN_BONE_COUNT; ++bone) {
+        const CcHumanoidSkinBonePose *target = &skin.bones[bone];
+        pose.bones[bone].head = FromLimbVector(target->head);
+        pose.bones[bone].rotation = (Quaternion){
+            target->world_rotation.x, target->world_rotation.y,
+            target->world_rotation.z, target->world_rotation.w,
+        };
+    }
+    return PoseSkinnedCharacter(creature, &pose, variant, controlled, moving);
 }
 
 static void DrawContactShadow(Vector3 center, float width, float depth,
@@ -3114,11 +3059,16 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
     if (skinned) {
         CreatureModelCache *creature =
             &creature_models[variant][CC_CREATURE_POSE_IDLE];
-        if (creature->ready && creature->model.meshCount == 1 &&
-            PoseQuadrupedCreature(
-                creature, variant, gait_phase, moving,
-                controlled_pose != NULL && controlled_pose->valid ? rig :
-                                                                    NULL)) {
+        bool controlled = controlled_pose != NULL && controlled_pose->valid;
+        bool posed = false;
+        if (creature->ready && creature->model.meshCount == 1) {
+            posed = creature->family == CC_SKELETON_HUMANOID ?
+                PoseHumanoidCreature(creature, variant, rig, position, yaw,
+                                     scale, controlled, moving) :
+                PoseQuadrupedCreature(creature, variant, gait_phase, moving,
+                                      controlled ? rig : NULL);
+        }
+        if (posed) {
             Color colors[CC_NPC_ARCHETYPE_MATERIAL_COUNT] = {
                 palette.skin, palette.secondary, palette.hide,
                 palette.cloth, palette.leather, palette.horn,
@@ -3138,36 +3088,40 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
             return true;
         }
     }
-    if (controlled_pose != NULL && skinned) {
-        if (!CcCreatureRigPoseResolve(
-                CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
-                ToLimbVector(position), yaw, scale, &generated_rig)) {
-            /* Nothing is drawn past this point, so the creature simply is not
-               there. Say so once per variant rather than leaving a carriage
-               rolling through town with no team in front of it. */
-            static bool reported[CC_CREATURE_VARIANT_COUNT];
-            if (variant >= 0 && variant < CC_CREATURE_VARIANT_COUNT &&
-                !reported[variant]) {
-                reported[variant] = true;
-                TraceLog(LOG_WARNING,
-                         "CREATURE: variant %d not drawn; rig pose failed at "
-                         "(%.2f, %.2f, %.2f) yaw %.2f scale %.2f phase %.2f "
-                         "movement %.2f",
-                         (int)variant, (double)position.x, (double)position.y,
-                         (double)position.z, (double)yaw, (double)scale,
-                         (double)rig_phase, (double)rig_movement);
-            }
-            return false;
+    bool procedural = IsDragonCreatureVariant(variant) ||
+                      variant == CC_CREATURE_HORSE ||
+                      variant == CC_CREATURE_COW ||
+                      variant == CC_CREATURE_SHEEP;
+    if (!procedural || (controlled_pose != NULL && skinned &&
+        !CcCreatureRigPoseResolve(
+            CreatureRigProfileForVariant(variant), rig_phase, rig_movement,
+            ToLimbVector(position), yaw, scale, &generated_rig))) {
+        /* Nothing is drawn past this point, so the creature simply is not
+           there. Say so once per variant rather than leaving a carriage
+           rolling through town with no team in front of it. A skinned-only
+           creature (a goblin) has no hand-drawn fallback at all. */
+        static bool reported[CC_CREATURE_VARIANT_COUNT];
+        if (variant >= 0 && variant < CC_CREATURE_VARIANT_COUNT &&
+            !reported[variant]) {
+            reported[variant] = true;
+            TraceLog(LOG_WARNING,
+                     "CREATURE: variant %d not drawn; rig pose failed at "
+                     "(%.2f, %.2f, %.2f) yaw %.2f scale %.2f phase %.2f "
+                     "movement %.2f",
+                     (int)variant, (double)position.x, (double)position.y,
+                     (double)position.z, (double)yaw, (double)scale,
+                     (double)rig_phase, (double)rig_movement);
         }
+        return false;
+    }
+    if (controlled_pose != NULL && skinned) {
         rig = &generated_rig;
     }
     if (variant != CC_CREATURE_DRAGON &&
         variant != CC_CREATURE_DRAGON_DEEP_WYRM) {
         DrawCreatureMuscleLimbs(rig, &palette, yaw, scale, variant);
     }
-    if (variant <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER) {
-        DrawGoblinRig(variant, rig, &palette, yaw, scale);
-    } else if (IsDragonCreatureVariant(variant)) {
+    if (IsDragonCreatureVariant(variant)) {
         DrawDragonRig(variant, rig, &palette, yaw, scale);
     } else {
         DrawFarmAnimalRig(variant, rig, &palette, yaw, scale);
@@ -3175,12 +3129,18 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
     return true;
 }
 
+/* Draw a creature from a held pose name. A skinned creature has no held
+   poses, so the stepped pose becomes a gait phase for its runtime skin. */
 static bool DrawCreature3D(CcCreatureVariant variant, CcCreaturePose pose,
                            Vector3 position, float yaw, float scale,
                            Color primary)
 {
+    const CcCreatureDefinition *definition = CcCreatureDefinitionAt(variant);
+    bool skinned = definition != NULL && definition->skinned;
+    float gait_phase = skinned ? CreatureRigPhase(pose) * 2.0f * PI : 0.0f;
+    bool moving = skinned && CreatureRigMovement(pose) > 0.0f;
     return DrawCreatureGait3D(variant, pose, position, yaw, scale, primary,
-                              0.0f, false, NULL);
+                              gait_phase, moving, NULL);
 }
 
 

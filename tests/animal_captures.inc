@@ -10,10 +10,11 @@ static void TestPonyHarnessAttachment(void)
     };
     *pony = (CreatureModelCache){0};
     pony->ready = true;
+    pony->family = CC_SKELETON_QUADRUPED;
     pony->model.skeleton.boneCount = 2;
     pony->model.skeleton.bindPose = bind;
-    pony->quadruped_bone[0] = CC_QUADRUPED_CHEST;
-    pony->quadruped_bone[1] = CC_QUADRUPED_HEAD;
+    pony->family_bone[0] = CC_QUADRUPED_CHEST;
+    pony->family_bone[1] = CC_QUADRUPED_HEAD;
     pony->pose[0] = bind[0];
     pony->pose[1] = bind[1];
     /* A lifted head turns the muzzle from forward to right in model space. */

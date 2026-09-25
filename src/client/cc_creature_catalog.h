@@ -41,6 +41,9 @@ typedef struct CcCreatureDefinition {
     const char *gait;
     bool quadruped;
     bool skinned;
+    /* Skeleton family name: "humanoid", "quadruped", or "none" for a
+       held-pose creature. See docs/design/unified-characters.md. */
+    const char *skeleton;
 } CcCreatureDefinition;
 
 const CcCreatureDefinition *CcCreatureDefinitionAt(CcCreatureVariant variant);

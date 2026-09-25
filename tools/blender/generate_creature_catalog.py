@@ -57,9 +57,11 @@ def render_catalog(manifest: dict) -> str:
         enum = VARIANT_ENUMS[variant]
         quadruped = "true" if entry["runtime_morphology"] == "quadruped" else "false"
         skinned = "true" if entry.get("skinned", False) else "false"
+        skeleton = entry.get("skeleton", "none")
         lines.append(
             f'    [{enum}] = {{"{variant}", "{entry["family"]}", '
-            f'"{entry["gait_contract"]}", {quadruped}, {skinned}}},'
+            f'"{entry["gait_contract"]}", {quadruped}, {skinned}, '
+            f'"{skeleton}"}},'
         )
     lines.extend([
         "};",
