@@ -1542,6 +1542,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " reported_encounter_outcome INTEGER NOT NULL);";
     return Execute(database, "CREATE TABLE IF NOT EXISTS resident_census (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS scriven_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS crown_calendar_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS custody_entry (slot INTEGER PRIMARY KEY,id INTEGER NOT NULL,revision INTEGER NOT NULL,owner_id INTEGER NOT NULL,source_id INTEGER NOT NULL,last_event_id INTEGER NOT NULL,holder_kind INTEGER NOT NULL,holder_id INTEGER NOT NULL,kind INTEGER NOT NULL,reference_id INTEGER NOT NULL,quantity INTEGER NOT NULL,good INTEGER NOT NULL,condition INTEGER NOT NULL,capacity INTEGER NOT NULL,active INTEGER NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS notice_state (id INTEGER PRIMARY KEY CHECK(id=1),ready INTEGER NOT NULL);", error, error_capacity) &&
@@ -3728,6 +3729,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveNotices(database, sim, error, error_capacity) &&
         SaveScriven(database, sim, error, error_capacity) &&
         SaveCensus(database, sim, error, error_capacity) &&
+        SaveCrownCalendar(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SaveTownRecovery(database, sim, error, error_capacity) &&
@@ -6487,6 +6489,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadNotices(database, sim, error, error_capacity) &&
               ReadScriven(database, sim, error, error_capacity) &&
               ReadCensus(database, sim, error, error_capacity) &&
+              ReadCrownCalendar(database, sim, error, error_capacity) &&
               ReadGoblinPolitics(database, sim, error, error_capacity) &&
               ReadMine(database, sim, error, error_capacity);
     if (!ok) {
@@ -6517,7 +6520,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     uint32_t stored_schema_version = sim->schema_version;
     uint32_t stored_generator_version = sim->generator_version;
     if (!CcSaveUpgradeLegacyRuntime(sim, error, error_capacity)) return false;
-    if (stored_schema_version < 114U) CcCensusInit(sim);
+    if (stored_schema_version < 117U) CcCensusInit(sim);
     if (stored_schema_version < 79U) CcSimInitializeOccupations(sim);
     if (stored_schema_version < 34U) CcSimUpgradePlayerKnowledge(sim);
     if (stored_schema_version < 40U) CcPoniesInit(sim);

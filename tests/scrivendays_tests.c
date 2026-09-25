@@ -215,6 +215,10 @@ static bool FieldNotes(void)
     CHECK(Apply(CC_SCRIVEN_OBSERVE,t->id));
     const CcScrivenBook *b=CcScrivenBookById(&sim,t->id);
     CHECK(sim.current_day==day+1 && b->notes[0].day==day);
+    CHECK(sim.crown_calendar.sighting_count==1 && sim.crown_calendar.sightings[0].day==day);
+    CHECK(sim.crown_calendar.company_sighting.day==day && sim.crown_calendar.editions==0);
+    char description[512]; CcScrivenDescribe(&sim,description,sizeof(description));
+    CHECK(strstr(description,"Crown Age year 1") && strstr(description,"Scribes will compare"));
     CHECK(b->notes[2].kind==CC_SCRIVEN_NOTE_GOBLINS);
     before=CcSimHash(&sim);
     CHECK(!Apply(CC_SCRIVEN_OBSERVE,t->id) && CcSimHash(&sim)==before);
@@ -243,6 +247,122 @@ static bool Schema112(void)
     copy.schema_version=112;
     copy.next_entity_serial -= CcCensusIssuedIdCount(&copy.census);
     CHECK(CcSimHash(&copy)==before);
+    return true;
+}
+static bool CrownAges(void)
+{
+    CcSimInit(&sim,313); sim.current_day=196;
+    sim.settlements[0].stock[CC_GOOD_PAPER]=100;
+    sim.settlements[0].stock[CC_GOOD_WHEAT]=100;
+    sim.settlements[0].stock[CC_GOOD_TOOLS]=100;
+    sim.player.cargo_capacity=100; sim.player.coins=100;
+    CcTreasure *a=Tome(&sim,0),*b=Tome(&sim,2),*held=Tome(&sim,0),*lost=Tome(&sim,3);
+    CHECK(a && b && held && lost);
+    CcScrivenBook *ba=(CcScrivenBook *)CcScrivenBookById(&sim,a->id);
+    CcScrivenBook *bb=(CcScrivenBook *)CcScrivenBookById(&sim,b->id);
+    CcScrivenBook *bl=(CcScrivenBook *)CcScrivenBookById(&sim,lost->id);
+    ba->notes[0]=(CcScrivenNote){.dragon_id=sim.dragon.id,.author_id=sim.characters[0].id,
+        .place_id=sim.dragon.lair_settlement_id,.source_book_id=a->id,.day=100,.kind=CC_SCRIVEN_NOTE_CROWNED};
+    bb->notes[0]=ba->notes[0];
+    bl->notes[0]=ba->notes[0]; bl->notes[0].day=40;
+    bl->notes[0].source_book_id=lost->id; bl->notes[0].author_id=sim.characters[2].id;
+    sim.scriven.host_id=sim.settlements[0].id; sim.scriven.status=2;
+    sim.scriven.meeting_year=0; sim.scriven.opens_day=196; sim.scriven.closes_day=202;
+    sim.player.location_id=sim.scriven.host_id;
+    held->owner_id=sim.player.id; ++sim.player.treasure_cargo_slots;
+    for(int i=0;i<2;++i) {
+        CcTreasure *t=i==0?a:b;
+        sim.scriven.delegates[i]=(CcScrivenDelegate){.person_id=sim.characters[i].id,.book_id=t->id,
+            .home_id=t->owner_id,.place_id=sim.scriven.host_id,.phase=CC_SCRIVEN_ATTENDING,.notice_day=140};
+        t->location_id=sim.characters[i].id;
+        sim.characters[i].current_settlement_id=sim.scriven.host_id;
+        sim.characters[i].travel_destination_id=0;
+    }
+    CHECK(Apply(CC_SCRIVEN_HEARING,0) && sim.crown_calendar.editions==0);
+    bb->notes[0].source_book_id=b->id;
+    CHECK(Apply(CC_SCRIVEN_HEARING,0) && sim.crown_calendar.editions==0); /* Same witness. */
+    bb->notes[0].author_id=sim.characters[1].id; bb->notes[0].day=120;
+    sim.scriven.delegates[1].place_id=sim.settlements[2].id;
+    CHECK(Apply(CC_SCRIVEN_HEARING,0) && sim.crown_calendar.editions==0);
+    sim.scriven.delegates[1].place_id=sim.scriven.host_id;
+    CHECK(Apply(CC_SCRIVEN_HEARING,0) && sim.crown_calendar.editions==1);
+    CHECK(sim.crown_calendar.company.proposed_day==100 && sim.crown_calendar.company.agreed_day==196);
+    CHECK(sim.crown_calendar.company.earliest_day==100 && sim.crown_calendar.company.latest_day==100);
+    CHECK(sim.crown_calendar.local[2].agreed_day==0);
+    /* The older page is still in another town. The register carries no public authority. */
+    CcCrownCalendarInit(&sim);
+    CHECK(sim.crown_calendar.sightings[0].day==40);
+    CHECK(Apply(CC_SCRIVEN_HEARING,0) && sim.crown_calendar.company.proposed_day==100);
+    CcScrivenFinding old=sim.crown_calendar.company;
+    CHECK(Apply(CC_SCRIVEN_COPY,held->id));
+    CcId copy_id=sim.treasures[sim.treasure_count-1].id;
+    const CcScrivenBook *copied=CcScrivenBookById(&sim,copy_id);
+    CHECK(sim.crown_calendar.book_editions[copied-sim.scriven.books]==1);
+    /* An earlier brought original revises the date and preserves the prior edition. */
+    lost->location_id=sim.scriven.host_id;
+    CHECK(Apply(CC_SCRIVEN_HEARING,0));
+    CHECK(sim.crown_calendar.editions==2 && sim.crown_calendar.company.proposed_day==40);
+    CHECK(memcmp(&old,&sim.crown_calendar.almanacs[0],sizeof(old))==0);
+    CHECK(sim.crown_calendar.book_editions[copied-sim.scriven.books]==1);
+    CHECK(Apply(CC_SCRIVEN_READ,copy_id) && sim.crown_calendar.company.proposed_day==100);
+    CHECK(Apply(CC_SCRIVEN_READ,held->id) && sim.crown_calendar.company.proposed_day==40);
+    bb->notes[1]=bb->notes[0]; bb->notes[1].kind=CC_SCRIVEN_NOTE_DEEP; bb->notes[1].day=180;
+    CHECK(Apply(CC_SCRIVEN_HEARING,0));
+    CHECK(sim.scriven.finding.agreed_day>0 && sim.crown_calendar.company.proposed_day==40);
+    sim.scriven.company=sim.scriven.finding;
+    char description[1024]; CcScrivenDescribe(&sim,description,sizeof(description));
+    CHECK(strstr(description,"Crown Age year 1") && strstr(description,"Deep Wyrm Epoch year 1"));
+    CHECK(RoundTrip());
+    sim.player.location_id=sim.settlements[1].id;
+    uint64_t before=CcSimHash(&sim);
+    CHECK(!Apply(CC_SCRIVEN_DELIVER,0) && CcSimHash(&sim)==before);
+    held->location_id=sim.player.location_id;
+    CHECK(Apply(CC_SCRIVEN_DELIVER,0));
+    CHECK(sim.crown_calendar.local[1].proposed_day==40);
+    CHECK(sim.scriven.local[1].proposed_day==sim.scriven.company.proposed_day);
+    held->location_id=sim.scriven.host_id; sim.player.location_id=sim.scriven.host_id;
+    sim.current_day=203;
+    sim.scriven.delegates[1].place_id=sim.settlements[2].id;
+    sim.characters[1].current_settlement_id=sim.settlements[2].id;
+    sim.scriven.delegates[1].phase=CC_SCRIVEN_RETURNING;
+    CcScrivenAdvance(&sim);
+    CHECK(sim.crown_calendar.local[2].proposed_day==40);
+    /* Reusing a destroyed tome's object slot clears its carried edition. */
+    CcId old_id=a->id;
+    int slot=(int)(ba-sim.scriven.books);
+    CHECK(sim.crown_calendar.book_editions[slot]>0);
+    sim.scriven.delegates[0].phase=CC_SCRIVEN_FINISHED; a->destroyed=true;
+    sim.dragon.life_stage=CC_DRAGON_STAGE_CROWNED; sim.dragon.age_days=1200*365;
+    sim.dragon.crown_continuity_days=800*365; sim.dragon.territory_stability=100;
+    sim.dragon.memory_integrity=100; sim.dragon_cult.devotion=100;
+    sim.dragon.hoard=5000; sim.dragon.hoard_goods[CC_GOOD_GOLD]=10; sim.dragon.hoard_goods[CC_GOOD_GEMS]=10;
+    CcSimAdvanceDays(&sim,1);
+    CHECK(sim.dragon.life_stage==CC_DRAGON_STAGE_DEEP_WYRM);
+    CHECK(CcScrivenBookById(&sim,old_id)==NULL && sim.crown_calendar.book_editions[slot]==0);
+    return true;
+}
+static bool CrownCodecAndLegacy(void)
+{
+    uint8_t bytes[CC_SCRIVEN_WIRE_CAPACITY],again[CC_SCRIVEN_WIRE_CAPACITY];
+    CcCrownCalendar recovered;
+    size_t length=CcCrownCalendarEncode(&sim.crown_calendar,bytes,sizeof(bytes)); CHECK(length>0);
+    CHECK(CcCrownCalendarDecode(&recovered,bytes,length));
+    CHECK(CcCrownCalendarEncode(&recovered,again,sizeof(again))==length && memcmp(bytes,again,length)==0);
+    CHECK(!CcCrownCalendarDecode(&recovered,bytes,length-1));
+    CHECK(!CcCrownCalendarDecode(&recovered,bytes,length+1));
+    bytes[0]=99; CHECK(!CcCrownCalendarDecode(&recovered,bytes,length)); bytes[0]=1;
+    uint64_t expected=CcCrownCalendarHash(&sim.crown_calendar);
+    for(size_t i=4;i<length;++i) {
+        bytes[i]^=1; CHECK(CcCrownCalendarDecode(&recovered,bytes,length));
+        CHECK(CcCrownCalendarHash(&recovered)!=expected); bytes[i]^=1;
+    }
+    CcSimInit(&sim,42); sim.schema_version=114; CcSimAdvanceDays(&sim,364);
+    CHECK(CcSimHash(&sim)==UINT64_C(13544121058959254427)); /* Captured from schema 114 code. */
+    unsigned char *data=NULL; size_t size=0;
+    CHECK(CcSaveEncode(&sim,&data,&size,error,sizeof(error)));
+    CHECK(CcSaveDecode(data,size,&copy,error,sizeof(error))); CcSaveFreeBuffer(data);
+    CHECK(copy.schema_version==115 && copy.crown_calendar.editions==0);
+    copy.schema_version=114; CHECK(CcSimHash(&copy)==CcSimHash(&sim));
     return true;
 }
 static bool Codec(void)
@@ -275,7 +395,7 @@ static bool DailyReplay(void)
 }
 int main(void)
 {
-    if(!Calendar() || !Books() || !HearingFixture() || !Codec() || !Expeditions() || !WatchAndCopy() || !FieldNotes() || !Schema112() || !DailyReplay()) return 1;
+    if(!Calendar() || !Books() || !HearingFixture() || !Codec() || !Expeditions() || !WatchAndCopy() || !FieldNotes() || !Schema112() || !CrownAges() || !CrownCodecAndLegacy() || !DailyReplay()) return 1;
     puts("Calendar, frozen passages, loans, evidence boundaries, codec, and daily replay passed.");
     return 0;
 }

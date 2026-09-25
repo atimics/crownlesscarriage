@@ -176,6 +176,11 @@ target_link_libraries(goblin_cult_split_tests PRIVATE crownless_persistence)
 cc_strict_warnings(goblin_cult_split_tests)
 add_test(NAME goblin_cult_split COMMAND goblin_cult_split_tests)
 
+add_executable(long_history_recovery_tests tests/long_history_recovery_tests.c)
+target_link_libraries(long_history_recovery_tests PRIVATE crownless_persistence)
+cc_strict_warnings(long_history_recovery_tests)
+add_test(NAME long_history_recovery COMMAND long_history_recovery_tests)
+
 add_executable(goblin_society_tests tests/goblin_society_tests.c)
 target_link_libraries(goblin_society_tests PRIVATE crownless_persistence)
 cc_strict_warnings(goblin_society_tests)

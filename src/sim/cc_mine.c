@@ -378,10 +378,12 @@ const char *CcMineAction(const CcSim *sim)
         if (Near(m,26,16)) {
             if (m->contest_active) return "Haulers engaged: fight or break contact";
             if (m->encounter_outcome == CC_MINE_ENCOUNTER_CONTESTED)
-                return "Take the defeated haulers' load";
+                return sim->schema_version >= 116U ? "The haulers have yielded" :
+                    "Take the defeated haulers' load";
             if (m->encounter_outcome == CC_MINE_ENCOUNTER_BARGAINED)
                 return "Gold paid from the hauler load";
-            return "Hungry goblin haulers: bargain or contest";
+            return sim->schema_version >= 116U ? "Goblin haulers: inspect or contest" :
+                "Hungry goblin haulers: bargain or contest";
         }
     }
     return NULL;
@@ -632,9 +634,11 @@ bool CcMineApply(CcSim *sim, const CcCommand *command, char *error, size_t capac
                 const CcDungeon *d=&sim->dungeons[0];
                 if (d->state == CC_DUNGEON_SEALED || d->state == CC_DUNGEON_RESEALED)
                     return Fail(error,capacity,"The mine mouth is sealed.");
-                if (CcNutritionAvailable(m->pack,CC_NUTRITION_TRAVEL) < CC_NUTRITION_PER_RATION)
-                    return Fail(error,capacity,"Carry one Bread or Meat from the carriage first.");
-                (void)CcNutritionConsume(m->pack,CC_NUTRITION_TRAVEL,CC_NUTRITION_PER_RATION);
+                if (sim->schema_version < 116U) {
+                    if (CcNutritionAvailable(m->pack,CC_NUTRITION_TRAVEL) < CC_NUTRITION_PER_RATION)
+                        return Fail(error,capacity,"Carry one Bread or Meat from the carriage first.");
+                    (void)CcNutritionConsume(m->pack,CC_NUTRITION_TRAVEL,CC_NUTRITION_PER_RATION);
+                }
                 m->phase=CC_MINE_LEVEL; m->x=5; m->y=4; m->light=18; m->steps=0; m->seen|=1U;
                 SpendMinutes(sim,1);
             } else if (m->phase == CC_MINE_LEVEL && Near(m,5,3)) {

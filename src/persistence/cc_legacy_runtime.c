@@ -773,5 +773,6 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
        separate paths; make the final living cast unique before validation. */
     MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version < 113U) CcScrivenInit(sim);
+    if (legacy_version < 115U) CcCrownCalendarInit(sim);
     return true;
 }
