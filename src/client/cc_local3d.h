@@ -590,6 +590,17 @@ void CcLocalCreatureGaitsAdvanceInternal(int32_t steps);
    now rather than where it was last frame. */
 void CcLocalRoadTravelHorseTargetsInternal(const CcSim *sim,
     const CcLocalConvoyState *convoy, float clock);
+/* The remaining local-only road scenes: each publishes its team's (and any
+   met pony's) gait targets from the same placement math its draw site uses,
+   so those draw sites no longer need to publish anything themselves. */
+void CcLocalRoadForkHorseTargetsInternal(const CcSim *sim,
+    int32_t selected_route, float turn_progress, float clock);
+void CcLocalRoadEncounterHorseTargetsInternal(const CcSim *sim, float clock);
+void CcLocalRoadSiteHorseTargetsInternal(const CcSim *sim,
+    CcLocalSiteKind site, bool travelling, bool returning, float progress,
+    float clock);
+void CcLocalRoadConvoyHorseTargetsInternal(const CcSim *sim,
+    const CcLocalConvoyState *convoy, float clock);
 /* Fraction of a fixed step remaining in the local accumulator: the subframe
    alpha for presentation interpolation. */
 float CcLocalCourseAlpha(const CcLocalCourse *course);

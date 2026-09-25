@@ -211,6 +211,29 @@ static void PublishRoadHorseTargets(const RoadHorsePlacement *placements,
     }
 }
 
+/* The extra pony met on the road, walking beside a hitched team. Every
+   local-only carriage scene shares this placement, so one helper publishes
+   it for all of them instead of each draw site doing it itself. */
+static void PublishRoadPonyOnRoadTarget(const CcSim *sim, Vector3 base,
+                                        float yaw, float pace,
+                                        bool bridge_checkpoint,
+                                        CcLocalSceneKind scene, float clock)
+{
+    if (sim == NULL || active_world_stream != NULL ||
+        CcPonyOnRoad(sim) < 0) {
+        return;
+    }
+    bool follow_ground = (active_world_stream != NULL ||
+                          scene == CC_LOCAL_SCENE_STREET) && !bridge_checkpoint;
+    Vector3 position = LocalPoint(base, 2.7f, 0.0f, 3.3f, yaw);
+    if (follow_ground) {
+        position.y = CcLocalTerrainHeightAt(position.x, position.z);
+    }
+    (void)CcLocalCreatureGaitTargetInternal(
+        CREATURE_GAIT_ROAD_PONY, CC_CREATURE_RIG_HORSE, RoadHorseRigGait(pace),
+        clock, 0.25f, position, yaw, 0.96f, scene);
+}
+
 /* The travelling carriage base: the same anchor the road-book draw uses, so
    the update can publish targets without a draw-time pose. */
 static Vector3 RoadTravelCarriageBase(const CcSim *sim,
@@ -242,20 +265,21 @@ void CcLocalRoadTravelHorseTargetsInternal(const CcSim *sim,
             placements[i].initial_phase, placements[i].base, yaw,
             placements[i].rig_scale, sim->journey.route_id, pace, 1.0f / 60.0f);
     }
+    PublishRoadPonyOnRoadTarget(sim, base, yaw, pace, false,
+                               CC_LOCAL_SCENE_ROAD, clock);
 }
 
 /* Pace still says which gait the team is in; the road says how fast it steps.
    A cadence in beats a second is a guess about speed, and it was wrong every
    time the carriage was not doing exactly what the guess assumed -- feet
    walking on the spot at a halt, skating at a canter. */
-static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
+static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base,
                               float pace, float travelled,
                               float yaw, float pitch, float sway,
                               bool bridge_checkpoint, CcLocalSceneKind scene,
                               float vehicle_scale)
 {
     CcClientConvoyGait convoy_gait = CcClientConvoyGaitForPace(pace);
-    CcCreatureRigGait rig_gait = RoadHorseRigGait(pace);
     bool moving = convoy_gait != CC_CLIENT_CONVOY_GAIT_HALT;
     float stride_phase = CcLocalRoadTeamGaitPhaseInternal(travelled);
     CcCreaturePose left_pose = CcCreatureSteppedPose(
@@ -265,13 +289,9 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base, float clock,
     RoadHorsePlacement placements[2];
     int32_t count = RoadHorsePlacements(sim, base, yaw, bridge_checkpoint,
                                         scene, vehicle_scale, placements);
-    /* Open-world targets belong to the update path, in world coordinates.
-       Local-only scenes retain their legacy publisher until migrated. */
-    if (active_world_stream == NULL && !(sim->journey.active &&
-        !bridge_checkpoint && scene == CC_LOCAL_SCENE_ROAD && count > 0 &&
-        creature_gaits[placements[0].slot].travel_route == sim->journey.route_id)) {
-        PublishRoadHorseTargets(placements, count, rig_gait, clock, yaw, scene);
-    }
+    /* Every caller now publishes this team's targets from the update path
+       (CcLocalRoadTravelHorseTargetsInternal and its local-only siblings),
+       so drawing only ever reads the already-published pose. */
     for (int32_t i = 0; i < count; ++i) {
         int32_t horse = placements[i].horse;
         Vector3 horse_base = placements[i].base;
@@ -453,7 +473,7 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     DrawCarriedCargoBoxes(player, base, yaw, vehicle_scale);
     if (follow_ground) rlPopMatrix();
     if (horses_hitched) {
-        DrawRoadHorseTeam(sim, base, clock, pace, travelled, yaw,
+        DrawRoadHorseTeam(sim, base, pace, travelled, yaw,
                           chassis_pitch, chassis_sway,
                           bridge_checkpoint, scene, vehicle_scale);
         int32_t pony = CcPonyOnRoad(sim);
@@ -463,16 +483,11 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
                                           3.3f * vehicle_scale, yaw);
             if (follow_ground) position.y = CcLocalTerrainHeightAt(position.x, position.z);
             CcClientConvoyGait gait = CcClientConvoyGaitForPace(pace);
-            CcCreatureRigGait rig_gait = gait == CC_CLIENT_CONVOY_GAIT_CANTER ?
-                CC_CREATURE_RIG_GAIT_CANTER : gait == CC_CLIENT_CONVOY_GAIT_TROT ?
-                CC_CREATURE_RIG_GAIT_TROT : CC_CREATURE_RIG_GAIT_WALK;
             bool moving = gait != CC_CLIENT_CONVOY_GAIT_HALT;
+            /* Every caller publishes this pony's target from the update
+               path now (PublishRoadPonyOnRoadTarget), so this only reads
+               the pose the last publish established. */
             CcCreatureRigPose controlled_pose;
-            if (active_world_stream == NULL) {
-                (void)CcLocalCreatureGaitTargetInternal(
-                    CREATURE_GAIT_ROAD_PONY, CC_CREATURE_RIG_HORSE, rig_gait,
-                    clock, 0.25f, position, yaw, pony_scale, scene);
-            }
             bool controlled = CcLocalCreatureGaitPoseInternal(
                 CREATURE_GAIT_ROAD_PONY, position, yaw, &controlled_pose);
             float phase = CcLocalRoadTeamGaitPhaseInternal(travelled) + 0.5f * PI;
@@ -650,6 +665,87 @@ static void DrawForkSignpost(Vector3 junction, Vector3 branch_end,
                              (Color){132, 91, 54, 255});
 }
 
+/* The endpoint of the selected outgoing branch, junction relative. Shared by
+   the draw route loop and the update-path publisher so both agree on where
+   the carriage is turning toward. */
+static bool ForkSelectedBranchEnd(const CcSim *sim, int32_t selected_route,
+                                  Vector3 *branch_end)
+{
+    if (sim == NULL) return false;
+    int32_t branch_count = 0;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (ForkRouteLeaves(sim, &sim->routes[i])) branch_count += 1;
+    }
+    int32_t ordinal = 0;
+    for (int32_t i = 0; i < sim->route_count; ++i) {
+        if (!ForkRouteLeaves(sim, &sim->routes[i])) continue;
+        Vector2 endpoint = CcLocalForkBranchEndInternal(ordinal, branch_count);
+        if (i == selected_route) {
+            *branch_end = (Vector3){endpoint.x, 0.0f, endpoint.y};
+            return true;
+        }
+        ordinal += 1;
+    }
+    return false;
+}
+
+/* Where the fork carriage stands for a given turn progress: the same math
+   the draw site uses to place the carriage and, from it, the hitched team. */
+static void ForkCarriagePose(const CcSim *sim, int32_t selected_route,
+                             float turn_progress, Vector3 *carriage,
+                             float *carriage_heading, float *carriage_travel)
+{
+    const Vector3 carriage_start = {29.0f, 0.0f, 41.0f};
+    const Vector3 junction = {50.5f, 0.0f, 40.0f};
+    float turn = SmoothStep01(turn_progress);
+    Vector3 selected_branch_end = junction;
+    bool selected_branch_found = ForkSelectedBranchEnd(
+        sim, selected_route, &selected_branch_end);
+    float branch_heading = 0.5f * PI;
+    if (selected_branch_found) {
+        branch_heading = atan2f(selected_branch_end.x - junction.x,
+                                selected_branch_end.z - junction.z);
+    }
+    /* The turn is two lerped legs, so the ground under the wheels is the
+       first leg plus however much of the second has been driven. */
+    float approach_length = Vector3Distance(carriage_start, junction);
+    if (turn < 0.68f || !selected_branch_found) {
+        float amount = fminf(1.0f, turn / 0.68f);
+        *carriage = Vector3Lerp(carriage_start, junction, amount);
+        *carriage_heading = 0.5f * PI;
+        *carriage_travel = approach_length * amount;
+    } else {
+        float amount = (turn - 0.68f) / 0.32f;
+        *carriage = Vector3Lerp(junction, selected_branch_end,
+                                amount * 0.24f);
+        *carriage_heading = 0.5f * PI +
+            WrapAngle(branch_heading - 0.5f * PI) * SmoothStep01(amount);
+        *carriage_travel = approach_length +
+            Vector3Distance(junction, selected_branch_end) * amount * 0.24f;
+    }
+}
+
+void CcLocalRoadForkHorseTargetsInternal(const CcSim *sim,
+                                         int32_t selected_route,
+                                         float turn_progress, float clock)
+{
+    if (sim == NULL || active_world_stream != NULL) return;
+    Vector3 carriage;
+    float carriage_heading;
+    float carriage_travel;
+    ForkCarriagePose(sim, selected_route, turn_progress, &carriage,
+                     &carriage_heading, &carriage_travel);
+    float pace = SmoothStep01(turn_progress) < 1.0f ? 0.72f : 0.0f;
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, carriage, carriage_heading,
+                                        false, CC_LOCAL_SCENE_ROAD, 1.0f,
+                                        placements);
+    PublishRoadHorseTargets(placements, count, RoadHorseRigGait(pace), clock,
+                            carriage_heading, CC_LOCAL_SCENE_ROAD);
+    PublishRoadPonyOnRoadTarget(sim, carriage, carriage_heading, pace, false,
+                               CC_LOCAL_SCENE_ROAD, clock);
+}
+
 void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t selected_route,
                        float turn_progress, float clock,
                        RenderTexture2D target,
@@ -691,8 +787,6 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
     for (int32_t i = 0; i < sim->route_count; ++i) {
         if (ForkRouteLeaves(sim, &sim->routes[i])) branch_count += 1;
     }
-    Vector3 selected_branch_end = junction;
-    bool selected_branch_found = false;
     int32_t ordinal = 0;
     for (int32_t i = 0; i < sim->route_count; ++i) {
         const CcRoute *route = &sim->routes[i];
@@ -707,8 +801,6 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
                        (Color){77, 61, 47, 255}, decay);
         bool selected = i == selected_route;
         if (selected) {
-            selected_branch_end = branch_end;
-            selected_branch_found = true;
             road = BlendColor(road, WORLD_GOLD, 0.30f);
         }
         float width = (route->smuggler_route ? 2.8f : 4.2f) +
@@ -761,36 +853,15 @@ void CcLocalDrawFork3D(const CcSim *sim, const CcLocalAgent *agent, int32_t sele
                  family, leaves, tree_style);
     }
 
-    Vector3 carriage_start = {29.0f, 0.0f, 41.0f};
-    float turn = SmoothStep01(turn_progress);
-    float branch_heading = 0.5f * PI;
-    if (selected_branch_found) {
-        branch_heading = atan2f(selected_branch_end.x - junction.x,
-                                selected_branch_end.z - junction.z);
-    }
     Vector3 carriage;
     float carriage_heading;
-    /* The turn is two lerped legs, so the ground under the wheels is the
-       first leg plus however much of the second has been driven. */
-    float approach_length = Vector3Distance(carriage_start, junction);
     float carriage_travel;
-    if (turn < 0.68f || !selected_branch_found) {
-        float amount = fminf(1.0f, turn / 0.68f);
-        carriage = Vector3Lerp(carriage_start, junction, amount);
-        carriage_heading = 0.5f * PI;
-        carriage_travel = approach_length * amount;
-    } else {
-        float amount = (turn - 0.68f) / 0.32f;
-        carriage = Vector3Lerp(junction, selected_branch_end,
-                               amount * 0.24f);
-        carriage_heading = 0.5f * PI +
-            WrapAngle(branch_heading - 0.5f * PI) * SmoothStep01(amount);
-        carriage_travel = approach_length +
-            Vector3Distance(junction, selected_branch_end) * amount * 0.24f;
-    }
+    ForkCarriagePose(sim, selected_route, turn_progress, &carriage,
+                     &carriage_heading, &carriage_travel);
     DrawRoadCarriage(carriage, sim, clock,
-                     turn < 1.0f ? 0.72f : 0.0f, carriage_travel,
-                     carriage_heading, true, false, CC_LOCAL_SCENE_ROAD, 1.0f, carriage_travel);
+                     SmoothStep01(turn_progress) < 1.0f ? 0.72f : 0.0f,
+                     carriage_travel, carriage_heading, true, false,
+                     CC_LOCAL_SCENE_ROAD, 1.0f, carriage_travel);
     DrawVisibleNpcFigure3D(
         (Vector3){33.0f, 0.0f, 35.6f}, 0.90f, 1.42f,
         UINT32_C(0x666f726b), CC_NPC_ROLE_SCOUT, kingdom,
@@ -1145,6 +1216,29 @@ float CcLocalRoadCarriageX(int32_t progress_milli)
             (float)progress_milli *
                 (float)ROAD_BOOK_CARRIAGE_PRESENTATION_SPAN_MILLI / 1000.0f) /
         1000.0f;
+}
+
+/* The stopped encounter/combat/parley carriage: the halted team sits at a
+   fixed nominal spot (optionally on the authored bridge checkpoint) rather
+   than the travelling anchor. The travelling case publishes separately from
+   CcLocalRoadTravelHorseTargetsInternal, so this only covers !travelling. */
+void CcLocalRoadEncounterHorseTargetsInternal(const CcSim *sim, float clock)
+{
+    if (sim == NULL || active_world_stream != NULL) return;
+    PrepareRuntimeAssets(UINT32_C(1) << RUNTIME_ASSET_BRIDGE);
+    bool bridge_checkpoint = runtime_assets[RUNTIME_ASSET_BRIDGE].ready;
+    const float yaw = 0.5f * PI;
+    Vector3 base = {CcLocalRoadEncounterCarriageXInternal(), 0.0f, 40.0f};
+    if (bridge_checkpoint) {
+        base.y += CcLocalRoadCheckpointSurfaceYInternal(base.x, base.z);
+    }
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, base, yaw, bridge_checkpoint,
+                                        CC_LOCAL_SCENE_ROAD, 1.0f, placements);
+    PublishRoadHorseTargets(placements, count, RoadHorseRigGait(0.0f), clock,
+                            yaw, CC_LOCAL_SCENE_ROAD);
+    PublishRoadPonyOnRoadTarget(sim, base, yaw, 0.0f, bridge_checkpoint,
+                               CC_LOCAL_SCENE_ROAD, clock);
 }
 
 void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
@@ -1891,6 +1985,34 @@ Camera3D CcLocalSiteCamera(const CcSim *sim, const CcLocalAgent *agent,
         art_height);
 }
 
+/* The remote-site carriage: parked outside the site, or driving the approach
+   road out to or back from it. The dragon cave has no carriage at all, so it
+   never hitches a team either. */
+void CcLocalRoadSiteHorseTargetsInternal(const CcSim *sim,
+                                         CcLocalSiteKind site, bool travelling,
+                                         bool returning, float progress,
+                                         float clock)
+{
+    if (sim == NULL || active_world_stream != NULL ||
+        site == CC_LOCAL_SITE_NONE || site == CC_LOCAL_SITE_DRAGON_CAVE) {
+        return;
+    }
+    float amount = fmaxf(0.0f, fminf(1.0f, progress));
+    float carriage_x = travelling ?
+        returning ? 62.0f - amount * 40.0f : 22.0f + amount * 40.0f :
+        CC_LOCAL_SITE_CARRIAGE_X;
+    Vector3 base = {carriage_x, 0.0f, CC_LOCAL_SITE_CARRIAGE_Z};
+    float yaw = returning ? -0.5f * PI : 0.5f * PI;
+    float pace = travelling ? 0.72f : 0.0f;
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, base, yaw, false,
+                                        CC_LOCAL_SCENE_ROAD, 1.0f, placements);
+    PublishRoadHorseTargets(placements, count, RoadHorseRigGait(pace), clock,
+                            yaw, CC_LOCAL_SCENE_ROAD);
+    PublishRoadPonyOnRoadTarget(sim, base, yaw, pace, false,
+                               CC_LOCAL_SCENE_ROAD, clock);
+}
+
 void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
                        CcLocalSiteKind site, bool travelling,
                        bool returning, float progress, float clock,
@@ -2120,6 +2242,31 @@ static void DrawSettlementCreatures(const CcSim *sim,
             DragonCourtHairColor(&sim->dragon));
     }
 
+}
+
+/* The town-street convoy: the carriage driving in or out of town while
+   departing or arriving. Parked (or any other phase) has no carriage on the
+   street, so there is nothing to publish. */
+void CcLocalRoadConvoyHorseTargetsInternal(const CcSim *sim,
+                                           const CcLocalConvoyState *convoy,
+                                           float clock)
+{
+    if (sim == NULL || convoy == NULL || active_world_stream != NULL ||
+        (convoy->phase != CC_LOCAL_CONVOY_DEPARTING &&
+         convoy->phase != CC_LOCAL_CONVOY_ARRIVING)) {
+        return;
+    }
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, convoy->town_position,
+                                        convoy->town_heading_yaw, false,
+                                        CC_LOCAL_SCENE_STREET, 1.0f,
+                                        placements);
+    PublishRoadHorseTargets(placements, count, RoadHorseRigGait(convoy->pace),
+                            clock, convoy->town_heading_yaw,
+                            CC_LOCAL_SCENE_STREET);
+    PublishRoadPonyOnRoadTarget(sim, convoy->town_position,
+                               convoy->town_heading_yaw, convoy->pace, false,
+                               CC_LOCAL_SCENE_STREET, clock);
 }
 
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,

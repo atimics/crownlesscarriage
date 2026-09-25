@@ -109,3 +109,139 @@ static void TestCarriageDrawReadOnly(void)
     memset(creature_gaits, 0, sizeof(creature_gaits));
     puts("PASS repeated world carriage DRAW: no gait/controller mutation");
 }
+
+/* GFX-03: the remaining local-only road scenes now publish their team's
+   gait targets from the update path (CcLocalRoad*HorseTargetsInternal), so
+   drawing each one twice in a row must not touch the gait caches at all. */
+static void CheckRoadSceneDrawReadOnly(const CreatureGaitCache *before,
+                                       const char *scene)
+{
+    const int slots[] = {CREATURE_GAIT_ROAD_HORSE_LEFT,
+        CREATURE_GAIT_ROAD_HORSE_RIGHT, CREATURE_GAIT_ROAD_PONY};
+    for (int i = 0; i < 3; ++i) {
+        RequireRenderer(memcmp(&before[slots[i]], &creature_gaits[slots[i]],
+                               sizeof(CreatureGaitCache)) == 0, scene);
+    }
+}
+
+static void TestForkDrawReadOnly(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcLocalBindPlace(&sim);
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    int32_t selected_route = -1;
+    for (int32_t i = 0; i < sim.route_count; ++i) {
+        if (ForkRouteLeaves(&sim, &sim.routes[i])) { selected_route = i; break; }
+    }
+    RequireRenderer(selected_route >= 0, "fork fixture needs an outgoing route");
+    CcLocalAgent agent = {.position = {40.0f, 0.0f, 40.0f}};
+    float turn_progress = 0.35f;
+    CcLocalRoadForkHorseTargetsInternal(&sim, selected_route, turn_progress, 1.0f);
+    CcLocalCreatureGaitsAdvanceInternal(1);
+    CreatureGaitCache before[CREATURE_GAIT_SLOT_COUNT];
+    memcpy(before, creature_gaits, sizeof(before));
+    RenderTexture2D target = LoadRenderTexture(320, 180);
+    for (int draw = 0; draw < 2; ++draw) {
+        BeginDrawing();
+        CcLocalDrawFork3D(&sim, &agent, selected_route, turn_progress, 1.0f,
+                          target, (Rectangle){0, 0, 320, 180});
+        EndDrawing();
+    }
+    CheckRoadSceneDrawReadOnly(before,
+        "drawing the fork carriage changed pony gait state");
+    UnloadRenderTexture(target);
+    CcLocalBindPlace(NULL);
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    puts("PASS repeated fork carriage DRAW: no gait/controller mutation");
+}
+
+static void TestEncounterDrawReadOnly(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcLocalBindPlace(&sim);
+    static CcLocalCourse course;
+    CcLocalCourseInit(&course);
+    CcLocalAgent agent = {.position = {40.0f, 0.0f, 38.0f}};
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    CcLocalRoadEncounterHorseTargetsInternal(&sim, 1.0f);
+    CcLocalCreatureGaitsAdvanceInternal(1);
+    CreatureGaitCache before[CREATURE_GAIT_SLOT_COUNT];
+    memcpy(before, creature_gaits, sizeof(before));
+    RenderTexture2D target = LoadRenderTexture(320, 180);
+    for (int draw = 0; draw < 2; ++draw) {
+        BeginDrawing();
+        CcLocalDrawRoad3D(&sim, &agent, &course, false, false, NULL, 1.0f,
+                          target, (Rectangle){0, 0, 320, 180});
+        EndDrawing();
+    }
+    CheckRoadSceneDrawReadOnly(before,
+        "drawing the encounter/combat/parley carriage changed pony gait state");
+    UnloadRenderTexture(target);
+    CcLocalBindPlace(NULL);
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    puts("PASS repeated encounter carriage DRAW: no gait/controller mutation");
+}
+
+static void TestSiteDrawReadOnly(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcLocalBindPlace(&sim);
+    CcLocalAgent agent = {.position =
+        {CC_LOCAL_SITE_ENTRANCE_X - 3.0f, 0.0f, CC_LOCAL_SITE_ENTRANCE_Z}};
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    CcLocalSiteKind site = CC_LOCAL_SITE_GOBLIN_CAVE;
+    CcLocalRoadSiteHorseTargetsInternal(&sim, site, false, false, 0.0f, 1.0f);
+    CcLocalCreatureGaitsAdvanceInternal(1);
+    CreatureGaitCache before[CREATURE_GAIT_SLOT_COUNT];
+    memcpy(before, creature_gaits, sizeof(before));
+    RenderTexture2D target = LoadRenderTexture(320, 180);
+    for (int draw = 0; draw < 2; ++draw) {
+        BeginDrawing();
+        CcLocalDrawSite3D(&sim, &agent, site, false, false, 0.0f, 1.0f,
+                         target, (Rectangle){0, 0, 320, 180});
+        EndDrawing();
+    }
+    CheckRoadSceneDrawReadOnly(before,
+        "drawing the remote-site carriage changed pony gait state");
+    UnloadRenderTexture(target);
+    CcLocalBindPlace(NULL);
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    puts("PASS repeated remote-site carriage DRAW: no gait/controller mutation");
+}
+
+static void TestConvoyDrawReadOnly(void)
+{
+    static CcSim sim;
+    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    CcLocalBindPlace(&sim);
+    static CcLocalCourse course;
+    CcLocalCourseInit(&course);
+    CcLocalAgent agent = {.position = {40.0f, 0.0f, 40.0f}};
+    CcLocalConvoyState convoy = {0};
+    convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
+    convoy.pace = 0.4f;
+    convoy.town_position = (Vector3){50.0f, 0.0f, 35.0f};
+    convoy.town_heading_yaw = 0.2f;
+    convoy.travelled = 12.0f;
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    CcLocalRoadConvoyHorseTargetsInternal(&sim, &convoy, 1.0f);
+    CcLocalCreatureGaitsAdvanceInternal(1);
+    CreatureGaitCache before[CREATURE_GAIT_SLOT_COUNT];
+    memcpy(before, creature_gaits, sizeof(before));
+    RenderTexture2D target = LoadRenderTexture(320, 180);
+    for (int draw = 0; draw < 2; ++draw) {
+        BeginDrawing();
+        CcLocalDrawStreet3D(&sim, &agent, &course, false, &convoy, 1.0f,
+                           target, (Rectangle){0, 0, 320, 180});
+        EndDrawing();
+    }
+    CheckRoadSceneDrawReadOnly(before,
+        "drawing the town-street convoy changed pony gait state");
+    UnloadRenderTexture(target);
+    CcLocalBindPlace(NULL);
+    memset(creature_gaits, 0, sizeof(creature_gaits));
+    puts("PASS repeated town-street convoy DRAW: no gait/controller mutation");
+}

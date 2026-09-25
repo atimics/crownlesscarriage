@@ -12529,6 +12529,35 @@ int main(int argc, char **argv)
                 CcLocalOpenWorldCarriageScaleInternal(&sim, &local.world_carriage));
         }
 
+        /* The remaining local-only road scenes (fork, encounter/combat/
+           parley, remote site, town-street convoy) still draw a hitched
+           team, but the open-world and travelling cases above already own
+           their targets. Publish each one here, once, from the same state
+           its own draw call below will use, so those draw calls can stay
+           read-only. Each publisher no-ops when its scene is not the one
+           actually active this frame. */
+        if (!local.open_world && (view == VIEW_ROADS ||
+                ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
+                 return_view == VIEW_ROADS))) {
+            CcLocalRoadForkHorseTargetsInternal(
+                &sim, selected, local.fork_turn_progress, clock);
+        }
+        {
+            bool road_scene_travelling = local.road_choice_active ||
+                local.journey_travel_active;
+            bool road_scene_active = view == VIEW_ENCOUNTER ||
+                (road_scene_travelling &&
+                 local.convoy.phase == CC_LOCAL_CONVOY_ROAD) ||
+                local.journey_combat_active || local.journey_parley_active;
+            if (road_scene_active && !road_scene_travelling) {
+                CcLocalRoadEncounterHorseTargetsInternal(&sim, clock);
+            }
+        }
+        CcLocalRoadSiteHorseTargetsInternal(&sim, local.site_kind,
+            local.site_travel_active, local.site_returning,
+            local.site_travel_progress, clock);
+        CcLocalRoadConvoyHorseTargetsInternal(&sim, &local.convoy, clock);
+
         bool map_visible = view == VIEW_MAP ||
             ((view == VIEW_LEDGER || view == VIEW_SITUATIONS) &&
              return_view == VIEW_MAP);

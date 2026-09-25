@@ -2,6 +2,8 @@
 
 Follow-up to the 20–21 September graphics review and PRs #859, #861,
 #863, #865, #867, #869 and #870. The integration review is on #870.
+GFX-03's remaining local-only road scenes moved to the update path in the
+24 September follow-up; see the last section.
 
 ## Active world travel
 
@@ -69,9 +71,52 @@ draws the same open-world carriage twice under a real graphics context and
 checks that its pony controller/command caches do not change.
 
 This is not a new renderer or a change to the campaign's travel-rate rules.
-The legacy local-only fork, encounter, remote-site and stable/cow publishers
-still have draw-time publication; migrating those consumers remains separate
-work. Full passenger skeletal tilt/seat fit, an ordinary-control out-and-back
+Full passenger skeletal tilt/seat fit, an ordinary-control out-and-back
 video, browser/GPU variation and contact quality during the complete arrival
 blend still require visual review. Passing a helper or framebuffer test is
 not that review.
+
+## Remaining road scenes moved to the update path (24 September)
+
+The fork, encounter/combat/parley, remote-site and town-street convoy
+(arrival/departure) scenes drew a hitched team but published its gait
+targets at draw time, the same ordering issue the travel path had before
+the fix above. They now publish from the update path too, before that
+frame's draw dispatch in `main.c`:
+
+- `CcLocalRoadForkHorseTargetsInternal` shares the fork carriage's turn/
+  branch math with `CcLocalDrawFork3D` through a new `ForkCarriagePose`
+  helper (built on `ForkSelectedBranchEnd`), the same way
+  `RoadTravelCarriageBase` keeps the travelling draw and its publisher in
+  step.
+- `CcLocalRoadEncounterHorseTargetsInternal` covers the stopped encounter,
+  combat and parley carriage (`CcLocalDrawRoad3D`'s `!travelling` case); the
+  travelling case is unchanged, still published by
+  `CcLocalRoadTravelHorseTargetsInternal`.
+- `CcLocalRoadSiteHorseTargetsInternal` covers the remote-site carriage
+  (`CcLocalDrawSite3D`), parked or driving the approach road; it is a no-op
+  for the dragon cave, which never hitches a team.
+- `CcLocalRoadConvoyHorseTargetsInternal` covers the town-street convoy
+  (`CcLocalDrawStreet3D`'s `convoy_visible` case) while departing or
+  arriving.
+
+Each publisher also covers the "pony on the road" (a met pony walking
+beside the team) through a new shared `PublishRoadPonyOnRoadTarget`, so
+`DrawRoadCarriage`'s pony-on-road block, like `DrawRoadHorseTeam`, is now a
+pure read (`CcLocalCreatureGaitPoseInternal` only). Every caller of both
+functions -- travel, fork, encounter/combat/parley, remote site, and the
+town-street convoy -- now publishes from the update path, so the old
+draw-time guard in `DrawRoadHorseTeam` was removed outright rather than
+extended.
+
+`renderer_regression_tests --carriage-graphics` gained one draw-twice check
+per scene (`TestForkDrawReadOnly`, `TestEncounterDrawReadOnly`,
+`TestSiteDrawReadOnly`, `TestConvoyDrawReadOnly`), alongside the existing
+open-world check. All five scenes captured pixel-identical before and after
+except arrival, whose small (132/972800 pixel) difference reproduces
+between two runs of the same unchanged binary and is unrelated jitter, not
+a regression. See `docs/reviews/gfx03-road-scenes-2026-09-24/`.
+
+The stable/cow publishers (`DrawStableHorseTeam` and the roadside/street cow
+targets) still publish at draw time; migrating those is separate work, as
+before.
