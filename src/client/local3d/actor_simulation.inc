@@ -5313,8 +5313,14 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                              physical_speed < 0.02f);
         if (target_distance < 0.025f && gait_settled &&
             fabsf(agent->position.y - agent->target_point.y) < 0.12f) {
-            agent->exact_target_valid = false;
-            agent->command_point_valid = false;
+            if (agent->navigation_active) {
+                /* At a tight corner the next leg may need the full waypoint.
+                   Reaching it advances the route after the early turn check. */
+                (void)AdvanceAgentNavigation(agent);
+            } else {
+                agent->exact_target_valid = false;
+                agent->command_point_valid = false;
+            }
             target_distance = 0.0f;
         }
     }
