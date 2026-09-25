@@ -156,7 +156,12 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        # Several tests keep more than one 1.7 MB CcSim on the stack, and
+        # cc_large_sim_stack() only raises the stack on Windows toolchains.
+        # Match the local play suite, which runs under a raised stack limit.
+        run: |
+          ulimit -s unlimited
+          ctest --test-dir build --output-on-failure
 
   # The matrix below re-runs this same non-client suite (plus the full
   # client/graphics suite in the `client` job) on every release tag, across
