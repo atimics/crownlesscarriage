@@ -63,4 +63,15 @@ typedef struct CcScrivenState {
 } CcScrivenState;
 _Static_assert(sizeof(CcScrivenState) == 47952,
     "Review the scriven codec, save migration, validation, and hash when fields change");
+
+/* Crown ages use witnessed dates. The older scriven findings retain the
+   separately investigated Deep Wyrm epochs. Each edition travels in a tome. */
+typedef struct CcCrownCalendar {
+    CcScrivenNote sightings[CC_SCRIVEN_AGES], company_sighting;
+    CcScrivenFinding almanacs[32], local[6], company;
+    uint64_t book_editions[CC_SCRIVEN_BOOKS];
+    int32_t sighting_count, editions;
+} CcCrownCalendar;
+_Static_assert(sizeof(CcCrownCalendar) == 22136,
+    "Review the Crown Age codec, save migration, validation, and hash when fields change");
 #endif
