@@ -5,3 +5,8 @@ if(NOT MSVC)
 endif()
 cc_strict_warnings(local_shops_tests)
 add_test(NAME town_specialist_shops COMMAND local_shops_tests)
+
+add_executable(supply_trade_tests tests/supply_trade_tests.c)
+target_link_libraries(supply_trade_tests PRIVATE crownless_persistence)
+cc_strict_warnings(supply_trade_tests)
+add_test(NAME paid_workshop_deliveries COMMAND supply_trade_tests)

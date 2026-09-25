@@ -1,3 +1,13 @@
+/* Producer buybacks stay below the fixed source price. Paid workshop orders
+   have their own bounded quote. */
+int32_t CcSimTradeResalePrice(const CcSim *sim, const CcSettlement *town, CcGood good)
+{
+    if (sim == NULL || town == NULL || good < 0 || good >= CC_GOOD_COUNT) return 0;
+    if (sim->schema_version >= 117U &&
+        (good == CC_GOOD_WHEAT || good == CC_GOOD_RAW_STONE)) return 2;
+    return MaximumI32(1, town->price[good] * 3 / 4);
+}
+
 /* Local paid deliveries have a finite order shared by every player. */
 void CcSimInitializeSupplyEconomy(CcSim *sim)
 {
@@ -31,7 +41,9 @@ CcSupplyOffer CcSimSupplyOffer(const CcSim *sim, CcGood good)
     bool source = wheat || (town->function == CC_SETTLEMENT_MINING &&
         CcSettlementHasService(town, CC_SERVICE_MINE));
     offer.source_available = source ? town->stock[good] : 0;
-    offer.ready = !wheat || CcSettlementHasService(town, CC_SERVICE_BAKERY);
+    /* The small shop order uses its own daily labor allowance. The town
+       service flag describes the larger civic production works. */
+    offer.ready = true;
     int order = wheat ? 0 : 1;
     int32_t filled = town->supply_order_day[order] == sim->current_day ?
         town->supply_order_filled[order] : 0;

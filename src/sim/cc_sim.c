@@ -17157,7 +17157,7 @@ static bool ApplyTrade(CcSim *sim, const CcCommand *command,
             SetError(error, error_capacity, "The carriage does not carry that cargo.");
             return false;
         }
-        int32_t sale_price = MaximumI32(1, price * 3 / 4);
+        int32_t sale_price = CcSimTradeResalePrice(sim, settlement, command->good);
         CcMoney proceeds = (CcMoney)selling * (CcMoney)sale_price;
         if (settlement->market_coins < proceeds) {
             SetError(error, error_capacity,
@@ -17253,7 +17253,7 @@ static bool ApplyGoblinTrade(CcSim *sim, const CcCommand *command,
         SetError(error, error_capacity, "The goblin lair cannot be reached.");
         return false;
     }
-    int32_t unit_price = MaximumI32(1, lair->price[command->good] * 3 / 4);
+    int32_t unit_price = CcSimTradeResalePrice(sim, lair, command->good);
     CcMoney proceeds = (CcMoney)unit_price * command->amount;
     if (lair->market_coins < proceeds) {
         SetError(error, error_capacity,

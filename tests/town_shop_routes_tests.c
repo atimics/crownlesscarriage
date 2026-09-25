@@ -50,6 +50,8 @@ int main(void)
                 CcLocalPlaceProfileForSettlement(&sim.settlements[town]);
             for (int32_t kind = 0; kind < CC_LOCAL_SHOP_COUNT; ++kind) {
                 const CcLocalShop *shop = CcLocalShopAt(profile, (CcLocalShopKind)kind);
+                if (kind == CC_LOCAL_SHOP_MINE_SUPPLIER &&
+                    profile->function != CC_SETTLEMENT_MINING) continue;
                 if (shop == NULL) {
                     (void)fprintf(stderr, "%s: shop %d needs a building\n",
                         sim.settlements[town].name, kind);
