@@ -4763,22 +4763,9 @@ static ContextActionSet BuildContextActions(
                 if (reason[0] == '\0')
                     (void)snprintf(reason, sizeof(reason), "%s", option_reason);
             }
-            int32_t road_slot = set.count;
             AddDetailedContextAction(&set, CONTEXT_ACTION_CHOOSE_ROAD,
                 "Choose a road", "", passable ? "OPEN THE DEPARTURE ROAD" :
                 reason, passable, false);
-            /* An empty town has nine shop doors. Keep the way out on the
-               first page, after any relief step. */
-            if (set.count > road_slot) {
-                int32_t first_target = 0;
-                while (first_target < road_slot &&
-                       set.items[first_target].kind != CONTEXT_ACTION_WORLD_TARGET)
-                    ++first_target;
-                ContextAction road = set.items[road_slot];
-                for (int32_t i = road_slot; i > first_target; --i)
-                    set.items[i] = set.items[i - 1];
-                set.items[first_target] = road;
-            }
         }
         if (NearParkedCarriage(sim, local)) AddHorseCareAction(&set, sim);
         if (local->world_cards_presented && (local->interaction.approaching ||
@@ -4841,25 +4828,42 @@ static ContextActionSet BuildContextActions(
             set = steady;
         }
         if (set.count > 4) {
-            for (int i = 4; i < set.count; ++i)
-                if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES) {
-                    ContextAction care = set.items[i];
-                    for (int j = i; j > 3; --j) set.items[j] = set.items[j - 1];
-                    set.items[3] = care;
-                    break;
+            /* Nine shop doors must not push the way out or stable care off
+               the first page. The carriage, the road and stable care take
+               the last page-one slots in that order. Every frame uses the
+               same slots, so a card does not move between reading and tap. */
+            int pinned[3], pinned_count = 0;
+            for (int kind = 0; kind < 3; ++kind)
+                for (int i = 0; i < set.count; ++i) {
+                    const ContextAction *item = &set.items[i];
+                    bool match = kind == 0 ?
+                        item->kind == CONTEXT_ACTION_WORLD_TARGET &&
+                            item->target.kind == CC_INTERACTION_CARRIAGE :
+                        kind == 1 ? item->kind == CONTEXT_ACTION_CHOOSE_ROAD :
+                        item->kind == CONTEXT_ACTION_CARE_HORSES;
+                    if (match) { pinned[pinned_count++] = i; break; }
                 }
-            /* Nine shop doors must not push the carriage off the first
-               page. Put it just before stable care when care is shown. */
-            int slot = set.items[3].kind == CONTEXT_ACTION_CARE_HORSES ? 2 : 3;
-            for (int i = slot + 1; i < set.count; ++i)
-                if (set.items[i].kind == CONTEXT_ACTION_WORLD_TARGET &&
-                    set.items[i].target.kind == CC_INTERACTION_CARRIAGE) {
-                    /* Swap, so stable care and earlier cards keep their slots. */
-                    ContextAction carriage = set.items[i];
-                    set.items[i] = set.items[slot];
-                    set.items[slot] = carriage;
-                    break;
+            if (pinned_count > 0) {
+                ContextActionSet ordered = set;
+                int lead = 4 - pinned_count, count = 0, others = 0;
+                for (int pass = 0; pass < 2; ++pass) {
+                    if (pass == 1)
+                        for (int j = 0; j < pinned_count; ++j)
+                            ordered.items[count++] = set.items[pinned[j]];
+                    for (int i = 0; i < set.count; ++i) {
+                        bool is_pinned = false;
+                        for (int j = 0; j < pinned_count; ++j)
+                            if (pinned[j] == i) is_pinned = true;
+                        if (is_pinned) continue;
+                        /* Pass 0 fills the lead slots; pass 1 adds the rest. */
+                        if ((pass == 0) == (others < lead))
+                            ordered.items[count++] = set.items[i];
+                        ++others;
+                    }
+                    others = 0;
                 }
+                set = ordered;
+            }
         }
         return set;
     }
