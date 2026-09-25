@@ -189,6 +189,7 @@ cc_strict_warnings(crownless_creature_catalog)
 
 add_library(crownless_local_place
     src/client/cc_local_place.c
+    src/client/cc_local_shops.c
 )
 target_include_directories(crownless_local_place PUBLIC src)
 cc_strict_warnings(crownless_local_place)
