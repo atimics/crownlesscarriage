@@ -36,11 +36,23 @@ typedef enum CcGateVoiceEvidence {
     CC_GATE_EVIDENCE_FACE    /* the speaker is a face the company remembers */
 } CcGateVoiceEvidence;
 
+/* The spoken gate order: a greeting, what happened, why, and who said so.
+   A line's clauses never go backwards in this order. */
+typedef enum CcGateVoicePart {
+    CC_GATE_PART_GREETING = 0,
+    CC_GATE_PART_EVENT,
+    CC_GATE_PART_CAUSE,
+    CC_GATE_PART_SOURCE
+} CcGateVoicePart;
+
 typedef struct CcGateVoiceClause {
     char text[CC_GATE_VOICE_CLAUSE_CAPACITY];
+    CcGateVoicePart part;
     CcGateVoiceEvidence evidence;
     /* The story's event, the source's id, the town, or the face. */
     CcId evidence_id;
+    /* The clause also reads the town as it is now (how much burned). */
+    bool town_state;
 } CcGateVoiceClause;
 
 /* A typed fact from the held account, as in tools/dialogue/fact_policy.py. */
@@ -119,5 +131,6 @@ bool CcGateVoiceToldCommand(const CcGateVoice *voice, CcCommand *command);
 bool CcGateVoiceSpeech(const CcSim *sim, const CcGateVoice *voice,
                        CcSpeech *speech);
 const char *CcGateVoiceEvidenceName(CcGateVoiceEvidence evidence);
+const char *CcGateVoicePartName(CcGateVoicePart part);
 
 #endif

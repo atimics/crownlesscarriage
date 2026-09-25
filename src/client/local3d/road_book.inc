@@ -2314,7 +2314,9 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     const CcLocalAgent *conversation_partner =
         conversation && conversation_focus_active ? &conversation_focus_agent :
         conversation && course != NULL && course->situation_witness_active ?
-            &course->situation_witness : NULL;
+            &course->situation_witness :
+        /* The Return: frame the resident speaking at the gate. */
+        course != NULL && course->gate_speaker_active ? &course->gate_speaker : NULL;
     camera = CcLocalConversationCameraInternal(
         camera, camera_subject, conversation_partner,
         conversation_partner != NULL, clock, true, target.texture.height);

@@ -55,8 +55,10 @@ static void PrintVoice(const CcGateVoice *voice)
                      voice->chosen_fact, voice->fact_count);
     (void)printf("\n");
     for (int32_t i = 0; i < voice->clause_count; ++i)
-        (void)printf("     - %-6s %llu: %s\n",
+        (void)printf("     - %-8s %-6s%s %llu: %s\n",
+                     CcGateVoicePartName(voice->clauses[i].part),
                      CcGateVoiceEvidenceName(voice->clauses[i].evidence),
+                     voice->clauses[i].town_state ? "+town" : "",
                      (unsigned long long)voice->clauses[i].evidence_id,
                      voice->clauses[i].text);
 }

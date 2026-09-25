@@ -122,14 +122,17 @@ static void Copy(char *out, size_t capacity, const char *text)
     (void)snprintf(out, capacity, "%s", text != NULL ? text : "");
 }
 
-static bool AddClause(CcGateVoice *voice, CcGateVoiceEvidence evidence,
-                      CcId evidence_id, const char *text)
+static bool AddClause(CcGateVoice *voice, CcGateVoicePart part,
+                      CcGateVoiceEvidence evidence, CcId evidence_id,
+                      bool town_state, const char *text)
 {
     if (voice->clause_count >= CC_GATE_VOICE_CLAUSES || text[0] == '\0') return false;
     CcGateVoiceClause *clause = &voice->clauses[voice->clause_count++];
     Copy(clause->text, sizeof(clause->text), text);
+    clause->part = part;
     clause->evidence = evidence;
     clause->evidence_id = evidence_id;
+    clause->town_state = town_state;
     return true;
 }
 
@@ -158,6 +161,13 @@ static void SelectFact(CcGateVoice *voice, const CcCoreAccount *account,
             voice->chosen_fact = voice->fact_count;
         ++voice->fact_count;
     }
+}
+
+static const CcGateVoiceFact *FactInRole(const CcGateVoice *voice, CcCoreRole role)
+{
+    for (int32_t i = 0; i < voice->fact_count; ++i)
+        if (voice->facts[i].role == role) return &voice->facts[i];
+    return NULL;
 }
 
 static void FirstName(const char *name, char *out, size_t capacity)
@@ -211,75 +221,50 @@ static void TrimPeriod(char *text)
         text[--length] = '\0';
 }
 
-/* The resident's own telling, through the account grammar. */
-static bool SayHeard(const CcSim *sim, const CcCharacter *speaker,
-                     CcGateVoice *voice)
+static bool WordEdge(char c)
 {
-    const CcGossip *story = CcSimGossipStory(sim, voice->story_slot);
-    const CcGossipCarrier *carrier = CcSimGossipCarrier(sim, speaker->id);
-    if (story == NULL || carrier == NULL) return false;
-    const CcGossipVersion *version = &carrier->versions[voice->story_slot];
-    voice->version = *version;
-    voice->confidence = version->confidence;
+    return !isalnum((unsigned char)c) && c != '\'';
+}
 
-    /* The telling without court stance or alarm: those are opinion. */
-    CcGossipVersion plain = *version;
-    plain.court_bias = 0;
-    plain.alarm = 0;
-    char telling[CC_EVENT_TEXT_CAPACITY];
-    CcGossipText(sim, story, &plain, telling, sizeof(telling));
-    CcCoreAccount account;
-    if (!CcCoreAccountPrepare(story->kind, telling, version->confidence,
-                              version->retellings, &account)) return false;
-
-    bool witnessed = version->source_character_id == speaker->id;
-    CcGateVoiceCertainty certainty = witnessed ? CC_GATE_CERTAIN_WITNESSED :
-        version->confidence >= 40 ? CC_GATE_CERTAIN_TOLD : CC_GATE_CERTAIN_DOUBTFUL;
-    SelectFact(voice, &account, certainty);
-    /* A doubtful answer to the asked role is withheld: the renderer says
-       "someone" or "somewhere" rather than repeat a shaky name. */
-    if (voice->chosen_fact >= 0 &&
-        voice->facts[voice->chosen_fact].certainty == CC_GATE_CERTAIN_DOUBTFUL)
-        account.fields[voice->facts[voice->chosen_fact].field].knowledge = CC_CORE_COARSE;
-
-    uint32_t variant = (uint32_t)((speaker->id ^ story->event_id) & 1U);
-    char claim[CC_SPEECH_TEXT_CAPACITY];
-    if (!CcCoreAccountRender(&account, variant, claim, sizeof(claim)) || claim[0] == '\0')
-        return false;
-    TrimPeriod(claim);
-
-    char who[CC_GATE_VOICE_CLAUSE_CAPACITY] = "";
-    CcId source = version->source_character_id;
-    bool named = !witnessed && source != 0U && source != sim->player.id;
-    if (named) SourcePhrase(sim, source, voice->settlement_id, who, sizeof(who),
-                            voice->source_name, sizeof(voice->source_name));
-    if (who[0] == '\0') named = false;
-
-    char text[CC_GATE_VOICE_CLAUSE_CAPACITY];
-    int32_t confidence = version->confidence;
-    if (witnessed) {
-        (void)snprintf(text, sizeof(text), "%s.", claim);
-        (void)AddClause(voice, CC_GATE_EVIDENCE_STORY, story->event_id, text);
-        (void)AddClause(voice, CC_GATE_EVIDENCE_SOURCE, speaker->id, "I saw it myself.");
-        return true;
+/* A resident does not name their own town: "in Gloamgate" becomes "here" and
+   "Gloamgate" becomes "the town". Only whole names are replaced. */
+static void Localize(char *text, size_t capacity, const char *town)
+{
+    size_t town_length = town != NULL ? strlen(town) : 0U;
+    if (town_length == 0U) return;
+    char out[CC_SPEECH_TEXT_CAPACITY];
+    size_t used = 0U;
+    for (const char *at = text; *at != '\0' && used + 16U < sizeof(out);) {
+        bool start = at == text || WordEdge(at[-1]);
+        const char *swap = NULL;
+        size_t skip = 0U;
+        if (strncmp(at, " in ", 4U) == 0 && strncmp(at + 4, town, town_length) == 0 &&
+            WordEdge(at[4 + town_length]) && at[4 + town_length] != '\'') {
+            swap = " here";
+            skip = 4U + town_length;
+        } else if (start && strncmp(at, town, town_length) == 0 &&
+                   (WordEdge(at[town_length]) || at[town_length] == '\'')) {
+            swap = at == text ? "The town" : "the town";
+            skip = town_length;
+        }
+        if (swap != NULL) {
+            size_t length = strlen(swap);
+            if (used + length >= sizeof(out)) break;
+            memcpy(out + used, swap, length);
+            used += length;
+            at += skip;
+        } else {
+            out[used++] = *at++;
+        }
     }
-    if (named) {
-        (void)snprintf(text, sizeof(text), "%s", claim);
-        (void)AddClause(voice, CC_GATE_EVIDENCE_STORY, story->event_id, text);
-        if (confidence >= 70)
-            (void)snprintf(text, sizeof(text), ". %s told me so.", who);
-        else if (confidence >= 40)
-            (void)snprintf(text, sizeof(text), ", or so %s says.", who);
-        else
-            (void)snprintf(text, sizeof(text), ", if %s has it right.", who);
-        (void)AddClause(voice, CC_GATE_EVIDENCE_SOURCE, source, text);
-        return true;
-    }
-    (void)snprintf(text, sizeof(text), "%s%s", claim,
-                   confidence >= 70 ? ", I hear." :
-                   confidence >= 40 ? ", so people say." : ", if the story is right.");
-    (void)AddClause(voice, CC_GATE_EVIDENCE_STORY, story->event_id, text);
-    return true;
+    out[used] = '\0';
+    (void)snprintf(text, capacity, "%s", out);
+}
+
+static const char *FireExtent(int32_t damage)
+{
+    return damage >= 60 ? "most of the town" : damage >= 40 ? "half the town" :
+        damage >= 20 ? "part of the town" : "a corner of the town";
 }
 
 static const char *GoodWord(int32_t good)
@@ -293,12 +278,12 @@ static void Lower(char *text)
 }
 
 /* What anyone at the gate can see for themselves. Every value here comes
-   from the change, which compares the town now with the company's record. */
+   from the change, which compares the town now with the company's record,
+   or from the town's stalls now. */
 static bool SaySeen(const CcSim *sim, CcGateVoice *voice)
 {
     const CcReturnChange *change = &voice->change;
     const CcSettlement *place = CcSimSettlement(sim, voice->settlement_id);
-    const char *town = place != NULL ? place->name : "the town";
     char text[CC_GATE_VOICE_CLAUSE_CAPACITY];
     char good[CC_NAME_CAPACITY];
     Copy(good, sizeof(good), GoodWord(change->detail));
@@ -308,11 +293,10 @@ static bool SaySeen(const CcSim *sim, CcGateVoice *voice)
     int32_t a = change->after;
     switch (change->kind) {
     case CC_RETURN_CHANGE_ABANDONED:
-        (void)snprintf(text, sizeof(text), "Hardly anyone lives in %s now.", town);
+        (void)snprintf(text, sizeof(text), "Hardly anyone lives here now.");
         break;
     case CC_RETURN_CHANGE_FIRE:
-        (void)snprintf(text, sizeof(text), "Fire burned %s of %s.",
-                       a >= 60 ? "most" : a >= 25 ? "a good part" : "part", town);
+        (void)snprintf(text, sizeof(text), "Fire took %s.", FireExtent(a));
         break;
     case CC_RETURN_CHANGE_REBUILT:
         (void)snprintf(text, sizeof(text), "The builders have mended %s of the fire damage.",
@@ -337,11 +321,13 @@ static bool SaySeen(const CcSim *sim, CcGateVoice *voice)
         if (subject == NULL) return false;
         (void)snprintf(text, sizeof(text), "%s does not live here any more.", subject);
         break;
-    case CC_RETURN_CHANGE_HUNGER:
-        (void)snprintf(text, sizeof(text), "%s",
-                       a >= 50 ? "People here are going hungry." :
-                                 "Food is short here now.");
+    case CC_RETURN_CHANGE_HUNGER: {
+        /* Concrete first: the empty bread stall, then the hunger. */
+        bool no_bread = place != NULL && place->stock[CC_GOOD_BREAD] == 0;
+        (void)snprintf(text, sizeof(text), "%s%s", no_bread ? "Bread's gone. " : "",
+                       a >= 50 ? "People are going hungry here." : "Food is short here.");
         break;
+    }
     case CC_RETURN_CHANGE_FED:
         (void)snprintf(text, sizeof(text), "There is more to eat here now.");
         break;
@@ -398,7 +384,7 @@ static bool SaySeen(const CcSim *sim, CcGateVoice *voice)
             Copy(also, sizeof(also), GoodWord(g));
             Lower(also);
         }
-        (void)snprintf(text, sizeof(text), "There is no %s%s%s to buy in the market.",
+        (void)snprintf(text, sizeof(text), "There's no %s%s%s in the market.",
                        good, also[0] != '\0' ? " or " : "", also);
         break;
     }
@@ -414,27 +400,197 @@ static bool SaySeen(const CcSim *sim, CcGateVoice *voice)
     default:
         return false;
     }
-    voice->confidence = 100;
-    return AddClause(voice, CC_GATE_EVIDENCE_TOWN, voice->settlement_id, text);
+    if (voice->telling == CC_GATE_VOICE_SEEN) voice->confidence = 100;
+    return AddClause(voice, CC_GATE_PART_EVENT, CC_GATE_EVIDENCE_TOWN,
+                     voice->settlement_id, true, text);
 }
 
-/* Changes whose story is the cause, not the change itself: the resident says
-   what is plain to see first, then the story behind it. */
-static bool StoryIsCause(CcReturnChangeKind kind)
+/* How the speaker came by the story. */
+typedef struct HeardFrom {
+    CcId story_id;
+    CcId source_id;
+    int32_t confidence;
+    bool witnessed;
+    bool named;
+    char who[CC_GATE_VOICE_CLAUSE_CAPACITY];
+} HeardFrom;
+
+/* Add the last story clause with its hedge and, when there is one, who said
+   so: "..., I hear.", "... — I heard it from Thora at the inn.", or
+   "... I saw it myself." A clause that already hedges ("Folk say ...") does
+   not hedge twice. */
+static void AddAttributed(CcGateVoice *voice, const HeardFrom *from,
+                          CcGateVoicePart part, bool town_state,
+                          const char *text, bool hedged)
 {
-    switch (kind) {
-    case CC_RETURN_CHANGE_ABANDONED:
-    case CC_RETURN_CHANGE_FIRE:
-    case CC_RETURN_CHANGE_REBUILT:
-    case CC_RETURN_CHANGE_NEW_RULER:
-    case CC_RETURN_CHANGE_NEW_KINGDOM:
-    case CC_RETURN_CHANGE_FACE_DIED:
-    case CC_RETURN_CHANGE_HUNGER:
-    case CC_RETURN_CHANGE_DRAGON_OMEN:
-        return false;
-    default:
+    char clause[CC_GATE_VOICE_CLAUSE_CAPACITY];
+    int32_t c = from->confidence;
+    if (from->witnessed) {
+        (void)snprintf(clause, sizeof(clause), "%s.", text);
+        (void)AddClause(voice, part, CC_GATE_EVIDENCE_STORY, from->story_id, town_state, clause);
+        (void)AddClause(voice, CC_GATE_PART_SOURCE, CC_GATE_EVIDENCE_SOURCE,
+                        from->source_id, false, "I saw it myself.");
+        return;
+    }
+    if (from->named) {
+        (void)AddClause(voice, part, CC_GATE_EVIDENCE_STORY, from->story_id, town_state, text);
+        if (c >= 70)
+            (void)snprintf(clause, sizeof(clause), "— %s told me.", from->who);
+        else if (c >= 40)
+            (void)snprintf(clause, sizeof(clause), "— I heard it from %s.", from->who);
+        else
+            (void)snprintf(clause, sizeof(clause), "— %s said so, but I'm not sure of it.",
+                           from->who);
+        (void)AddClause(voice, CC_GATE_PART_SOURCE, CC_GATE_EVIDENCE_SOURCE,
+                        from->source_id, false, clause);
+        return;
+    }
+    (void)snprintf(clause, sizeof(clause), "%s%s", text,
+                   hedged ? (c >= 40 ? "." : ", if the story's true.") :
+                   c >= 70 ? ", I hear." : c >= 40 ? ", so people say." :
+                   ", if the story's true.");
+    (void)AddClause(voice, part, CC_GATE_EVIDENCE_STORY, from->story_id, town_state, clause);
+}
+
+/* The why of a held account, when its grammar rule carries one. The account
+   matched the rule in full, so the rule's fixed words are part of what the
+   speaker holds. */
+static const char *CauseOf(const char *rule)
+{
+    if (strcmp(rule, "dragon_retaliation_0") == 0) return "over missing hoard money";
+    return NULL;
+}
+
+/* Whether a held story is the change itself, told as an event; otherwise it
+   is the reason behind a change anyone can see. */
+static bool StoryIsEvent(CcReturnChangeKind change, CcEventKind story)
+{
+    switch (change) {
+    case CC_RETURN_CHANGE_FIRE: return story == CC_EVENT_DRAGON_RETALIATION;
+    case CC_RETURN_CHANGE_NEW_RULER: return story == CC_EVENT_ROYAL_SUCCESSION;
+    case CC_RETURN_CHANGE_FACE_DIED: return story == CC_EVENT_CHARACTER_DIED;
+    case CC_RETURN_CHANGE_DRAGON_OMEN: return story == CC_EVENT_DRAGON_OMEN;
+    case CC_RETURN_CHANGE_REBUILT: return story == CC_EVENT_MASONRY_REPAIR;
+    case CC_RETURN_CHANGE_SERVICE_OPENED: return story == CC_EVENT_SERVICE_OPENED;
+    default: return false;
+    }
+}
+
+/* Render the held account with the actor first when a wording allows it:
+   say what happened before why. */
+static bool RenderEventFirst(const CcCoreAccount *account, const CcGateVoiceFact *actor,
+                             bool actor_named, char *text, size_t capacity)
+{
+    char variants[2][CC_SPEECH_TEXT_CAPACITY];
+    bool ok[2];
+    for (uint32_t v = 0U; v < 2U; ++v)
+        ok[v] = CcCoreAccountRender(account, v, variants[v], sizeof(variants[v])) &&
+            variants[v][0] != '\0';
+    int32_t pick = ok[0] ? 0 : ok[1] ? 1 : -1;
+    if (pick < 0) return false;
+    if (ok[0] && ok[1]) {
+        const char *lead = actor != NULL && actor_named ? actor->value : "Someone";
+        size_t length = strlen(lead);
+        bool first0 = strncmp(variants[0], lead, length) == 0;
+        bool first1 = strncmp(variants[1], lead, length) == 0;
+        if (!first0 && first1) pick = 1;
+    }
+    (void)snprintf(text, capacity, "%s", variants[pick]);
+    return true;
+}
+
+/* The resident's own telling, spoken in gate order: what happened, why, and
+   who said so. */
+static bool SayHeard(const CcSim *sim, const CcCharacter *speaker,
+                     CcGateVoice *voice)
+{
+    const CcGossip *story = CcSimGossipStory(sim, voice->story_slot);
+    const CcGossipCarrier *carrier = CcSimGossipCarrier(sim, speaker->id);
+    if (story == NULL || carrier == NULL) return false;
+    const CcGossipVersion *version = &carrier->versions[voice->story_slot];
+    voice->version = *version;
+    voice->confidence = version->confidence;
+
+    /* The telling without court stance or alarm: those are opinion. */
+    CcGossipVersion plain = *version;
+    plain.court_bias = 0;
+    plain.alarm = 0;
+    char telling[CC_EVENT_TEXT_CAPACITY];
+    CcGossipText(sim, story, &plain, telling, sizeof(telling));
+    CcCoreAccount account;
+    if (!CcCoreAccountPrepare(story->kind, telling, version->confidence,
+                              version->retellings, &account)) return false;
+
+    HeardFrom from = {.story_id = story->event_id,
+                      .source_id = version->source_character_id,
+                      .confidence = version->confidence};
+    from.witnessed = version->source_character_id == speaker->id;
+    CcGateVoiceCertainty certainty = from.witnessed ? CC_GATE_CERTAIN_WITNESSED :
+        version->confidence >= 40 ? CC_GATE_CERTAIN_TOLD : CC_GATE_CERTAIN_DOUBTFUL;
+    SelectFact(voice, &account, certainty);
+    /* A doubtful answer to the asked role is withheld: the renderer says
+       "someone" or "somewhere" rather than repeat a shaky name. */
+    bool withheld = voice->chosen_fact >= 0 &&
+        voice->facts[voice->chosen_fact].certainty == CC_GATE_CERTAIN_DOUBTFUL;
+    if (withheld)
+        account.fields[voice->facts[voice->chosen_fact].field].knowledge = CC_CORE_COARSE;
+    from.named = !from.witnessed && from.source_id != 0U && from.source_id != sim->player.id;
+    if (from.named) SourcePhrase(sim, from.source_id, voice->settlement_id, from.who,
+                                 sizeof(from.who), voice->source_name,
+                                 sizeof(voice->source_name));
+    if (from.who[0] == '\0') from.named = false;
+
+    const CcSettlement *place = CcSimSettlement(sim, voice->settlement_id);
+    const char *town = place != NULL ? place->name : "";
+    const CcGateVoiceFact *actor = FactInRole(voice, CC_CORE_ACTOR);
+    const CcGateVoiceFact *where = FactInRole(voice, CC_CORE_PLACE);
+    bool here = where == NULL || strcmp(where->value, town) == 0;
+    bool actor_named = actor != NULL && !withheld;
+    const char *cause = CauseOf(CcCoreAccountRule(&account));
+    char text[CC_GATE_VOICE_CLAUSE_CAPACITY];
+
+    /* A story that only names this town adds nothing to what the speaker
+       can see: say that, plainly. The story still counts as told. */
+    bool only_here = voice->fact_count > 0;
+    for (int32_t i = 0; i < voice->fact_count; ++i)
+        if (voice->facts[i].role != CC_CORE_PLACE || strcmp(voice->facts[i].value, town) != 0)
+            only_here = false;
+    if (only_here) return SaySeen(sim, voice);
+
+    char claim[CC_SPEECH_TEXT_CAPACITY];
+    if (!RenderEventFirst(&account, actor, actor_named, claim, sizeof(claim))) return false;
+    TrimPeriod(claim);
+    Localize(claim, sizeof(claim), town);
+
+    if (voice->change.kind == CC_RETURN_CHANGE_FIRE && here && cause != NULL &&
+        StoryIsEvent(voice->change.kind, story->kind)) {
+        /* The gate render mode for a burning: who burned how much of the
+           town, then why, then who said so. */
+        bool from_story = actor_named;
+        if (actor_named)
+            (void)snprintf(text, sizeof(text), "%s burned %s.", actor->value,
+                           FireExtent(voice->change.after));
+        else
+            (void)snprintf(text, sizeof(text), "Fire took %s.",
+                           FireExtent(voice->change.after));
+        (void)AddClause(voice, CC_GATE_PART_EVENT,
+                        from_story ? CC_GATE_EVIDENCE_STORY : CC_GATE_EVIDENCE_TOWN,
+                        from_story ? story->event_id : voice->settlement_id, true, text);
+        bool hedged = !from.witnessed && version->confidence < 70;
+        (void)snprintf(text, sizeof(text), "%s was %s",
+                       !hedged ? "It" : version->confidence >= 40 ? "Folk say it" :
+                       "Some say it", cause);
+        AddAttributed(voice, &from, CC_GATE_PART_CAUSE, false, text, hedged);
         return true;
     }
+    if (StoryIsEvent(voice->change.kind, story->kind)) {
+        AddAttributed(voice, &from, CC_GATE_PART_EVENT, false, claim, false);
+        return true;
+    }
+    /* The story is the reason: the visible change first, then the story. */
+    if (!SaySeen(sim, voice)) return false;
+    AddAttributed(voice, &from, CC_GATE_PART_CAUSE, false, claim, false);
+    return true;
 }
 
 static void JoinLine(CcGateVoice *voice)
@@ -481,13 +637,10 @@ bool CcGateVoiceSay(const CcSim *sim, CcId speaker_id,
     if (!Holds(sim, speaker->id, voice->story_slot)) voice->story_slot = -1;
 
     if (voice->remembered_face)
-        (void)AddClause(voice, CC_GATE_EVIDENCE_FACE, speaker->id, "You're back.");
+        (void)AddClause(voice, CC_GATE_PART_GREETING, CC_GATE_EVIDENCE_FACE,
+                        speaker->id, false, "You're back.");
     int32_t opening = voice->clause_count;
     voice->telling = CC_GATE_VOICE_HEARD;
-    if (voice->story_slot >= 0 && StoryIsCause(change->kind)) {
-        /* The visible change leads; the heard cause follows. */
-        if (!SaySeen(sim, voice)) voice->clause_count = opening;
-    }
     if (voice->story_slot < 0 || !SayHeard(sim, speaker, voice)) {
         /* Not their story, or not one the grammar can say: fall back to
            what is plain to see. */
@@ -588,6 +741,17 @@ const char *CcGateVoiceEvidenceName(CcGateVoiceEvidence evidence)
     case CC_GATE_EVIDENCE_SOURCE: return "source";
     case CC_GATE_EVIDENCE_TOWN: return "town";
     case CC_GATE_EVIDENCE_FACE: return "face";
+    default: return "none";
+    }
+}
+
+const char *CcGateVoicePartName(CcGateVoicePart part)
+{
+    switch (part) {
+    case CC_GATE_PART_GREETING: return "greeting";
+    case CC_GATE_PART_EVENT: return "event";
+    case CC_GATE_PART_CAUSE: return "cause";
+    case CC_GATE_PART_SOURCE: return "source";
     default: return "none";
     }
 }

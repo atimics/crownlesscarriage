@@ -95,6 +95,7 @@ static void CheckEvidence(const CcSim *world, const CcGateVoice *voice)
             break;
         case CC_GATE_EVIDENCE_TOWN:
             CC_CHECK(clause->evidence_id == voice->settlement_id);
+            CC_CHECK(clause->town_state);
             break;
         case CC_GATE_EVIDENCE_FACE: {
             bool remembered = false;
@@ -106,7 +107,28 @@ static void CheckEvidence(const CcSim *world, const CcGateVoice *voice)
         default:
             CC_CHECK(false);
         }
+        /* Words that read the town now must match the town now. */
+        const CcSettlement *place = CcSimSettlement(world, voice->settlement_id);
+        CC_CHECK(place != NULL);
+        if (strstr(clause->text, "Bread's gone") != NULL)
+            CC_CHECK(clause->town_state && place->stock[CC_GOOD_BREAD] == 0);
+        if (strstr(clause->text, "going hungry") != NULL)
+            CC_CHECK(clause->town_state && place->hunger >= 50);
+        if (strstr(clause->text, "most of the town") != NULL)
+            CC_CHECK(clause->town_state && place->fire_damage >= 60);
     }
+    /* Gate order: greeting, what happened, why, who said so. An event always
+       comes before its cause or source. */
+    bool event = false;
+    for (int32_t i = 0; i < voice->clause_count; ++i) {
+        if (i > 0) CC_CHECK(voice->clauses[i].part >= voice->clauses[i - 1].part);
+        if (voice->clauses[i].part == CC_GATE_PART_EVENT) event = true;
+        if (voice->clauses[i].part >= CC_GATE_PART_CAUSE) CC_CHECK(event);
+    }
+    CC_CHECK(event);
+    /* Residents do not name their own town to a visitor. */
+    const CcSettlement *home = CcSimSettlement(world, voice->settlement_id);
+    CC_CHECK(strstr(voice->line, home->name) == NULL);
 }
 
 /* Thornford to Silverwick and back to Gloamgate after a year (seed 4 burns
@@ -137,8 +159,15 @@ static void CheckRouteVoice(void)
     CC_CHECK(voice.change.kind == CC_RETURN_CHANGE_FIRE);
     CC_CHECK(voice.telling == CC_GATE_VOICE_HEARD);
     CC_CHECK(voice.speaker_id != 0U && voice.speaker[0] != '\0');
-    CC_CHECK(strstr(voice.line, "Gloamgate") != NULL);
-    CC_CHECK(strstr(voice.line, sim.dragon.name) != NULL);
+    /* What happened comes first, then why: "Varkesh ... burned most of the
+       town. It was over missing hoard money, I hear." */
+    CC_CHECK(strncmp(voice.line, sim.dragon.name, strlen(sim.dragon.name)) == 0);
+    CC_CHECK(strstr(voice.line, "burned most of the town.") != NULL);
+    CC_CHECK(voice.clause_count == 2);
+    CC_CHECK(voice.clauses[0].part == CC_GATE_PART_EVENT);
+    CC_CHECK(voice.clauses[0].evidence == CC_GATE_EVIDENCE_STORY);
+    CC_CHECK(voice.clauses[1].part == CC_GATE_PART_CAUSE);
+    CC_CHECK(strstr(voice.clauses[1].text, "missing hoard money") != NULL);
     /* Fact selection asked who did it and chose the dragon. */
     CC_CHECK(voice.asked_role == CC_CORE_ACTOR);
     CC_CHECK(voice.chosen_fact >= 0);
@@ -174,6 +203,9 @@ static void CheckRouteVoice(void)
     CC_CHECK(voice.more);
     CC_CHECK(CcGateVoiceNext(&sim, &voice));
     CC_CHECK(voice.change.kind == next->kind);
+    CC_CHECK(voice.change.kind == CC_RETURN_CHANGE_HUNGER);
+    /* Concrete and personal, from the town's stalls and hunger now. */
+    CC_CHECK(strcmp(voice.line, "Bread's gone. People are going hungry here.") == 0);
     CheckEvidence(&sim, &voice);
     (void)printf("%s: \"%s\"\n", voice.speaker, voice.line);
     CC_CHECK(CcGateVoiceBegin(&sim, town, &again));
@@ -287,8 +319,7 @@ static void CheckWitnessedFallback(void)
     CC_CHECK(voice.story_slot < 0);
     CC_CHECK(voice.clause_count == 1);
     CC_CHECK(voice.clauses[0].evidence == CC_GATE_EVIDENCE_TOWN);
-    CC_CHECK(strstr(voice.line, "Fire burned most of") != NULL);
-    CC_CHECK(strstr(voice.line, sim.settlements[0].name) != NULL);
+    CC_CHECK(strcmp(voice.line, "Fire took most of the town.") == 0);
     CheckEvidence(&sim, &voice);
     CcCommand told;
     CC_CHECK(!CcGateVoiceToldCommand(&voice, &told));
@@ -319,18 +350,25 @@ static void CheckHedgesAndAttribution(void)
     char first[CC_NAME_CAPACITY];
     (void)snprintf(first, sizeof(first), "%s", teller->name);
     first[strcspn(first, " ")] = '\0';
-    char expected[96];
-    (void)snprintf(expected, sizeof(expected), ", or so %s at the inn says.", first);
-
-    /* Middling confidence: the claim, attributed to who told them. */
+    char expected[160];
+    /* Middling confidence: the burning, the hedged reason, and who told them:
+       "Varkesh burned most of the town. Folk say it was over missing hoard
+       money — I heard it from Thora at the inn." */
+    (void)snprintf(expected, sizeof(expected),
+                   "Varkesh burned most of the town. Folk say it was over missing "
+                   "hoard money — I heard it from %s at the inn.", first);
     (void)TellFire(&sim, town, speaker->id, 55, teller->id);
     CcReturnDigest digest;
     CC_CHECK(CcReturnDigestBuild(&sim, town, &digest));
     CcGateVoice voice = {0};
     CC_CHECK(CcGateVoiceSay(&sim, speaker->id, &digest.changes[0], &voice));
     CC_CHECK(voice.telling == CC_GATE_VOICE_HEARD);
-    CC_CHECK(strstr(voice.line, "Varkesh") != NULL);
-    CC_CHECK(strstr(voice.line, expected) != NULL);
+    CC_CHECK(strcmp(voice.line, expected) == 0);
+    CC_CHECK(voice.clause_count == 3);
+    CC_CHECK(voice.clauses[0].part == CC_GATE_PART_EVENT);
+    CC_CHECK(voice.clauses[1].part == CC_GATE_PART_CAUSE);
+    CC_CHECK(voice.clauses[2].part == CC_GATE_PART_SOURCE);
+    CC_CHECK(voice.clauses[2].evidence_id == teller->id);
     CC_CHECK(strcmp(voice.source_name, teller->name) == 0);
     CheckEvidence(&sim, &voice);
     (void)printf("%s: \"%s\"\n", voice.speaker, voice.line);
@@ -342,8 +380,9 @@ static void CheckHedgesAndAttribution(void)
     CC_CHECK(voice.chosen_fact >= 0);
     CC_CHECK(voice.facts[voice.chosen_fact].certainty == CC_GATE_CERTAIN_DOUBTFUL);
     CC_CHECK(strstr(voice.line, "Varkesh") == NULL);
-    CC_CHECK(strstr(voice.line, "omeone") != NULL);
-    CC_CHECK(strstr(voice.line, "has it right.") != NULL);
+    CC_CHECK(strncmp(voice.line, "Fire took most of the town. Some say it was over", 48) == 0);
+    CC_CHECK(voice.clauses[0].evidence == CC_GATE_EVIDENCE_TOWN);
+    CC_CHECK(strstr(voice.line, "but I'm not sure of it.") != NULL);
     CheckEvidence(&sim, &voice);
     (void)printf("%s: \"%s\"\n", voice.speaker, voice.line);
 
@@ -352,7 +391,8 @@ static void CheckHedgesAndAttribution(void)
     CC_CHECK(CcReturnDigestBuild(&sim, town, &digest));
     CC_CHECK(CcGateVoiceSay(&sim, speaker->id, &digest.changes[0], &voice));
     CC_CHECK(voice.facts[voice.chosen_fact].certainty == CC_GATE_CERTAIN_WITNESSED);
-    CC_CHECK(strstr(voice.line, "I saw it myself.") != NULL);
+    CC_CHECK(strcmp(voice.line, "Varkesh burned most of the town. It was over "
+                                "missing hoard money. I saw it myself.") == 0);
     CheckEvidence(&sim, &voice);
 
     /* The line builder is deterministic. */
@@ -363,6 +403,44 @@ static void CheckHedgesAndAttribution(void)
     CC_CHECK(CcGateVoiceSpeech(&sim, &voice, &speech));
     CC_CHECK(strcmp(speech.text, voice.line) == 0);
     CC_CHECK(speech.speaker_id == speaker->id);
+}
+
+/* A story that explains a visible change comes after it: the bare stall,
+   then the raid, then the hedge. The town is "the town", not its name. */
+static void CheckCauseFollowsEvent(void)
+{
+    CcId town = BurntTown(&sim);
+    CcSettlement *place = &sim.settlements[0];
+    place->fire_damage = 0;
+    sim.return_memory.towns[0].stock[CC_GOOD_BREAD] = 9;
+    place->stock[CC_GOOD_BREAD] = 0;
+    CcCharacter *speaker = Local(&sim, town, 0);
+    CcId event = CcMakeId(CC_ENTITY_EVENT, 900002U);
+    sim.gossip[6] = (CcGossip){
+        .event_id = event, .origin_id = town, .day = sim.current_day,
+        .kind = CC_EVENT_SETTLEMENT_RAIDED, .settlement_mask = 1U
+    };
+    (void)snprintf(sim.gossip[6].text, sizeof(sim.gossip[6].text),
+                   "The Cinder Tithe raids %s and takes 9 Bread.", place->name);
+    CcGossipCarrier *carrier = CarrierFor(&sim, speaker->id);
+    carrier->stories |= UINT32_C(1) << 6U;
+    carrier->versions[6] = (CcGossipVersion){.confidence = 80};
+    CcReturnDigest digest;
+    CC_CHECK(CcReturnDigestBuild(&sim, town, &digest));
+    CC_CHECK(digest.changes[0].kind == CC_RETURN_CHANGE_STALL_EMPTY);
+    CC_CHECK(digest.changes[0].evidence_event_id == event);
+    CcGateVoice voice = {0};
+    CC_CHECK(CcGateVoiceSay(&sim, speaker->id, &digest.changes[0], &voice));
+    CC_CHECK(voice.telling == CC_GATE_VOICE_HEARD);
+    CC_CHECK(voice.clause_count == 2);
+    CC_CHECK(voice.clauses[0].part == CC_GATE_PART_EVENT);
+    CC_CHECK(voice.clauses[0].evidence == CC_GATE_EVIDENCE_TOWN);
+    CC_CHECK(voice.clauses[1].part == CC_GATE_PART_CAUSE);
+    CC_CHECK(voice.clauses[1].evidence == CC_GATE_EVIDENCE_STORY);
+    CC_CHECK(strcmp(voice.line, "There's no bread in the market. "
+                                "The Cinder Tithe raided the town, I hear.") == 0);
+    CheckEvidence(&sim, &voice);
+    (void)printf("%s: \"%s\"\n", voice.speaker, voice.line);
 }
 
 static void CheckFaces(void)
@@ -402,6 +480,7 @@ int main(void)
 {
     CheckWitnessedFallback();
     CheckHedgesAndAttribution();
+    CheckCauseFollowsEvent();
     CheckFaces();
     CheckRouteVoice();
     (void)printf("gate voice tests passed\n");

@@ -93,7 +93,7 @@ static bool CcCaptureAfterFrame(const CcCaptureRequest *request,
     } else if (request->capture) {
         state->capture_frames += 1;
         int32_t settled_frames = request->capture_ux ? 90 : request->capture_road || request->capture_pony_encounter || request->capture_pony_swap ? 45 :
-                                 request->capture_character ? 120 : 3;
+                                 request->capture_character || request->capture_gate_voice ? 120 : 3;
         if (state->capture_frames >= settled_frames) {
             take_screenshot(request->capture_path);
             return true;

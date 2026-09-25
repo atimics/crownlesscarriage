@@ -467,6 +467,11 @@ typedef struct CcLocalCourse {
     bool road_encounter;
     bool mine_encounter;
     CcLocalSceneKind scene;
+    /* The Return: the resident who speaks at the gate on arrival. Staged by
+       the client update path; the renderer only draws it. */
+    CcLocalAgent gate_speaker;
+    CcId gate_speaker_character_id;
+    bool gate_speaker_active;
 } CcLocalCourse;
 
 typedef struct CcLocalRendererStats {
@@ -586,6 +591,12 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
 const char *CcLocalCombatOutcomeName(CcCombatOutcome outcome);
 const char *CcLocalCombatTeamName(CcCombatTeam team);
 void CcLocalCourseInit(CcLocalCourse *course);
+/* Stand the gate-voice speaker a few steps ahead of the player, facing them.
+   Staging the same character again keeps the placement. */
+void CcLocalCourseStageGateSpeaker(CcLocalCourse *course, const CcLocalAgent *player,
+                                   CcId character_id, uint32_t appearance_seed,
+                                   CcNpcRole role);
+void CcLocalCourseClearGateSpeaker(CcLocalCourse *course);
 void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                          const CcSim *sim, float delta_time);
 int32_t CcLocalWorldUpdate(CcLocalCourse *course, CcLocalAgent *player,

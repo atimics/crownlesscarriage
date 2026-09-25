@@ -6261,3 +6261,37 @@ static const CcHumanoidPose *AgentRenderPose(const CcLocalAgent *agent)
     return agent->render_pose_valid ? &agent->render_pose :
                                       &agent->humanoid.pose;
 }
+
+/* The Return: the resident at the gate stands a few steps ahead of the
+   player and a little to the side, so the camera sees both, and turns to
+   face the player. Kept apart from the ambient town crowd. */
+void CcLocalCourseStageGateSpeaker(CcLocalCourse *course, const CcLocalAgent *player,
+                                   CcId character_id, uint32_t appearance_seed,
+                                   CcNpcRole role)
+{
+    if (course == NULL || player == NULL || character_id == 0U) return;
+    if (course->gate_speaker_active &&
+        course->gate_speaker_character_id == character_id) return;
+    float yaw = player->facing_yaw;
+    Vector2 at = {
+        player->position.x + sinf(yaw) * 1.9f + cosf(yaw) * 0.5f,
+        player->position.z + cosf(yaw) * 1.9f - sinf(yaw) * 0.5f
+    };
+    at.x = fminf(fmaxf(at.x, 0.8f), CC_LOCAL_WORLD_WIDTH - 0.8f);
+    at.y = fminf(fmaxf(at.y, 0.8f), CC_LOCAL_WORLD_DEPTH - 0.8f);
+    CcLocalAgentInit(&course->gate_speaker, at, false);
+    course->gate_speaker.crowned = false;
+    CcLocalAgentSetNpcAppearance(&course->gate_speaker, appearance_seed, role,
+                                 (Color){173, 112, 76, 255});
+    course->gate_speaker.facing_yaw = atan2f(player->position.x - at.x,
+                                             player->position.z - at.y);
+    course->gate_speaker_character_id = character_id;
+    course->gate_speaker_active = true;
+}
+
+void CcLocalCourseClearGateSpeaker(CcLocalCourse *course)
+{
+    if (course == NULL) return;
+    course->gate_speaker_active = false;
+    course->gate_speaker_character_id = 0U;
+}

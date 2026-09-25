@@ -3,6 +3,27 @@
    this file only shows them and offers one follow-up. Marking a story as told
    is a journalled command, applied when the line is spoken. */
 
+/* Stand the speaker in the scene. This runs in the update path; the renderer
+   only draws what the course holds. */
+static void StageGateSpeaker(const CcSim *sim, LocalState *local)
+{
+    const CcCharacter *person = CcSimCharacter(sim, local->gate_voice.speaker_id);
+    if (!local->gate_voice_open || person == NULL) {
+        CcLocalCourseClearGateSpeaker(&local->course);
+        return;
+    }
+    CcNpcRole role = person->role == CC_CHARACTER_OFFICIAL ? CC_NPC_ROLE_GUARD :
+        person->role == CC_CHARACTER_SCOUT ? CC_NPC_ROLE_SCOUT :
+        person->role == CC_CHARACTER_TRAVELLER || person->role == CC_CHARACTER_COURIER ?
+            CC_NPC_ROLE_TRAVELLER :
+        person->role == CC_CHARACTER_REFUGEE ? CC_NPC_ROLE_REFUGEE :
+        person->occupation == CC_OCCUPATION_INNKEEPER ||
+        person->occupation == CC_OCCUPATION_BAKER ? CC_NPC_ROLE_MERCHANT :
+            CC_NPC_ROLE_LABORER;
+    CcLocalCourseStageGateSpeaker(&local->course, &local->agent, person->id,
+                                  person->appearance_seed, role);
+}
+
 static void GateVoiceSpeak(CcJournal *journal, CcSim *sim, LocalState *local,
                            bool audio)
 {
@@ -11,6 +32,7 @@ static void GateVoiceSpeak(CcJournal *journal, CcSim *sim, LocalState *local,
     if (CcGateVoiceToldCommand(&local->gate_voice, &told))
         (void)ApplyCommand(journal, sim, told, note, sizeof(note));
     local->gate_voice.more = CcGateVoiceHasMore(sim, &local->gate_voice);
+    StageGateSpeaker(sim, local);
     CcSpeech speech;
     if (audio && CcGateVoiceSpeech(sim, &local->gate_voice, &speech)) {
         /* The voice seam: the same turn feeds subtitles and audio. */
@@ -55,12 +77,17 @@ static Rectangle GateVoiceOption(Rectangle bubble, int32_t index)
 static bool HandleGateVoiceInput(CcJournal *journal, CcSim *sim,
                                  LocalState *local, ClientView view)
 {
-    if (!local->gate_voice_open) return false;
+    if (!local->gate_voice_open) {
+        if (local->course.gate_speaker_active) CcLocalCourseClearGateSpeaker(&local->course);
+        return false;
+    }
     if (view != VIEW_LOCAL || sim->journey.active ||
         sim->player.location_id != local->gate_voice.settlement_id) {
         local->gate_voice_open = false;
+        CcLocalCourseClearGateSpeaker(&local->course);
         return false;
     }
+    StageGateSpeaker(sim, local);
     Rectangle bubble = GateVoiceBubble(local);
     bool more = local->gate_voice.more;
     int32_t thanks_index = more ? 1 : 0;
@@ -69,6 +96,7 @@ static bool HandleGateVoiceInput(CcJournal *journal, CcSim *sim,
             GateVoiceSpeak(journal, sim, local, true);
         else
             local->gate_voice_open = false;
+        StageGateSpeaker(sim, local);
         return true;
     }
     if (ClientKeyPressed(more ? KEY_TWO : KEY_ONE) || ClientKeyPressed(KEY_ENTER) ||
@@ -76,6 +104,7 @@ static bool HandleGateVoiceInput(CcJournal *journal, CcSim *sim,
         AdventureHit(GateVoiceOption(bubble, thanks_index))) {
         CcAudioClearSpeech();
         local->gate_voice_open = false;
+        CcLocalCourseClearGateSpeaker(&local->course);
         return true;
     }
     /* A short exchange at the gate: it holds the input until it ends. */
