@@ -126,6 +126,7 @@ add_library(crownless_sim
     src/sim/cc_scriven_codec.c
     src/sim/cc_sim.c
     src/sim/cc_census.c
+    src/sim/cc_return.c
     src/sim/cc_census_layout.c
     src/sim/cc_shared_clock.c
     src/sim/cc_custody.c
@@ -385,6 +386,10 @@ if(CC_BUILD_BENCHMARKS)
     add_executable(crownless_sim_metrics tools/sim_metrics.c)
     target_link_libraries(crownless_sim_metrics PRIVATE crownless_sim)
     cc_strict_warnings(crownless_sim_metrics)
+
+    add_executable(crownless_return_digest tools/return_digest.c)
+    target_link_libraries(crownless_return_digest PRIVATE crownless_sim)
+    cc_strict_warnings(crownless_return_digest)
 
     add_executable(crownless_quest_cast_experiment tools/quest_cast_experiment.c)
     target_link_libraries(crownless_quest_cast_experiment PRIVATE crownless_sim)

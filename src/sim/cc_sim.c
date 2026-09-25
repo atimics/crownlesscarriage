@@ -6,6 +6,7 @@
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
 #include "sim/cc_census.h"
+#include "sim/cc_return.h"
 #include "sim/cc_oven_court.h"
 #include "sim/cc_occupations.h"
 #include "sim/cc_archive_recruitment.h"
@@ -23074,6 +23075,10 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 }
             }
         }
+    }
+    if (!CcReturnMemoryValidate(sim)) {
+        SetError(error, error_capacity, "The company's memory of a town is invalid.");
+        return false;
     }
     if (!CcCensusValidate(sim)) {
         SetError(error, error_capacity, "The resident census or homes are invalid.");

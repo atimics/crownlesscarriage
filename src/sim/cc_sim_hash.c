@@ -1,6 +1,7 @@
 #include "sim/cc_wants.h"
 #include "sim/cc_scriven.h"
 #include "sim/cc_census.h"
+#include "sim/cc_return.h"
 #include "sim/cc_sim.h"
 
 #include <stddef.h>
@@ -51,6 +52,8 @@ uint64_t CcSimHash(const CcSim *sim)
 #define HASH_VALUE(value) hash = HashU64(hash, (uint64_t)(value))
     if (sim->schema_version >= 121U) HASH_VALUE(CcWantsHash(&sim->wants));
     if (sim->schema_version >= 117U) HASH_VALUE(CcCensusHash(&sim->census));
+    if (sim->schema_version >= CC_RETURN_SCHEMA_VERSION)
+        HASH_VALUE(CcReturnMemoryHash(&sim->return_memory));
     if (sim->schema_version >= 113U) HASH_VALUE(CcScrivenHash(&sim->scriven));
     if (sim->schema_version >= 115U) HASH_VALUE(CcCrownCalendarHash(&sim->crown_calendar));
     if (sim->schema_version >= 99U) {
