@@ -630,6 +630,9 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
     }
     if (request->capture_interior) {
         scene->local->market_interior = true;
+        scene->local->shop_building_index =
+            CcLocalPlaceProfileForSettlement(CcSimSettlement(scene->sim,
+                scene->sim->player.location_id))->primary_building;
         CcLocalAgentInit(&scene->local->agent, (Vector2){4.60f, 5.10f}, true);
     }
     if (request->capture_limbs) {
@@ -691,6 +694,7 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
         CcLocalLanePoint approach = CcLocalShopApproach(profile, shop);
         scene->local->adventure_ui = true;
         scene->local->course.automatic_alarm = false;
+        scene->local->market_interior = !request->capture_shop_front;
         RepositionHero(scene->local, request->capture_shop_front ?
             (Vector2){approach.x, approach.z} : (Vector2){6.55f, 3.15f},
             !request->capture_shop_front);
@@ -826,6 +830,11 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
         }
         if (request->capture_ux_view == 1 || request->capture_ux_view == 3) {
             scene->local->market_interior = true;
+            const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+                CcSimSettlement(scene->sim, scene->sim->player.location_id));
+            scene->local->shop_building_index = CcLocalShopAt(profile,
+                request->capture_ux_view == 3 ? CC_LOCAL_SHOP_BAKERY :
+                CC_LOCAL_SHOP_GRAIN_MERCHANT)->building_index;
             RepositionHero(scene->local, (Vector2){4.5f, 4.2f}, true);
         }
         if (request->capture_ux_view == 2) {
@@ -913,6 +922,15 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             (*scene->view) = VIEW_TRADE;
             scene->local->trade_mode = 5;
             scene->local->trade_good = (CcGood)1;
+        }
+        if (request->capture_ux_view >= 15 && request->capture_ux_view <= 20) {
+            const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
+                CcSimSettlement(scene->sim, scene->sim->player.location_id));
+            scene->local->market_interior = true;
+            scene->local->shop_building_index = CcLocalShopAt(profile,
+                request->capture_ux_view <= 16 ? CC_LOCAL_SHOP_BAKERY :
+                CC_LOCAL_SHOP_GRAIN_MERCHANT)->building_index;
+            RepositionHero(scene->local, (Vector2){4.5f, 4.2f}, true);
         }
         if (request->capture_ux_view == 35) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 4; scene->local->book_offset = 0; }
         if (request->capture_ux_view == 4) { (*scene->view) = VIEW_LEDGER; scene->local->book_page = 0; }

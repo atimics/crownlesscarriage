@@ -156,6 +156,22 @@ static int RunCaptureSceneRegression(void)
     if (!CcCapturePrepareWorld(&request, &sim, NULL) ||
         sim.player.location_id != sim.settlements[2].id)
         return ClientRegressionFailure("Town capture must use the requested settlement.");
+    static LocalState local;
+    ResetLocalState(&local);
+    ClientView view = VIEW_LOCAL, return_view = VIEW_LOCAL;
+    CcCaptureScene scene = {.sim = &sim, .local = &local,
+        .view = &view, .return_view = &return_view};
+    request = (CcCaptureRequest){.capture_shop = true,
+        .capture_town_index = 4, .capture_shop_good = CC_GOOD_STONE};
+    if (!CcCapturePrepareWorld(&request, &sim, NULL) ||
+        !CcCapturePrepareUX(&request, &scene) || !local.market_interior ||
+        view != VIEW_TRADE || LocalActiveShop(&sim, &local) == NULL ||
+        LocalActiveShop(&sim, &local)->kind != CC_LOCAL_SHOP_STONECUTTER)
+        return ClientRegressionFailure("Shop capture must open the selected shop and its trade panel.");
+    request.capture_shop_front = true;
+    if (!CcCapturePrepareUX(&request, &scene) || local.market_interior ||
+        view != VIEW_LOCAL)
+        return ClientRegressionFailure("Shop front capture must show the street door.");
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     request = (CcCaptureRequest){.capture_underroad = true};
     if (!CcCapturePrepareDungeon(&request, &sim) ||
