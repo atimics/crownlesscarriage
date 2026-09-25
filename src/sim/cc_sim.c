@@ -30,6 +30,9 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 #include <string.h>
 
 
@@ -6677,7 +6680,13 @@ static void ExchangeGatheredGossip(CcSim *sim, CcId carrier_id, CcId place_id,
     uint32_t differences = town_story_masks != NULL ?
         carrier->stories ^ town_story_masks[place] : UINT32_MAX;
     while (differences != 0U) {
+#ifdef _MSC_VER
+        unsigned long slot;
+        _BitScanForward(&slot, differences);
+        int32_t i = (int32_t)slot;
+#else
         int32_t i = (int32_t)__builtin_ctz(differences);
+#endif
         uint32_t bit = UINT32_C(1) << (uint32_t)i;
         differences &= differences - 1U;
         CcGossip *story = &sim->gossip[i];
