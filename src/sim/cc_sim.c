@@ -4905,6 +4905,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcSimInitializeWoodEconomy(sim);
     CcSimInitializeStoneEconomy(sim);
     CcSimInitializePaperEconomy(sim);
+    if (sim->schema_version >= 117U) CcSimInitializeSupplyEconomy(sim);
     for (int32_t i = 0; i < sim->settlement_count; ++i) {
         SeedSettlementServices(&sim->settlements[i]);
     }
@@ -17089,6 +17090,8 @@ static bool ApplyMineReportReturn(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+#include "cc_supply_trade.inc"
+
 static bool ApplyTrade(CcSim *sim, const CcCommand *command,
                        char *error, size_t error_capacity)
 {
@@ -20050,7 +20053,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
                  "Return to the carriage before taking an outside action.");
         return false;
     }
-    bool settlement_action = command->kind == CC_COMMAND_TRADE ||
+    bool settlement_action = command->kind == CC_COMMAND_TRADE_SUPPLY ||
+        command->kind == CC_COMMAND_TRADE ||
         command->kind == CC_COMMAND_REPAIR_ROUTE ||
         command->kind == CC_COMMAND_CHANGE_DUNGEON ||
         command->kind == CC_COMMAND_BUY_MAP ||
@@ -20131,6 +20135,8 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_SWAP_PONY:
         case CC_COMMAND_LEAVE_PONY:
             return CcPoniesApply(sim, command, error, error_capacity);
+        case CC_COMMAND_TRADE_SUPPLY:
+            return ApplySupplyTrade(sim, command, error, error_capacity);
         case CC_COMMAND_TRADE:
             return ApplyTrade(sim, command, error, error_capacity);
         case CC_COMMAND_TRAVEL:
@@ -20768,6 +20774,17 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
              (settlement->fire_damage > 0 && settlement->last_fire_day == 0))) {
             SetError(error, error_capacity, "Town fire history is invalid.");
             return false;
+        }
+        if (sim->schema_version >= 117U) {
+            for (int order = 0; order < 2; ++order) {
+                if (settlement->supply_order_day[order] < 0 ||
+                    settlement->supply_order_day[order] > sim->current_day ||
+                    settlement->supply_order_filled[order] < 0 ||
+                    settlement->supply_order_filled[order] > 8) {
+                    SetError(error, error_capacity, "Workshop order state is invalid.");
+                    return false;
+                }
+            }
         }
         int32_t saved_good_count = CcGoodCountForSchema(sim->schema_version);
         for (int32_t good = 0; good < saved_good_count; ++good) {

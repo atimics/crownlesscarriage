@@ -6,7 +6,7 @@ static bool SaveRoadStores(sqlite3 *database, const CcSim *sim,
     if (!Prepare(database, "INSERT INTO road_site_stock VALUES(?,?,?);",
                  &statement, error, error_capacity)) return false;
     for (int32_t site = 0; site < sim->road_site_count; ++site) {
-        for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        for (int32_t good = 0; good < CcGoodCountForSchema(sim->schema_version); ++good) {
             BindInt(statement, 1, site); BindInt(statement, 2, good);
             BindInt(statement, 3, sim->road_sites[site].stock[good]);
             if (!StepDone(database, statement, error, error_capacity) ||
@@ -32,7 +32,7 @@ static bool ReadRoadStores(sqlite3 *database, CcSim *sim,
         int64_t site = sqlite3_column_int64(statement, 0);
         int64_t good = sqlite3_column_int64(statement, 1);
         int64_t quantity = sqlite3_column_int64(statement, 2);
-        if (site != rows / CC_GOOD_COUNT || good != rows % CC_GOOD_COUNT ||
+        if (site != rows / CcGoodCountForSchema(sim->schema_version) || good != rows % CcGoodCountForSchema(sim->schema_version) ||
             site >= sim->road_site_count || quantity < 0 || quantity > CC_SIM_MAX_UNITS) {
             sqlite3_finalize(statement);
             SetError(error, error_capacity, "Road store rows are invalid.");
@@ -42,7 +42,7 @@ static bool ReadRoadStores(sqlite3 *database, CcSim *sim,
         rows++;
     }
     sqlite3_finalize(statement);
-    if (status != SQLITE_DONE || rows != sim->road_site_count * CC_GOOD_COUNT) {
+    if (status != SQLITE_DONE || rows != sim->road_site_count * CcGoodCountForSchema(sim->schema_version)) {
         SetError(error, error_capacity, "Road store rows are incomplete.");
         return false;
     }

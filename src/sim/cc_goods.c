@@ -19,12 +19,14 @@ static const CcGoodDefinition GOOD_DEFINITIONS[CC_GOOD_COUNT] = {
     [CC_GOOD_STONE] = {"Stone", 7, 4, 1, 4, 8},
     [CC_GOOD_PAPER] = {"Paper", 12, 8, 1, 4, 16},
     [CC_GOOD_ROTTEN_MEAT] = {"Rotten Meat", 1, 6, 1, 4, 12},
-    [CC_GOOD_ROTTEN_GRAIN] = {"Rotten Grain", 1, 10, 1, 4, 20}
+    [CC_GOOD_ROTTEN_GRAIN] = {"Rotten Grain", 1, 10, 1, 4, 20},
+    [CC_GOOD_RAW_STONE] = {"Raw stone", 3, 4, 1, 4, 8}
 };
 
 int32_t CcGoodCountForSchema(uint32_t schema_version)
 {
-    if (schema_version >= 33U) return CC_GOOD_COUNT;
+    if (schema_version >= 117U) return CC_GOOD_COUNT;
+    if (schema_version >= 33U) return 14;
     if (schema_version >= 27U) return 11;
     if (schema_version >= 9U) return CC_LEGACY_GOOD_COUNT;
     return 3;

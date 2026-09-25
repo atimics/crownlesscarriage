@@ -47,7 +47,7 @@ static bool SaveGoblinPolitics(sqlite3 *database, const CcSim *sim, char *error,
     }
     sqlite3_finalize(statement);
     if (!Prepare(database, "INSERT INTO dragon_cult_store VALUES(?,?);", &statement, error, error_capacity)) return false;
-    for (int32_t good = -1; good < CC_GOOD_COUNT; ++good) {
+    for (int32_t good = -1; good < CcGoodCountForSchema(sim->schema_version); ++good) {
         BindInt(statement, 1, good);
         BindMoney(statement, 2, good < 0 ? sim->dragon_cult.offering_coins : sim->dragon_cult.offering_stock[good]);
         if (!StepDone(database, statement, error, error_capacity) || !ResetStatement(database, statement, error, error_capacity)) { sqlite3_finalize(statement); return false; }
@@ -113,7 +113,7 @@ static bool ReadGoblinPolitics(sqlite3 *database, CcSim *sim, char *error, size_
     if (!Prepare(database, "SELECT good,quantity FROM dragon_cult_store ORDER BY good;", &statement, error, error_capacity)) return false;
     rows = -1;
     while (sqlite3_step(statement) == SQLITE_ROW) {
-        if (rows >= CC_GOOD_COUNT || sqlite3_column_int(statement, 0) != rows) { sqlite3_finalize(statement); SetError(error, error_capacity, "Cult stores are invalid."); return false; }
+        if (rows >= CcGoodCountForSchema(sim->schema_version) || sqlite3_column_int(statement, 0) != rows) { sqlite3_finalize(statement); SetError(error, error_capacity, "Cult stores are invalid."); return false; }
         sqlite3_int64 value = sqlite3_column_int64(statement, 1);
         if (value < 0 || value > (rows < 0 ? CC_SIM_MAX_MONEY : CC_SIM_MAX_UNITS)) { sqlite3_finalize(statement); SetError(error, error_capacity, "Cult quantity is invalid."); return false; }
         if (rows < 0) sim->dragon_cult.offering_coins = value;
@@ -121,6 +121,6 @@ static bool ReadGoblinPolitics(sqlite3 *database, CcSim *sim, char *error, size_
         rows += 1;
     }
     sqlite3_finalize(statement);
-    if (rows != CC_GOOD_COUNT) { SetError(error, error_capacity, "Cult stores are incomplete."); return false; }
+    if (rows != CcGoodCountForSchema(sim->schema_version)) { SetError(error, error_capacity, "Cult stores are incomplete."); return false; }
     return true;
 }
