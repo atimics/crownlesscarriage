@@ -38,6 +38,19 @@ BODY_FAMILY_SCALE = {
     "compact": (0.97, 1.03, 0.96),
 }
 
+# The hero's rig is not scaled uniformly: DrawHeroSkin (asset_loading.inc)
+# boosts the head/hair bone 1.32x and shrinks the hand bones 0.90x at
+# runtime so the hero reads at game size. NPCs are static baked meshes with
+# no skin, so the same read has to be baked into the authored geometry
+# instead of a runtime hack. These constants approximate that same
+# gameplay proportion for the NPC generator.
+HEAD_GROWTH = 1.30
+HAND_SHRINK = 0.90
+
+# Archetypes whose face reads better with a dark jaw/chin mass. Kept to a
+# subset so silhouettes stay distinct across the roster.
+BEARDED_ROLES = {"guard", "laborer", "raider"}
+
 MATERIAL_ORDER = (
     "skin",
     "hair",
@@ -205,7 +218,8 @@ def add_box(name: str, center: tuple[float, float, float],
             dimensions: tuple[float, float, float], material: str,
             collection: bpy.types.Collection, spec: Archetype, part: str,
             *, rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
-            bevel: float = 0.012) -> bpy.types.Object:
+            bevel: float = 0.012,
+            bevel_segments: int = 1) -> bpy.types.Object:
     bpy.ops.mesh.primitive_cube_add(location=center, rotation=rotation)
     obj = bpy.context.object
     obj.name = name
@@ -213,7 +227,8 @@ def add_box(name: str, center: tuple[float, float, float],
     obj.dimensions = dimensions
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     if bevel > 0.0:
-        add_bevel(obj, min(bevel, min(dimensions) * 0.22))
+        add_bevel(obj, min(bevel, min(dimensions) * 0.22),
+                  segments=bevel_segments)
     assign(obj, material)
     move_to(obj, collection)
     tag(obj, spec, part)
@@ -381,10 +396,14 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
         "ankle_r": Vector((hip_x + 0.006, 0.015, 0.14)),
         "shoulder_l": Vector((-shoulder_x, 0.0, 1.57)),
         "shoulder_r": Vector((shoulder_x, 0.0, 1.57)),
-        "elbow_l": Vector((-0.43 * spec.shoulder, -0.020, 1.24)),
-        "elbow_r": Vector((0.43 * spec.shoulder, 0.015, 1.24)),
-        "hand_l": Vector((-0.49 * spec.shoulder, -0.055, 0.92)),
-        "hand_r": Vector((0.49 * spec.shoulder, -0.035, 0.94)),
+        # A relaxed idle hang: the elbow tucks in near the ribs and the
+        # hand falls close to the hip, instead of bowing outward like a
+        # stiff mannequin. (Only "ready"/"upright" postures use this
+        # default directly; other postures override or offset it below.)
+        "elbow_l": Vector((-0.235 * spec.shoulder, -0.015, 1.27)),
+        "elbow_r": Vector((0.235 * spec.shoulder, 0.010, 1.27)),
+        "hand_l": Vector((-0.205 * spec.shoulder, -0.045, 0.97)),
+        "hand_r": Vector((0.205 * spec.shoulder, -0.030, 0.99)),
     }
     if spec.posture == "open":
         points["elbow_l"] = Vector((-0.46, -0.08, 1.31))
@@ -506,38 +525,65 @@ def pose_points(spec: Archetype) -> dict[str, Vector]:
     return points
 
 
+def build_beard(spec: Archetype, collection: bpy.types.Collection,
+                center: Vector, width: float, depth: float,
+                height: float) -> None:
+    """A dark jaw/chin mass for a subset of rugged archetypes.
+
+    Kept as one soft ellipsoid in the "hair" palette slot: the dark value
+    reads as a beard shape at silhouette scale without adding geometry
+    detail that would just get lost at art resolution.
+    """
+    add_ellipsoid(
+        f"GEO_{spec.role}_beard",
+        (0.0, center.y - depth * 0.24, center.z - height * 0.60),
+        (width * 0.74, depth * 0.82, height * 0.40), "hair", collection,
+        spec, "beard", subdivisions=1)
+
+
 def build_head(spec: Archetype, collection: bpy.types.Collection) -> None:
-    center = Vector((0.0, -0.010, 1.84))
-    width = 0.153 * spec.head_width
-    depth = 0.128 * spec.head_width
-    height = 0.178 * spec.head_height
+    # Baked equivalent of the hero's runtime 1.32x head/hair bone scale
+    # (DrawHeroSkin, asset_loading.inc): NPCs have no skin to scale at
+    # runtime, so the head is authored bigger up front to match the
+    # hero's effective gameplay proportions and stay readable at
+    # ~35-60 art-pixel figure heights.
+    center = Vector((0.0, -0.010, 1.825))
+    width = 0.153 * HEAD_GROWTH * spec.head_width
+    depth = 0.128 * HEAD_GROWTH * spec.head_width
+    height = 0.178 * HEAD_GROWTH * spec.head_height
     add_segment(f"GEO_{spec.role}_neck", (0.0, 0.0, 1.57),
-                (0.0, -0.004, 1.70), 0.077 * spec.mass, 0.070,
+                (0.0, -0.004, 1.66), 0.077 * spec.mass, 0.070,
                 "skin", collection, spec, "neck")
     add_ellipsoid(f"GEO_{spec.role}_head", tuple(center),
                   (width, depth, height), "skin", collection, spec, "head")
 
-
-
     add_ellipsoid(f"GEO_{spec.role}_jaw",
-                  (0.0, -0.034, center.z - height * 0.52),
+                  (0.0, center.y - depth * 0.27, center.z - height * 0.55),
                   (width * 0.80, depth * 0.90, height * 0.48), "skin",
                   collection, spec, "jaw", subdivisions=1)
 
-
+    # No brow/eye/nose geometry here on purpose: the runtime already paints
+    # a full procedural face (brow, eyes, nose, scars, mouth) on top of this
+    # head in DrawWorldFace/CcNpcPaintFaceFeatures (cc_npc_appearance.c),
+    # scaled and anchored to match this bigger head (see
+    # NPC_ARCHETYPE_HEAD_GROWTH in actor_rendering.inc). A mesh brow/nose
+    # here only doubled up with that overlay and read as clutter, confirmed
+    # by an A/B render with and without it.
 
     for side in (-1.0, 1.0):
         add_ellipsoid(f"GEO_{spec.role}_ear_{side:+.0f}",
-                      (side * width * 0.99, -0.004, center.z - 0.005),
-                      (0.022, 0.018, 0.036), "skin", collection, spec, "ear",
-                      subdivisions=1)
+                      (side * width * 0.99, center.y + 0.006,
+                       center.z - height * 0.03),
+                      (0.028 * spec.head_width, 0.023 * spec.head_width,
+                       0.046 * spec.head_height),
+                      "skin", collection, spec, "ear", subdivisions=1)
 
-
-
+    if spec.role in BEARDED_ROLES:
+        build_beard(spec, collection, center, width, depth, height)
 
     add_ellipsoid(f"GEO_{spec.role}_runtime_scalp",
-                  (0.0, 0.016, center.z + height * 0.48),
-                  (width * 0.98, depth * 0.98, height * 0.34), "hair",
+                  (0.0, center.y + 0.026, center.z + height * 0.46),
+                  (width * 0.98, depth * 0.98, height * 0.36), "hair",
                   collection, spec, "runtime_identity_base", subdivisions=1)
 
 
@@ -587,11 +633,11 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
         add_segment(f"GEO_{spec.role}_shin_{side}", tuple(knee), tuple(ankle),
                     leg_radius * 0.82, leg_radius * 0.64, "trousers",
                     collection, spec, "leg")
-        boot_center = Vector((ankle.x, ankle.y - 0.060, ankle.z - 0.025))
+        boot_center = Vector((ankle.x, ankle.y - 0.060, ankle.z - 0.030))
         add_box(f"GEO_{spec.role}_boot_{side}", tuple(boot_center),
-                (0.210 * spec.boot, 0.340 * spec.boot, 0.240), "leather",
+                (0.222 * spec.boot, 0.360 * spec.boot, 0.205), "leather",
                 collection, spec, "boot", rotation=(0.035 * sign, 0.0, 0.0),
-                bevel=0.025)
+                bevel=0.045, bevel_segments=3)
 
     arm_radius = 0.100 * mass * limb_scale
     for side in ("l", "r"):
@@ -604,9 +650,14 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
         add_segment(f"GEO_{spec.role}_forearm_{side}", tuple(elbow), tuple(hand),
                     arm_radius * 0.80, arm_radius * 0.60,
                     "underlayer", collection, spec, "arm")
+        # Baked equivalent of the hero's runtime 0.90x hand-bone shrink:
+        # rounder (subdivisions=2) and less elongated than the old
+        # egg-shaped hand so it reads as a soft fist, not a brick.
         add_ellipsoid(f"GEO_{spec.role}_hand_{side}", tuple(hand),
-                      (0.082 * spec.hand, 0.070 * spec.hand, 0.094 * spec.hand),
-                      "skin", collection, spec, "hand", subdivisions=1)
+                      (0.088 * HAND_SHRINK * spec.hand,
+                       0.078 * HAND_SHRINK * spec.hand,
+                       0.086 * HAND_SHRINK * spec.hand),
+                      "skin", collection, spec, "hand", subdivisions=2)
 
     if spec.garment in {"split_tunic", "road_coat", "short_coat"}:
         length = 0.31 if spec.garment == "short_coat" else 0.42
@@ -760,23 +811,42 @@ def build_body(spec: Archetype, collection: bpy.types.Collection) -> None:
                     bevel=0.008)
 
     if "apron" in spec.equipment:
-
-
-
+        # A shaped bib + split skirt with a stitched center fold, in place
+        # of the old flat boxes that read as grey placeholder rectangles.
+        # Painted "leather" (its own dark, reliably distinct color pool at
+        # runtime, cc_npc_appearance.c) instead of "underlayer" so the apron
+        # reads as a separate layer over the tunic instead of blending into
+        # it as one flat grey mass.
         apron_y = -0.170 * mass * body_depth
-        add_box(f"GEO_{spec.role}_apron_bib", (0.0, apron_y, 1.27),
-                (0.275 * mass, 0.050, 0.235), "underlayer", collection,
-                spec, "apron", bevel=0.018)
+        bib = add_panel(f"GEO_{spec.role}_apron_bib", (
+            (-0.130 * mass, apron_y + 0.012, 1.415),
+            (0.130 * mass, apron_y + 0.012, 1.415),
+            (0.205 * mass, apron_y - 0.006, 1.160),
+            (0.0, apron_y - 0.016, 1.045),
+            (-0.205 * mass, apron_y - 0.006, 1.160),
+        ), "leather", collection, spec, "apron", thickness=0.032,
+            edge=0.014)
+        bib["cc_value_offset"] = -0.08
         for side in (-1.0, 1.0):
-            add_box(f"GEO_{spec.role}_apron_skirt_{side:+.0f}",
-                    (side * 0.090 * mass, apron_y - 0.006, 0.94),
-                    (0.155 * mass, 0.058, 0.390), "underlayer", collection,
-                    spec, "apron", rotation=(0.0, side * 0.035, 0.0),
-                    bevel=0.018)
+            inner = side * 0.045 * mass
+            outer = side * 0.205 * mass
+            skirt = add_panel(f"GEO_{spec.role}_apron_skirt_{side:+.0f}", (
+                (inner, apron_y - 0.006, 1.035),
+                (outer, apron_y - 0.002, 1.000),
+                (outer * 0.86, apron_y + 0.014, 0.640),
+                (inner * 0.55, apron_y + 0.010, 0.585),
+            ), "leather", collection, spec, "apron", thickness=0.030,
+                edge=0.014)
+            skirt["cc_value_offset"] = -0.08
             add_box(f"GEO_{spec.role}_apron_hem_{side:+.0f}",
-                    (side * 0.090 * mass, apron_y - 0.010, 0.765),
-                    (0.160 * mass, 0.064, 0.060), "accent", collection,
+                    (side * 0.135 * mass, apron_y - 0.006, 0.605),
+                    (0.150 * mass, 0.056, 0.045), "accent", collection,
                     spec, "apron", bevel=0.008)
+        fold = add_box(f"GEO_{spec.role}_apron_fold",
+                       (0.0, apron_y - 0.022, 0.985),
+                       (0.045 * mass, 0.020, 0.66), "leather", collection,
+                       spec, "apron", bevel=0.009)
+        fold["cc_value_offset"] = -0.22
 
     mantle = "mantle" in spec.equipment or "short_mantle" in spec.equipment
     if mantle:
@@ -842,22 +912,29 @@ def consolidate(collection: bpy.types.Collection,
     objects = [obj for obj in collection.objects if obj.type == "MESH"]
     if not objects:
         raise RuntimeError(f"{spec.role} generated no meshes")
+    canonical = {MATERIALS[name].name: index
+                 for index, name in enumerate(MATERIAL_ORDER)}
     for obj in objects:
         apply_modifiers(obj)
+        material_name = obj.data.materials[0].name if obj.data.materials \
+            else None
+        semantic_index = canonical.get(material_name)
+        if semantic_index is None:
+            raise RuntimeError(
+                f"{obj.name} has an unexpected material {material_name!r}")
+        # Painted per-part (before the join) so a part can carry its own
+        # cc_value_offset for extra shading, such as the apron's fold
+        # crease, on top of the automatic per-face-normal shading.
+        value_offset = float(obj.get("cc_value_offset", 0.0))
+        paint_channels.add_indexed_paint_channels(
+            obj, [semantic_index] * len(obj.data.polygons), MATERIAL_ORDER,
+            value_offset=value_offset)
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:
         obj.select_set(True)
     bpy.context.view_layer.objects.active = objects[0]
     bpy.ops.object.join()
     joined = objects[0]
-    old_materials = list(joined.data.materials)
-    old_names = [material.name if material else "" for material in old_materials]
-    canonical = {MATERIALS[name].name: index
-                 for index, name in enumerate(MATERIAL_ORDER)}
-    polygon_materials = [canonical[old_names[polygon.material_index]]
-                         for polygon in joined.data.polygons]
-    paint_channels.add_indexed_paint_channels(
-        joined, polygon_materials, MATERIAL_ORDER)
     joined.data.materials.clear()
     if INDEXED_MATERIAL is None:
         raise RuntimeError("indexed NPC material was not initialized")

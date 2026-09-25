@@ -529,6 +529,16 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
     }
 }
 
+/* Keep in sync with HEAD_GROWTH in
+   tools/blender/build_npc_archetype_library.py. The archetype mesh's head is
+   baked about 1.3x bigger there (to match the hero's runtime 1.32x head/hair
+   bone scale, since the static archetype mesh has no bone to scale at
+   runtime). Hair, headwear, and the procedural face overlay are drawn
+   separately from that mesh here, anchored to the same head point, so they
+   have to grow by the same factor about that point to stay fitted to the
+   bigger head instead of sitting on it like a shrunken cap. */
+static const float NPC_ARCHETYPE_HEAD_GROWTH = 1.30f;
+
 static bool DrawNpcArchetypePose3D(
     Vector3 position, float size_hint, float yaw, float phase,
     CcTraversalMode mode, int32_t fixed_pose,
@@ -605,15 +615,17 @@ static bool DrawNpcArchetypePose3D(
     Matrix identity_head = NpcModuleTransform(
         head, head_right, head_up, head_forward,
         (Vector3){0.36f * appearance->head_width * scale * width *
-                      silhouette_gain,
-                  0.40f * scale,
+                      silhouette_gain * NPC_ARCHETYPE_HEAD_GROWTH,
+                  0.40f * scale * NPC_ARCHETYPE_HEAD_GROWTH,
                   0.33f * appearance->head_depth * scale * width *
-                      silhouette_gain});
+                      silhouette_gain * NPC_ARCHETYPE_HEAD_GROWTH});
     Matrix molded_hair = NpcModuleTransform(
         head, head_right, head_up, head_forward,
-        (Vector3){scale * width * silhouette_gain,
-                  scale,
-                  scale * width * silhouette_gain});
+        (Vector3){scale * width * silhouette_gain *
+                      NPC_ARCHETYPE_HEAD_GROWTH,
+                  scale * NPC_ARCHETYPE_HEAD_GROWTH,
+                  scale * width * silhouette_gain *
+                      NPC_ARCHETYPE_HEAD_GROWTH});
     (void)DrawNpcHairFamily(appearance, molded_hair, identity_head);
     if ((appearance->equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) {
         NpcDynamicModuleId headwear = NpcHeadwearModule(
@@ -623,13 +635,15 @@ static bool DrawNpcArchetypePose3D(
         (void)DrawNpcDynamicModule(headwear, identity_head, headwear_color);
     }
     CcFaceRecipe face = CcNpcFaceRecipe(appearance);
-    DrawWorldFace(PhysicsAdd(head, Vector3Scale(head_up, 0.025f * scale)),
+    DrawWorldFace(PhysicsAdd(head, Vector3Scale(head_up,
+                                                0.025f * scale *
+                                                    NPC_ARCHETYPE_HEAD_GROWTH)),
                   head_right, head_up, head_forward,
                   0.18f * appearance->head_width * scale * width *
-                      silhouette_gain,
-                  0.20f * scale,
+                      silhouette_gain * NPC_ARCHETYPE_HEAD_GROWTH,
+                  0.20f * scale * NPC_ARCHETYPE_HEAD_GROWTH,
                   0.165f * appearance->head_depth * scale * width *
-                      silhouette_gain,
+                      silhouette_gain * NPC_ARCHETYPE_HEAD_GROWTH,
                   &face, expression, false);
     RestoreWorldLighting();
     if (visual_style.hero.ready) {
