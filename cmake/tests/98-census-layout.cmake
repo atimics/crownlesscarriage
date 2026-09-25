@@ -1,0 +1,5 @@
+add_executable(census_layout_tests tests/census_layout_tests.c)
+target_link_libraries(census_layout_tests PRIVATE crownless_persistence)
+cc_strict_warnings(census_layout_tests)
+cc_large_sim_stack(census_layout_tests)
+add_test(NAME connected_census_districts COMMAND census_layout_tests)

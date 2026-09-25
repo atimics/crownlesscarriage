@@ -51,6 +51,7 @@ int main(void)
     }
     char status[160];
     CcLocalTownStatus(&sim, sim.settlements[0].id, status, sizeof(status));
+    CC_CHECK(strstr(status, "Market Centre: 64 people / 16 homes") != NULL);
     CC_CHECK(strstr(status,
         "1463 residents across 6 districts / 368 homes") != NULL);
     CheckCensus(&sim);

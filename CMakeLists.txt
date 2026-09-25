@@ -112,6 +112,7 @@ add_library(crownless_sim
     src/sim/cc_scriven_codec.c
     src/sim/cc_sim.c
     src/sim/cc_census.c
+    src/sim/cc_census_layout.c
     src/sim/cc_custody.c
     src/sim/cc_sim_custody.c
     src/sim/cc_sim_hash.c
