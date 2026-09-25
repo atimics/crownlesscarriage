@@ -6522,10 +6522,49 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
                       958, 604, 9, MUTED);
 }
 
-static Vector2 DistrictMapScreenPoint(CcCensusPoint point)
+typedef struct {
+    float scale;
+    float centre_east_m;
+    float centre_north_m;
+} DistrictMapProjection;
+
+static DistrictMapProjection DistrictMapFit(const CcSim *sim, int32_t first)
 {
-    return (Vector2){65.0f + (float)(point.east_m + 1050) * 0.50f,
-                     138.0f + (float)(620 - point.north_m) * 0.40f};
+    int32_t min_east = 0, max_east = 0, min_north = 0, max_north = 0;
+    for (int32_t i = 0; i < CC_CENSUS_DISTRICTS_PER_TOWN; ++i) {
+        const CcCensusDistrict *district = &sim->census.districts[first + i];
+        CcCensusPoint point;
+        if (CcCensusDistrictCentre(sim, district->id, &point)) {
+            if (point.east_m < min_east) min_east = point.east_m;
+            if (point.east_m > max_east) max_east = point.east_m;
+            if (point.north_m < min_north) min_north = point.north_m;
+            if (point.north_m > max_north) max_north = point.north_m;
+        }
+        for (int32_t home = 0; home < district->dwelling_count; ++home) {
+            if (!CcCensusDwellingEntrance(sim, district->id, home, &point))
+                continue;
+            if (point.east_m < min_east) min_east = point.east_m;
+            if (point.east_m > max_east) max_east = point.east_m;
+            if (point.north_m < min_north) min_north = point.north_m;
+            if (point.north_m > max_north) max_north = point.north_m;
+        }
+    }
+    DistrictMapProjection fit = {
+        .scale = fminf(830.0f / (float)(max_east - min_east + 80),
+                       440.0f / (float)(max_north - min_north + 80)),
+        .centre_east_m = (float)(min_east + max_east) * 0.5f,
+        .centre_north_m = (float)(min_north + max_north) * 0.5f
+    };
+    return fit;
+}
+
+static Vector2 DistrictMapScreenPoint(CcCensusPoint point,
+                                      DistrictMapProjection fit)
+{
+    return (Vector2){475.0f +
+                         ((float)point.east_m - fit.centre_east_m) * fit.scale,
+                     387.0f -
+                         ((float)point.north_m - fit.centre_north_m) * fit.scale};
 }
 
 static void DrawDistrictMap(const CcSim *sim, int32_t selected,
@@ -6543,6 +6582,7 @@ static void DrawDistrictMap(const CcSim *sim, int32_t selected,
     if (first < 0) return;
     if (selected < 0 || selected >= CC_CENSUS_DISTRICTS_PER_TOWN)
         selected = 0;
+    DistrictMapProjection fit = DistrictMapFit(sim, first);
     DrawPanel((Rectangle){28, 76, 895, 574}, PANEL);
     DrawPanel((Rectangle){938, 82, 322, 538}, PANEL);
     CcOverlayDrawText(TextFormat("%s / THE DISTRICTS", town->name),
@@ -6552,9 +6592,9 @@ static void DrawDistrictMap(const CcSim *sim, int32_t selected,
     for (int32_t i = 0; i < CC_CENSUS_ROADS_PER_TOWN; ++i) {
         CcCensusRoad road;
         if (!CcCensusRoadAt(sim, town->id, i, &road)) continue;
-        Vector2 a = DistrictMapScreenPoint(road.from);
-        Vector2 turn = DistrictMapScreenPoint(road.corner);
-        Vector2 b = DistrictMapScreenPoint(road.to);
+        Vector2 a = DistrictMapScreenPoint(road.from, fit);
+        Vector2 turn = DistrictMapScreenPoint(road.corner, fit);
+        Vector2 b = DistrictMapScreenPoint(road.to, fit);
         DrawLineEx(a, turn, 3.0f, Fade(CC_GOLD, 0.78f));
         DrawLineEx(turn, b, 3.0f, Fade(CC_GOLD, 0.78f));
     }
@@ -6564,7 +6604,7 @@ static void DrawDistrictMap(const CcSim *sim, int32_t selected,
             CcCensusPoint entrance;
             if (!CcCensusDwellingEntrance(sim, district->id, home,
                                           &entrance)) continue;
-            Vector2 marker = DistrictMapScreenPoint(entrance);
+            Vector2 marker = DistrictMapScreenPoint(entrance, fit);
             if (i == selected && home == selected_dwelling)
                 DrawCircleV(marker, 6.0f, CC_GOLD);
             DrawCircleV(marker, i == selected ? 2.5f : 1.7f,
@@ -6572,7 +6612,7 @@ static void DrawDistrictMap(const CcSim *sim, int32_t selected,
         }
         CcCensusPoint centre;
         if (!CcCensusDistrictCentre(sim, district->id, &centre)) continue;
-        Vector2 point = DistrictMapScreenPoint(centre);
+        Vector2 point = DistrictMapScreenPoint(centre, fit);
         DrawCircleV(point, i == selected ? 11.0f : 8.0f,
                     i == selected ? TEAL : INK);
         CcOverlayDrawText(district->name, (int)point.x + 13,
@@ -11363,13 +11403,14 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                      i += CC_CENSUS_DISTRICTS_PER_TOWN) {
                     if (sim->census.districts[i].settlement_id !=
                         sim->player.location_id) continue;
+                    DistrictMapProjection fit = DistrictMapFit(sim, i);
                     for (int32_t j = 0; j < CC_CENSUS_DISTRICTS_PER_TOWN; ++j) {
                         CcCensusPoint centre;
                         if (!CcCensusDistrictCentre(sim,
                                 sim->census.districts[i + j].id,
                                 &centre)) continue;
                         if (CheckCollisionPointCircle(mouse,
-                                DistrictMapScreenPoint(centre), 14.0f)) {
+                                DistrictMapScreenPoint(centre, fit), 14.0f)) {
                             local->selected_district = j;
                             local->selected_dwelling = -1;
                             return;
@@ -11384,7 +11425,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                             CcCensusPoint entrance;
                             if (!CcCensusDwellingEntrance(sim, district->id,
                                     home, &entrance)) continue;
-                            Vector2 point = DistrictMapScreenPoint(entrance);
+                            Vector2 point = DistrictMapScreenPoint(entrance, fit);
                             float dx = mouse.x - point.x, dy = mouse.y - point.y;
                             float distance = dx * dx + dy * dy;
                             if (distance >= nearest) continue;
