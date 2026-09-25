@@ -81,6 +81,11 @@ async function main() {
     await layout(`${stage} town`);
     const frame = await page.evaluate(() => Module.crownlessTouchFrame);
     if (frame.scene !== 'trade' && !frame.reading.includes('Baker')) {
+      for (let trayPage = 0; trayPage < 4; ++trayPage) {
+        if (await page.locator('#touch-actions .touch-buttons button')
+            .filter({hasText: 'Enter Bakery'}).count()) break;
+        await tap('More objects', `${stage} town shops`);
+      }
       await tap('Enter Bakery', `${stage} town`);
       await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'),
         undefined, {timeout: 30000});

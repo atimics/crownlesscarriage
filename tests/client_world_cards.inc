@@ -164,9 +164,20 @@ static int RunWorldCardRegression(void)
         view = VIEW_LOCAL;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         ContextActionSet cards = BuildContextActions(&sim, &local, view, selected, 0);
-        CARD_CHECK(local.interactions.count > 4 && cards.count == 4 &&
+        CARD_CHECK(local.interactions.count > 4 && cards.count > 4 &&
             cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
-            "Town controls show nearby objects and stable care.");
+            "Town controls page every object and keep stable care nearby.");
+        const CcLocalPlaceProfile *shop_profile = CcLocalPlaceProfileForSettlement(
+            CcSimSettlement(&sim, sim.player.location_id));
+        for (int32_t shop_kind = 0; shop_kind < CC_LOCAL_SHOP_COUNT; ++shop_kind) {
+            const CcLocalShop *shop = CcLocalShopAt(shop_profile, (CcLocalShopKind)shop_kind);
+            bool listed = false;
+            for (int32_t i = 0; i < cards.count; ++i)
+                if (cards.items[i].target.kind == CC_INTERACTION_DOOR &&
+                    cards.items[i].target.object == (uint64_t)shop->building_index + 1U)
+                    listed = true;
+            CARD_CHECK(listed, "Every local shop must have a reachable town card.");
+        }
         CARD_CHECK(ContextCardsPerPage() == 4, "The tray must show four choices.");
         const CcInteractionTarget *first_card = CcInteractionFind(
             &local.interactions, cards.items[0].target);
@@ -188,7 +199,7 @@ static int RunWorldCardRegression(void)
         local.course.situation_witness_active = false;
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         cards = BuildContextActions(&sim, &local, view, selected, 0);
-        CARD_CHECK(cards.count == 4 && cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
+        CARD_CHECK(cards.count > 4 && cards.items[3].kind == CONTEXT_ACTION_CARE_HORSES,
             "Stable care remains visible after the witness leaves.");
         CARD_CHECK(cards.items[0].target.kind == CC_INTERACTION_DOOR,
             "The market hall stays in the ordinary town tray.");
@@ -222,7 +233,7 @@ static int RunWorldCardRegression(void)
         unavailable->available = true;
         message[0] = '\0';
 
-        CARD_CHECK(cards.count == 4 && ContextCardCount(&cards, 0) == 4,
+        CARD_CHECK(cards.count > 4 && ContextCardCount(&cards, 0) == 4,
             "Town controls must show nearby objects and care together.");
         /* Card identity remains valid when the object is outside the camera. */
         CcInteractionTarget *door = NULL;

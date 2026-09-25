@@ -94,7 +94,16 @@ async function main() {
       await controls.button(/^Back/).tap();
       await page.waitForFunction(() => Module.crownlessScreen === 'playing', undefined, {timeout: 15000});
 
-      await controls.button('Enter Bakery').tap();
+      for (let trayPage = 0; trayPage < 4; ++trayPage) {
+        const buttons = await controls.buttons();
+        if (buttons.some(button => button.label === 'Enter Bakery')) {
+          await controls.button('Enter Bakery').tap();
+          break;
+        }
+        assert(buttons.some(button => button.label === 'More objects'),
+          `${name}: town tray lists the bakery`);
+        await controls.button('More objects').tap();
+      }
       await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'), undefined, {timeout: 30000});
       await controls.button(/^Trade .*Baker/).tap();
       await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade', undefined, {timeout: 30000});

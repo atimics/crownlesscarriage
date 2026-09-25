@@ -47,13 +47,25 @@ async function main() {
       undefined, {timeout: 120000});
   }
 
-  async function enterTrade(page) {
-    const controls = gameControls(page, true);
-    if (await page.evaluate(() => Module.crownlessTouchFrame.scene !== 'trade')) {
+  async function chooseBakery(controls) {
+    for (let page = 0; page < 4; ++page) {
       const buttons = await controls.buttons();
       if (buttons.some(button => button.label === 'Enter Bakery')) {
         await controls.button('Enter Bakery').tap();
+        return;
       }
+      assert(buttons.some(button => button.label === 'More objects'),
+        'The town tray must give a page to the bakery');
+      await controls.button('More objects').tap();
+    }
+    assert.fail('The town tray must list the bakery');
+  }
+
+  async function enterTrade(page) {
+    const controls = gameControls(page, true);
+    if (await page.evaluate(() => Module.crownlessTouchFrame.scene !== 'trade')) {
+      const reading = await controls.reading();
+      if (!reading.includes('Baker')) await chooseBakery(controls);
       await page.waitForFunction(() =>
         Module.crownlessTouchFrame.reading.includes('Baker'), undefined, {timeout: 45000});
       await controls.button(/^Trade .*Baker/).tap();
@@ -69,7 +81,7 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     await startGame(page);
     const controls = gameControls(page, true);
-    await controls.button('Enter Bakery').waitFor();
+    const start = await page.evaluate(() => Module.crownlessLocalNavigation);
     if (width === 390) {
       const mobileDetailSize = await page.locator('#touch-actions .touch-detail')
         .evaluate(node => getComputedStyle(node).fontSize);
@@ -81,9 +93,12 @@ async function main() {
 
     await fs.mkdir(path.join(output, name), {recursive: true});
     await page.screenshot({path: path.join(output, name, 'town.png')});
-    await controls.button('Enter Bakery').tap();
+    await chooseBakery(controls);
     await page.waitForFunction(() => Module.crownlessTouchFrame.reading.includes('Baker'),
       undefined, {timeout: 45000});
+    const arrival = await page.evaluate(() => Module.crownlessLocalNavigation);
+    assert(Math.hypot(arrival.x - start.x, arrival.z - start.z) > 2,
+      `${name}: entering the bakery walks across town`);
     await controls.button(/^Trade .*Baker/).tap();
     await page.waitForFunction(() => Module.crownlessTouchFrame.scene === 'trade',
       undefined, {timeout: 45000});

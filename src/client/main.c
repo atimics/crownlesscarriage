@@ -4713,8 +4713,8 @@ static ContextActionSet BuildContextActions(
                     GridDistance(LocalPosition(local),
                         (Vector2){previous->approach_x, previous->approach_z}) : 0.0f;
                 if (previous == NULL || previous_priority > priority ||
-                    (previous_priority == priority && (priority > 0 ||
-                        previous_distance <= distance))) break;
+                    (previous_priority == priority &&
+                        previous_distance <= distance)) break;
                 ContextAction swap = set.items[at - 1];
                 set.items[at - 1] = set.items[at]; set.items[at] = swap;
                 --at;
@@ -4791,15 +4791,24 @@ static ContextActionSet BuildContextActions(
                     if (!included) steady.items[steady.count++] = *action;
                 }
             }
+            for (int i = 0; i < set.count; ++i) {
+                bool included = false;
+                for (int j = 0; j < steady.count; ++j)
+                    if (steady.items[j].kind == set.items[i].kind &&
+                        CcInteractionKeyEqual(steady.items[j].target,
+                                              set.items[i].target)) included = true;
+                if (!included) steady.items[steady.count++] = set.items[i];
+            }
             set = steady;
         }
         if (set.count > 4) {
             for (int i = 4; i < set.count; ++i)
                 if (set.items[i].kind == CONTEXT_ACTION_CARE_HORSES) {
-                    set.items[3] = set.items[i];
+                    ContextAction care = set.items[i];
+                    for (int j = i; j > 3; --j) set.items[j] = set.items[j - 1];
+                    set.items[3] = care;
                     break;
                 }
-            set.count = 4;
         }
         return set;
     }

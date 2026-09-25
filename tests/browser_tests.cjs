@@ -1065,7 +1065,7 @@ async function main() {
       assert(roadJourney.driveChoices > 0, JSON.stringify(roadJourney));
       assert(roadJourney.roadsideStops > 0, JSON.stringify(roadJourney));
       assert(roadJourney.bridgePaid, JSON.stringify(roadJourney));
-      await controls.button('Deliver promise Company store').tap();
+      await controls.button('Deliver promise Grain merchant').tap();
       const storeApproach = [];
       for (let step = 0; step < 18; ++step) {
         if (await controls.button('Deliver promise Oren — Company clerk').read())
