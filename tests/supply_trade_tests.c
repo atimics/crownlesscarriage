@@ -178,10 +178,11 @@ static void CheckJournal(void)
     (void)remove(path);
 }
 
-static void CheckLegacy(void)
+static void CheckLegacy(uint32_t version)
 {
     Prepare(0);
-    sim.schema_version = 116U;
+    CcTestStampLegacyGoods(&sim, version);
+    CC_CHECK(CcGoodCountForSchema(version) == 14);
     /* A legacy save omits raw stone and orders from every store and hash. */
     unsigned char *bytes = NULL;
     size_t length = 0;
@@ -191,6 +192,8 @@ static void CheckLegacy(void)
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.player.coins == sim.player.coins);
     CC_CHECK(restored.settlements[3].stock[CC_GOOD_RAW_STONE] == 24);
+    for (int32_t site = 0; site < restored.road_site_count; ++site)
+        CC_CHECK(restored.road_sites[site].output_good != CC_GOOD_RAW_STONE);
     CC_CHECK(CcSimSupplyOffer(&restored, CC_GOOD_WHEAT).ready);
     sim = restored;
     RoundTrip();
@@ -198,7 +201,8 @@ static void CheckLegacy(void)
 
 int main(void)
 {
-    CheckWheat(); CheckStone(); CheckRejections(); CheckBuyback(); CheckJournal(); CheckLegacy();
+    CheckWheat(); CheckStone(); CheckRejections(); CheckBuyback(); CheckJournal();
+    for (uint32_t version = 116; version <= 118; ++version) CheckLegacy(version);
     puts("PASS paid local deliveries: quotes, profit, stocks, stock demand, atomic rejection, save and journal replay");
     return 0;
 }

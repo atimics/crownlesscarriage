@@ -142,6 +142,11 @@ static int RunCaptureFrameRegression(void)
     return 0;
 }
 
+static bool CaptureSceneShowsView(const CcCaptureScene *scene, ClientView expected)
+{
+    return scene->view != NULL && *scene->view == expected;
+}
+
 static int RunCaptureSceneRegression(void)
 {
     static CcSim sim;
@@ -165,12 +170,12 @@ static int RunCaptureSceneRegression(void)
         .capture_town_index = 4, .capture_shop_good = CC_GOOD_STONE};
     if (!CcCapturePrepareWorld(&request, &sim, NULL) ||
         !CcCapturePrepareUX(&request, &scene) || !local.market_interior ||
-        view != VIEW_TRADE || LocalActiveShop(&sim, &local) == NULL ||
+        !CaptureSceneShowsView(&scene, VIEW_TRADE) || LocalActiveShop(&sim, &local) == NULL ||
         LocalActiveShop(&sim, &local)->kind != CC_LOCAL_SHOP_STONECUTTER)
         return ClientRegressionFailure("Shop capture must open the selected shop and its trade panel.");
     request.capture_shop_front = true;
     if (!CcCapturePrepareUX(&request, &scene) || local.market_interior ||
-        view != VIEW_LOCAL)
+        !CaptureSceneShowsView(&scene, VIEW_LOCAL))
         return ClientRegressionFailure("Shop front capture must show the street door.");
     CcSimInit(&sim, UINT32_C(0xc0a71a9e));
     request = (CcCaptureRequest){.capture_underroad = true};

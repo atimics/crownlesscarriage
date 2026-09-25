@@ -1,4 +1,4 @@
-"""Check millennial replay against the parent simulation's saved state hashes."""
+"""Check millennial replay against the saved baseline for each schema."""
 
 import csv
 import io
@@ -7,20 +7,22 @@ import sys
 
 
 EXPECTED_HASHES = {
-    1: "1545048496086583334",
-    2: "914304945445556228",
-    3: "7099700105504748256",
+    118: {1: "1545048496086583334", 2: "914304945445556228", 3: "7099700105504748256"},
+    # Schema 119 adds raw stone inventory and mine production.
+    119: {1: "7437858379406480744", 2: "12539320987051683624", 3: "13067450569132321010"},
 }
 
 
 def main() -> int:
     binary = sys.argv[1]
-    for seed, expected in EXPECTED_HASHES.items():
+    for seed in (1, 2, 3):
         output = subprocess.check_output(
             [binary, "--seed", str(seed), "--years", "1000", "--final-only"],
             text=True,
         )
         row = next(csv.DictReader(io.StringIO(output)))
+        schema = int(row["schema_version"])
+        expected = EXPECTED_HASHES[schema][seed]
         actual = row["state_hash"]
         if actual != expected:
             print(f"seed {seed}: expected {expected}, got {actual}", file=sys.stderr)
