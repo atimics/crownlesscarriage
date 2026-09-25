@@ -314,6 +314,17 @@ add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
 
+add_executable(crownless_determinism_trace tools/determinism_trace.c)
+target_link_libraries(crownless_determinism_trace PRIVATE crownless_persistence)
+cc_strict_warnings(crownless_determinism_trace)
+if(EMSCRIPTEN)
+    # Run under node with direct file access, so CI can compare the WASM
+    # hash list with the native ones.
+    target_link_options(crownless_determinism_trace PRIVATE
+        "-sNODERAWFS=1" "-sALLOW_MEMORY_GROWTH=1" "-sSTACK_SIZE=16777216"
+        "-sEXIT_RUNTIME=1")
+endif()
+
 add_executable(crownless_underroad tools/underroad_construction.c)
 cc_strict_warnings(crownless_underroad)
 

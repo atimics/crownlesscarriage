@@ -51,4 +51,24 @@ bool CcJournalClose(CcJournal **journal, CcSim *sim,
 
 void CcJournalAbandon(CcJournal **journal);
 
+/* Diagnostic hook for journal replay on load. When set, it is called once
+   for each replayed record, after the record is applied and before its
+   committed post-state hash is checked. Tools use it to print a hash trace
+   that can be compared across platforms. It is process-wide state; pass
+   NULL to clear it. */
+typedef struct CcJournalReplayStep {
+    uint64_t ordinal;
+    int32_t operation_kind;
+    int32_t command_kind;
+    int32_t step_count;
+    uint64_t pre_state_hash;
+    uint64_t committed_post_state_hash;
+    bool applied;
+} CcJournalReplayStep;
+typedef void (*CcJournalReplayObserver)(void *context,
+                                        const CcJournalReplayStep *step,
+                                        const CcSim *sim);
+void CcJournalSetReplayObserver(CcJournalReplayObserver observer,
+                                void *context);
+
 #endif

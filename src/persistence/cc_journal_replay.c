@@ -1,4 +1,5 @@
 #include "persistence/cc_journal_internal.h"
+#include "persistence/cc_save.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -8,6 +9,16 @@ enum {
     CC_SCHEMA12_COMMAND_STEAL_DRAGON_NAMED_TREASURE = 16,
     CC_SCHEMA12_COMMAND_RETURN_DRAGON_NAMED_TREASURE = 17,
 };
+
+static CcJournalReplayObserver replay_observer = NULL;
+static void *replay_observer_context = NULL;
+
+void CcJournalSetReplayObserver(CcJournalReplayObserver observer,
+                                void *context)
+{
+    replay_observer = observer;
+    replay_observer_context = context;
+}
 
 static void SetError(char *error, size_t capacity, const char *message)
 {
@@ -193,6 +204,18 @@ bool CcJournalReplay(sqlite3 *database, CcSim *sim,
             default:
                 applied = false;
                 break;
+        }
+        if (replay_observer != NULL) {
+            CcJournalReplayStep step = {
+                .ordinal = ordinal,
+                .operation_kind = (int32_t)operation,
+                .command_kind = stored_command_kind,
+                .step_count = step_count,
+                .pre_state_hash = pre_hash,
+                .committed_post_state_hash = post_hash,
+                .applied = applied
+            };
+            replay_observer(replay_observer_context, &step, sim);
         }
         if (!applied || CcSimHash(sim) != post_hash) {
             SetError(error, error_capacity,

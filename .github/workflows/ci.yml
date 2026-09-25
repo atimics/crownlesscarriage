@@ -169,6 +169,83 @@ jobs:
           ulimit -s unlimited
           ctest --test-dir build --output-on-failure -E '^sqlite_round_trip$'
 
+  determinism-trace:
+    name: Determinism trace / ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+          - platform: macos-arm64
+            os: macos-14
+          - platform: wasm
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite development files
+        if: matrix.platform == 'linux-x86_64'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - uses: emscripten-core/setup-emsdk@v15
+        if: matrix.platform == 'wasm'
+        with:
+          version: 5.0.4
+          actions-cache-folder: emsdk-cache
+      - name: Build the trace tool
+        run: |
+          configure="cmake"
+          if [ "${{ matrix.platform }}" = wasm ]; then configure="emcmake cmake"; fi
+          $configure -S . -B build-trace -DCMAKE_BUILD_TYPE=Release \
+            -DCC_BUILD_CLIENT=OFF -DCC_BUILD_BENCHMARKS=OFF \
+            -DBUILD_TESTING=OFF -DCC_WARNINGS_AS_ERRORS=ON
+          cmake --build build-trace --target crownless_determinism_trace --parallel
+      - name: Record state hashes
+        run: |
+          ulimit -s unlimited || ulimit -s 65520
+          tool=./build-trace/crownless_determinism_trace
+          if [ "${{ matrix.platform }}" = wasm ]; then
+            tool="node ./build-trace/crownless_determinism_trace.js"
+          fi
+          out="trace-${{ matrix.platform }}.txt"
+          {
+            $tool seeds 300
+            for seed in 1 0x205722 0x3235a7ed 0xc0a7118e 0xffffffff; do
+              $tool geometry "$seed"
+            done
+            # Every shipped save: load, migrate, replay its journal.
+            $tool replay tests/fixtures/shipped/*.ccsave || true
+          } > "$out"
+          wc -l "$out"
+          grep -E 'DIVERGED|load-failed' "$out" | cut -c1-300 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: determinism-trace-${{ matrix.platform }}
+          path: trace-${{ matrix.platform }}.txt
+          if-no-files-found: error
+
+  determinism-compare:
+    name: Cross-platform determinism
+    needs: determinism-trace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: determinism-trace-*
+          merge-multiple: true
+      - name: Compare hash lists
+        run: |
+          status=0
+          for other in macos-arm64 wasm; do
+            if ! diff -u trace-linux-x86_64.txt "trace-$other.txt" > "diff-$other.txt"; then
+              echo "::error::linux-x86_64 and $other state hashes differ"
+              head -c 20000 "diff-$other.txt"
+              status=1
+            fi
+          done
+          exit $status
+
   # The matrix below re-runs this same non-client suite (plus the full
   # client/graphics suite in the `client` job) on every release tag, across
   # both build types and operating systems, as a release-verification pass.
