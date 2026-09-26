@@ -17,6 +17,7 @@ Silverwick also has a mine supply office near the quarry.
 | Stationer | Paper |
 | Silverwick mine supply office | Raw stone |
 
+The stationer sells paper and buys wood to make it; it does not take paper back.
 The main hall's grain merchant also receives town promises. Bread belongs at
 the bakery; cut stone belongs at the stonecutter. The grain merchant sells wheat
 to carry to a bakery. Silverwick's mine supply office sells raw stone for a

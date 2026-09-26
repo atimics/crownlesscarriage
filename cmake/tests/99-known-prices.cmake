@@ -1,0 +1,5 @@
+add_executable(known_prices_tests tests/known_prices_tests.c)
+target_link_libraries(known_prices_tests PRIVATE crownless_persistence)
+cc_strict_warnings(known_prices_tests)
+cc_large_sim_stack(known_prices_tests)
+add_test(NAME known_prices_under_the_fog COMMAND known_prices_tests)
