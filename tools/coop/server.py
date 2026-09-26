@@ -969,6 +969,9 @@ def main():
               threads=8, connection_limit=128, channel_timeout=15, max_request_body_size=MAX_BODY,
               max_request_header_size=16384, clear_untrusted_proxy_headers=True)
     finally:
+        # A second signal must not interrupt the final save.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         stop.set()
         thread.join()
         worlds.close()
