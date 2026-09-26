@@ -33,7 +33,8 @@ typedef enum CcGateVoiceEvidence {
     CC_GATE_EVIDENCE_STORY,  /* the speaker's gossip version of a story */
     CC_GATE_EVIDENCE_SOURCE, /* that version's source_character_id */
     CC_GATE_EVIDENCE_TOWN,   /* the town now against the company's last view */
-    CC_GATE_EVIDENCE_FACE    /* the speaker is a face the company remembers */
+    CC_GATE_EVIDENCE_FACE,   /* the speaker is a face the company remembers */
+    CC_GATE_EVIDENCE_ROAD    /* a traveller's own road: the town they left */
 } CcGateVoiceEvidence;
 
 /* The spoken gate order: a greeting, what happened, why, and who said so.
@@ -78,6 +79,9 @@ typedef struct CcGateVoiceKey {
 typedef struct CcGateVoice {
     CcId settlement_id;
     CcId speaker_id;
+    /* Milestone 4: a traveller met on the road, not a resident at the gate.
+       The town is named, not "here", and nobody says "You're back." */
+    bool on_road;
     char speaker[CC_NAME_CAPACITY];
     /* "innkeeper", "resident", and so on, for the name plate. */
     char speaker_label[CC_NAME_CAPACITY];
@@ -121,6 +125,13 @@ bool CcGateVoiceNext(const CcSim *sim, CcGateVoice *voice);
 /* Build the line for one change and one speaker. Exposed for tests and tools. */
 bool CcGateVoiceSay(const CcSim *sim, CcId speaker_id,
                     const CcReturnChange *change, CcGateVoice *voice);
+/* Milestone 4: a traveller on the road tells a change about `town` from their
+   own telling of the evidence story. The event comes first and names the
+   town, then the hedge or who said so, then, when the traveller has just
+   left that town, a word about their own road. False when the traveller
+   does not hold the story: a traveller only passes on what they carry. */
+bool CcGateVoiceSayOnRoad(const CcSim *sim, CcId traveller_id, CcId town,
+                          const CcReturnChange *change, CcGateVoice *voice);
 /* Whether an unknown, unspoken change remains. Call it again after the told
    command: one story can explain several changes. */
 bool CcGateVoiceHasMore(const CcSim *sim, const CcGateVoice *voice);

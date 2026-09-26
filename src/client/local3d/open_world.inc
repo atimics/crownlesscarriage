@@ -1322,6 +1322,130 @@ void CcLocalOpenWorldCarriageTargetsInternal(const CcSim *sim,
     }
 }
 
+/* The Return, milestone 4: what the road shows of its news
+   (sim/cc_road_news.h). Read only: the sim decides what the company met;
+   these only draw it where it was met. */
+static bool RoadNewsRoutePose(const CcSim *sim, const CcWorldManifest *manifest,
+                              float progress, float ahead, float side,
+                              Vector3 *at, float *yaw)
+{
+    const CcWorldRoutePlacement *route =
+        CcWorldRoutePlacementForId(manifest, sim->journey.route_id);
+    CcWorldPoint point;
+    float heading = 0.0f;
+    if (route == NULL || !CcWorldRoutePose(route, sim->journey.origin_id,
+            CcWorldRouteJourneyAmount(route, sim->journey.origin_id, progress),
+            &point, &heading)) return false;
+    Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
+    Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
+    at->x = point.x + right.x * side + forward.x * ahead;
+    at->z = point.z + right.z * side + forward.z * ahead;
+    at->y = CcWorldTerrainHeight(manifest, at->x, at->z);
+    *yaw = heading;
+    return true;
+}
+
+/* The newest piece of news of one kind met on this leg. */
+static const CcRoadNews *RoadNewsOnThisLeg(const CcSim *sim, CcRoadNewsChannel channel)
+{
+    if (!sim->journey.active) return NULL;
+    const CcRoadNews *best = NULL;
+    for (int32_t t = 0; t < sim->settlement_count && t < CC_MAX_SETTLEMENTS; ++t) {
+        const CcTownSeen *seen = &sim->return_memory.towns[t];
+        for (int32_t i = 0; seen->settlement_id != 0U && i < CC_RETURN_ROAD_NEWS; ++i) {
+            const CcRoadNews *news = &seen->road_news[i];
+            if (news->channel != (int32_t)channel ||
+                news->route_id != sim->journey.route_id ||
+                news->day < sim->journey.departure_day) continue;
+            if (best == NULL || news->tick > best->tick) best = news;
+        }
+    }
+    return best;
+}
+
+/* A milestone with a post and a notice nailed to it, on the near verge just
+   past where the company read it. */
+static void DrawRoadNewsNotice(const CcSim *sim, const CcWorldManifest *manifest)
+{
+    if (RoadNewsOnThisLeg(sim, CC_ROAD_NEWS_READ) == NULL) return;
+    Vector3 at;
+    float yaw;
+    if (!RoadNewsRoutePose(sim, manifest,
+            (float)CC_ROAD_NEWS_APPROACH_MILLI / 1000.0f, 14.0f, -3.8f, &at, &yaw))
+        return;
+    Color stone = {150, 146, 134, 255};
+    Color wood = {104, 76, 52, 255};
+    Color paper = {232, 222, 190, 255};
+    Color ink = {70, 58, 48, 255};
+    rlPushMatrix();
+    rlTranslatef(at.x, at.y, at.z);
+    rlRotatef(yaw * RAD2DEG, 0.0f, 1.0f, 0.0f);
+    /* A little larger than life, so it reads from the bench. */
+    rlScalef(1.5f, 1.5f, 1.5f);
+    /* the milestone stone, rounded at the top */
+    DrawCube((Vector3){0.0f, 0.36f, 0.55f}, 0.34f, 0.72f, 0.50f, stone);
+    DrawSphere((Vector3){0.0f, 0.72f, 0.55f}, 0.25f, stone);
+    /* the post and its board, facing the road */
+    DrawCube((Vector3){0.0f, 0.95f, 0.0f}, 0.13f, 1.90f, 0.13f, wood);
+    DrawCube((Vector3){0.03f, 1.55f, 0.0f}, 0.07f, 0.78f, 1.08f, ShadeColor(wood, 0.8f));
+    /* the notice itself, on the side toward the road and the bench */
+    DrawCube((Vector3){-0.02f, 1.55f, 0.0f}, 0.03f, 0.64f, 0.84f, paper);
+    for (int32_t line = 0; line < 4; ++line) {
+        float width = line == 0 ? 0.52f : 0.66f - (float)(line % 2) * 0.14f;
+        DrawCube((Vector3){-0.04f, 1.74f - (float)line * 0.13f, 0.0f},
+                 0.01f, line == 0 ? 0.06f : 0.035f, width, ink);
+    }
+    /* the nail heads */
+    DrawCube((Vector3){-0.04f, 1.84f, 0.36f}, 0.02f, 0.04f, 0.04f, ink);
+    DrawCube((Vector3){-0.04f, 1.84f, -0.36f}, 0.02f, 0.04f, 0.04f, ink);
+    rlPopMatrix();
+}
+
+/* The traveller who told the news, stopped on the near verge where the
+   company met them, facing the carriage as it comes. */
+static void DrawRoadNewsTraveller(const CcSim *sim, const CcWorldManifest *manifest,
+                                  float clock)
+{
+    const CcRoadNews *news = RoadNewsOnThisLeg(sim, CC_ROAD_NEWS_TOLD);
+    const CcCharacter *person = news != NULL ? CcSimCharacter(sim, news->source_id) : NULL;
+    if (person == NULL) return;
+    Vector3 at;
+    float yaw;
+    if (!RoadNewsRoutePose(sim, manifest,
+            (float)CC_ROAD_NEWS_TRAVELLER_MILLI / 1000.0f, 11.0f, -3.0f, &at, &yaw))
+        return;
+    CcNpcRole role = person->role == CC_CHARACTER_REFUGEE ? CC_NPC_ROLE_REFUGEE :
+        person->role == CC_CHARACTER_SCOUT ? CC_NPC_ROLE_SCOUT : CC_NPC_ROLE_TRAVELLER;
+    DrawNpcFigure3D(at, 0.92f, yaw + PI * 0.75f, person->appearance_seed, role,
+                    (Color){151, 103, 78, 255}, clock * 0.4f, CC_TRAVERSAL_IDLE);
+    /* a bundle on a stick, the mark of someone on the road */
+    Vector3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
+    Vector3 bundle = {at.x - right.x * 0.35f, at.y + 0.22f, at.z - right.z * 0.35f};
+    DrawSphere(bundle, 0.2f, (Color){132, 110, 80, 255});
+}
+
+/* Smoke on the horizon over a freshly burned destination: the town's own
+   smoke columns (the M2 prop, DrawSmokeColumnAt), scaled up so they read
+   from the road. More columns for a larger fire. */
+static void DrawRoadNewsSmoke(const CcSim *sim, const CcWorldManifest *manifest,
+                              float clock)
+{
+    CcId town = 0U;
+    int32_t damage = 0;
+    if (!CcRoadNewsSmokeAhead(sim, &town, &damage)) return;
+    const CcWorldSettlementPlacement *place = CcWorldSettlementPlacementForId(manifest, town);
+    if (place == NULL) return;
+    float spread = fmaxf(3.0f, place->radius * 0.35f);
+    static const float offsets[3][2] = {{0.0f, 0.0f}, {-0.8f, 0.6f}, {0.7f, -0.5f}};
+    int32_t columns = damage >= 60 ? 3 : damage >= 30 ? 2 : 1;
+    for (int32_t i = 0; i < columns; ++i) {
+        float x = place->center.x + offsets[i][0] * spread;
+        float z = place->center.z + offsets[i][1] * spread;
+        Vector3 base = {x, CcWorldTerrainHeight(manifest, x, z), z};
+        DrawSmokeColumnAt(base, 2.6f - 0.4f * (float)i, 0.9f + (float)i * 1.7f, clock);
+    }
+}
+
 void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             const CcWorldStream *stream,
                             const CcLocalAgent *agent,
@@ -1479,6 +1603,11 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
         DrawOpenWorldSettlement(sim, place, focus, kingdom_view, distant_view);
     }
     DrawOpenWorldSites(sim, &stream->manifest, focus, clock, kingdom_view);
+    if (storybook && !town_arrival) {
+        DrawRoadNewsSmoke(sim, &stream->manifest, clock);
+        DrawRoadNewsNotice(sim, &stream->manifest);
+        DrawRoadNewsTraveller(sim, &stream->manifest, clock);
+    }
     bool hero_embarked = carriage != NULL && carriage->hero_embarked;
     if (!hero_embarked) DrawAgentPath(agent, false);
     if (course != NULL &&

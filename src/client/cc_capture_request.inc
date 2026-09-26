@@ -66,6 +66,13 @@ typedef struct CcCaptureRequest {
     uint32_t capture_gate_seed;
     int32_t capture_gate_days;
     int32_t capture_gate_turns;
+    /* The Return, milestone 4: --capture-road-news SEED DAYS CHANNEL PNG
+       rides the same trip and stops on the road back as soon as the company
+       meets news of CHANNEL (told, read, or witnessed). */
+    bool capture_road_news;
+    uint32_t capture_road_news_seed;
+    int32_t capture_road_news_days;
+    int32_t capture_road_news_channel;
     bool capture_dragon_cave;
     bool capture_mine_yard;
     bool capture_mine_menu;
@@ -381,6 +388,30 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         request->capture_town_x = 82.0f;
         request->capture_town_z = 36.0f;
     }
+    request->capture_road_news = argc >= 2 &&
+        strcmp(argv[1], "--capture-road-news") == 0;
+    request->capture_road_news_seed = 0U;
+    request->capture_road_news_days = 0;
+    request->capture_road_news_channel = 0;
+    if (request->capture_road_news) {
+        char *seed_end = NULL, *days_end = NULL;
+        unsigned long seed = argc == 6 ? strtoul(argv[2], &seed_end, 10) : 0UL;
+        long days = argc == 6 ? strtol(argv[3], &days_end, 10) : -1L;
+        int32_t channel = argc != 6 ? 0 :
+            strcmp(argv[4], "told") == 0 ? CC_ROAD_NEWS_TOLD :
+            strcmp(argv[4], "read") == 0 ? CC_ROAD_NEWS_READ :
+            strcmp(argv[4], "witnessed") == 0 ? CC_ROAD_NEWS_WITNESSED : 0;
+        if (argc != 6 || seed_end == argv[2] || *seed_end != '\0' ||
+            days_end == argv[3] || *days_end != '\0' || days < 0 || days > 3650 ||
+            channel == 0) {
+            (void)fprintf(stderr,
+                "capture road news: SEED DAYS told|read|witnessed FRAME\n");
+            return false;
+        }
+        request->capture_road_news_seed = (uint32_t)seed;
+        request->capture_road_news_days = (int32_t)days;
+        request->capture_road_news_channel = channel;
+    }
     request->capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
     request->capture_mine_yard = argc >= 2 && strcmp(argv[1],"--capture-mine-yard") == 0;
@@ -549,11 +580,13 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
                     request->capture_parley ||
                     request->capture_aftermath || request->capture_golden || request->capture_town ||
                     request->capture_town_arrival || request->capture_return ||
+                    request->capture_road_news ||
                     request->capture_dragon_cave || request->capture_underroad ||
                     request->capture_atmosphere || request->capture_face ||
                     request->capture_room || request->capture_npc_review || request->capture_heraldry ||
                     request->capture_creature_media);
     request->capture_path = request->capture_gate_voice ? argv[5] :
+                               request->capture_road_news ? argv[5] :
                                request->capture_shop ? argv[4] :
                                request->capture_ux ? argv[3] : request->capture_storybook ? argv[4] :
                                request->capture_creature_media ? argv[3] :

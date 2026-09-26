@@ -28,4 +28,11 @@ int32_t CcReturnRideRoadPath(const CcSim *sim, CcId from, CcId to, CcId *path);
 bool CcReturnRideAlongPath(CcSim *sim, CcId destination, char *error,
                           size_t error_capacity);
 
+/* The same ride, stopped on the road as soon as `stop` says so after a step
+   (the journey stays active there). Returns false and fills `error` when a
+   leg fails or the ride reaches `destination` without stopping. */
+typedef bool (*CcReturnRideStop)(const CcSim *sim, void *context);
+bool CcReturnRideUntil(CcSim *sim, CcId destination, CcReturnRideStop stop,
+                       void *context, char *error, size_t error_capacity);
+
 #endif

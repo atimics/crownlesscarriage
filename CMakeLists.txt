@@ -127,6 +127,7 @@ add_library(crownless_sim
     src/sim/cc_sim.c
     src/sim/cc_census.c
     src/sim/cc_return.c
+    src/sim/cc_road_news.c
     src/sim/cc_return_ride.c
     src/sim/cc_census_layout.c
     src/sim/cc_shared_clock.c
@@ -183,6 +184,7 @@ add_library(crownless_story
     src/story/cc_core_conversation.c
     src/story/cc_core_participant.c
     src/story/cc_gate_voice.c
+    src/story/cc_road_voice.c
     src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)
