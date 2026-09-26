@@ -178,6 +178,43 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
         }
         return true;
     }
+    if (request->capture_return) {
+        /* The Return, milestone 2: ride the region by the real roads, wait
+           out the days away, and ride back -- the same shape of trip as
+           tools/return_digest.c's RideAll, sharing its ride driver
+           (sim/cc_return_ride.h) so this reflects an actual journey. Only
+           Thornford and Silverwick are ever the ride's two ends; TOWN
+           (Thornford, Gloamgate, or Silverwick) is always the return leg's
+           destination, so an intermediate town (Gloamgate) is read the
+           moment the company arrives there, before a further departure
+           would stamp a new "last seen" over the one we want to compare
+           against. */
+        CcId thornford = CcReturnRideTownByName(sim, "Thornford");
+        CcId silverwick = CcReturnRideTownByName(sim, "Silverwick");
+        CcId town = CcReturnRideTownByName(sim, request->capture_return_town);
+        if (town == 0U || thornford == 0U || silverwick == 0U) {
+            (void)fprintf(stderr, "capture return: unknown town %s\n",
+                          request->capture_return_town);
+            return false;
+        }
+        CcId home = town == silverwick ? silverwick : thornford;
+        CcId far = home == thornford ? silverwick : thornford;
+        if (sim->player.location_id != home) {
+            sim->player.location_id = home;
+            sim->carriage.location_id = home;
+        }
+        char ride_error[256];
+        if (!CcReturnRideAlongPath(sim, far, ride_error, sizeof(ride_error))) {
+            (void)fprintf(stderr, "capture return: %s\n", ride_error);
+            return false;
+        }
+        CcSimAdvanceDays(sim, request->capture_return_days);
+        if (!CcReturnRideAlongPath(sim, town, ride_error, sizeof(ride_error))) {
+            (void)fprintf(stderr, "capture return: %s\n", ride_error);
+            return false;
+        }
+        return true;
+    }
     if (request->capture_creature_media &&
         strcmp(request->capture_creature_family, "goblins") == 0) {
         sim->player.location_id = sim->goblins.lair_settlement_id;
@@ -367,6 +404,20 @@ static bool CcCapturePrepareDeparture(const CcCaptureRequest *request, CcCapture
     return true;
 }
 
+/* The arrival progress at which the carriage has rolled `distance` world
+   units in from the gate along this town's own carriage path. */
+static float CcCaptureArrivalProgressAt(float distance)
+{
+    Vector2 points[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t count = CcLocalTownCarriagePath(
+        true, points, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+    float length = 0.0f;
+    for (int32_t i = 0; i + 1 < count; ++i) {
+        length += hypotf(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+    }
+    return length > distance ? distance / length : 0.30f;
+}
+
 static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScene *scene)
 {
     uint32_t walk_cycle_mask = 0;
@@ -396,8 +447,35 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
     }
     if (request->capture_town_arrival) {
         BeginTownArrivalState(scene->local);
-        scene->local->convoy.phase_progress = request->capture_town_arrival_progress;
+        scene->local->convoy.phase_progress =
+            request->capture_town_arrival_progress >= 0.0f ?
+                request->capture_town_arrival_progress :
+                CcCaptureArrivalProgressAt(
+                    CcLocalTownEstablishingSubjectDistance());
         SetConvoyTownPose(&scene->local->convoy, 0.0f);
+        /* Stage the town the way the game does as the carriage rolls in. */
+        CcReturnDigest digest;
+        if (CcReturnDigestBuild(scene->sim, scene->sim->player.location_id,
+                                &digest)) {
+            CcReturnSceneCuesBuild(&digest, &scene->local->return_scene);
+            CcLocalReturnStagingPlace(scene->sim, &scene->local->return_scene);
+        }
+    }
+    if (request->capture_return) {
+        /* Frame the gate passage itself: every staged cue (the fresh
+           banner, the shuttered booth, the bare stall, the extra hungry
+           figure, the camp on the horizon, the gate-side smoke) sits by
+           the gate the company is still walking through, not deeper in
+           the coach court the default arrival progress settles into. */
+        BeginTownArrivalState(scene->local);
+        scene->local->convoy.phase_progress = CcCaptureArrivalProgressAt(
+            CcLocalTownEstablishingSubjectDistance());
+        SetConvoyTownPose(&scene->local->convoy, 0.0f);
+        CcReturnDigest digest;
+        if (CcReturnDigestBuild(scene->sim, scene->sim->player.location_id, &digest)) {
+            CcReturnSceneCuesBuild(&digest, &scene->local->return_scene);
+            CcLocalReturnStagingPlace(scene->sim, &scene->local->return_scene);
+        }
     }
     if (request->capture_face) {
         if (request->capture_face_view == 3) {
@@ -1004,6 +1082,10 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
         (void)snprintf(message, message_size, "%s town plan.",
                        CcSettlementFunctionName(
                            scene->sim->settlements[request->capture_town_index].function));
+    } else if (request->capture_return) {
+        (void)snprintf(message, message_size, "%s, %d days away.",
+                       CcSimSettlement(scene->sim, scene->sim->player.location_id)->name,
+                       request->capture_return_days);
     } else if (request->capture_atmosphere) {
         (void)snprintf(message, message_size, "%s.",
                        CcLocalAtmosphereName(request->capture_atmosphere_preset));

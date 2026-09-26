@@ -1,6 +1,7 @@
 # The Return
 
-Status: milestone 1 (design, last-seen record, change digest).
+Status: milestone 2 (the scene shows the changes), building on milestone 1
+(design, last-seen record, change digest).
 
 Crownless is a small life inside a big living history. The player sits on a
 carriage company's bench. The simulation is deep, but today the player mostly
@@ -32,7 +33,7 @@ with style packs (`assets/stylepacks`, #922), never as pre-rendered plates.
 | Town condition | `CcSimTownConditions`: burnt, rebuilding, lawless, peaceful, thriving, hungry, abandoned | `src/sim/cc_sim.c`, `CcTownCondition` in `src/sim/cc_sim.h` |
 | Condition in the scene | fire scars, hungry crowd, tuft colour, sky scar, lawless figures | `src/client/local3d/authored_places.inc`, `road_book.inc`, `town_sky.inc`, `actor_rendering.inc` |
 | Condition as text | the header line in town (`CcLocalTownConditionText`) | `src/client/cc_local_place.c`, `src/client/main.c` |
-| Captures | `--capture-town-state INDEX X Z PNG burnt\|rebuilding\|lawless\|peaceful\|thriving\|hungry` (the #880 variants), `--capture-town-arrival`, `--capture-road-arrival`, `--capture-storybook-arrival` | `src/client/cc_capture_request.inc`, `cc_capture_scenes.inc` |
+| Captures | `--capture-town-state INDEX X Z PNG burnt\|rebuilding\|lawless\|peaceful\|thriving\|hungry` (the #880 variants), `--capture-town-arrival`, `--capture-road-arrival`, `--capture-storybook-arrival`, `--capture-return SEED DAYS TOWN PNG` (milestone 2) | `src/client/cc_capture_request.inc`, `cc_capture_scenes.inc` |
 | Rulers | `CcKingdom.ruler_character_id`; succession pushes `CC_EVENT_ROYAL_SUCCESSION` | `src/sim/cc_sim.c` (succession, contested claims) |
 | Fires | dragon retaliation sets `fire_damage` and `last_fire_day`; masons repair it | `AdvanceDragonRetaliation`, `RepairSettlementFire` |
 | Food, prices, stock | `CcSettlement.hunger`, `stock[]`, `price[]`; shortage and famine events | `src/sim/cc_food_economy.c`, `cc_goods.c` |
@@ -121,9 +122,47 @@ anything to the player.
 
 1. **Record and digest (this change).** `src/sim/cc_return.[ch]`, schema 122,
    `crownless_return_digest` for review, and `tests/return_tests.c`.
-2. **The scene shows the changes.** Drive the town scene from the digest's top
-   changes. Most visuals already read live state; this milestone makes the
-   *changed* things prominent in the arrival shot.
+2. **The scene shows the changes (this change).** Drive the town scene from
+   the digest's top unknown changes (up to three).
+   `CcReturnSceneCuesBuild` (`src/client/cc_local_place.[ch]`) maps them to
+   cues; `CcLocalReturnStagingPlace` stands each cue's props in the town
+   (positions are written into the cues on the update path, when the
+   carriage rolls through the gate and again when it parks; draw code only
+   reads them, `DrawReturnArrivalStaging` in
+   `src/client/local3d/authored_places.inc`):
+   - **Fire** shows on the town itself, in every view, not only on
+     arrival. `fire_damage` sets how much burns; plots burn in a fixed
+     per-town order, nearest the gate first (the fire came in over the
+     approach road). A caught building is charred, soot-streaked, with a
+     hole burned through its roof; a building past its threshold by 75% is
+     a gutted shell: broken wall stumps with black tops, empty windows,
+     fallen rafters, rubble and embers, no roof. Landmarks and the east
+     windmill burn in the same order; compound stone scorches. Ash and
+     scorch lie on the ground round every burned plot. When the fire is new
+     news, dark smoke columns rise from the burned plots the arrival lens
+     sees.
+   - **Hunger**: a knot of thin, hunched people at the gate, some kneeling,
+     some lying on mats, with empty bowls.
+   - **The market**: a gate market (two or three striped stalls) stands on
+     every visit and carries the town's own stock. An empty market leaves
+     the tables bare with an upturned basket; a lost market boards the
+     nearest booth up (planks and an X). A lost service also boards the
+     real shop's front door and windows when that building still stands.
+   - A fresh banner for a new ruler; a bandit camp on the rise beyond.
+   - `cues.speaker` is a spot inside the gate kept clear of every prop, for
+     the gate voice's speaker (milestone 3).
+
+   The arrival opens on an **establishing shot**: a still, composed view
+   from the approach road down the carriage path into town, one authored
+   station per town profile (`TownEstablishingStationFor`,
+   `src/client/local3d/camera_composition.inc`). It holds while the
+   carriage rolls through the gate, then pans to the wide shot that watches
+   it park. `--capture-return SEED DAYS TOWN PNG` renders it after a real
+   ride (`src/sim/cc_return_ride.[ch]`); `--capture-town-arrival INDEX
+   establishing PNG` renders any town's first-visit establishing shot. The
+   header keeps one short journal line in place of the condition list once
+   the scene is already carrying the news (step 4 of the "fewer panels"
+   direction). Review frames: `docs/reviews/the-return-scene-2026-09-25/`.
 3. **The gate voice.** A resident at the gate speaks the top unknown change in
    their own words, using their own telling of the evidence story.
 4. **News on the road.** Travellers and roadside signs tell stories while the

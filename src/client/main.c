@@ -23,6 +23,8 @@
 #include "sim/cc_road_position.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_oven_court.h"
+#include "sim/cc_return.h"
+#include "sim/cc_return_ride.h"
 #include "story/cc_story.h"
 #include "story/cc_core_conversation.h"
 #include "story/cc_core_participant.h"
@@ -362,6 +364,10 @@ typedef struct LocalState {
     CcLocalWorldCarriageState world_carriage;
     CcClientDepartureTransition departure;
     CcClientArrivalTransition arrival;
+    /* The Return, milestone 2: the digest's top unknown changes, staged for
+       this town stay. Built once when the carriage parks (FinishTownArrival
+       State), on the update path; draw code only reads it. */
+    CcReturnSceneCues return_scene;
     float travel_time_blend;
     bool travel_fast_forward;
     bool travel_pointer_down;
@@ -1497,6 +1503,8 @@ static void ResetLocalState(LocalState *local)
         .town_position = {CC_LOCAL_CARRIAGE_X, 0.0f,
                           CC_LOCAL_CARRIAGE_Z}
     };
+    local->return_scene = (CcReturnSceneCues){
+        .service_lost_kind = -1, .boarded_building = -1};
 
     CcLocalAgentInit(
         &local->agent,
@@ -3329,9 +3337,17 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
     CcOverlayDrawText(fitted_title, 22, 18, title_size, INK);
     CcOverlayDrawText(summary, summary_x, 22, 10, road ? TEAL : CC_GOLD);
     if (!road && !site && place != NULL && !local->market_interior) {
+        /* The Return, milestone 2, step 4 ("fewer panels"): once the
+           arrival shot is already staging the change, the header keeps one
+           short journal line instead of the full condition keyword list. */
         char condition_text[96];
-        CcLocalTownConditionText(CcSimTownConditions(sim, place->id),
-                                 condition_text, sizeof(condition_text));
+        if (local->return_scene.active) {
+            CcReturnSceneJournalLine(&local->return_scene, condition_text,
+                                     sizeof(condition_text));
+        } else {
+            CcLocalTownConditionText(CcSimTownConditions(sim, place->id),
+                                     condition_text, sizeof(condition_text));
+        }
         int condition_width = CcOverlayMeasureText(condition_text, 8);
         CcOverlayDrawText(condition_text, GetScreenWidth() - condition_width - 22,
                           40, 8, MUTED);
@@ -7755,6 +7771,23 @@ static bool HandleExpedition(CcJournal *journal, CcSim *sim,
     return true;
 }
 
+/* The Return, milestone 2: look at what changed since the company left
+   and stand its props in the town -- once when the carriage rolls through
+   the gate (so the establishing shot already shows it) and again when it
+   parks, both on the update path. CcReturnDigestBuild only reads sim;
+   CcReturnSceneCuesBuild only reads the digest; CcLocalReturnStagingPlace
+   only writes the cues. Draw code never calls any of them. */
+static void StageReturnScene(const CcSim *sim, LocalState *local)
+{
+    local->return_scene = (CcReturnSceneCues){
+        .service_lost_kind = -1, .boarded_building = -1};
+    CcReturnDigest digest;
+    if (CcReturnDigestBuild(sim, sim->player.location_id, &digest)) {
+        CcReturnSceneCuesBuild(&digest, &local->return_scene);
+        CcLocalReturnStagingPlace(sim, &local->return_scene);
+    }
+}
+
 static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
                                    int32_t *selected, char *message,
                                    size_t message_capacity)
@@ -7762,6 +7795,7 @@ static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
     *selected = FirstOutgoingRouteIndex(sim);
     LeaveOpenWorld(local);
     ResetLocalStatePreservingAthletics(local);
+    StageReturnScene(sim, local);
     (void)snprintf(message, message_capacity,
                    "The carriage is parked in town.");
 }
@@ -10808,6 +10842,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (!sim->journey.active && local->open_world &&
                 local->arrival.phase == CC_CLIENT_ARRIVAL_TOWN) {
                 BeginTownArrivalState(local);
+                StageReturnScene(sim, local);
             }
             bool enter_pressed = ClientKeyPressed(KEY_ENTER);
             if (HandleTownArrivalAction(
@@ -12535,7 +12570,11 @@ int main(int argc, char **argv)
     CcCaptureConfigureRenderer(&capture_request);
 
     static CcSim sim;
-    CcSimInit(&sim, UINT32_C(0xc0a71a9e));
+    /* --capture-return rides its own seed over the real roads (like
+       tools/return_digest.c); every other capture keeps the fixed seed the
+       rest of the review fixtures were authored against. */
+    CcSimInit(&sim, capture_request.capture_return ?
+              capture_request.capture_return_seed : UINT32_C(0xc0a71a9e));
     CcJournal *journal = NULL;
     char startup_message[256] = "";
     char saved_world_load_error[256] = "";
@@ -12549,6 +12588,10 @@ int main(int argc, char **argv)
         (void)snprintf(startup_message, sizeof(startup_message), "%s",
                        journal != NULL ? "The company shares this carriage and clock." : error);
         CcCoopClientReady(journal != NULL ? "" : error);
+    } else if (capture_request.capture_return) {
+        /* CcCapturePrepareWorld rides the region and waits out the days
+           itself, so the digest reflects an actual ride, not a flat
+           28-day skip. */
     } else if (capture_active || benchmark.active) {
         CcSimAdvanceDays(&sim, 28);
     } else {
@@ -13200,7 +13243,8 @@ int main(int argc, char **argv)
                 CcLocalDrawStreet3D(&sim, &local.agent, &local.course,
                                     view == VIEW_CHARACTER,
                                     &local.convoy, clock,
-                                    local_target, local_bounds);
+                                    local_target, local_bounds,
+                                    &local.return_scene);
             }
             if (sim.mine.phase == CC_MINE_NONE && presentation.local_panels &&
                 view != VIEW_ENCOUNTER) {

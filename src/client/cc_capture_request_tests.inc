@@ -76,8 +76,27 @@ static int RunCaptureRequestRegression(void)
         request.capture_road_zoom_weight != 0.5f ||
         strcmp(request.capture_path, "arrival.png") != 0)
         return ClientRegressionFailure("Road arrival must retain the zoom capture alias.");
+    char *return_capture[] = {"crownless", "--capture-return", "4", "365",
+                              "Gloamgate", "return.png"};
+    if (!CcCaptureRequestParse(6, return_capture, &request) || !request.capture ||
+        !request.capture_return || request.capture_return_seed != 4U ||
+        request.capture_return_days != 365 ||
+        strcmp(request.capture_return_town, "Gloamgate") != 0 ||
+        strcmp(request.capture_path, "return.png") != 0)
+        return ClientRegressionFailure("Return capture must retain its seed, days, town, and path.");
+    return_capture[3] = "3651";
+    if (CcCaptureRequestParse(6, return_capture, &request))
+        return ClientRegressionFailure("Return capture must enforce its days range.");
+    return_capture[3] = "-1";
+    if (CcCaptureRequestParse(6, return_capture, &request))
+        return ClientRegressionFailure("Return capture must reject negative days.");
+    return_capture[3] = "365";
+    char *return_short[] = {"crownless", "--capture-return", "4", "365", "Gloamgate"};
+    if (CcCaptureRequestParse(5, return_short, &request))
+        return ClientRegressionFailure("Return capture must require a frame path.");
     if (!CcCaptureRequestParse(1, normal, &request) || request.capture ||
-        request.capture_road_arrival || request.capture_storybook)
+        request.capture_road_arrival || request.capture_storybook ||
+        request.capture_return)
         return ClientRegressionFailure("Each parse must reset the previous request.");
     (void)puts("PASS capture requests: play, paths, views, scene settings, and ranges");
     return 0;

@@ -1326,6 +1326,107 @@ Camera3D CcLocalStreetCameraInternal(const CcLocalAgent *agent, float clock,
     return camera;
 }
 
+/* A point on the arrival carriage path, `distance` world units in from the
+   gate, and the path's heading there. Every town's carriage enters through
+   the same gate (CC_LOCAL_TOWN_GATE_X/Z); only the lanes beyond it differ. */
+static Vector2 TownArrivalPathPoint(float distance, Vector2 *direction)
+{
+    Vector2 points[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t count = CcLocalTownCarriagePath(
+        true, points, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+    if (count < 2) {
+        if (direction != NULL) *direction = (Vector2){-1.0f, 0.0f};
+        return (Vector2){CC_LOCAL_TOWN_GATE_X - distance, CC_LOCAL_TOWN_GATE_Z};
+    }
+    float remaining = fmaxf(0.0f, distance);
+    for (int32_t i = 0; i + 1 < count; ++i) {
+        Vector2 delta = Vector2Subtract(points[i + 1], points[i]);
+        float segment = Vector2Length(delta);
+        if (segment < 0.0001f) continue;
+        if (remaining <= segment || i + 2 == count) {
+            if (direction != NULL) *direction = Vector2Scale(delta, 1.0f / segment);
+            return Vector2Add(points[i],
+                Vector2Scale(delta, fminf(remaining, segment) / segment));
+        }
+        remaining -= segment;
+    }
+    if (direction != NULL) *direction = (Vector2){-1.0f, 0.0f};
+    return points[count - 1];
+}
+
+/* How far the lens pans (in carriage travel) from the establishing shot
+   to the parked wide shot. */
+#define TOWN_ESTABLISHING_PAN_DISTANCE 16.0f
+
+/* The Return (docs/design/the-return.md): the arrival opens on a still,
+   composed establishing shot, Sierra style. The lens stands on the approach
+   a little to one side of the road and above eye height, and looks down the
+   carriage path into town: nothing big stands between it and the gate, the
+   carriage rolls into the middle ground, and the town (and whatever
+   happened to it) fills the background. Every town's carriage enters
+   through the same gate (CC_LOCAL_TOWN_GATE_X/Z), so each station is
+   authored relative to the gate and the town's own carriage lanes, one row
+   per town profile, like the other authored town screens. */
+typedef struct TownEstablishingStation {
+    float back;    /* along the approach, outside the gate (negative: inside) */
+    float side;    /* across the road; positive is the carriage's left */
+    float eye;     /* over the higher of the station's and the gate's ground */
+    float aim;     /* how far down the carriage path the lens looks */
+    float fovy;
+    float hold;    /* carriage distance in from the gate when the pan starts */
+    float subject; /* carriage distance where it reads best in the still */
+} TownEstablishingStation;
+
+/* Authored from rendered frames of every town (see
+   docs/reviews/the-return-scene-2026-09-25/). Alderwatch's gate opens onto
+   a bridge between ravine pylons, so its lens stands inside, past the
+   pylons, and lets the carriage roll in beneath it. */
+static TownEstablishingStation TownEstablishingStationFor(
+    CcSettlementFunction function)
+{
+    switch (function) {
+    case CC_SETTLEMENT_FORTRESS:
+        return (TownEstablishingStation){-10.5f, 0.0f, 4.0f, 26.0f, 46.0f, 25.0f, 20.5f};
+    case CC_SETTLEMENT_CAPITAL:
+        return (TownEstablishingStation){12.0f, 6.0f, 5.5f, 18.0f, 46.0f, 13.0f, 9.0f};
+    case CC_SETTLEMENT_DUNGEON_TOWN:
+        return (TownEstablishingStation){9.0f, -7.0f, 5.5f, 14.0f, 46.0f, 13.0f, 9.0f};
+    case CC_SETTLEMENT_FARMING:
+    case CC_SETTLEMENT_MINING:
+    case CC_SETTLEMENT_MARKET:
+    default:
+        return (TownEstablishingStation){7.5f, 2.6f, 4.1f, 20.0f, 46.0f, 13.0f, 9.0f};
+    }
+}
+
+float CcLocalTownEstablishingSubjectDistance(void)
+{
+    return TownEstablishingStationFor(active_place_function).subject;
+}
+
+static Camera3D TownEstablishingCamera(void)
+{
+    TownEstablishingStation authored = TownEstablishingStationFor(
+        active_place_function);
+    Vector2 gate = TownArrivalPathPoint(0.0f, NULL);
+    Vector2 look = TownArrivalPathPoint(26.0f, NULL);
+    Vector2 heading = Vector2Normalize(Vector2Subtract(look, gate));
+    Vector2 across = {heading.y, -heading.x};
+    Vector2 station = Vector2Add(gate, Vector2Add(
+        Vector2Scale(heading, -authored.back),
+        Vector2Scale(across, authored.side)));
+    Vector2 aim = TownArrivalPathPoint(authored.aim, NULL);
+    float ground = fmaxf(CcLocalTerrainHeightAt(station.x, station.y),
+                         CcLocalTerrainHeightAt(gate.x, gate.y));
+    return (Camera3D){
+        .position = {station.x, ground + authored.eye, station.y},
+        .target = {aim.x, CcLocalTerrainHeightAt(aim.x, aim.y) + 3.0f, aim.y},
+        .up = {0.0f, 1.0f, 0.0f},
+        .fovy = authored.fovy,
+        .projection = CAMERA_PERSPECTIVE,
+    };
+}
+
 static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
                                   float clock, int32_t art_height)
 {
@@ -1342,18 +1443,7 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         return PerspectiveCameraComposed(target, offset, 43.0f);
     }
 
-    float heading = convoy->town_heading_yaw;
-    Vector3 forward = {sinf(heading), 0.0f, cosf(heading)};
-    Vector3 right = {cosf(heading), 0.0f, -sinf(heading)};
-    Vector3 follow_target = Vector3Add(
-        convoy->town_position,
-        Vector3Add(Vector3Scale(forward, 5.2f),
-                   (Vector3){0.0f, 1.55f, 0.0f}));
-    Vector3 follow_position = Vector3Add(
-        convoy->town_position,
-        Vector3Add(Vector3Scale(forward, -10.5f),
-                   Vector3Add(Vector3Scale(right, 3.8f),
-                              (Vector3){0.0f, 3.0f, 0.0f})));
+    Camera3D establishing = TownEstablishingCamera();
     Vector3 wide_target = {
         arrival->target_x,
         target_height + CcLocalTerrainHeightAt(
@@ -1366,17 +1456,24 @@ static Camera3D TownArrivalCamera(const CcLocalConvoyState *convoy,
         SmoothStep01((convoy->phase_progress - 0.12f) / 0.72f));
     Vector3 wide_position = Vector3Add(wide_target, travel_offset);
     wide_position.y = CcLocalTerrainHeightAt(wide_position.x, wide_position.z) + 3.0f;
+    /* Hold the establishing shot while the carriage rolls through the gate,
+       then pan (the only camera move: a transition) to the wide shot that
+       watches it park. */
     float pull_out = SmoothStep01(
-        (convoy->phase_progress - 0.08f) / 0.78f);
+        (convoy->travelled -
+         TownEstablishingStationFor(active_place_function).hold) /
+        TOWN_ESTABLISHING_PAN_DISTANCE);
     Camera3D camera = {
-        .position = Vector3Lerp(follow_position, wide_position, pull_out),
-        .target = Vector3Lerp(follow_target, wide_target, pull_out),
+        .position = Vector3Lerp(establishing.position, wide_position, pull_out),
+        .target = Vector3Lerp(establishing.target, wide_target, pull_out),
         .up = {0.0f, 1.0f, 0.0f},
-        .fovy = 43.0f + (32.0f - 43.0f) * pull_out,
+        .fovy = establishing.fovy + (32.0f - establishing.fovy) * pull_out,
         .projection = CAMERA_PERSPECTIVE,
     };
-    camera = StreetCameraClearVolume(camera,
-        Vector3Add(convoy->town_position, (Vector3){0.0f, 1.55f, 0.0f}));
+    if (pull_out > 0.0f) {
+        camera = StreetCameraClearVolume(camera,
+            Vector3Add(convoy->town_position, (Vector3){0.0f, 1.55f, 0.0f}));
+    }
     if (active_place_function == CC_SETTLEMENT_CAPITAL) {
         /* The exchange roof crosses the avenue lens midway through arrival. */
         float x = convoy->town_position.x;

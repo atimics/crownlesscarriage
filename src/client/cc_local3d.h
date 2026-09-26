@@ -2,6 +2,7 @@
 #define CROWNLESS_LOCAL3D_H
 
 #include "client/cc_npc_appearance.h"
+#include "client/cc_local_place.h"
 #include "client/cc_local_shops.h"
 #include "client/cc_local_viewport.h"
 #include "client/cc_soundscape.h"
@@ -500,6 +501,16 @@ void CcLocalBindPlace(const CcSim *sim);
 void CcLocalBindOpenWorld(const CcWorldStream *stream);
 float CcLocalTerrainHeightAt(float x, float z);
 int32_t CcLocalTownCarriagePath(bool arriving, Vector2 *points, int32_t capacity);
+/* How far in from the gate (along the arrival carriage path) the carriage
+   reads best in the bound town's establishing shot. */
+float CcLocalTownEstablishingSubjectDistance(void);
+/* The Return, milestone 2: stand each built cue's props in the bound town
+   -- the hungry crowd and bare stalls by the gate, smoke over the burned
+   buildings, boards on the lost service's front -- clear of buildings, of
+   the carriage road, and of the gate voice's speaker spot. Call once on the
+   update path, right after CcReturnSceneCuesBuild; draw code only reads
+   the result. Binds the sim's current town. */
+void CcLocalReturnStagingPlace(const CcSim *sim, CcReturnSceneCues *cues);
 Vector3 CcLocalTerrainNormalAt(float x, float z);
 CcSoundCue CcLocalFootstepSurfaceAt(CcLocalSceneKind scene, float x, float z);
 
@@ -678,7 +689,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
                          const CcLocalCourse *course,
                          bool conversation,
                          const CcLocalConvoyState *convoy, float clock,
-                         RenderTexture2D target, Rectangle destination);
+                         RenderTexture2D target, Rectangle destination,
+                         const CcReturnSceneCues *return_scene);
 void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             const CcWorldStream *stream,
                             const CcLocalAgent *agent,

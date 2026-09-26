@@ -41,7 +41,7 @@ void CaptureTown(int town, int frame)
         BeginDrawing();
         ClearBackground(BLACK);
         CcLocalDrawStreet3D(&capture_sim, &hero, NULL, false, NULL, clock,
-                           capture_target, (Rectangle){0, 0, 630, 320});
+                           capture_target, (Rectangle){0, 0, 630, 320}, NULL);
         EndDrawing();
     }
     capture_frame = frame;
