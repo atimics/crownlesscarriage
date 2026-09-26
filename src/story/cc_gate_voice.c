@@ -586,9 +586,9 @@ static bool SayHeard(const CcSim *sim, const CcCharacter *speaker,
         else
             Copy(extent, sizeof(extent), FireExtent(voice->change.after));
         if (actor_named)
-            (void)snprintf(text, sizeof(text), "%s burned %s.", actor->value, extent);
+            (void)snprintf(text, sizeof(text), "%.80s burned %.60s.", actor->value, extent);
         else
-            (void)snprintf(text, sizeof(text), "Fire took %s.", extent);
+            (void)snprintf(text, sizeof(text), "Fire took %.60s.", extent);
         (void)AddClause(voice, CC_GATE_PART_EVENT,
                         from_story ? CC_GATE_EVIDENCE_STORY : CC_GATE_EVIDENCE_TOWN,
                         from_story ? story->event_id : voice->settlement_id, true, text);
@@ -653,7 +653,7 @@ static bool SayTelling(const CcSim *sim, const CcCharacter *speaker,
                              version->retellings, &account) &&
         RenderEventFirst(&account, NULL, false, claim, sizeof(claim))) {
         TrimPeriod(claim);
-        if (claim[0] != '\0') (void)snprintf(telling, sizeof(telling), "%s", claim);
+        if (claim[0] != '\0') Copy(telling, sizeof(telling), claim);
     }
     HeardFrom from = {.story_id = story->event_id,
                       .source_id = version->source_character_id,

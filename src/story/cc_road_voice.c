@@ -113,7 +113,7 @@ bool CcRoadVoiceBuild(const CcSim *sim, CcId town, const CcRoadNews *news,
         return voice->line[0] != '\0';
     }
     case CC_ROAD_NEWS_READ: {
-        char notice[CC_SPEECH_TEXT_CAPACITY];
+        char notice[CC_SPEECH_TEXT_CAPACITY - 2];
         if (!NoticeText(sim, &change, place, notice, sizeof(notice))) return false;
         Copy(voice->speaker, sizeof(voice->speaker), "A notice at the milestone");
         Copy(voice->speaker_label, sizeof(voice->speaker_label), "");
