@@ -1,6 +1,7 @@
 #include "sim/cc_calendar.h"
 #define CC_LOCAL3D_UNITY_BUILD 1
 #include "sim/cc_mine.h"
+#include "sim/cc_road_news.h"
 #include "client/local3d/context_state.inc"
 #include "client/local3d/terrain_navigation.inc"
 #include "client/local3d/actor_simulation.inc"

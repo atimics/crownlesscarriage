@@ -91,12 +91,23 @@ static int RunCaptureRequestRegression(void)
     if (CcCaptureRequestParse(6, return_capture, &request))
         return ClientRegressionFailure("Return capture must reject negative days.");
     return_capture[3] = "365";
+    char *road_news[] = {"crownless", "--capture-road-news", "4", "365",
+                         "witnessed", "smoke.png"};
+    if (!CcCaptureRequestParse(6, road_news, &request) || !request.capture ||
+        !request.capture_road_news || request.capture_road_news_seed != 4U ||
+        request.capture_road_news_days != 365 ||
+        request.capture_road_news_channel != CC_ROAD_NEWS_WITNESSED ||
+        strcmp(request.capture_path, "smoke.png") != 0)
+        return ClientRegressionFailure("Road news capture must retain its seed, days, channel, and path.");
+    road_news[4] = "heard";
+    if (CcCaptureRequestParse(6, road_news, &request))
+        return ClientRegressionFailure("Road news capture must name told, read, or witnessed.");
     char *return_short[] = {"crownless", "--capture-return", "4", "365", "Gloamgate"};
     if (CcCaptureRequestParse(5, return_short, &request))
         return ClientRegressionFailure("Return capture must require a frame path.");
     if (!CcCaptureRequestParse(1, normal, &request) || request.capture ||
         request.capture_road_arrival || request.capture_storybook ||
-        request.capture_return)
+        request.capture_return || request.capture_road_news)
         return ClientRegressionFailure("Each parse must reset the previous request.");
     (void)puts("PASS capture requests: play, paths, views, scene settings, and ranges");
     return 0;
