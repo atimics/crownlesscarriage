@@ -4650,9 +4650,10 @@ static void PlaceReturnSmoke(const CcSettlement *place, CcReturnSceneCues *cues,
             ActiveWorldBuildingAt(chosen[pick]).footprint :
             PlaceLandmarkFootprint(
                 ActivePlaceLandmarkAt(chosen[pick] - building_count));
-        cues->smoke[cues->smoke_count++] = (CcReturnStagePoint){
-            f.x + f.width * 0.5f, f.y + f.height * 0.5f,
-            (float)cues->smoke_count};
+        /* The column's slot doubles as its drift seed. */
+        int32_t slot = cues->smoke_count++;
+        cues->smoke[slot] = (CcReturnStagePoint){
+            f.x + f.width * 0.5f, f.y + f.height * 0.5f, (float)slot};
     }
     if (cues->smoke_count == 0) {
         /* No burned plot in view: smoke still rises beyond the gate. */
