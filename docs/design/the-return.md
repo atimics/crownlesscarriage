@@ -107,6 +107,25 @@ quarter. The sort has a total order (score, kind, detail, subject), so the same
 world always gives the same list. Small price moves are dropped, and the digest
 keeps at most three market lines.
 
+### Known prices (pure)
+
+Town economies uses the record for prices under the fog
+(`docs/design/town-economies.md`). `CcKnownPricesFor(sim, town, &known)` in
+`src/sim/cc_known_prices.[ch]` gives:
+
+- **here:** today's prices, only for the town the company stands in (not on
+  the road);
+- **seen:** the record's prices, with `known_day`, `age_days`, and a
+  confidence that fades from 100 to 10 over 120 days;
+- **unknown:** nothing, for a town the company has never left.
+
+A shortage or relief story told to the company after the record (by a
+resident or a traveller on the road), or road news about the town's food
+(`road_news`: hunger, fed, an empty or restocked stall, such as a famine
+notice at a milestone), adds news beside the old price, with its confidence. It never changes the number. The map case lists the
+known prices of the two towns a chart depicts, and the gate's road choice
+shows the far town's bread price with its age. No new saved state.
+
 ## How news reaches the player
 
 - **Witnessed:** the company saw it (`CcEvent.witness_id` is the company).

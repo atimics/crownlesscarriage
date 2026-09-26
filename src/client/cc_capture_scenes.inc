@@ -313,6 +313,37 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
     if (request->capture_road_fork || request->capture_map_case || request->capture_dragon_hoard_map) {
         sim->player.location_id = sim->settlements[1].id;
     }
+    if (request->capture_known_prices) {
+        for (int32_t i = 0; i < sim->settlement_count; ++i) {
+            CcSettlement *town = &sim->settlements[i];
+            if (strcmp(town->name, "Silverwick") != 0) continue;
+            int32_t today = sim->current_day;
+            CcReturnRecordSeen(sim, town->id);
+            sim->return_memory.towns[i].seen_day = today > 26 ? today - 26 : 0;
+            /* The live market moved after the company left; the map case
+               must still show the old prices. */
+            town->price[CC_GOOD_BREAD] += 4;
+            town->price[CC_GOOD_WHEAT] += 3;
+            int32_t slot = CC_MAX_GOSSIP - 1;
+            sim->gossip[slot] = (CcGossip){
+                .event_id = CcMakeId(CC_ENTITY_EVENT, 990001U),
+                .origin_id = town->id,
+                .day = today > 3 ? today - 3 : today,
+                .kind = CC_EVENT_SHORTAGE
+            };
+            (void)snprintf(sim->gossip[slot].text, sizeof(sim->gossip[slot].text),
+                           "Bread is short in %s.", town->name);
+            for (int32_t c = 0; c < CcSimGossipCarrierCapacity(sim); ++c) {
+                CcGossipCarrier *carrier = &sim->gossip_carriers[c];
+                if (carrier->id == 0U) continue;
+                carrier->stories |= UINT32_C(1) << (uint32_t)slot;
+                carrier->told_player |= UINT32_C(1) << (uint32_t)slot;
+                carrier->versions[slot].confidence = 60;
+                break;
+            }
+            break;
+        }
+    }
     if (request->capture_town || request->capture_town_arrival || request->capture_shop) {
         sim->player.location_id = sim->settlements[request->capture_town_index].id;
     }
