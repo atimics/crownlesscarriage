@@ -1,4 +1,5 @@
 #include "sim/cc_road_position.h"
+#include "sim/cc_dmath.h"
 #include "sim/cc_journey_internal.h"
 #include <limits.h>
 #include <math.h>
@@ -137,7 +138,7 @@ static bool BuildGeometrySettlements(const CcSim *sim,
             if (other == NULL) continue;
             float dx = other->x - place->x;
             float dz = other->z - place->z;
-            float length = sqrtf(dx * dx + dz * dz);
+            float length = CcDmathSqrtf(dx * dx + dz * dz);
             if (length <= 0.001f) continue;
             dx /= length;
             dz /= length;
@@ -153,11 +154,11 @@ static bool BuildGeometrySettlements(const CcSim *sim,
             direction_x = fallback_x;
             direction_z = fallback_z;
         }
-        place->entrance_heading = atan2f(direction_x, direction_z);
+        place->entrance_heading = CcDmathAtan2f(direction_x, direction_z);
         float gate_distance = 48.0f * (place->radius - 3.0f) / 60.0f;
-        place->gate_x = place->x + sinf(place->entrance_heading) *
+        place->gate_x = place->x + CcDmathSinf(place->entrance_heading) *
             gate_distance;
-        place->gate_z = place->z + cosf(place->entrance_heading) *
+        place->gate_z = place->z + CcDmathCosf(place->entrance_heading) *
             gate_distance;
     }
     return true;
@@ -174,8 +175,8 @@ static void RingPoint(const GeometrySettlement *place, float heading,
 {
     float distance = place->radius + ROAD_JUNCTION_CLEARANCE +
         fmaxf(0.0f, extra);
-    *x = place->x + sinf(heading) * distance;
-    *z = place->z + cosf(heading) * distance;
+    *x = place->x + CcDmathSinf(heading) * distance;
+    *z = place->z + CcDmathCosf(heading) * distance;
 }
 
 static bool BuildRoadGeometry(const CcSim *sim, CcId route_id,
@@ -204,7 +205,7 @@ static bool BuildRoadGeometry(const CcSim *sim, CcId route_id,
     sample_z[CC_ROAD_GEOMETRY_SAMPLE_COUNT - 1] = to->gate_z;
     float center_dx = to->x - from->x;
     float center_dz = to->z - from->z;
-    float route_heading = atan2f(center_dx, center_dz);
+    float route_heading = CcDmathAtan2f(center_dx, center_dz);
     float reverse_heading = WrapAngle(route_heading + 3.14159265359f);
     float from_turn = WrapAngle(route_heading - from->entrance_heading);
     for (int32_t sample = CC_ROAD_GEOMETRY_FROM_JUNCTION_SAMPLE;
@@ -233,7 +234,7 @@ static bool BuildRoadGeometry(const CcSim *sim, CcId route_id,
     float last_z = sample_z[ROAD_TO_CORRIDOR_SAMPLE];
     float dx = last_x - first_x;
     float dz = last_z - first_z;
-    float length = sqrtf(dx * dx + dz * dz);
+    float length = CcDmathSqrtf(dx * dx + dz * dz);
     float inverse_length = length > 0.001f ? 1.0f / length : 0.0f;
     uint32_t seed = MixBits(sim->world_seed ^ (uint32_t)route->id ^
                             (uint32_t)(route->id >> 32U));

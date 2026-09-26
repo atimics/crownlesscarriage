@@ -33,6 +33,17 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+# Deterministic floating point. The simulation state (and its hash) must be
+# bit-identical on macOS arm64 (clang), Linux x86_64 (GCC) and WebAssembly.
+# Clang on arm64 fuses a*b+c into FMA by default; GCC on x86_64 and wasm do
+# not, so FMA contraction is off for every target, and fast-math is never
+# used. See src/sim/cc_dmath.h.
+if(MSVC)
+    add_compile_options(/fp:precise)
+else()
+    add_compile_options(-ffp-contract=off -fno-fast-math)
+endif()
+
 option(CC_BUILD_CLIENT "Build the raylib fixed-pixel three-quarter 3D client" ON)
 option(CC_BUILD_GRAPHICS_PROBES "Build standalone GPU regression probes" OFF)
 option(CC_BUILD_BENCHMARKS "Build repeatable headless benchmarks" ON)
@@ -121,6 +132,7 @@ add_library(crownless_sim
     src/sim/cc_occupations.c
     src/sim/cc_gossip_topics.c
     src/sim/cc_doubt.c
+    src/sim/cc_dmath.c
     src/sim/cc_archive_volumes.c
     src/sim/cc_archive_staff.c
     src/sim/cc_archive_recruitment.c
@@ -313,6 +325,17 @@ cc_strict_warnings(crownless_gossip_flow)
 add_executable(crownless_sim_runner tools/sim_runner.c)
 target_link_libraries(crownless_sim_runner PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_sim_runner)
+
+add_executable(crownless_determinism_trace tools/determinism_trace.c)
+target_link_libraries(crownless_determinism_trace PRIVATE crownless_persistence)
+cc_strict_warnings(crownless_determinism_trace)
+if(EMSCRIPTEN)
+    # Run under node with direct file access, so CI can compare the WASM
+    # hash list with the native ones.
+    target_link_options(crownless_determinism_trace PRIVATE
+        "-sNODERAWFS=1" "-sALLOW_MEMORY_GROWTH=1" "-sSTACK_SIZE=16777216"
+        "-sEXIT_RUNTIME=1")
+endif()
 
 add_executable(crownless_underroad tools/underroad_construction.c)
 cc_strict_warnings(crownless_underroad)

@@ -6518,9 +6518,11 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
         }
     }
     uint64_t replayed_through = journal_cursor;
+    bool legacy_journal = false;
     if (journal_generation > 0U &&
         !CcJournalReplay(database, sim, journal_generation, journal_cursor,
-                       &replayed_through, error, error_capacity)) {
+                         &replayed_through, &legacy_journal,
+                         error, error_capacity)) {
         return false;
     }
     uint32_t stored_schema_version = sim->schema_version;
@@ -6532,8 +6534,11 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
     if (stored_schema_version < 40U) CcPoniesInit(sim);
     if (stored_schema_version < 108U) CcSimInitializeUnderroadNetwork(sim);
     if (upgraded != NULL) {
+        /* A legacy-arithmetic journal is closed like an upgrade: the next
+           writer starts a fresh epoch from the replayed state. */
         *upgraded = sim->schema_version != stored_schema_version ||
-                    sim->generator_version != stored_generator_version;
+                    sim->generator_version != stored_generator_version ||
+                    legacy_journal;
     }
     if (!CcSimValidate(sim, validation, sizeof(validation))) {
         SetError(error, error_capacity, validation);

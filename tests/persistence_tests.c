@@ -563,6 +563,22 @@ static void CheckLegacyJournalMigration(char *error,
     RemoveDatabase(path);
 }
 
+typedef struct LegacyReplayWatch {
+    int32_t steps;
+    int32_t legacy_steps;
+    int32_t unverified_steps;
+} LegacyReplayWatch;
+
+static void WatchLegacyReplay(void *context, const CcJournalReplayStep *step,
+                              const CcSim *sim)
+{
+    (void)sim;
+    LegacyReplayWatch *watch = context;
+    watch->steps += 1;
+    if (step->legacy_arithmetic) watch->legacy_steps += 1;
+    if (!step->verified) watch->unverified_steps += 1;
+}
+
 /* Shipped fixtures replay their action journal on load; say why a load
    failed so a platform difference is visible in CI output. */
 static bool ReadShippedFixture(const char *fixture, CcSim *sim, char *error,
@@ -1232,6 +1248,84 @@ static void CheckJournalCheckpointAndTamper(char *error,
     sqlite3_close(database);
     CC_CHECK(!CcSaveRead(path, &restored, error, error_capacity));
     CC_CHECK(strstr(error, "diverged") != NULL);
+    RemoveDatabase(path);
+}
+
+/* Journals written before deterministic arithmetic (record version 1) keep
+   loading when a committed hash no longer matches: the commands replay
+   unverified, replay stops quietly at a command that no longer applies,
+   and the next writer starts a fresh version 2 epoch. Version 2 journals
+   stay strict (see CheckJournalCheckpointAndTamper). */
+static void CheckLegacyArithmeticJournal(char *error, size_t error_capacity)
+{
+    const char *path = "persistence-legacy-arithmetic-journal.ccsave";
+    RemoveDatabase(path);
+    static CcSim sim, restored;
+    CcSimInit(&sim, UINT32_C(0x1e6a5e));
+    CcJournal *journal = CcJournalStart(path, &sim, error, error_capacity);
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 1, error, error_capacity));
+    CC_CHECK(CcJournalAdvanceDays(journal, &sim, 2, error, error_capacity));
+    uint64_t expected_hash = CcSimHash(&sim);
+    CC_CHECK(CcJournalClose(&journal, &sim, error, error_capacity));
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT MIN(record_version) FROM action_journal;") ==
+             2);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT MIN(record_version) FROM journal_epoch;") ==
+             2);
+
+    /* Make it a version 1 journal whose first committed hash came from
+       different arithmetic, then add a command that no longer applies. */
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database,
+                                  SQLITE_OPEN_READWRITE, NULL),
+                  database, "could not open legacy arithmetic fixture");
+    ExecuteFixtureSql(database,
+        "DROP TRIGGER action_journal_no_update;"
+        "DROP TRIGGER journal_epoch_no_update;"
+        "UPDATE journal_epoch SET record_version=1;"
+        "UPDATE action_journal SET record_version=1;"
+        "UPDATE action_journal SET post_state_hash='0000000000000001' "
+        "WHERE ordinal=1;"
+        "INSERT INTO action_journal "
+        "(generation,ordinal,record_version,operation_kind,command_kind,"
+        "actor_id,target_id,secondary_id,good,amount,dungeon_state,"
+        "step_count,sim_schema_version,generator_version,pre_state_hash,"
+        "post_state_hash,committed_tick) "
+        "SELECT generation,3,1,1,2,0,12345,0,0,0,0,0,sim_schema_version,"
+        "generator_version,post_state_hash,'0000000000000002',"
+        "committed_tick FROM action_journal WHERE ordinal=2;",
+        "could not make a legacy arithmetic journal");
+    sqlite3_close(database);
+
+    LegacyReplayWatch watch = {0};
+    CcJournalSetReplayObserver(WatchLegacyReplay, &watch);
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CcJournalSetReplayObserver(NULL, NULL);
+    CC_CHECK(watch.steps == 3 && watch.legacy_steps == 3 &&
+             watch.unverified_steps == 3);
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+
+    /* The next writer closes the legacy epoch and journals strictly. */
+    journal = CcJournalResume(path, &restored, error, error_capacity);
+    CC_CHECK(journal != NULL);
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
+    CC_CHECK(ReadSqliteInteger(
+                 path, "SELECT record_version FROM journal_epoch WHERE "
+                       "generation=(SELECT journal_generation FROM meta);") ==
+             2);
+    CC_CHECK(CcJournalAdvanceDays(journal, &restored, 1,
+                                  error, error_capacity));
+    expected_hash = CcSimHash(&restored);
+    CC_CHECK(CcJournalClose(&journal, &restored, error, error_capacity));
+    watch = (LegacyReplayWatch){0};
+    CcJournalSetReplayObserver(WatchLegacyReplay, &watch);
+    CC_CHECK(CcSaveRead(path, &restored, error, error_capacity));
+    CcJournalSetReplayObserver(NULL, NULL);
+    CC_CHECK(watch.steps == 1 && watch.legacy_steps == 0 &&
+             watch.unverified_steps == 0);
+    CC_CHECK(CcSimHash(&restored) == expected_hash);
     RemoveDatabase(path);
 }
 
@@ -3171,8 +3265,25 @@ static void CheckSchema110RoadBlockJournalUpgrade(char *error,
         "SELECT COUNT(*) FROM action_journal WHERE ordinal=1 AND "
         "command_kind=2 AND sim_schema_version=110 AND "
         "post_state_hash='1f5095a1b0263277';") == 1);
-    static CcSim restored, reloaded;
+    static CcSim restored, reloaded, recorded;
+    LegacyReplayWatch watch = {0};
+    CcJournalSetReplayObserver(WatchLegacyReplay, &watch);
     CC_CHECK(ReadShippedFixture(fixture, &restored, error, error_capacity));
+    CcJournalSetReplayObserver(NULL, NULL);
+    /* The shipped macOS arm64 build fused the road curve's a*b+c into FMA.
+       With deterministic arithmetic, curve sample 20 rounds to 315404
+       instead of 315405, so the travel command no longer reproduces its
+       committed hash on any platform. The legacy (version 1) journal still
+       loads: its command replays unverified. */
+    CC_CHECK(watch.steps == 1 && watch.legacy_steps == 1 &&
+             watch.unverified_steps == 1);
+    CC_CHECK(restored.journey.road_geometry_z_units[20] == 315404);
+    /* Restoring that one unit gives exactly the state the old build
+       recorded, so nothing else about the replay changed. */
+    recorded = restored;
+    recorded.journey.road_geometry_z_units[20] = 315405;
+    CC_CHECK(CcTestBeforeCalendarHash(&recorded) ==
+             UINT64_C(10350592686180817433));
     CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
     CC_CHECK(restored.journey.active);
     CC_CHECK(restored.journey.route_id == UINT64_C(216172782113783818));
@@ -3185,7 +3296,6 @@ static void CheckSchema110RoadBlockJournalUpgrade(char *error,
             empty_outputs += 1;
     }
     CC_CHECK(empty_outputs > 0);
-    CC_CHECK(CcTestBeforeCalendarHash(&restored) == UINT64_C(10350592686180817433));
     const char *copy = "schema110-road-block-upgraded.ccsave";
     RemoveDatabase(copy);
     CC_CHECK(CcSaveWrite(copy, &restored, error, error_capacity));
@@ -4041,6 +4151,7 @@ int main(void)
     CheckDiplomacyPersistence(error, sizeof(error));
     CheckJournalRecovery(error, sizeof(error));
     CheckJournalCheckpointAndTamper(error, sizeof(error));
+    CheckLegacyArithmeticJournal(error, sizeof(error));
     CheckLegacyJournalMigration(error, sizeof(error));
     CheckCharacterPersistence(error, sizeof(error));
     CheckSocialThreadPersistence(error, sizeof(error));
