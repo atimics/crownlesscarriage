@@ -71,11 +71,11 @@ fewer axe in the crew when bandits come.
 
 ## Prices under the fog
 
-Every price the company knows has an age: "bread 5c at Gloamgate" means "bread
-was 5c at Gloamgate on day 88". The map, trade screens and route planning show a
-known price together with how old it is, and it fades like the rest of the fog
-(`docs/design/the-return.md`). Trade becomes a judgement about how stale your
-knowledge is, and fresh news about a shortage becomes valuable cargo.
+A distant price the company knows has an age: "bread 5c at Gloamgate" means
+"bread was 5c at Gloamgate on day 88". The current town's price is live. The
+map case and gate road choices show known distant prices with their age and
+confidence (`docs/design/the-return.md`). Trade becomes a judgement about how
+stale your knowledge is, and fresh news about a shortage becomes valuable cargo.
 
 A shortage also gives a moral choice the simulation already supports: sell into
 the famine at a high price, or bring relief (the relief crate and famine relief
@@ -120,17 +120,21 @@ An audit of main (17f4ae6b) found:
   Underroad (`light_remaining`), with nothing to refuel it.
 - **Hunting does not exist.**
 
-### Pull requests, in order
+### Delivery status and next pull requests (26 September 2026)
 
-1. **Town services and makers.** Make `SeedSettlementServices` follow the
+1. **Prices under the fog — merged in #953.** `CcKnownPrices` derives distant
+   prices from saved `CcTownSeen` snapshots and received news. The map case and
+   gate road choices show their age and confidence. Current-town prices stay
+   live. Research text and the fallback Ledger passage still read live distant
+   prices; review their player exposure as part of this design.
+2. **Town services and makers — next.** #951 made the stationer buy wood and
+   sell paper in the client shop table. Make `SeedSettlementServices` follow the
    table above: bakeries in Thornford, Gloamgate and Rosespire only; a
    weaponsmith in Alderwatch and a toolsmith in Silverwick; paper mills only
    where there is a stationer; market halls only in Gloamgate and Rosespire; a
-   fence in Hollowbarrow. Makers stop buying their own products, in the client
-   shop table and in `CcSimTradeResalePrice`. The client shop table follows the
-   services. This needs a save schema bump with a migration for existing worlds.
-2. **Prices under the fog.** Known prices carry the day they were learned and
-   fade with age. This builds on the existing settlement knowledge sources.
+   fence in Hollowbarrow. Apply maker buyback rules in both the client shop
+   table and `CcSimTradeResalePrice`. Make the shop table follow the services.
+   Save changes need a schema bump and a migration for existing worlds.
 3. **Six carried items.** Replace `CC_GOOD_TOOLS` and `CC_GOOD_WEAPONS` with
    pick, axe, hammer, sword, bow and lantern, plus lamp oil. Keep each
    recipe's current uses: tools gate production, weapons drive raids and
