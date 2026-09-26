@@ -203,8 +203,52 @@ static bool CaptureReturnTrip(CcSim *sim, CcId town, int32_t days)
     return true;
 }
 
+/* Stop the ride back when the company meets news of the wanted channel. */
+static bool CaptureRoadNewsMet(const CcSim *sim, void *context)
+{
+    const int32_t *channel = context;
+    const CcRoadNews *news = CcRoadNewsLatest(sim, NULL);
+    return news != NULL && news->channel == *channel;
+}
+
+/* The Return, milestone 4: the review trip of --capture-return, stopped on
+   the road back at the first news of the wanted channel. */
+static bool CaptureRoadNewsTrip(CcSim *sim, int32_t days, int32_t channel)
+{
+    CcId thornford = CcReturnRideTownByName(sim, "Thornford");
+    CcId silverwick = CcReturnRideTownByName(sim, "Silverwick");
+    if (thornford == 0U || silverwick == 0U) return false;
+    if (sim->player.location_id != thornford) {
+        sim->player.location_id = thornford;
+        sim->carriage.location_id = thornford;
+    }
+    char ride_error[256];
+    if (!CcReturnRideAlongPath(sim, silverwick, ride_error, sizeof(ride_error))) {
+        (void)fprintf(stderr, "capture road news: %s\n", ride_error);
+        return false;
+    }
+    CcSimAdvanceDays(sim, days);
+    if (!CcReturnRideUntil(sim, thornford, CaptureRoadNewsMet, &channel,
+                           ride_error, sizeof(ride_error))) {
+        (void)fprintf(stderr, "capture road news: %s\n", ride_error);
+        return false;
+    }
+    sim->journey.ambush_pending = false;
+    sim->pony_company.encounter = -1;
+    CcId town = 0U;
+    const CcRoadNews *news = CcRoadNewsLatest(sim, &town);
+    (void)printf("road news: day %d, %s about %s on the road to %s\n",
+                 news->day, CcRoadNewsChannelName((CcRoadNewsChannel)news->channel),
+                 CcSimSettlement(sim, town)->name,
+                 CcSimSettlement(sim, sim->journey.destination_id)->name);
+    return true;
+}
+
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
+    if (request->capture_road_news)
+        return CaptureRoadNewsTrip(sim, request->capture_road_news_days,
+                                   request->capture_road_news_channel);
     if (request->capture_gate_voice) {
         /* The same trip as --capture-return; TOWN is a settlement index. */
         if (request->capture_town_index >= sim->settlement_count ||
@@ -552,6 +596,17 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
             (void)CcLocalCourseSelectPlayerTarget(&scene->local->course, &scene->local->agent, 0);
         }
     }
+    if (request->capture_road_news) {
+        /* The storybook travel view, where the news was met. */
+        BeginRoadTravelState(scene->sim, scene->local);
+        scene->local->travel_time_blend = 0.0f;
+        scene->local->travel_fast_forward = false;
+        scene->local->world_carriage.storybook_travel = true;
+        scene->local->world_carriage.camera_weight = 0.0f;
+        scene->local->world_carriage.camera_target = 0.0f;
+        UpdateRoadNews(scene->sim, scene->local, false);
+        (*scene->view) = VIEW_LOCAL;
+    }
     if (request->capture_travel || request->capture_route_sight ||
         request->capture_mine_road || request->capture_mine_road_reverse) {
         BeginRoadTravelState(scene->sim, scene->local);
@@ -611,6 +666,7 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
         !request->capture_navigation && !request->capture_limbs && !request->capture_dojo &&
         !request->capture_action_reel && !request->capture_gameplay_reel &&
         !request->capture_encounter && !request->capture_travel && !request->capture_route_sight &&
+        !request->capture_road_news &&
         !request->capture_road_fork &&
         !request->capture_road_zoom &&
         !request->capture_road &&

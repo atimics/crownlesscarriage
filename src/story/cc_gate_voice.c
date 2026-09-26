@@ -646,6 +646,15 @@ static bool SayTelling(const CcSim *sim, const CcCharacter *speaker,
     if (tally != NULL) *tally = '\0';
     TrimPeriod(telling);
     if (telling[0] == '\0') return false;
+    /* Without the tally the grammar may read it after all: "raided". */
+    CcCoreAccount account;
+    char claim[CC_SPEECH_TEXT_CAPACITY];
+    if (CcCoreAccountPrepare(story->kind, telling, version->confidence,
+                             version->retellings, &account) &&
+        RenderEventFirst(&account, NULL, false, claim, sizeof(claim))) {
+        TrimPeriod(claim);
+        if (claim[0] != '\0') (void)snprintf(telling, sizeof(telling), "%s", claim);
+    }
     HeardFrom from = {.story_id = story->event_id,
                       .source_id = version->source_character_id,
                       .confidence = version->confidence};

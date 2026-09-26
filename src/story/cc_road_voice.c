@@ -127,7 +127,7 @@ bool CcRoadVoiceBuild(const CcSim *sim, CcId town, const CcRoadNews *news,
         Copy(voice->speaker_label, sizeof(voice->speaker_label), "");
         Copy(voice->source, sizeof(voice->source), "the company's own eyes");
         (void)snprintf(voice->line, sizeof(voice->line),
-                       "Black smoke hangs over %s, ahead. Something there has burned.",
+                       "Black smoke hangs over %s. Something there has burned.",
                        place->name);
         return true;
     default:

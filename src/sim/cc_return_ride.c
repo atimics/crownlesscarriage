@@ -91,9 +91,11 @@ static bool RideContinuePause(CcSim *sim, char *error, size_t error_capacity)
 }
 
 /* One leg: apply the travel command, then step through the journey a
-   second at a time, skipping ambush encounters, until it parks. */
-static bool RideLeg(CcSim *sim, CcId destination, char *error,
-                    size_t error_capacity)
+   second at a time, skipping ambush encounters, until it parks or `stop`
+   says to wait on the road. */
+static bool RideLegUntil(CcSim *sim, CcId destination, CcReturnRideStop stop,
+                         void *context, bool *stopped, char *error,
+                         size_t error_capacity)
 {
     if (!RideApply(sim, CC_COMMAND_TRAVEL, destination, error, error_capacity))
         return false;
@@ -103,6 +105,12 @@ static bool RideLeg(CcSim *sim, CcId destination, char *error,
     for (int32_t step = 0; step < 200000 && sim->journey.active; ++step) {
         if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
             CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
+            if (stop != NULL && sim->journey.active &&
+                sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+                stop(sim, context)) {
+                *stopped = true;
+                return true;
+            }
         } else if (!RideContinuePause(sim, error, error_capacity)) {
             return false;
         }
@@ -113,6 +121,35 @@ static bool RideLeg(CcSim *sim, CcId destination, char *error,
         return false;
     }
     return true;
+}
+
+static bool RideLeg(CcSim *sim, CcId destination, char *error,
+                    size_t error_capacity)
+{
+    bool stopped = false;
+    return RideLegUntil(sim, destination, NULL, NULL, &stopped, error,
+                        error_capacity);
+}
+
+bool CcReturnRideUntil(CcSim *sim, CcId destination, CcReturnRideStop stop,
+                       void *context, char *error, size_t error_capacity)
+{
+    if (sim == NULL || stop == NULL) return false;
+    CcId path[CC_MAX_SETTLEMENTS];
+    int32_t legs = CcReturnRideRoadPath(sim, sim->player.location_id,
+                                        destination, path);
+    if (legs == 0) {
+        (void)snprintf(error, error_capacity, "no road path to the destination.");
+        return false;
+    }
+    for (int32_t i = 0; i < legs; ++i) {
+        bool stopped = false;
+        if (!RideLegUntil(sim, path[i], stop, context, &stopped, error,
+                          error_capacity)) return false;
+        if (stopped) return true;
+    }
+    (void)snprintf(error, error_capacity, "the ride ended without stopping.");
+    return false;
 }
 
 bool CcReturnRideAlongPath(CcSim *sim, CcId destination, char *error,

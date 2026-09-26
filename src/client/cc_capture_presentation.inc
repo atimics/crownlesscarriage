@@ -153,6 +153,7 @@ static void CcCaptureSelectStart(const CcCaptureRequest *request, int32_t *selec
 static bool CcCaptureNeedsRoadbook(const CcCaptureRequest *request)
 {
     return request->capture_world || request->capture_travel || request->capture_route_sight ||
+        request->capture_road_news ||
         request->capture_road_fork || request->capture_road_zoom ||
         request->capture_road_carriage || request->capture_mine_road ||
         request->capture_mine_road_reverse;
@@ -163,7 +164,7 @@ static bool CcCaptureJourneyReady(const CcCaptureRequest *request, const CcSim *
 {
     if (request->capture_road_arrival) return !sim->journey.active && local->journey_travel_active &&
         local->arrival.phase == CC_CLIENT_ARRIVAL_ROAD_BOOK;
-    if (request->capture_travel || request->capture_route_sight)
+    if (request->capture_travel || request->capture_route_sight || request->capture_road_news)
         return sim->journey.active && sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
             local->journey_travel_active;
     return fallback;

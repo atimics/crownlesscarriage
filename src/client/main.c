@@ -25,10 +25,12 @@
 #include "sim/cc_oven_court.h"
 #include "sim/cc_return.h"
 #include "sim/cc_return_ride.h"
+#include "sim/cc_road_news.h"
 #include "story/cc_story.h"
 #include "story/cc_core_conversation.h"
 #include "story/cc_core_participant.h"
 #include "story/cc_gate_voice.h"
+#include "story/cc_road_voice.h"
 #include "world/cc_world.h"
 
 #include "raylib.h"
@@ -376,6 +378,10 @@ typedef struct LocalState {
        not open it again. ResetLocalState leaves it alone: it has to carry
        over the park, and the park clears it. */
     bool gate_voice_offered_at_gate;
+    /* The Return, milestone 4: the newest news met on this leg, built on the
+       update path (UpdateRoadNews); the travel view only reads it. */
+    bool road_news_ready;
+    CcRoadVoice road_news;
     float travel_time_blend;
     bool travel_fast_forward;
     bool travel_pointer_down;
@@ -1440,6 +1446,7 @@ static void ResetLocalState(LocalState *local)
     local->conversation_name[0] = '\0';
     local->conversation_line[0] = '\0';
     local->gate_voice_open = false;
+    local->road_news_ready = false;
     local->conversation_report_response = false;
     local->conversation_oven_response = false;
     local->conversation_want_person = 0;
@@ -7721,6 +7728,7 @@ static bool ApplyHorseCare(CcJournal *journal, CcSim *sim,
 static void DrawAdventureCourtNotes(const CcSim *sim, const LocalState *local);
 #include "client/cc_adventure.inc"
 #include "client/cc_gate_voice_ui.inc"
+#include "client/cc_road_news_ui.inc"
 #include "client/cc_oven_court.inc"
 #include "client/cc_mine_view.inc"
 #include "client/cc_world_actions.inc"
@@ -7889,6 +7897,56 @@ static int RunTravelHoldRegression(void)
     UpdateTravelHold(&sim, &local, VIEW_PAUSE, 0, 0, (Vector2){0}, false, 1.0f/60);
     if (local.travel_fast_forward) { fprintf(stderr,"Travel control assertion line %d\n",__LINE__); return 1; }
     puts("Continuous travel: two moving actions, explicit stopped options, no hold-to-resume.");
+    return 0;
+}
+
+static bool RoadNewsSmokeMet(const CcSim *sim, void *context)
+{
+    (void)context;
+    const CcRoadNews *news = CcRoadNewsLatest(sim, NULL);
+    return news != NULL && news->channel == CC_ROAD_NEWS_WITNESSED;
+}
+
+/* The Return, milestone 4: the travel view's road news is built on the
+   update path and read by the draw path; neither changes the world. */
+static int RunRoadNewsRegression(void)
+{
+    static CcSim sim;
+    static LocalState local;
+    char error[256];
+    CcSimInit(&sim, 4U);
+    CcId thornford = CcReturnRideTownByName(&sim, "Thornford");
+    CcId silverwick = CcReturnRideTownByName(&sim, "Silverwick");
+    if (!CcReturnRideAlongPath(&sim, silverwick, error, sizeof(error))) {
+        (void)fprintf(stderr, "Road news ride: %s\n", error);
+        return 1;
+    }
+    CcSimAdvanceDays(&sim, 365);
+    if (!CcReturnRideUntil(&sim, thornford, RoadNewsSmokeMet, NULL, error, sizeof(error))) {
+        (void)fprintf(stderr, "Road news ride back: %s\n", error);
+        return 1;
+    }
+    uint64_t hash = CcSimHash(&sim);
+    UpdateRoadNews(&sim, &local, false);
+    CcRoadVoice first = local.road_news;
+    UpdateRoadNews(&sim, &local, false);
+    bool ok = local.road_news_ready && first.channel == CC_ROAD_NEWS_WITNESSED &&
+        strstr(first.line, "smoke") != NULL &&
+        strcmp(first.line, local.road_news.line) == 0;
+    /* What the travel view reads, twice. */
+    for (int32_t pass = 0; pass < 2; ++pass) {
+        CcId town = 0U;
+        int32_t damage = 0;
+        ok = ok && CcRoadNewsSmokeAhead(&sim, &town, &damage) && damage > 0 &&
+            town == sim.journey.destination_id &&
+            CcRoadNewsLatest(&sim, NULL) != NULL;
+    }
+    if (!ok || CcSimHash(&sim) != hash) {
+        (void)fprintf(stderr, "Road news: the travel view must read the world without changing it.\n");
+        return 1;
+    }
+    (void)printf("Road news: \"%s\" (%s); update and draw inputs are read only.\n",
+                 first.line, first.speaker);
     return 0;
 }
 
@@ -10908,6 +10966,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
                 (void)snprintf(message, message_capacity, "%s", error);
                 return;
             }
+            UpdateRoadNews(sim, local, true);
             if (local->open_world && sim->journey.active) {
                 float alpha = CcLocalCourseAlpha(&local->course);
                 CcLocalCarriageInterpolate(&local->world_carriage, alpha);
@@ -12390,6 +12449,7 @@ int main(int argc, char **argv)
     if (argc == 2 && strcmp(argv[1], "--test-storybook-travel") == 0) {
         return RunStorybookTravelRegression();
     }
+    if (argc == 2 && strcmp(argv[1], "--test-road-news") == 0) return RunRoadNewsRegression();
     if (argc == 2 && strcmp(argv[1], "--test-road-carriage-target") == 0) {
         return RunRoadCarriageTargetRegression();
     }
@@ -12601,7 +12661,9 @@ int main(int argc, char **argv)
     CcSimInit(&sim, capture_request.capture_return ?
               capture_request.capture_return_seed :
               capture_request.capture_gate_voice ?
-              capture_request.capture_gate_seed : UINT32_C(0xc0a71a9e));
+              capture_request.capture_gate_seed :
+              capture_request.capture_road_news ?
+              capture_request.capture_road_news_seed : UINT32_C(0xc0a71a9e));
     CcJournal *journal = NULL;
     char startup_message[256] = "";
     char saved_world_load_error[256] = "";
@@ -12616,7 +12678,8 @@ int main(int argc, char **argv)
                        journal != NULL ? "The company shares this carriage and clock." : error);
         CcCoopClientReady(journal != NULL ? "" : error);
     } else if (capture_request.capture_return ||
-               capture_request.capture_gate_voice) {
+               capture_request.capture_gate_voice ||
+               capture_request.capture_road_news) {
         /* CcCapturePrepareWorld rides the region and waits out the days
            itself, so the digest reflects an actual ride, not a flat
            28-day skip. */
@@ -12806,6 +12869,23 @@ int main(int argc, char **argv)
         CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
         return 1;
     }
+#if defined(CC_CLIENT_SELF_TESTS)
+    if (capture_request.capture_road_news) {
+        /* The Return, milestone 4: the travel view with its road news is
+           drawn twice before the capture, and the world must not change. */
+        uint64_t drawn_before = CcSimHash(&sim);
+        for (int32_t pass = 0; pass < 2; ++pass)
+            CcLocalDrawOpenWorld3D(&sim, &local.world_stream, &local.agent, &local.course,
+                                   &local.world_carriage, (float)pass, local_target,
+                                   LocalViewportBounds());
+        if (CcSimHash(&sim) != drawn_before) {
+            (void)fprintf(stderr, "Road news: drawing changed the world.\n");
+            CcCaptureSceneAbort(local_target, &map_textures, &instance_lock);
+            return 1;
+        }
+        (void)printf("road news: drawn twice, the world is unchanged\n");
+    }
+#endif
     bool performance_overlay = false;
     float message_age = 0.0f;
     float save_feedback_age = SAVE_FEEDBACK_VISIBLE_SECONDS;
@@ -13283,6 +13363,8 @@ int main(int argc, char **argv)
                 /* The gate voice replaces the panel while it speaks. */
                 if (view == VIEW_LOCAL && local.gate_voice_open) DrawGateVoice(&local);
                 else DrawLocalPanel(&sim, &local);
+                /* News met on the road, over the travel view. */
+                if (view == VIEW_LOCAL && local.open_world) DrawRoadNews(&sim, &local);
             }
         }
         if (view == VIEW_LOCAL || view == VIEW_ROADS) {
