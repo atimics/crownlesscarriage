@@ -81,10 +81,6 @@ cc_strict_warnings(client_session_tests)
 add_test(NAME local_session_round_trip COMMAND client_session_tests)
 
 add_executable(road_stop_tests tests/road_stop_tests.c)
-add_executable(road_council_tests tests/road_council_tests.c)
-target_link_libraries(road_council_tests PRIVATE crownless_metagame)
-cc_strict_warnings(road_council_tests)
-add_test(NAME road_council_and_quests COMMAND road_council_tests)
 
 add_executable(grain_supply_tests tests/grain_supply_tests.c)
 target_link_libraries(grain_supply_tests PRIVATE crownless_persistence)

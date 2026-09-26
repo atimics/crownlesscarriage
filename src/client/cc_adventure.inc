@@ -1,4 +1,3 @@
-#include "sim/cc_road_council.h"
 #include "sim/cc_occupations.h"
 /* Scene actions and modal UI share the same input boundary. */
 static bool adventure_preferences_dirty;
@@ -281,7 +280,7 @@ static void BuildAdventureTargets(const CcSim *sim, LocalState *local,
                 2.2f, 2.4f, 0.55f, (Vector2){oven.x, oven.z + 1.1f}, 1.0f);
         }
         if (!abandoned) (void)AdventureTarget(local, sim, CC_INTERACTION_BOARD, 1U,
-            place->notice_board, "Read promises", (Vector3){LOCAL_NOTICE.x, 0, LOCAL_NOTICE.y},
+            place->notice_board, "Read local work", (Vector3){LOCAL_NOTICE.x, 0, LOCAL_NOTICE.y},
             1.6f, 2.5f, 0.7f, LOCAL_NOTICE, 1.05f);
         if (local->opening_step == CC_LOCAL_OPENING_COMPLETE) (void)AdventureTarget(local, sim, CC_INTERACTION_CARRIAGE, 1U,
             "Crownless carriage", "Board", (Vector3){LOCAL_CARRIAGE.x, 0, LOCAL_CARRIAGE.y},
@@ -549,9 +548,10 @@ static bool HandleAdventureScene(CcJournal *journal, CcSim *sim,
                 CcOvenCourtRead(sim, &local->oven_observation)) {
                 const CcEvent *note = CcOvenCourtNote(sim, 0);
                 local->oven_note_event = note != NULL ? note->id : 0U;
-                local->oven_page = 0;
-                *return_view = VIEW_LOCAL;
-                *view = VIEW_OVEN_COURT;
+                const CcOvenCourtObservation *o = &local->oven_observation;
+                (void)snprintf(message, capacity,
+                    "Day %d: %d Bread, %d Wheat. %s",
+                    o->day, o->bread, o->wheat, CcOvenCourtStatus(o));
             }
         } else if (target != NULL) {
             AdventureActivate(
@@ -846,7 +846,7 @@ static bool AdventureShopModeAvailable(const CcLocalShop *shop, int mode)
 {
     if (shop == NULL) return false;
     if (mode == 3) return shop->kind == CC_LOCAL_SHOP_BAKERY;
-    if (mode == 2 || mode == 4 || mode == 5)
+    if (mode == 2 || mode == 4)
         return shop->kind == CC_LOCAL_SHOP_GRAIN_MERCHANT;
     return mode == 0 || mode == 1;
 }
@@ -863,7 +863,7 @@ static Rectangle AdventureShopTab(Rectangle panel,
     const CcLocalShop *shop, int mode)
 {
     int count = 0;
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < 5; ++i)
         if (AdventureShopModeAvailable(shop, i)) ++count;
     return AdventureTab(panel, AdventureShopTabIndex(shop, mode), count);
 }
@@ -890,41 +890,6 @@ static Rectangle AdventureConfirmBounds(Rectangle panel)
         panel.width * 0.48f - 24.0f, 46.0f};
 }
 
-static Rectangle CouncilRowButton(Rectangle panel, int row)
-{
-    return (Rectangle){panel.x + 28, panel.y + 140 + (float)row * 46, panel.width * .36f, 38};
-}
-
-static void DrawAdventureCouncil(const CcSim *sim, LocalState *local, const CcSettlement *town)
-{
-    Rectangle panel = AdventurePanel();
-    CcRoadCouncil council = CcSimRoadCouncil(sim, town->id);
-    int selected = (int)local->trade_good % CC_ROAD_COUNCIL_ROWS;
-    if (selected < 0) selected = 0;
-    const CcLocalShop *shop = LocalActiveShop(sim, local);
-    AdventureShopTitle(panel, shop, "Road meeting");
-    const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
-    for (int i = 0; i < 6; ++i)
-        if (AdventureShopModeAvailable(shop, i))
-            AdventureButton(AdventureShopTab(panel, shop, i), tabs[i], true, i == 5);
-    const char *concerns[] = {"Grain", "Repair", "Trade", "Visitor", "Camp", "Scout"};
-    for (int i = 0; i < CC_ROAD_COUNCIL_ROWS; ++i)
-        AdventureButton(CouncilRowButton(panel, i), TextFormat("%s: %s", concerns[i], council.rows[i].name), true, i == selected);
-    const CcRoadCouncilRow *row = &council.rows[selected];
-    int x = (int)(panel.x + panel.width * .44f), y = (int)panel.y + 144;
-    int width = (int)(panel.width * .56f) - 30;
-    y += AdventureWrap(row->name, x, y, width, AdventureTextSize(18), INK) + 20;
-    y += AdventureWrap(row->detail, x, y, width, AdventureTextSize(15), TEAL) + 20;
-    const CcSituation *quest = CcSimSituation(sim, row->situation_id);
-    if (quest != NULL) {
-        (void)AdventureWrap(TextFormat("Public work: %s. Reward %" PRId64 " crowns. Due day %d. Open Promises to read its terms.",
-            CcSituationKindName(quest->kind), quest->reward, quest->deadline_day), x, y, width, AdventureTextSize(14), INK);
-    }
-    (void)AdventureWrap("Choose a person or concern. Use Bakery or Grain fund to offer supplies. Road repairs and public work keep their usual terms.",
-        (int)panel.x + 28, (int)(panel.y + panel.height) - 95, (int)panel.width - 56, AdventureTextSize(13), MUTED);
-    ClientTouchHeading(shop->name, row->detail);
-    local->trade_quote_presented = false;
-}
 
 static Rectangle GrainFundButton(Rectangle panel, bool stop)
 {
@@ -941,8 +906,8 @@ static void DrawAdventureGrainSupply(const CcSim *sim, LocalState *local, const 
     const CcCharacter *organiser = CcSimCharacter(sim, supply->organiser_id != 0 ? supply->organiser_id : offer.contact_id);
     const CcLocalShop *shop = LocalActiveShop(sim, local);
     AdventureShopTitle(panel, shop, "Continuing grain deliveries");
-    const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
-    for (int i = 0; i < 6; ++i)
+    const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund"};
+    for (int i = 0; i < 5; ++i)
         if (AdventureShopModeAvailable(shop, i))
             AdventureButton(AdventureShopTab(panel, shop, i), tabs[i], true, i == 4);
     int x = (int)panel.x + 28, y = (int)panel.y + 135;
@@ -997,14 +962,13 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
     }
     if (!AdventureShopModeAvailable(selected_shop, local->trade_mode))
         local->trade_mode = 0;
-    if (local->trade_mode == 5) { DrawAdventureCouncil(sim, local, place); return; }
     if (local->trade_mode == 4) { DrawAdventureGrainSupply(sim, local, place); return; }
     if (local->trade_mode == 3) {
         CcBakerySupportPlan plan = CcSimBakerySupportPlan(sim, place->id);
         const CcCharacter *contact = CcSimCharacter(sim, plan.contact_id);
         AdventureShopTitle(panel, selected_shop, "Bakery support");
-        const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
-        for (int i = 0; i < 6; ++i)
+        const char *tabs[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund"};
+        for (int i = 0; i < 5; ++i)
             if (AdventureShopModeAvailable(selected_shop, i))
                 AdventureButton(AdventureShopTab(panel, selected_shop, i), tabs[i], true, i == 3);
         int x = (int)panel.x + 28, y = (int)panel.y + 138;
@@ -1072,14 +1036,14 @@ static void DrawAdventureTrade(const CcSim *sim, LocalState *local,
             supply_offer.source_unit_price, supply_offer.delivery_unit_price);
     }
     AdventureShopTitle(panel, shop, shop->service_name);
-    const char *modes[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund", "Road meeting"};
+    const char *modes[] = {"Buy", "Sell", "Deliver promise", "Bakery", "Grain fund"};
     ClientTouchHeading(shop->name,
         TextFormat("%s. %s %d %s. %s: %" PRId64 " crowns. Purse: %" PRId64 ". %s %s",
             shop->service_name,
             modes[local->trade_mode], abs(quote.command.amount), CcGoodName(quote.command.good),
             local->trade_mode == 0 ? "Total cost" : "Sale value", displayed_total,
             sim->player.coins, supply_detail, quote.reason));
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < 5; ++i)
         if (AdventureShopModeAvailable(shop, i))
             AdventureButton(AdventureShopTab(panel, shop, i), modes[i], true,
                 i == local->trade_mode);
@@ -1178,7 +1142,7 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
         local->trade_quote_presented = false;
     }
     bool changed = false;
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 5; ++i) {
         if (AdventureShopModeAvailable(shop, i) &&
             (AdventureHit(AdventureShopTab(panel, shop, i)) ||
              ClientKeyPressed(KEY_ONE + AdventureShopTabIndex(shop, i)))) {
@@ -1189,11 +1153,6 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
                     local->trade_good = LocalShopFirstGood(shop);
             }
         }
-    }
-    if (local->trade_mode == 5) {
-        for (int i = 0; i < CC_ROAD_COUNCIL_ROWS; ++i)
-            if (AdventureHit(CouncilRowButton(panel, i))) local->trade_good = (CcGood)i;
-        return true;
     }
     if (local->trade_mode == 4) {
         bool stop = AdventureHit(GrainFundButton(panel, true));
@@ -1286,7 +1245,21 @@ static bool HandleAdventureTrade(CcJournal *journal, CcSim *sim, LocalState *loc
 
 static Rectangle AdventureBookPageBounds(Rectangle panel, int32_t page)
 {
-    return AdventureTab(panel,page,6);
+    return AdventureTab(panel,page,3);
+}
+
+static Rectangle AdventureBookRelatedBounds(Rectangle panel, int32_t index,
+                                            int32_t count)
+{
+    float width = (panel.width - 56.0f) / (float)count;
+    return (Rectangle){panel.x + 28.0f + (float)index * width,
+        panel.y + panel.height - 100.0f, width - 8.0f, 34.0f};
+}
+
+static Rectangle AdventureBookWorkRequestBounds(Rectangle panel)
+{
+    return (Rectangle){panel.x + 28.0f, panel.y + panel.height - 56.0f,
+        panel.width - 56.0f, 34.0f};
 }
 
 static bool AdventureBookCompact(Rectangle panel)
@@ -1306,22 +1279,21 @@ static void DrawAdventureBookHead(Rectangle panel, const char *page_name,
 {
     bool compact=AdventureBookCompact(panel);
     AdventurePanelTitle(panel,compact ? "Book" : "Company Book");
-    const char *pages[]={compact ? "Ahead" : "Ahead  1",
+    const char *pages[]={compact ? "Work" : "Work  1",
         compact ? "People" : "People  2",
-        compact ? "Mine" : "Mine notes  3",
-        compact ? "Court" : "Court  4",
-        compact ? "Dates" : "Calendar  5",
-        compact ? "Wants" : "Requests  6"};
-    for (int32_t page=0;page<6;++page)
+        compact ? "Notes" : "Notes  3"};
+    int32_t selected = active_page == 5 ? 0 :
+        active_page >= 2 ? 2 : active_page;
+    for (int32_t page=0;page<3;++page)
         AdventureButton(AdventureBookPageBounds(panel,page),pages[page],true,
-            page==active_page);
+            page==selected);
     ClientTouchRecordText(page_name);
 }
 
 static void DrawAdventureAhead(const CcSim *sim, const LocalState *local)
 {
     Rectangle panel = AdventurePanel();
-    DrawAdventureBookHead(panel, "Ahead",0);
+    DrawAdventureBookHead(panel, "Work",0);
     (void)local;
     int x = (int)panel.x + 28, y = (int)panel.y + 128;
     int width = (int)panel.width - 56;
@@ -1368,12 +1340,28 @@ static void DrawAdventureAhead(const CcSim *sim, const LocalState *local)
         if (s->status != CC_SITUATION_ACTIVE ||
             s->id == sim->player.accepted_situation_id) continue;
         const CcNotice *notice = CcSimSituationNotice(sim, s->id);
-        if (notice == NULL) continue;
+        if (notice == NULL || sim->journey.active ||
+            notice->settlement_id != sim->player.location_id) continue;
+        bool repeated = false;
+        for (int32_t prior = 0; prior < i; ++prior) {
+            const CcNotice *earlier = CcSimSituationNotice(
+                sim, sim->situations[prior].id);
+            if (earlier != NULL && earlier->settlement_id == notice->settlement_id &&
+                strcmp(earlier->text, notice->text) == 0) {
+                repeated = true;
+                break;
+            }
+        }
+        if (repeated) continue;
         if (shown++ < 3 && notice->text[0] != '\0')
             y += AdventureWrap(notice->text, x, y, width, size - 2, INK) + 10;
     }
     if (shown == 0)
-        (void)AdventureWrap("Nothing new has been posted.", x, y, width, size - 2, MUTED);
+        (void)AdventureWrap(sim->journey.active ?
+            "Town notices are available at the next stop." :
+            "No local notice has been posted.", x, y, width, size - 2, MUTED);
+    AdventureButton(AdventureBookWorkRequestBounds(panel),
+        "Personal requests", true, false);
 }
 
 static void DrawAdventurePeople(const CcSim *sim, const LocalState *local)
@@ -1393,9 +1381,13 @@ static void DrawAdventurePeople(const CcSim *sim, const LocalState *local)
         CcOverlayDrawText(label, x, y, size + 2, INK);
         y += 30;
         const CcSettlement *where = CcSimSettlement(sim, person->current_settlement_id);
-        (void)AdventureWrap(TextFormat("%s, %s. Born under the %s.",
-            where != NULL ? where->name : "the road",
-            CcCharacterActivityName(person->activity), CcZodiacName(CcCalendar(person->birth_day).sign)), x + 4, y, width - 4, size - 3, MUTED);
+        const char *detail = person->current_settlement_id == sim->player.location_id ?
+            TextFormat("Here in %s, %s.", where != NULL ? where->name : "town",
+                CcCharacterActivityName(person->activity)) :
+            person->introduced_day > 0 ?
+                TextFormat("Met on day %d. Current whereabouts need a fresh report.",
+                    person->introduced_day) : "Known through a report.";
+        (void)AdventureWrap(detail, x + 4, y, width - 4, size - 3, MUTED);
         y += 34;
         shown += 1;
     }
@@ -1482,6 +1474,10 @@ static void DrawAdventureMineNotes(const CcSim *sim, const LocalState *local)
         AdventureButton(AdventureBookMineStepBounds(panel,0),"Earlier note",section>0,false);
         AdventureButton(AdventureBookMineStepBounds(panel,1),"Later note",section<2,false);
     }
+    AdventureButton(AdventureBookRelatedBounds(panel, 0, 2),
+        "Bakery notes", CcOvenCourtNote(sim, 0) != NULL, false);
+    AdventureButton(AdventureBookRelatedBounds(panel, 1, 2),
+        "Almanac", true, false);
 }
 
 #include "client/cc_scriven_book.inc"
@@ -1503,7 +1499,7 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
     Rectangle panel = AdventurePanel();
     if (ClientKeyPressed(KEY_ESCAPE) || ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || ClientKeyPressed(KEY_TAB) ||
         AdventureHit(AdventureClose(panel))) { *view = SafeOverlayReturnView(*return_view); return true; }
-    for (int32_t page=0;page<6;++page) {
+    for (int32_t page=0;page<3;++page) {
         if (AdventureHit(AdventureBookPageBounds(panel,page))) {
             local->book_page=page;
             local->book_offset=0;
@@ -1511,6 +1507,28 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
             return true;
         }
     }
+    if (local->book_page == 0 &&
+        AdventureHit(AdventureBookWorkRequestBounds(panel))) {
+        local->book_page = 5;
+        local->book_offset = 0;
+        local->want_scroll = 0.0f;
+        return true;
+    }
+    if (local->book_page == 2 &&
+        AdventureHit(AdventureBookRelatedBounds(panel, 0, 2)) &&
+        CcOvenCourtNote(sim, 0) != NULL) {
+        local->book_page = 3;
+        local->book_offset = 0;
+        return true;
+    }
+    if (local->book_page == 2 &&
+        AdventureHit(AdventureBookRelatedBounds(panel, 1, 2))) {
+        local->book_page = 4;
+        local->book_offset = 0;
+        return true;
+    }
+    int32_t main_page = local->book_page == 5 ? 0 :
+        local->book_page >= 2 ? 2 : local->book_page;
     if (local->book_page == 2 && AdventureBookCompact(panel) &&
         (ClientKeyPressed(KEY_UP) || AdventureHit(AdventureBookMineStepBounds(panel,0)))) {
         if (local->book_offset > 0) local->book_offset-=1;
@@ -1518,10 +1536,10 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         (ClientKeyPressed(KEY_DOWN) || AdventureHit(AdventureBookMineStepBounds(panel,1)))) {
         if (local->book_offset < 2) local->book_offset+=1;
     } else if (ClientKeyPressed(KEY_LEFT)) {
-        local->book_page=(local->book_page+5)%6;
+        local->book_page=(main_page+2)%3;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_RIGHT)) {
-        local->book_page=(local->book_page+1)%6;
+        local->book_page=(main_page+1)%3;
         local->book_offset=0;
     } else if (ClientKeyPressed(KEY_ONE)) {
         local->book_page = 0;
@@ -1533,11 +1551,8 @@ static bool HandleAdventureBook(CcJournal *journal, CcSim *sim, LocalState *loca
         local->book_page = 2;
         local->book_offset=0;
     }
-    if (ClientKeyPressed(KEY_SIX)) { local->book_page = 5; local->book_offset = 0; local->want_scroll = 0.0f; }
     if (local->book_page == 5) HandleAdventureWants(journal, sim, local, message, message_capacity);
-    if (ClientKeyPressed(KEY_FIVE)) { local->book_page = 4; local->book_offset = 0; }
     if (local->book_page == 4) HandleAdventureCalendar(journal, sim, local, message, message_capacity);
-    if (ClientKeyPressed(KEY_FOUR)) { local->book_page = 3; local->book_offset = 0; }
     if (local->book_page == 3 &&
         (ClientKeyPressed(KEY_UP) || AdventureHit(AdventureBookMineStepBounds(panel, 0)))) local->book_offset = 1;
     if (local->book_page == 3 &&
@@ -1578,7 +1593,7 @@ static void DrawAdventurePause(const LocalState *local)
     int x = (int)(panel.x + panel.width * 0.53f), y = (int)panel.y + 84;
     CcOverlayDrawText(CcCoopClientActive() ? "The host keeps company time" : "At your own pace", x, y, AdventureTextSize(20), CC_GOLD);
     y += 46;
-    (void)AdventureWrap(TextFormat("Choose an object card or tap the object to approach and act. Browse more cards with the arrows. Click the ground to walk. Tap a road to turn, the carriage to stop or drive, and a camp to rest.\n\n%c selects the next visible target. Shift+%c goes back. %c uses the selected action.\n\n%c opens the Company Book. %c opens promises. M opens the map case.\n\nEsc cancels an approach or returns to the scene. F5 saves.",
+    (void)AdventureWrap(TextFormat("Choose an object card or tap the object to approach and act. Browse more cards with the arrows. Click the ground to walk. Tap a road to turn, the carriage to stop or drive, and a camp to rest.\n\n%c selects the next visible target. Shift+%c goes back. %c uses the selected action.\n\n%c opens the Company Book. %c opens Work. M opens the map case.\n\nEsc cancels an approach or returns to the scene. F5 saves.",
         adventure_preferences != NULL ? adventure_preferences->key_target_next : 'E',
         adventure_preferences != NULL ? adventure_preferences->key_target_next : 'E',
         adventure_preferences != NULL ? adventure_preferences->key_interact : 'F',
@@ -1839,7 +1854,7 @@ static void DrawAdventurePromises(const CcSim *sim, int32_t selected)
     Rectangle panel = AdventurePanel();
     panel.height -= 60.0f;
     panel.y -= 14.0f;
-    AdventurePanelTitle(panel, "Local promises");
+    AdventurePanelTitle(panel, "Local work");
     const CcSituation *promise = SelectedActiveSituation(sim, selected);
     int x = (int)panel.x + 28, y = (int)panel.y + 85;
     int width = (int)panel.width - 56;

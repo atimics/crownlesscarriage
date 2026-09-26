@@ -1498,16 +1498,11 @@ int main(void)
     };
     CC_CHECK(CcSimApply(&defended_road, &fulfill, error, sizeof(error)));
     CC_CHECK(journey_charter->status == CC_SITUATION_RESOLVED);
-    CC_CHECK(defended_road.delayed_echo.active);
-    CcSimAdvanceDays(&defended_road, 30);
-    CC_CHECK(defended_road.delayed_echo.active);
-    CC_CHECK(CcSimRecentEvent(&defended_road, 0)->kind ==
-             CC_EVENT_DELAYED_ECHO);
+    CC_CHECK(!defended_road.delayed_echo.active);
     CcSimAdvanceDays(&defended_road, 30);
     CC_CHECK(!defended_road.delayed_echo.active);
-    CC_CHECK(CcSimRecentEvent(&defended_road, 0)->kind ==
-             CC_EVENT_DELAYED_ECHO);
-    CC_CHECK(CcSimRecentEvent(&defended_road, 0)->parent_id != 0U);
+    CcSimAdvanceDays(&defended_road, 30);
+    CC_CHECK(!defended_road.delayed_echo.active);
 
     static CcSim bargained_road;
     CcSimInit(&bargained_road, UINT32_C(0x50adca11));

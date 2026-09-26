@@ -253,7 +253,7 @@ int main(void)
              CC_SITUATION_FAILED);
     CC_CHECK(SituationStatus(&official, CC_SITUATION_BLACK_MARKET_DELIVERY) ==
              CC_SITUATION_FAILED);
-    CC_CHECK(official.delayed_echo.active);
+    CC_CHECK(!official.delayed_echo.active);
 
     CcSim repair;
     CcSimInit(&repair, UINT32_C(0xc0a71a9e));

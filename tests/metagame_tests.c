@@ -505,7 +505,7 @@ int main(void)
              CC_SITUATION_FAILED);
     CC_CHECK(Situation(&metagame, CC_SITUATION_ROUTE_REPAIR)->status ==
              CC_SITUATION_FAILED);
-    CC_CHECK(metagame.sim.delayed_echo.active);
+    CC_CHECK(!metagame.sim.delayed_echo.active);
 
     const char *save_path = "/tmp/crownless-metagame-tests.ccsave";
     (void)remove(save_path);
@@ -513,29 +513,27 @@ int main(void)
     CC_CHECK(CcMetagameExecute(&metagame, command, output, sizeof(output)));
     int32_t saved_day = metagame.sim.current_day;
     CC_CHECK(CcMetagameExecute(&metagame, "wait 30", output, sizeof(output)));
-    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 1);
-    CC_CHECK(metagame.sim.delayed_echo.active);
+    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 0);
+    CC_CHECK(!metagame.sim.delayed_echo.active);
     CC_CHECK(CcMetagameExecute(&metagame, "history 3", output,
                                sizeof(output)));
-    CC_CHECK(strstr(output, "A letter from Tomas Rill") != NULL);
-    CC_CHECK(strstr(output, "onion soup") != NULL);
+    CC_CHECK(strstr(output, "A letter from Tomas Rill") == NULL);
     const char *echo_path = "/tmp/crownless-metagame-echo-tests.ccsave";
     (void)remove(echo_path);
     (void)snprintf(command, sizeof(command), "save %s", echo_path);
     CC_CHECK(CcMetagameExecute(&metagame, command, output, sizeof(output)));
     CC_CHECK(CcMetagameExecute(&metagame, "wait 30", output, sizeof(output)));
-    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 2);
+    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 0);
     CC_CHECK(!metagame.sim.delayed_echo.active);
     CC_CHECK(CcMetagameExecute(&metagame, "history 3", output,
                                sizeof(output)));
-    CC_CHECK(strstr(output, "A second letter from Tomas Rill") != NULL);
-    CC_CHECK(strstr(output, "Night Road collectors") != NULL);
+    CC_CHECK(strstr(output, "A second letter from Tomas Rill") == NULL);
     (void)snprintf(command, sizeof(command), "load %s", echo_path);
     CC_CHECK(CcMetagameExecute(&metagame, command, output, sizeof(output)));
-    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 1);
-    CC_CHECK(metagame.sim.delayed_echo.active);
+    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 0);
+    CC_CHECK(!metagame.sim.delayed_echo.active);
     CC_CHECK(CcMetagameExecute(&metagame, "wait 30", output, sizeof(output)));
-    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 2);
+    CC_CHECK(EventCount(&metagame, CC_EVENT_DELAYED_ECHO) == 0);
     CC_CHECK(!metagame.sim.delayed_echo.active);
     CC_CHECK(remove(echo_path) == 0);
     (void)snprintf(command, sizeof(command), "load %s", save_path);
@@ -669,13 +667,12 @@ int main(void)
                                sizeof(output)));
     CC_CHECK(strstr(output, "No golden light declares the choice good") !=
              NULL);
-    CC_CHECK(lawful.sim.delayed_echo.active);
+    CC_CHECK(!lawful.sim.delayed_echo.active);
     CC_CHECK(CcMetagameExecute(&lawful, "wait 30", output,
                                sizeof(output)));
     CC_CHECK(CcMetagameExecute(&lawful, "history 5", output,
                                sizeof(output)));
-    CC_CHECK(strstr(output, "A letter from Jory Fen") != NULL);
-    CC_CHECK(strstr(output, "tied with red thread") != NULL);
+    CC_CHECK(strstr(output, "A letter from Jory Fen") == NULL);
     CC_CHECK(CcSimValidate(&lawful.sim, error, sizeof(error)));
 
     CcMetagame supper;

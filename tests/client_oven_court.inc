@@ -44,21 +44,42 @@ static int RunOvenCourtInputRegression(void)
     target->visible = true; /* No graphics context in this input-only regression. */
     local.interaction.focus = target->key;
     OVEN_KEY(KEY_F);
-    OVEN_CHECK(view == VIEW_OVEN_COURT && CcOvenCourtNote(&sim, 0) != NULL,
-        "F at the tally must acquire a note through the journal and open inspection.");
+    OVEN_CHECK(view == VIEW_LOCAL && CcOvenCourtNote(&sim, 0) != NULL &&
+        strstr(message, "0 Bread, 0 Wheat") != NULL,
+        "F at the tally records the stock and reports its current values.");
     OVEN_CHECK(town->stock[CC_GOOD_BREAD] == 0 && sim.player.cargo[CC_GOOD_WHEAT] == 4 && sim.current_day == 6,
         "Opening the tally must not bake, transfer cargo or advance time.");
     CcId first = CcOvenCourtNote(&sim, 0)->id;
-    OVEN_KEY(KEY_TWO);
-    OVEN_CHECK(local.oven_page == 1 && CcOvenCourtNote(&sim, 0)->id == first,
-        "Reading advice cannot create more evidence.");
     OVEN_KEY(KEY_B);
-    OVEN_CHECK(view == VIEW_LEDGER && local.book_page == 3, "B must open dated court notes.");
-    OVEN_KEY(KEY_ESCAPE);
-    OVEN_CHECK(view == VIEW_OVEN_COURT, "Back must restore the court, not enter trade.");
     OVEN_KEY(KEY_THREE);
+    OVEN_CHECK(view == VIEW_LEDGER && local.book_page == 2,
+        "Notes holds the dated bakery observation.");
+    Rectangle bakery_notes = AdventureBookRelatedBounds(AdventurePanel(), 0, 2);
+    client_test_pointer_active = true;
+    client_test_pointer = (Vector2){bakery_notes.x + 8.0f, bakery_notes.y + 8.0f};
+    queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+    OVEN_FRAME();
+    client_test_pointer_active = false;
+    OVEN_CHECK(local.book_page == 3 && CcOvenCourtNote(&sim, 0)->id == first,
+        "The bakery note opens from Notes.");
+    OVEN_KEY(KEY_ESCAPE);
+    OVEN_CHECK(view == VIEW_LOCAL, "Back returns to the street.");
+    BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
+    const CcLocalShop *grain_shop = CcLocalShopAt(
+        CcLocalPlaceProfileForSettlement(town), CC_LOCAL_SHOP_GRAIN_MERCHANT);
+    OVEN_CHECK(grain_shop != NULL, "The grain shop stays available.");
+    target = NULL;
+    for (int32_t i = 0; i < local.interactions.count; ++i)
+        if (local.interactions.targets[i].key.kind == CC_INTERACTION_DOOR &&
+            local.interactions.targets[i].key.object ==
+                (uint64_t)grain_shop->building_index + 1U)
+            target = &local.interactions.targets[i];
+    OVEN_CHECK(target != NULL, "The grain shop door is a street target.");
+    target->visible = true;
+    local.interaction.focus = target->key;
+    OVEN_KEY(KEY_F);
     OVEN_CHECK(view == VIEW_LOCAL && local.interaction.approaching && !local.market_interior,
-        "Store action must start a real approach, not teleport to a trade menu.");
+        "The shop door starts a real approach.");
     for (int32_t frame = 0; frame < 1800 && !local.market_interior; ++frame) {
         BuildAdventureTargets(&sim, &local, (RenderTexture2D){0}, (Rectangle){0});
         OVEN_FRAME();
@@ -96,7 +117,7 @@ static int RunOvenCourtInputRegression(void)
     OVEN_KEY(KEY_ENTER);
     OVEN_CHECK(town->stock[CC_GOOD_WHEAT] == 4, "Repeated confirmation cannot duplicate a delivery.");
     OVEN_KEY(KEY_B);
-    OVEN_KEY(KEY_FOUR);
+    local.book_page = 3;
     OVEN_CHECK(view == VIEW_LEDGER && local.book_page == 3 && CcOvenCourtNote(&sim, 0)->id == first &&
         strstr(CcOvenCourtNote(&sim, 0)->text, "0 Wheat") != NULL,
         "Selling cannot silently refresh a dated field note.");
@@ -114,6 +135,6 @@ static int RunOvenCourtInputRegression(void)
 #undef OVEN_KEY
 #undef OVEN_FRAME
 #undef OVEN_CHECK
-    puts("Oven Court input: inspect, Book, walk to door/counter, funded sale, remembered note and grounded question.");
+    puts("Oven tally input: inspect, Notes, walk to shop, funded sale, remembered note and grounded question.");
     return 0;
 }

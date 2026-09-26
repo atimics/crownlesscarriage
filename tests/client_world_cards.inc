@@ -126,7 +126,18 @@ static int RunWorldCardRegression(void)
         queued_key_press[KEY_ONE] = true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && local.book_page == 0,
-            "Key 1 must open the Ahead page at the start.");
+            "Key 1 opens Work in the Company Book.");
+        Rectangle work_request = AdventureBookWorkRequestBounds(AdventurePanel());
+        CARD_CHECK(work_request.y >= AdventurePanel().y +
+            AdventurePanel().height - 70.0f,
+            "Personal requests leave room for the prophecy action.");
+        client_test_pointer_active = true;
+        client_test_pointer = (Vector2){work_request.x + 8.0f,
+            work_request.y + 8.0f};
+        queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+        CARD_INPUT();
+        CARD_CHECK(view == VIEW_LEDGER && local.book_page == 5,
+            "Personal requests open within Work.");
         queued_key_press[KEY_TWO] = true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && local.book_page == 1,
@@ -138,10 +149,10 @@ static int RunWorldCardRegression(void)
         queued_mouse_button_press[MOUSE_BUTTON_LEFT]=true;
         CARD_INPUT();
         CARD_CHECK(view == VIEW_LEDGER && local.book_page == 2,
-            "The visible Mine notes tab must open with an ordinary pointer.");
+            "The visible Notes tab opens with an ordinary pointer.");
         CARD_CHECK(AdventureBookCompact((Rectangle){0,0,342,560})&&
             AdventureBookMineStepBounds((Rectangle){0,0,342,560},1).y+36<=560,
-            "Portrait Mine notes must page inside its visible panel.");
+            "Portrait Notes stay inside the visible panel.");
         CcMineVisit mine_history=sim.mine;
         sim.mine.report_event_id=UINT64_MAX;
         sim.mine.report_recipient_id=0U;

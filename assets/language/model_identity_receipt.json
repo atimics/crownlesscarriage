@@ -2,7 +2,7 @@
   "artifacts": {
     "grammar_source": {
       "path": "tools/data/core_account_rules.json",
-      "sha256": "bd632b60f64df09a0fa4ceb7bc5f0dabe0100eb21626407bdb8f598da91eaaa1"
+      "sha256": "19f1c586ae04ff75347cb6db350c013e87791e5e9b4cd5d5b40428dea17f221b"
     },
     "model": {
       "path": "assets/language/core.ccv2",
