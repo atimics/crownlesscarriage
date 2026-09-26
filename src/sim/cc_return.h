@@ -51,8 +51,17 @@ typedef enum CcReturnChangeKind {
 typedef enum CcReturnKnowledge {
     CC_RETURN_UNKNOWN = 0,
     CC_RETURN_TOLD,      /* someone told the company the story */
-    CC_RETURN_WITNESSED  /* the company was a witness to the event */
+    CC_RETURN_WITNESSED, /* the company was a witness to the event */
+    CC_RETURN_READ       /* the company read a notice about it on the road */
 } CcReturnKnowledge;
+
+/* How the company met a piece of news on the road (CcRoadNews.channel). */
+typedef enum CcRoadNewsChannel {
+    CC_ROAD_NEWS_NONE = 0,
+    CC_ROAD_NEWS_TOLD,      /* a traveller on the same road told it */
+    CC_ROAD_NEWS_READ,      /* a notice at a milestone near the town */
+    CC_ROAD_NEWS_WITNESSED  /* smoke on the horizon, seen from the road */
+} CcRoadNewsChannel;
 
 typedef struct CcReturnChange {
     CcReturnChangeKind kind;
@@ -71,6 +80,8 @@ typedef struct CcReturnChange {
     CcReturnKnowledge knowledge;
     CcId evidence_event_id; /* the world event behind it, when one is known */
     CcId source_id;         /* who told the company, for CC_RETURN_TOLD */
+    /* Learned on the road (milestone 4): the town's road_news holds it. */
+    bool on_road;
     int32_t source_confidence;
     int32_t score;          /* ranking key; higher comes first */
 } CcReturnChange;

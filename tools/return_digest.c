@@ -9,12 +9,18 @@
 
    With --voice, each return also prints the gate voice (milestone 3): who
    speaks, each line with the evidence of every clause, and the digest again
-   after the heard stories are marked as told. */
+   after the heard stories are marked as told.
+
+   Every leg also prints the news the company met on the road (milestone 4):
+   a traveller's story, a notice at the milestone, or smoke on the horizon,
+   with the line the travel view shows. */
 
 #include "sim/cc_return.h"
 #include "sim/cc_return_ride.h"
+#include "sim/cc_road_news.h"
 #include "sim/cc_sim.h"
 #include "story/cc_gate_voice.h"
+#include "story/cc_road_voice.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,12 +92,48 @@ static void Listen(CcSim *sim, CcId town)
     PrintDigest(sim, town);
 }
 
+/* The news met on the leg just ridden: road news entries that are new since
+   the snapshot taken before the leg. */
+static void PrintRoadNews(const CcSim *sim, const CcReturnMemory *before)
+{
+    for (int32_t t = 0; t < CC_MAX_SETTLEMENTS; ++t) {
+        const CcTownSeen *seen = &sim->return_memory.towns[t];
+        for (int32_t n = 0; seen->settlement_id != 0U && n < CC_RETURN_ROAD_NEWS; ++n) {
+            const CcRoadNews *news = &seen->road_news[n];
+            const CcRoadNews *old = &before->towns[t].road_news[n];
+            if (news->channel == CC_ROAD_NEWS_NONE ||
+                (old->channel == news->channel && old->tick == news->tick)) continue;
+            CcRoadVoice voice;
+            bool said = CcRoadVoiceBuild(sim, seen->settlement_id, news, &voice);
+            (void)printf("   On the road, day %d: [%s] %s, about %s. %s%s%s%s: %s (%s, confidence %d)\n",
+                         news->day, CcRoadNewsChannelName((CcRoadNewsChannel)news->channel),
+                         CcReturnChangeKindName((CcReturnChangeKind)news->kind),
+                         CcSimSettlement(sim, seen->settlement_id)->name,
+                         said ? voice.speaker : "",
+                         said && voice.speaker_label[0] != '\0' ? " (" : "",
+                         said ? voice.speaker_label : "",
+                         said && voice.speaker_label[0] != '\0' ? ")" : "",
+                         said ? voice.line : "(no line)",
+                         said ? voice.source : "", news->confidence);
+            if (said && voice.channel == CC_ROAD_NEWS_TOLD) {
+                for (int32_t i = 0; i < voice.voice.clause_count; ++i)
+                    (void)printf("     - %-8s %-6s %llu: %s\n",
+                                 CcGateVoicePartName(voice.voice.clauses[i].part),
+                                 CcGateVoiceEvidenceName(voice.voice.clauses[i].evidence),
+                                 (unsigned long long)voice.voice.clauses[i].evidence_id,
+                                 voice.voice.clauses[i].text);
+            }
+        }
+    }
+}
+
 static bool RideAll(CcSim *sim, CcId to)
 {
     CcId path[CC_MAX_SETTLEMENTS];
     int32_t legs = CcReturnRideRoadPath(sim, sim->player.location_id, to, path);
     if (legs == 0) return false;
     for (int32_t i = 0; i < legs; ++i) {
+        CcReturnMemory before = sim->return_memory;
         if (!Ride(sim, path[i])) {
             (void)fprintf(stderr, "The ride to %s stopped: %s\n",
                           CcSimSettlement(sim, path[i])->name, error);
@@ -99,6 +141,7 @@ static bool RideAll(CcSim *sim, CcId to)
         }
         (void)printf("\n== Arrive ");
         PrintDigest(sim, path[i]);
+        PrintRoadNews(sim, &before);
         if (voice_mode) Listen(sim, path[i]);
     }
     return true;
