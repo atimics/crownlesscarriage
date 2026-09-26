@@ -75,7 +75,9 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 121
+#define CC_SIM_SCHEMA_VERSION 122
+/* The Return: the company's last view of each town (cc_return.h). */
+#define CC_RETURN_SCHEMA_VERSION 122U
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -2252,6 +2254,33 @@ typedef struct CcNoticeBoard {
     CcNotice notices[CC_MAX_SITUATIONS];
 } CcNoticeBoard;
 
+/* The Return: how the company last saw a town, captured when it leaves.
+   A zero settlement_id means the company has not left that town yet. */
+#define CC_RETURN_FACES 4
+typedef struct CcTownSeen {
+    CcId settlement_id;
+    CcId kingdom_id;
+    CcId ruler_id;
+    CcId face_ids[CC_RETURN_FACES];
+    char ruler_name[CC_NAME_CAPACITY];
+    char face_names[CC_RETURN_FACES][CC_NAME_CAPACITY];
+    int32_t seen_day;
+    uint32_t conditions;
+    uint32_t service_mask;
+    uint32_t threats;
+    int32_t population;
+    int32_t security;
+    int32_t prosperity;
+    int32_t hunger;
+    int32_t fire_damage;
+    int32_t stock[CC_GOOD_COUNT];
+    int32_t price[CC_GOOD_COUNT];
+} CcTownSeen;
+
+typedef struct CcReturnMemory {
+    CcTownSeen towns[CC_MAX_SETTLEMENTS];
+} CcReturnMemory;
+
 typedef struct CcSim {
     uint32_t schema_version;
     uint32_t generator_version;
@@ -2314,6 +2343,7 @@ typedef struct CcSim {
     CcScrivenState scriven;
     CcCrownCalendar crown_calendar;
     CcWantsState wants;
+    CcReturnMemory return_memory;
     CcGossip gossip[CC_MAX_GOSSIP];
     CcGossipCarrier gossip_carriers[CC_MAX_GOSSIP_CARRIERS];
     CcId gossip_last_event_id;
@@ -2370,7 +2400,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 1733784,
+_Static_assert(sizeof(CcSim) == 1736040,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

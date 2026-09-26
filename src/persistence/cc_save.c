@@ -2,6 +2,7 @@
 #include "persistence/cc_save.h"
 #include "sim/cc_scriven.h"
 #include "sim/cc_census.h"
+#include "sim/cc_return.h"
 #include "sim/cc_occupations.h"
 #include "persistence/cc_journal_internal.h"
 #include "persistence/cc_legacy_runtime_internal.h"
@@ -1547,6 +1548,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " reported_encounter_outcome INTEGER NOT NULL);";
     return Execute(database, "CREATE TABLE IF NOT EXISTS wants_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS resident_census (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
+        Execute(database, "CREATE TABLE IF NOT EXISTS return_memory (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS scriven_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS crown_calendar_state (id INTEGER PRIMARY KEY CHECK(id=1),payload BLOB NOT NULL);", error, error_capacity) &&
         Execute(database, "CREATE TABLE IF NOT EXISTS custody_state (slot INTEGER PRIMARY KEY,next_id INTEGER NOT NULL);"
@@ -3669,6 +3671,7 @@ invalid:
 #include "persistence/cc_save_scriven.inc"
 #include "persistence/cc_save_wants.inc"
 #include "persistence/cc_save_census.inc"
+#include "persistence/cc_save_return.inc"
 #include "persistence/cc_save_mine.inc"
 #include "persistence/cc_save_goblin_politics.inc"
 
@@ -3738,6 +3741,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveScriven(database, sim, error, error_capacity) &&
         SaveWants(database, sim, error, error_capacity) &&
         SaveCensus(database, sim, error, error_capacity) &&
+        SaveReturnMemory(database, sim, error, error_capacity) &&
         SaveCrownCalendar(database, sim, error, error_capacity) &&
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
@@ -6500,6 +6504,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
               ReadScriven(database, sim, error, error_capacity) &&
               ReadWants(database, sim, error, error_capacity) &&
               ReadCensus(database, sim, error, error_capacity) &&
+              ReadReturnMemory(database, sim, error, error_capacity) &&
               ReadCrownCalendar(database, sim, error, error_capacity) &&
               ReadGoblinPolitics(database, sim, error, error_capacity) &&
               ReadMine(database, sim, error, error_capacity);

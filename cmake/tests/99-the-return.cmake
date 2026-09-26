@@ -1,0 +1,5 @@
+add_executable(return_tests tests/return_tests.c)
+target_link_libraries(return_tests PRIVATE crownless_persistence)
+cc_strict_warnings(return_tests)
+cc_large_sim_stack(return_tests)
+add_test(NAME the_return_digest COMMAND return_tests)

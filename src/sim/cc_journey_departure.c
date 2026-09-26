@@ -1,5 +1,6 @@
 #include "sim/cc_journey_internal.h"
 #include "sim/cc_road_position.h"
+#include "sim/cc_return.h"
 #include "sim/cc_route_rules_internal.h"
 
 #include <stdio.h>
@@ -198,6 +199,8 @@ bool CcJourneyDepart(CcSim *sim, const CcCommand *command,
     SpoilPlayerJourneyCargo(
         sim, preview.rain_expected, &meat_spoiled, &grain_spoiled);
     services->exchange_gossip(sim, sim->player.id, sim->player.location_id, "Your fellow travelers");
+    /* The Return: remember the town as the company last saw it. */
+    CcReturnRecordSeen(sim, sim->player.location_id);
     CcId parent_event_id = services->latest_local_cause(sim, destination->id);
     sim->journey = (CcJourneyEncounter){
         .active = true,
