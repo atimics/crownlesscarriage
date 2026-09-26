@@ -3349,12 +3349,9 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
         CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
     int summary_width = CcOverlayMeasureText(summary, 10);
     int summary_x = GetScreenWidth() - summary_width - 22;
-    int title_limit = summary_x - 44;
-    if (local->opening_step == CC_LOCAL_OPENING_COMPLETE && !local->adventure_ui) {
-        /* Stop short of the centred command bar rather than run under it. */
-        int bar_x = (int)CommandActionBounds(COMMAND_ACTION_QUESTS).x;
-        if (bar_x - 46 < title_limit) title_limit = bar_x - 46;
-    }
+    /* Stop short of the centred command bar rather than run under it. */
+    int bar_x = (int)CommandActionBounds(COMMAND_ACTION_QUESTS).x;
+    int title_limit = summary_x - 44 < bar_x - 46 ? summary_x - 44 : bar_x - 46;
     char fitted_title[256];
     int title_size = HeaderFitText(title, title_limit, 18, 12,
                                    fitted_title, sizeof(fitted_title));
