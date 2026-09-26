@@ -1,3 +1,4 @@
+import base64
 import io
 import ctypes as c
 import hashlib
@@ -1360,6 +1361,237 @@ class CoopTests(unittest.TestCase):
         self.assertTrue(skipped['accepted'])
         self.assertEqual(skipped['world']['state'], self.worlds.view(self.id, self.a)['state'])
         self.assertNotEqual(skipped['world']['state']['hash'], view['state']['hash'])
+
+    # Live worlds: travel runs in memory and is saved on change or a timer.
+
+    def start_travel(self, world=None):
+        world = world or self.id
+        view = self.worlds.view(world, self.a)
+        route = next(option['id'] for option in view['state']['travel'] if option['available'])
+        result = self.worlds.command(world, self.a, dict(protocol=1, sequence=view['next_sequence'],
+            action_revision=view['action_revision'], action='travel', target=route))
+        self.assertTrue(result['accepted'])
+        return result['world']
+
+    def saved(self, world=None):
+        row = self.worlds.db.execute('SELECT state,view,revision FROM worlds WHERE id=?',
+                                     (world or self.id,)).fetchone()
+        return row['state'], json.loads(row['view']), row['revision']
+
+    def live_ticks(self, count, now, worlds=None, step=0.1):
+        """Tick the clock with every given world online; return the new time.
+        The test road stops for a choice after 154 ticks, so steps are short."""
+        for _ in range(count):
+            now += step
+            for world in worlds or [self.id]:
+                self.worlds.seen[(world, 'online')] = now
+            self.worlds.tick(now=now)
+        return now
+
+    def reference(self, saved, *steps):
+        with self.engine.open(saved=saved) as sim:
+            for ticks in steps:
+                sim.advance(ticks)
+            return sim.snapshot()
+
+    def test_live_travel_advances_without_writing_each_tick(self):
+        self.start_travel()
+        self.worlds.view(self.id, self.a)
+        start, before, revision = self.saved()
+        saves = []
+        self.worlds.db.set_trace_callback(lambda sql: saves.append(sql) if 'state=' in sql else None)
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now
+        changes = self.worlds.db.total_changes
+        now = self.live_ticks(1, now)
+        # Going live reserves revisions in one small write; no campaign save.
+        self.assertEqual(self.worlds.db.total_changes - changes, 1)
+        changes = self.worlds.db.total_changes
+        seen = [self.worlds.view(self.id, self.b, present=False)['revision']]
+        for _ in range(9):
+            now = self.live_ticks(1, now)
+            seen.append(self.worlds.view(self.id, self.b, present=False)['revision'])
+        self.assertEqual(self.worlds.db.total_changes - changes, 0)
+        self.assertEqual(saves, [])
+        self.assertEqual(seen, list(range(revision + 1, revision + 11)))
+        self.worlds.db.set_trace_callback(None)
+        live = self.worlds.view(self.id, self.b)
+        self.assertEqual(live['state'], self.reference(start, *[6] * 10))
+        self.assertEqual(self.saved()[0], start)
+        self.assertEqual(self.saved()[1], before)
+        # A campaign poll carries the live campaign, not the older save.
+        polled = self.worlds.view(self.id, self.b, campaign=True, after=str(revision))
+        with self.engine.open(saved=base64.b64decode(polled['campaign'])) as sim:
+            self.assertEqual(sim.snapshot(), live['state'])
+        self.assertNotIn('campaign', self.worlds.view(self.id, self.b, True, str(live['revision'])))
+
+    def test_live_travel_saves_on_timer_and_before_commands(self):
+        self.start_travel()
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now
+        now = self.live_ticks(4, now)
+        self.assertIn(self.id, self.worlds.live)
+        with patch('server.FLUSH_SECONDS', 0.25):
+            now = self.live_ticks(1, now)
+        live = self.worlds.view(self.id, self.a)
+        state, view, revision = self.saved()
+        self.assertEqual(view, live['state'])
+        self.assertGreater(revision, live['revision'])
+        now = self.live_ticks(3, now)
+        live = self.worlds.view(self.id, self.a)
+        self.assertNotEqual(self.saved()[1], live['state'])
+        # A command sees the live state: travel is saved first, then the stop.
+        stop = self.command(self.a, 'stop_travel', target=live['state']['journey']['route'])
+        stopped = self.worlds.command(self.id, self.a, stop)
+        self.assertTrue(stopped['accepted'])
+        self.assertEqual(stopped['world']['state'], live['state'])
+        self.assertEqual(stopped['world']['revision'], live['revision'] + 1)
+        self.assertNotIn(self.id, self.worlds.live)
+        state, view, revision = self.saved()
+        self.assertEqual((view, revision), (live['state'], live['revision'] + 1))
+        with self.engine.open(saved=state) as sim:
+            self.assertEqual(sim.snapshot(), live['state'])
+        resumed = self.worlds.command(self.id, self.a, self.command(
+            self.a, 'resume_travel', target=live['state']['journey']['route']))
+        self.assertTrue(resumed['accepted'])
+        self.worlds.last_tick[self.id] = now
+        now = self.live_ticks(2, now)
+        live = self.worlds.view(self.id, self.a)
+        skipped = self.worlds.command(self.id, self.b, self.command(self.b, 'skip_watch'))
+        self.assertTrue(skipped['accepted'])
+        with self.engine.open(saved=self.saved()[0]) as sim:
+            self.assertEqual(sim.snapshot(), skipped['world']['state'])
+        self.assertEqual(self.reference(state, 6, 6)['tick'], live['state']['tick'])
+        self.assertGreater(skipped['world']['state']['tick'], live['state']['tick'])
+
+    def test_live_travel_saves_when_the_journey_changes(self):
+        self.start_travel()
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now
+        first = self.worlds.view(self.id, self.a)['state']
+        for _ in range(400):
+            now = self.live_ticks(1, now, step=0.5)
+            state = self.worlds.view(self.id, self.a)['state']
+            if Worlds.milestone(state) != Worlds.milestone(first):
+                break
+        self.assertNotEqual(Worlds.milestone(state), Worlds.milestone(first))
+        self.assertEqual(self.saved()[1], state)
+
+    def test_live_travel_saves_on_pause_eviction_and_shutdown(self):
+        self.start_travel()
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now
+        now = self.live_ticks(3, now)
+        live = self.worlds.view(self.id, self.a)
+        paused = self.worlds.owner_action(self.id, self.a, 'pause')
+        self.assertNotIn(self.id, self.worlds.live)
+        self.assertEqual(paused['state'], live['state'])
+        self.assertEqual(paused['revision'], live['revision'] + 1)
+        self.assertEqual(self.saved()[1:], (live['state'], live['revision'] + 1))
+        self.worlds.owner_action(self.id, self.a, 'resume')
+        self.worlds.last_tick[self.id] = now
+        now = self.live_ticks(3, now)
+        live = self.worlds.view(self.id, self.a, present=False)
+        # Offline: saved at once, released from memory after a minute.
+        self.worlds.seen.clear()
+        self.worlds.tick(now=now + 0.5)
+        self.assertEqual(self.saved()[1], live['state'])
+        self.assertIn(self.id, self.worlds.live)
+        self.worlds.tick(now=now + 61)
+        self.assertNotIn(self.id, self.worlds.live)
+        self.assertEqual(self.saved()[1:], (live['state'], live['revision']))
+        # Shutdown saves unsaved travel with its exact revision.
+        self.worlds.last_tick[self.id] = now
+        now = self.live_ticks(3, now)
+        live = self.worlds.view(self.id, self.a, present=False)
+        self.assertNotEqual(self.saved()[1], live['state'])
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        restored = self.worlds.view(self.id, self.a, present=False)
+        self.assertEqual((restored['state'], restored['revision']), (live['state'], live['revision']))
+
+    def test_crash_restores_last_saved_travel_with_a_newer_revision(self):
+        self.start_travel()
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now
+        now = self.live_ticks(2, now)
+        with patch('server.FLUSH_SECONDS', 0.0):
+            now = self.live_ticks(1, now)
+        flushed = self.worlds.view(self.id, self.a)['state']
+        now = self.live_ticks(5, now)
+        lost = self.worlds.view(self.id, self.a)
+        self.assertNotEqual(lost['state'], flushed)
+        # A crash: memory is gone without a save.
+        for world in list(self.worlds.live):
+            self.worlds.drop(world)
+        self.worlds.close()
+        self.worlds = Worlds(self.path, self.engine)
+        restored = self.worlds.view(self.id, self.a, campaign=True, after=str(lost['revision']))
+        self.assertEqual(restored['state'], flushed)
+        self.assertGreater(restored['revision'], lost['revision'])
+        self.assertIn('campaign', restored)
+
+    def test_two_live_worlds_travel_apart(self):
+        other = '2' * 32
+        self.create_world(other)
+        starts = {}
+        for world in (self.id, other):
+            self.start_travel(world)
+            starts[world] = self.saved(world)[0]
+        now = time.monotonic()
+        for world in (self.id, other):
+            self.worlds.last_tick[world] = now
+        now = self.live_ticks(4, now, [self.id, other])
+        self.assertEqual(set(self.worlds.live), {self.id, other})
+        self.worlds.seen = {key: value for key, value in self.worlds.seen.items() if key[0] != other}
+        now = self.live_ticks(2, now, [self.id])
+        self.assertEqual(self.worlds.view(self.id, self.a)['state'], self.reference(starts[self.id], *[6] * 6))
+        self.assertEqual(self.worlds.view(other, self.a)['state'], self.reference(starts[other], *[6] * 4))
+        self.assertEqual(self.saved(other)[1], self.reference(starts[other], *[6] * 4))
+        self.worlds.owner_action(other, self.a, 'delete')
+        self.assertEqual(set(self.worlds.live), {self.id})
+
+    def test_slow_ticks_keep_their_time_and_stalls_are_capped(self):
+        start = self.start_travel()['state']['tick']
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now - 100
+        self.worlds.seen[(self.id, 'online')] = now
+        self.worlds.tick(now=now)
+        self.assertEqual(self.worlds.view(self.id, self.a)['state']['tick'], start + 120)
+        self.assertEqual(self.worlds.last_tick[self.id], now)
+        # A late tick keeps the unspent part: 12 ticks at 0.21 s, then 12 more
+        # at 0.4 s, where dropping the remainder would give only 11.
+        self.worlds.tick(now=now + 0.21)
+        self.worlds.tick(now=now + 0.4)
+        self.assertEqual(self.worlds.view(self.id, self.a)['state']['tick'], start + 144)
+
+    def test_live_tick_costs_less_than_one_save(self):
+        self.start_travel()
+        with self.engine.open(saved=self.saved()[0]) as sim:
+            started = time.process_time()
+            for _ in range(5):
+                sim.save()
+            one_save = (time.process_time() - started) / 5
+        saves, opens = [0], [0]
+        save, init = Campaign.save, Campaign.__init__
+        def counted_save(sim):
+            saves[0] += 1
+            return save(sim)
+        def counted_init(sim, *args, **kwargs):
+            opens[0] += 1
+            return init(sim, *args, **kwargs)
+        now = time.monotonic()
+        self.worlds.last_tick[self.id] = now
+        with patch.object(Campaign, 'save', counted_save), patch.object(Campaign, '__init__', counted_init):
+            started = time.process_time()
+            now = self.live_ticks(16, now)
+            per_tick = (time.process_time() - started) / 16
+        # Before: every tick opened and saved the world. Now: one open, no save
+        # inside the ten-second timer.
+        self.assertEqual((opens[0], saves[0]), (1, 0))
+        print(f'\nlive travel tick {per_tick * 1000:.2f} ms CPU; one save {one_save * 1000:.2f} ms',
+              file=sys.stderr)
+        self.assertLess(per_tick, one_save)
 
 
 if __name__ == '__main__':

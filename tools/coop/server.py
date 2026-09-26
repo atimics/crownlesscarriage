@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import signal
 import sqlite3
 import threading
 import time
@@ -30,6 +31,17 @@ AWAY_GRACE = 15.0
 AWAY_RAMP = 6 * 3600.0
 AWAY_BASE_RATE = 30 / 1440.0
 AWAY_MAX_RATE = 100 * 365 / 86400.0
+# A travelling world lives in memory. Its save is written when something
+# meaningful changes, and at least this often while it has unsaved travel.
+FLUSH_SECONDS = 10.0
+# A world that has not moved for this long leaves memory, after its save.
+EVICT_SECONDS = 60.0
+# A slow tick keeps its lost time, but a long stall does not jump the carriage.
+MAX_CATCH_UP_TICKS = 120
+# While a world is live, its saved revision stays this far ahead of the
+# revisions players have seen. After a crash the restored world then still
+# counts up from every poll, and players load it at once.
+REVISION_RESERVE = 64
 
 
 def away_days(seconds):
@@ -70,6 +82,27 @@ def issue_world_pass(path):
 def number(value, minimum, maximum, label):
     require(type(value) is int and minimum <= value <= maximum, f"Choose a valid {label}.")
     return value
+
+
+class LiveWorld:
+    """A travelling world held in memory between saves.
+
+    The in-memory campaign, view and revision are newer than the database
+    while `dirty` is set. Only the clock advances a live world. Every other
+    change first saves it and lets it go (see `Worlds.settle`)."""
+
+    def __init__(self, sim, view, revision, now):
+        self.sim, self.view, self.revision = sim, view, revision
+        self.stored = revision
+        self.dirty = False
+        self.flushed = self.moved = now
+        self.encoded = None
+
+    def campaign(self):
+        """The encoded campaign for the current revision, shared by every poll."""
+        if self.encoded is None or self.encoded[0] != self.revision:
+            self.encoded = (self.revision, base64.b64encode(self.sim.save()).decode("ascii"))
+        return self.encoded[1]
 
 
 class Worlds:
@@ -146,6 +179,7 @@ class Worlds:
         self.seen, self.last_tick, self.failed = {}, {}, set()
         self.visits, self.poses = {}, {}
         self.pose_sequence = 0
+        self.live = {}
         self.refresh_saved_worlds()
 
     def refresh_saved_worlds(self):
@@ -167,9 +201,66 @@ class Worlds:
                 logging.exception("World %s needs recovery after the engine upgrade", row["id"])
 
     def close(self):
+        """Save every live world, then release the database."""
         with self.lock:
+            for world in list(self.live):
+                try:
+                    self.settle(world)
+                except Exception:
+                    logging.exception("World %s could not save its last travel", world)
+                    self.drop(world)
             self.db.close()
             self.guard.close()
+
+    def flush(self, world, now=None, keep=True):
+        """Write a live world's campaign, view and revision if they are newer.
+
+        A world that stays live saves a reserved revision ahead of its own;
+        a world leaving memory saves its exact revision."""
+        live = self.live.get(world)
+        if live is None:
+            return
+        revision = live.revision + REVISION_RESERVE if keep else live.revision
+        if not live.dirty and live.stored == revision:
+            return
+        saved = live.sim.save() if live.dirty else None
+        def store():
+            if saved is None:
+                self.db.execute("UPDATE worlds SET revision=? WHERE id=?", (revision, world))
+            else:
+                self.db.execute("UPDATE worlds SET state=?,view=?,revision=? WHERE id=?",
+                                (saved, json.dumps(live.view), revision, world))
+        if self.db.in_transaction:
+            store()
+        else:
+            with self.transaction():
+                store()
+        live.stored, live.dirty = revision, False
+        live.flushed = time.monotonic() if now is None else now
+
+    def drop(self, world):
+        """Forget a live world without saving it."""
+        live = self.live.pop(world, None)
+        if live is not None:
+            live.sim.close()
+
+    def settle(self, world):
+        """Save a live world and release it, so the database is current.
+
+        Every path except the clock reads and writes the database. It settles
+        first, so stale saved state can never overwrite newer travel, and a
+        failed request can never leave memory ahead of the database."""
+        with self.lock:
+            self.flush(world, keep=False)
+            self.drop(world)
+
+    def current(self, world):
+        """The world row with its newest view and revision, from memory when live."""
+        row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
+        live = self.live.get(world)
+        if row is None or live is None:
+            return row, (json.loads(row["view"]) if row else None), (row["revision"] if row else None)
+        return row, live.view, live.revision
 
     @contextmanager
     def transaction(self):
@@ -196,6 +287,10 @@ class Worlds:
         credit = 0.0 if paused else max(0.0, away_days(wall - start) - away_days(previous["accounted_at"] - start))
         owed = previous["owed_days"] + credit
         last_human = wall if present or paused else previous["last_human"]
+        if not present and not paused and wall <= start:
+            # Still inside the grace period: nothing is owed and nothing needs
+            # saving. The clock checks online worlds every tick without a write.
+            return owed, 0.0
         self.db.execute("UPDATE away_clocks SET last_human=?,accounted_at=?,owed_days=? WHERE world=?", (last_human, wall, owed, world))
         return owed, max(0.0, wall - last_human - AWAY_GRACE)
 
@@ -216,15 +311,15 @@ class Worlds:
     def view(self, world, token, campaign=False, after=None, present=True, enter=False):
         with self.lock:
             member = self.member(world, token)
-            row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
+            row, state, revision = self.current(world)
             if present:
                 self.seen[(world, member["id"])] = time.monotonic()
             if world not in self.last_tick:
                 self.last_tick[world] = time.monotonic()
-            result = dict(protocol=PROTOCOL, id=world, name=row["name"], revision=row["revision"],
+            result = dict(protocol=PROTOCOL, id=world, name=row["name"], revision=revision,
                           action_revision=row["action_revision"], paused=bool(row["paused"]),
                           owner=row["owner"] == digest(token), member=member["id"],
-                          next_sequence=member["sequence"] + 1, state=json.loads(row["view"]),
+                          next_sequence=member["sequence"] + 1, state=state,
                           recovery_required=world in self.failed)
             result["travel_stopped"] = self.travel_stopped(world, result["state"])
             owed, absent = self.account_away(world, time.time(), present, bool(row["paused"]))
@@ -238,7 +333,7 @@ class Worlds:
             result["appearance"] = next(m["appearance"] for m in result["crew"] if m["id"] == member["id"])
             result["party_wipes"] = self.wipe_count(world)
             result["dead"] = self.member_dead(world, member["id"])
-            result["session_context"] = self.session_context(world, row)
+            result["session_context"] = self.session_context(world, state, revision)
             if campaign and after is None:
                 if enter:
                     visit = secrets.token_hex(16)
@@ -247,8 +342,9 @@ class Worlds:
                     result["visit"] = visit
                 saved = self.db.execute("SELECT sequence,context,session FROM sessions WHERE world=? AND member=?", (world, member["id"])).fetchone()
                 result["session"] = dict(saved) if saved else None
-            if campaign and after != str(row["revision"]):
-                result["campaign"] = base64.b64encode(row["state"]).decode("ascii")
+            if campaign and after != str(revision):
+                live = self.live.get(world)
+                result["campaign"] = live.campaign() if live else base64.b64encode(row["state"]).decode("ascii")
             return result
 
     def pose(self, world, token, body):
@@ -277,8 +373,8 @@ class Worlds:
                 self.visits.pop(key, None)
                 self.seen.pop(key, None)
                 return {"peers": []}
-            row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
-            context = self.session_context(world, row)
+            _, state, revision = self.current(world)
+            context = self.session_context(world, state, revision)
             require(body["context"] == context, "The company has moved. Refresh the carriage.", 409)
             now = time.monotonic()
             self.pose_sequence += 1
@@ -290,7 +386,7 @@ class Worlds:
                 dead = True
                 with self.transaction():
                     self.db.execute("INSERT INTO party_lives(world,member,dead) VALUES(?,?,1) ON CONFLICT(world,member) DO UPDATE SET dead=1", key)
-            wiped = dead and self.resolve_party_wipe(world, row, now)
+            wiped = dead and self.resolve_party_wipe(world, now)
             peers = []
             for crew in self.db.execute("SELECT m.id,m.name,a.appearance FROM members m LEFT JOIN appearances a ON a.world=m.world AND a.member=m.id WHERE m.world=? AND m.revoked=0 ORDER BY m.rowid", (world,)):
                 other = self.poses.get((world, crew["id"]))
@@ -312,16 +408,19 @@ class Worlds:
         row = self.db.execute("SELECT count FROM party_wipes WHERE world=?", (world,)).fetchone()
         return row["count"] if row else 0
 
-    def resolve_party_wipe(self, world, row, now):
+    def resolve_party_wipe(self, world, now):
         # Visits cover the whole party, including players in other scenes.
         party = [m["id"] for m in self.db.execute(
             "SELECT id FROM members WHERE world=? AND revoked=0", (world,))
             if (world, m["id"]) in self.visits and
             now - self.seen.get((world, m["id"]), -100) < 15]
-        if (row["paused"] or world in self.failed or not party or
+        paused = self.db.execute("SELECT paused FROM worlds WHERE id=?", (world,)).fetchone()["paused"]
+        if (paused or world in self.failed or not party or
                 any(not self.member_dead(world, member) for member in party)):
             return False
+        self.settle(world)
         with self.transaction():
+            row = self.db.execute("SELECT state,view FROM worlds WHERE id=?", (world,)).fetchone()
             with self.engine.open(saved=row["state"]) as sim:
                 day = json.loads(row["view"])["day"]
                 accepted, message = sim.apply("party_wipe", str(day), 0, 0)
@@ -373,18 +472,28 @@ class Worlds:
                                 (world, digest(permission)))
         return self.view(world, token, present=False)
 
-    def session_context(self, world, row):
-        state = json.loads(row["view"])
+    @staticmethod
+    def scene_signature(state):
         journey = state["journey"]
-        signature = json.dumps([state["company"]["location"],
+        return json.dumps([state["company"]["location"],
             *[journey[key] for key in ("active", "phase", "route", "watch")]])
+
+    @classmethod
+    def milestone(cls, state):
+        """What must be saved at once when it changes: arrival, departure,
+        a road leg or site, a watch, or a new scene."""
+        return (cls.journey_key(state), cls.scene_signature(state),
+                json.dumps(state["journey"].get("road_site"), sort_keys=True))
+
+    def session_context(self, world, state, revision):
+        signature = self.scene_signature(state)
         wipes = self.wipe_count(world)
         if wipes:
             signature += ':' + str(wipes)
         previous = self.db.execute("SELECT signature,context FROM scene_contexts WHERE world=?", (world,)).fetchone()
         if previous and previous["signature"] == signature:
             return previous["context"]
-        context = digest(signature + ':' + str(row["revision"]))
+        context = digest(signature + ':' + str(revision))
         self.db.execute("INSERT INTO scene_contexts(world,signature,context) VALUES(?,?,?) ON CONFLICT(world) DO UPDATE SET signature=excluded.signature,context=excluded.context", (world, signature, context))
         return context
 
@@ -398,8 +507,8 @@ class Worlds:
                 "Send a complete player session.")
         with self.transaction():
             member = self.member(world, token)
-            row = self.db.execute("SELECT * FROM worlds WHERE id=?", (world,)).fetchone()
-            context = self.session_context(world, row)
+            _, state, revision = self.current(world)
+            context = self.session_context(world, state, revision)
             require(body["context"] == context, "The company has moved. Refresh your place in the world.", 409)
             saved = self.db.execute("SELECT * FROM sessions WHERE world=? AND member=?", (world, member["id"])).fetchone()
             if saved and sequence <= saved["sequence"]:
@@ -465,6 +574,15 @@ class Worlds:
         amount = number(body.get("amount", 0), -1000000, 1000000, "quantity")
         payload = json.dumps({k: v for k, v in body.items() if k != "campaign"}, sort_keys=True)
         payload_hash = hashlib.sha256(payload.encode()).hexdigest()
+        with self.lock:
+            self.member(world, token)
+            # Save live travel first. The command then works on the current
+            # save, and a command that fails leaves the saved travel intact.
+            self.settle(world)
+            return self.apply_command(world, token, body, sequence, revision, action,
+                                      target, good, amount, payload_hash)
+
+    def apply_command(self, world, token, body, sequence, revision, action, target, good, amount, payload_hash):
         with self.transaction():
             member = self.member(world, token)
             receipt = self.db.execute("SELECT * FROM receipts WHERE world=? AND member=? AND sequence=?",
@@ -531,49 +649,90 @@ class Worlds:
                 with self.lock:
                     row = self.db.execute("SELECT paused FROM worlds WHERE id=?", (world,)).fetchone()
                     if row is None:
+                        self.drop(world)
                         continue
-                    previous = self.last_tick.get(world, now)
-                    online = any(w == world and now - seen < 15 for (w, _), seen in self.seen.items())
-                    ticks = min(60, int(max(0, now - previous) * 60))
                     try:
                         with self.transaction():
-                            owed, _ = self.account_away(world, wall, paused=bool(row["paused"]))
-                            if row["paused"] or world in self.failed:
-                                self.last_tick[world] = now
-                                continue
-                            saved = self.db.execute("SELECT state,view,revision FROM worlds WHERE id=?", (world,)).fetchone()
-                            before = json.loads(saved["view"])
-                            days = min(int(owed), 8 * 365, 2147000000 - before["day"])
-                            if days > 0:
-                                with self.engine.open(saved=saved["state"]) as sim:
-                                    remaining = days
-                                    while remaining:
-                                        batch = min(remaining, 365)
-                                        sim.advance_away(batch)
-                                        remaining -= batch
-                                    self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
-                                                    (sim.save(), json.dumps(sim.snapshot()), world))
-                                    self.db.execute("UPDATE away_clocks SET owed_days=owed_days-? WHERE world=?", (days, world))
-                            elif online and ticks > 0 and not self.travel_stopped(world, before) and before["journey"]["active"] and before["journey"]["phase"] in (1, 3):
-                                with self.engine.open(saved=saved["state"]) as sim:
-                                    if before["journey"].get("road_site"):
-                                        ticks = max(1, ticks // 2)
-                                    context = self.session_context(world, saved)
-                                    scale = max((pose.get("travel_scale", 1)
-                                        for (w, member), pose in self.poses.items()
-                                        if w == world and now - pose["seen"] < 0.4
-                                        and pose["context"] == context
-                                        and not self.member_dead(world, member)), default=1)
-                                    sim.advance(ticks, scale)
-                                    self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1 WHERE id=?",
-                                                    (sim.save(), json.dumps(sim.snapshot()), world))
-                        self.last_tick[world] = now
+                            self.tick_world(world, bool(row["paused"]), now, wall)
                     except Exception:
+                        # The saved world is the last good state. Memory may be
+                        # part-way through a failed step, so it is not kept.
+                        self.drop(world)
                         self.failed.add(world)
                         logging.exception("World %s needs recovery", world)
             finally:
                 if index + 1 < len(world_ids):
                     time.sleep(0)
+
+    def tick_world(self, world, paused, now, wall):
+        """Advance one world inside the clock's transaction."""
+        previous = self.last_tick.setdefault(world, now)
+        online = any(w == world and now - seen < 15 for (w, _), seen in self.seen.items())
+        owed, _ = self.account_away(world, wall, paused=paused)
+        live = self.live.get(world)
+        if paused or world in self.failed:
+            self.last_tick[world] = now
+            self.settle(world)
+            return
+        before = live.view if live else json.loads(
+            self.db.execute("SELECT view FROM worlds WHERE id=?", (world,)).fetchone()["view"])
+        days = min(int(owed), 8 * 365, 2147000000 - before["day"])
+        if days > 0:
+            self.settle(world)
+            saved = self.db.execute("SELECT state FROM worlds WHERE id=?", (world,)).fetchone()
+            with self.engine.open(saved=saved["state"]) as sim:
+                remaining = days
+                while remaining:
+                    batch = min(remaining, 365)
+                    sim.advance_away(batch)
+                    remaining -= batch
+                self.db.execute("UPDATE worlds SET state=?,view=?,revision=revision+1,action_revision=action_revision+1 WHERE id=?",
+                                (sim.save(), json.dumps(sim.snapshot()), world))
+                self.db.execute("UPDATE away_clocks SET owed_days=owed_days-? WHERE world=?", (days, world))
+            self.last_tick[world] = now
+            return
+        journey = before["journey"]
+        if not (online and journey["active"] and journey["phase"] in (1, 3)
+                and not self.travel_stopped(world, before)):
+            # Not moving: nothing accumulates, unsaved travel is saved, and an
+            # idle world leaves memory after a while.
+            self.last_tick[world] = now
+            if live is not None:
+                self.flush(world, now)
+                if now - live.moved >= EVICT_SECONDS:
+                    self.settle(world)
+            return
+        # Carry the part of a tick that has not run yet, so a slow host tick
+        # does not lose travel time. Cap a long stall instead of jumping.
+        ticks = int(max(0.0, now - previous) * 60 + 1e-6)
+        if ticks > MAX_CATCH_UP_TICKS:
+            ticks, self.last_tick[world] = MAX_CATCH_UP_TICKS, now
+        elif ticks > 0:
+            self.last_tick[world] = previous + ticks / 60
+        else:
+            return
+        if live is None:
+            saved = self.db.execute("SELECT state,revision FROM worlds WHERE id=?", (world,)).fetchone()
+            sim = self.engine.open(saved=saved["state"])
+            live = self.live[world] = LiveWorld(sim, before, saved["revision"], now)
+            live.dirty = sim.repaired
+            self.flush(world, now)
+        if journey.get("road_site"):
+            ticks = max(1, ticks // 2)
+        context = self.session_context(world, before, live.revision)
+        scale = max((pose.get("travel_scale", 1)
+            for (w, member), pose in self.poses.items()
+            if w == world and now - pose["seen"] < 0.4
+            and pose["context"] == context
+            and not self.member_dead(world, member)), default=1)
+        live.sim.advance(ticks, scale)
+        live.view = live.sim.snapshot()
+        live.revision += 1
+        live.dirty = True
+        live.moved = now
+        if (self.milestone(live.view) != self.milestone(before) or now - live.flushed >= FLUSH_SECONDS
+                or live.stored - live.revision <= REVISION_RESERVE // 2):
+            self.flush(world, now)
 
     def delete_world(self, world, token):
         with self.lock:
@@ -604,11 +763,21 @@ class Worlds:
             self.poses = {key: value for key, value in self.poses.items() if key[0] != world}
             self.last_tick.pop(world, None)
             self.failed.discard(world)
+            self.drop(world)
         return {"deleted": True}
 
     def owner_action(self, world, token, action, member=None):
         if action == "delete":
             return self.delete_world(world, token)
+        with self.lock:
+            row = self.db.execute("SELECT owner FROM worlds WHERE id=?", (world,)).fetchone()
+            require(row is not None and row["owner"] == digest(token), "The world host manages the crew and pause control.", 403)
+            if action in ("pause", "resume"):
+                # Save live travel before the pause changes the saved revision.
+                self.settle(world)
+            return self.apply_owner_action(world, token, action, member)
+
+    def apply_owner_action(self, world, token, action, member):
         with self.transaction():
             row = self.db.execute("SELECT owner,paused FROM worlds WHERE id=?", (world,)).fetchone()
             require(row is not None and row["owner"] == digest(token), "The world host manages the crew and pause control.", 403)
@@ -728,7 +897,9 @@ class Application:
         headers = [("Content-Type", content_type or "application/json"), ("Cache-Control", "no-store"),
                    ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "no-referrer")]
         if "gzip" in env.get("HTTP_ACCEPT_ENCODING", "") and len(data) > 1024:
-            compressor = zlib.compressobj(wbits=31)
+            # Fast compression: a travelling world sends its campaign on most
+            # polls, and level 1 costs a third of the default for 14% more bytes.
+            compressor = zlib.compressobj(1, wbits=31)
             data = compressor.compress(data) + compressor.flush()
             headers.extend([("Content-Encoding", "gzip"), ("Vary", "Accept-Encoding")])
         headers.append(("Content-Length", str(len(data))))
@@ -786,11 +957,21 @@ def main():
             worlds.tick()
     thread = threading.Thread(target=clock, daemon=True)
     thread.start()
+    def stop_host(signum, _frame):
+        # Waitress returns from serve on SystemExit; the finally block below
+        # then saves every live world before the process ends.
+        logging.info("Stopping the host on signal %s", signum)
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, stop_host)
+    signal.signal(signal.SIGINT, stop_host)
     try:
         serve(Application(worlds, args.public_origin, args.game_dir), host=args.bind, port=args.port,
               threads=8, connection_limit=128, channel_timeout=15, max_request_body_size=MAX_BODY,
               max_request_header_size=16384, clear_untrusted_proxy_headers=True)
     finally:
+        # A second signal must not interrupt the final save.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         stop.set()
         thread.join()
         worlds.close()
