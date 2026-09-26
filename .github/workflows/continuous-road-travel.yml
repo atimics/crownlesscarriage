@@ -1,7 +1,6 @@
 name: Continuous road travel
 on:
   pull_request:
-    paths: ['src/client/**', 'src/locomotion/**', 'src/multiplayer/**', 'src/sim/cc_journey*', 'src/sim/cc_sim.h', 'tools/coop/**', 'web/coop_game.js', 'tests/**', 'cmake/tests/80-client.cmake', '.github/workflows/continuous-road-travel.yml']
   push:
     branches: [main]
     paths: ['src/client/**', 'src/locomotion/**', 'src/multiplayer/**', 'src/sim/cc_journey*', 'src/sim/cc_sim.h', 'tools/coop/**', 'web/coop_game.js', 'tests/**', 'cmake/tests/80-client.cmake', '.github/workflows/continuous-road-travel.yml']
@@ -31,7 +30,7 @@ jobs:
           ulimit -s 65536
           mkdir -p out/travel/frames
           git rev-parse HEAD > out/travel/revision.txt
-          git rev-parse HEAD^{tree} > out/travel/tree.txt
+          git rev-parse 'HEAD^{tree}' > out/travel/tree.txt
           cmake -S . -B build-road -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON 2>&1 | tee out/travel/configure.log
           cmake --build build-road --parallel 4 2>&1 | tee out/travel/build.log
           xvfb-run -a ctest --test-dir build-road --output-on-failure --no-tests=error -R 'continuous_road|travel|carriage|creature|daily_play_policy|native_shared|saved_road_position|roadside_camp|rainbow_pony|road_journey_save|road_encounter_session|distinct_local_places|local_collision_space|town_arrival|town_departure|roadbook_arrival|oven_court|silverwick_mine|renderer' 2>&1 | tee out/travel/tests.log
