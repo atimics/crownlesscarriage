@@ -120,8 +120,9 @@ Town economies uses the record for prices under the fog
 - **unknown:** nothing, for a town the company has never left.
 
 A shortage or relief story told to the company after the record (by a
-resident or a traveller on the road) adds news beside the old price, with the
-teller's confidence. It never changes the number. The map case lists the
+resident or a traveller on the road), or road news about the town's food
+(`road_news`: hunger, fed, an empty or restocked stall, such as a famine
+notice at a milestone), adds news beside the old price, with its confidence. It never changes the number. The map case lists the
 known prices of the two towns a chart depicts, and the gate's road choice
 shows the far town's bread price with its age. No new saved state.
 

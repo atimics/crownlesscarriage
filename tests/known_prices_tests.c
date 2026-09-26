@@ -224,6 +224,26 @@ static void CheckToldNews(void)
     CC_CHECK(known.news == CC_KNOWN_PRICE_NEWS_SUPPLY);
     CC_CHECK(known.news_confidence == 40);
 
+    /* A famine notice read on the road later still (The Return M4) is the
+       newest news; the price is unchanged. */
+    CcTownSeen *record = &sim.return_memory.towns[0];
+    CC_CHECK(record->settlement_id == thornford);
+    record->road_news[1] = (CcRoadNews){
+        .channel = CC_ROAD_NEWS_READ, .kind = CC_RETURN_CHANGE_HUNGER,
+        .confidence = 100, .day = seen->seen_day + 25, .story_slot = -1
+    };
+    CC_CHECK(CcKnownPricesFor(&sim, thornford, &known));
+    CC_CHECK(known.news == CC_KNOWN_PRICE_NEWS_SHORTAGE);
+    CC_CHECK(known.news_day == seen->seen_day + 25);
+    CC_CHECK(known.news_confidence == 100);
+    CC_CHECK(known.news_teller_id == 0U);
+    CC_CHECK(known.price[CC_GOOD_BREAD] == seen->price[CC_GOOD_BREAD]);
+    /* Road news that is not about food adds nothing. */
+    record->road_news[1].kind = CC_RETURN_CHANGE_FIRE;
+    CC_CHECK(CcKnownPricesFor(&sim, thornford, &known));
+    CC_CHECK(known.news == CC_KNOWN_PRICE_NEWS_SUPPLY);
+    record->road_news[1] = (CcRoadNews){0};
+
     /* News never reveals a town the company has not seen. */
     CcId silverwick = TownByName(&sim, "Silverwick");
     sim.gossip[slot].origin_id = silverwick;

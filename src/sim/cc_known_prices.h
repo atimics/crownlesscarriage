@@ -13,8 +13,9 @@
    (CcTownSeen), labelled with its age. A town the company has never left has
    no known prices.
 
-   Stories the company was told can add news newer than the snapshot, such as
-   a shortage. News does not invent a number: the price stays the snapshot and
+   Stories the company was told, and news met on the road (CcTownSeen
+   road_news: a traveller's telling or a famine notice), can add news newer
+   than the snapshot, such as a shortage. News does not invent a number: the price stays the snapshot and
    the news is shown beside it, with the teller's lower confidence.
 
    Everything here is pure. It reads the simulation and writes only its

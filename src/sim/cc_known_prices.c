@@ -18,9 +18,45 @@ static CcKnownPriceNews NewsForKind(CcEventKind kind)
     }
 }
 
+static CcKnownPriceNews NewsForChange(int32_t kind)
+{
+    switch (kind) {
+    case CC_RETURN_CHANGE_HUNGER:
+    case CC_RETURN_CHANGE_STALL_EMPTY:
+        return CC_KNOWN_PRICE_NEWS_SHORTAGE;
+    case CC_RETURN_CHANGE_FED:
+    case CC_RETURN_CHANGE_STALL_RESTOCKED:
+        return CC_KNOWN_PRICE_NEWS_SUPPLY;
+    default:
+        return CC_KNOWN_PRICE_NEWS_NONE;
+    }
+}
+
+/* News met on the road since the snapshot (The Return, milestone 4): a
+   famine notice read at a milestone, or a traveller's telling. A newer piece
+   wins; on the same day the more certain one wins. */
+static void FindRoadNews(const CcTownSeen *seen, CcKnownPrices *known)
+{
+    for (int32_t i = 0; i < CC_RETURN_ROAD_NEWS; ++i) {
+        const CcRoadNews *piece = &seen->road_news[i];
+        CcKnownPriceNews news = NewsForChange(piece->kind);
+        if (piece->channel == 0 || news == CC_KNOWN_PRICE_NEWS_NONE ||
+            piece->day < known->known_day) continue;
+        if (known->news != CC_KNOWN_PRICE_NEWS_NONE &&
+            (piece->day < known->news_day ||
+             (piece->day == known->news_day &&
+              piece->confidence <= known->news_confidence))) continue;
+        known->news = news;
+        known->news_day = piece->day;
+        known->news_teller_id = piece->source_id;
+        known->news_confidence = piece->confidence < 0 ? 0 :
+            piece->confidence > 100 ? 100 : piece->confidence;
+    }
+}
+
 /* The newest food story about the town that someone told the company after
-   the snapshot. Stories heard on the road are told the same way. Ties go to
-   the lower slot, then the more certain teller, so the result is stable. */
+   the snapshot. Ties go to the lower slot, then the more certain teller, so
+   the result is stable. */
 static void FindNews(const CcSim *sim, CcKnownPrices *known)
 {
     int32_t carriers = CcSimGossipCarrierCapacity(sim);
@@ -89,6 +125,7 @@ bool CcKnownPricesFor(const CcSim *sim, CcId settlement_id,
         known->stock[good] = seen->stock[good];
     }
     FindNews(sim, known);
+    FindRoadNews(seen, known);
     return true;
 }
 
