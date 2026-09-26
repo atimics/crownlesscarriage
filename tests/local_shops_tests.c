@@ -56,7 +56,10 @@ static int CheckTown(CcSettlementFunction function)
             if (CcLocalShopSells(shop, (CcGood)good)) {
                 CHECK(++goods_seen[good] == 1);
                 CHECK(CcLocalShopForGood(profile, (CcGood)good) == shop);
-                CHECK(CcLocalShopBuys(shop, (CcGood)good));
+                /* Shops take back what they sell, except the stationer,
+                   which buys wood to make paper. */
+                CHECK(CcLocalShopBuys(shop, (CcGood)good) ==
+                      (shop->kind != CC_LOCAL_SHOP_STATIONER));
             }
         }
     }
@@ -91,6 +94,12 @@ static int CheckTown(CcSettlementFunction function)
     CHECK(CcLocalShopBuys(CcLocalShopAt(profile, CC_LOCAL_SHOP_GRAIN_MERCHANT),
                           CC_GOOD_ROTTEN_GRAIN));
     CHECK(!CcLocalShopBuys(bakery, CC_GOOD_RAW_STONE));
+    const CcLocalShop *stationer = CcLocalShopForGood(profile, CC_GOOD_PAPER);
+    CHECK(stationer != NULL && stationer->kind == CC_LOCAL_SHOP_STATIONER);
+    CHECK(CcLocalShopSells(stationer, CC_GOOD_PAPER));
+    CHECK(!CcLocalShopSells(stationer, CC_GOOD_WOOD));
+    CHECK(CcLocalShopBuys(stationer, CC_GOOD_WOOD));
+    CHECK(!CcLocalShopBuys(stationer, CC_GOOD_PAPER));
     CHECK(!CcLocalShopBuys(NULL, CC_GOOD_WHEAT));
     return 0;
 }
