@@ -80,6 +80,9 @@ bool CcLocalShopSells(const CcLocalShop *shop, CcGood good)
 bool CcLocalShopBuys(const CcLocalShop *shop, CcGood good)
 {
     if (shop == NULL) return false;
+    /* The stationer makes paper from wood: it buys the wood and sells the
+       paper, and does not take paper back. */
+    if (shop->kind == CC_LOCAL_SHOP_STATIONER) return good == CC_GOOD_WOOD;
     if (CcLocalShopSells(shop, good)) return true;
     if (shop->kind == CC_LOCAL_SHOP_BAKERY && good == CC_GOOD_WHEAT)
         return true;
