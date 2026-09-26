@@ -1,7 +1,7 @@
 # The Return
 
 Status: milestones 1 (design, last-seen record, change digest), 2 (the scene
-shows the changes) and 3 (the gate voice).
+shows the changes), 3 (the gate voice) and 4 (news on the road).
 
 Crownless is a small life inside a big living history. The player sits on a
 carriage company's bench. The simulation is deep, but today the player mostly
@@ -64,7 +64,8 @@ milestones need:
 - population, security, prosperity, hunger, and fire damage;
 - stock and price for each good.
 
-It is 376 bytes per town, 2.3 KB in all.
+It is 376 bytes per town, 2.3 KB in all; with the road news of milestone 4,
+it is 568 bytes per town, 3.4 KB in all.
 
 **Why this must be saved.** A town's past state is gone once the simulation
 moves on. The event ring holds only 256 events, often a few days' worth. The
@@ -106,14 +107,36 @@ quarter. The sort has a total order (score, kind, detail, subject), so the same
 world always gives the same list. Small price moves are dropped, and the digest
 keeps at most three market lines.
 
+### Known prices (pure)
+
+Town economies uses the record for prices under the fog
+(`docs/design/town-economies.md`). `CcKnownPricesFor(sim, town, &known)` in
+`src/sim/cc_known_prices.[ch]` gives:
+
+- **here:** today's prices, only for the town the company stands in (not on
+  the road);
+- **seen:** the record's prices, with `known_day`, `age_days`, and a
+  confidence that fades from 100 to 10 over 120 days;
+- **unknown:** nothing, for a town the company has never left.
+
+A shortage or relief story told to the company after the record (by a
+resident or a traveller on the road), or road news about the town's food
+(`road_news`: hunger, fed, an empty or restocked stall, such as a famine
+notice at a milestone), adds news beside the old price, with its confidence. It never changes the number. The map case lists the
+known prices of the two towns a chart depicts, and the gate's road choice
+shows the far town's bread price with its age. No new saved state.
+
 ## How news reaches the player
 
 - **Witnessed:** the company saw it (`CcEvent.witness_id` is the company).
 - **Told:** a person told the company the story (`told_player` on that
   person's gossip carrier). Their telling carries a confidence and a source
   (`CcGossipVersion.source_character_id`).
-- **Read:** a notice or roadside sign. Notices exist (`CcNoticeBoard`), but the
-  digest does not mark them yet. Milestone 4 adds this.
+- **Read:** a notice at a milestone on the road (milestone 4). The digest
+  marks the change `read`, at full confidence.
+- **On the road:** a traveller's story, a notice, or smoke on the horizon,
+  met while the carriage moves (milestone 4, below). The digest finds these in
+  the town's `road_news` first.
 
 Passive story swaps on arrival do not count as told, because nobody said
 anything to the player.
@@ -168,21 +191,112 @@ shows it. Building is pure. It reads the simulation and writes only the voice.
    `told_player`, so the digest ranks the change as told and the next voice
    moves on. No new saved state.
 
-The client opens the voice when the carriage parks in a town the company has
-seen before. It shows the speaker's name and trade, the line, and "Tell me
-more" or "Thank you". While it is open it replaces the local panel and the
-arrival note. The line is also a `CcSpeech` turn (`return.gate`), so it goes
-through the existing speech and audio path.
+The client opens the voice at the gate, in a town the company has seen
+before. The speaker waits at the staged scene's `cues.speaker` spot, inside
+the gate among the milestone 2 props. When the arriving carriage comes within
+a few steps of them, the carriage stops and the voice opens, once per arrival
+(`OfferGateVoiceAtGate`). If the player parks early, before the carriage
+reaches the spot, the voice opens after the park instead. It shows the
+speaker's name and trade, the line, and "Tell me more" or "Thank you". While
+it is open it holds the input, replaces the local panel, the arrival note and
+the context actions. The line is also a `CcSpeech` turn (`return.gate`), so
+it goes through the existing speech and audio path.
 
 The speaker stands in the scene. The update path stages them
-(`CcLocalCourseStageGateSpeaker`): a few steps ahead of the player, a little
-to the side, facing the player, with their own appearance seed. The renderer
-only draws the staged agent, and the conversation camera frames the two of
-them. The staging is one small function, apart from the town crowd.
+(`CcLocalCourseStageGateSpeaker`): at the `cues.speaker` spot when the
+company is by the gate, otherwise a few steps ahead of the player, a little
+to the side. Either way they face the player, with their own appearance seed.
+The renderer only draws the staged agent, and the conversation camera frames
+the two of them. The staging is one small function, apart from the town crowd.
+The combined review (all three milestones together) is in
+`docs/reviews/the-return-combined-2026-09-26/`.
 
 Review: `crownless_return_digest --seed 4 --days 365 --voice` and
 `--capture-gate-voice SEED DAYS TOWN PNG [TURNS]`; frames are in
 `docs/reviews/the-return-gate-voice-2026-09-25/`.
+
+## News on the road (milestone 4)
+
+While the company rides a leg, it can meet news about a town it has seen
+before, about a change it does not know yet. There are three channels:
+
+| Channel | Where on the leg | What | Digest |
+| --- | --- | --- | --- |
+| Told | 35% of the way | A traveller on the same road (a character travelling between the leg's two towns, either way) who holds the evidence story and has not told it to the company. The best-ranked such change wins. | `told`, with the traveller and their confidence |
+| Read | 70%, the milestone | A notice for a public fact about the destination: a new ruler (a proclamation), a new crown, a famine, or a bandit camp (a bounty). | `read`, confidence 100 |
+| Witnessed | 70%, 80% and 90% | Smoke over the destination when it burned in the last 10 days. At the milestone, smoke in view takes the notice's place. | `witnessed` |
+
+So a leg meets at most one traveller and one notice, plus the smoke of a
+fire. It stays sparse: 12 review rides (six seeds, 60 and 365 days) meet seven
+pieces in all, and many rides meet none. Only unknown changes with evidence
+count, never prices or restocked stalls.
+
+**The sim decides; the client shows.** `CcRoadNewsAdvance`
+(`src/sim/cc_road_news.c`) runs from the journey tick with the route progress
+before and after each step. When the carriage crosses a point, the pure
+finder picks the news and `CcRoadNewsRecord` writes it into the town's
+`CcTownSeen.road_news` (up to three a town). A told story also sets
+`told_player` on the traveller's carrier, as `CC_COMMAND_HEARD_STORY` would.
+Journey ticks are journalled, so replay meets the same news. Rendering only
+reads it.
+
+**The digest.** `FindKnowledge` looks at the town's road news first and marks
+the change told, read, or witnessed, with `on_road` set. Read news scores a
+third, like told. The gate voice skips every known change, so it moves on. The
+arrival scene still stages road news (a notice is not the town, and smoke on
+the horizon is not the burned street): `CcReturnSceneCuesBuild` ranks it by
+its score before the discount.
+
+**The words.** `src/story/cc_road_voice.[ch]` builds one line:
+
+- Told: the gate voice builder in road mode (`CcGateVoiceSayOnRoad`). The
+  traveller names the town, never "here", and never says "You're back". The
+  event comes first from their own telling, then the hedge or who told them,
+  then, when they set out from that town, a word about their own road. When
+  the grammar cannot read the telling, the sim's own words are used, without
+  the tally.
+- Read: the notice's words, in quotes, from the change.
+- Witnessed: what the company sees from the bench.
+
+**The travel view.** `UpdateRoadNews` (`src/client/cc_road_news_ui.inc`)
+builds the line on the update path when a new piece appears, and says a
+traveller's line through the speech path (`return.road`). `DrawRoadNews`
+shows it in a card for 12 seconds of travel. The storybook travel view
+(`open_world.inc`) draws the traveller on the verge where they were met,
+facing the carriage; a milestone with a post and a notice; and the town's
+smoke columns (the M2 prop, `DrawSmokeColumnAt`, scaled up) over the
+destination.
+
+**Saved state (schema 123).** `CcTownSeen` gains `road_news[3]`
+(`CcRoadNews`: channel, kind, detail, subject, evidence event, traveller,
+route, story slot, confidence, day, tick). It resets when the company leaves
+the town again. The `return_memory` blob is version 2; version 1 (schema 122)
+still loads, with no road news. Empty entries add nothing to the hash. Schema
+122 journals replay without road news.
+
+Samples (`crownless_return_digest`):
+
+- Told, seed 2, 365 days: *Willet Sheafbinder, scribe:* "The Cinder Tithe
+  raided Thornford, I hear. I left while there was still bread for the road."
+- Told, seed 7, 365 days: *Ferwen Longreckon, smith:* "The Cinder Tithe
+  raided Thornford — Aldwyn at the inn told me."
+- Read, seed 4, 365 days: *A notice at the milestone:* "Famine in Gloamgate.
+  Grain and bread are wanted at the gate."
+- Witnessed, seed 4, 365 days: *From the bench:* "Black smoke hangs over
+  Gloamgate. Something there has burned."
+
+**The payoff.** Seed 4, 365 days: on the way back to Gloamgate the company
+hears a traveller's omen story, reads the famine notice, and sees the smoke.
+At the gate the resident no longer leads with the fire ("Varkesh the
+Unappeased burned most of the town ..."). They say: "The market is closed.
+Varkesh the Unappeased burned the town over money missing from the hoard, I
+hear."
+
+Review: `crownless_return_digest --seed 4 --days 365 --voice` prints each
+piece of road news when it is met, and `--capture-road-news SEED DAYS
+told|read|witnessed PNG` renders the travel view at that moment. Frames are in
+`docs/reviews/the-return-road-news-2026-09-25/`. Tests:
+`tests/road_news_tests.c` and `crownless_carriage --test-road-news`.
 
 ## Milestones
 
@@ -231,8 +345,8 @@ Review: `crownless_return_digest --seed 4 --days 365 --voice` and
    direction). Review frames: `docs/reviews/the-return-scene-2026-09-25/`.
 3. **The gate voice.** A resident at the gate speaks the top unknown change in
    their own words, using their own telling of the evidence story.
-4. **News on the road.** Travellers and roadside signs tell stories while the
-   carriage moves, so some changes arrive already told or read.
+4. **News on the road (this change).** News travels at carriage speed, and the
+   ride changes what the gate says. See "News on the road" below.
 5. **Fewer panels.** Replace the condition text and panel lines that the scene
    and voice now carry.
 6. **Polish.**

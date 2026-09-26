@@ -940,11 +940,31 @@ void CcReturnSceneCuesBuild(const CcReturnDigest *digest, CcReturnSceneCues *cue
     *cues = (CcReturnSceneCues){.service_lost_kind = -1,
                                 .boarded_building = -1};
     if (digest == NULL || digest->first_visit) return;
-    int32_t taken = 0;
-    for (int32_t i = 0; i < digest->change_count && taken < 3; ++i) {
+    /* The staged changes: the company has not seen them up close. News met
+       on the road (milestone 4) still counts: a notice or a traveller's story
+       is not the town itself, and smoke on the horizon is not the burned
+       street. Such news keeps its rank from before the digest discounted it,
+       so the arrival shows the same town the ride heard about. */
+    int32_t order[CC_RETURN_MAX_CHANGES];
+    int32_t weight[CC_RETURN_MAX_CHANGES];
+    int32_t count = 0;
+    for (int32_t i = 0; i < digest->change_count && i < CC_RETURN_MAX_CHANGES; ++i) {
         const CcReturnChange *change = &digest->changes[i];
-        if (change->knowledge != CC_RETURN_UNKNOWN) continue;
-        ++taken;
+        bool on_road = change->on_road;
+        if (change->knowledge != CC_RETURN_UNKNOWN && !on_road) continue;
+        int32_t w = !on_road ? change->score :
+            change->score * (change->knowledge == CC_RETURN_WITNESSED ? 4 : 3);
+        int32_t at = count++;
+        while (at > 0 && weight[at - 1] < w) {
+            order[at] = order[at - 1];
+            weight[at] = weight[at - 1];
+            --at;
+        }
+        order[at] = i;
+        weight[at] = w;
+    }
+    for (int32_t n = 0; n < count && n < 3; ++n) {
+        const CcReturnChange *change = &digest->changes[order[n]];
         switch (change->kind) {
         case CC_RETURN_CHANGE_FIRE:
             cues->fire = true;

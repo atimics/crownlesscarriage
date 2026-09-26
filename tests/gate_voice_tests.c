@@ -132,7 +132,9 @@ static void CheckEvidence(const CcSim *world, const CcGateVoice *voice)
 }
 
 /* Thornford to Silverwick and back to Gloamgate after a year (seed 4 burns
-   Gloamgate and leaves it hungry). */
+   Gloamgate and leaves it hungry). The ride back meets news on the road
+   (milestone 4: tests/road_news_tests.c); these checks are about the gate,
+   so the company forgets it, as if the ride had been quiet. */
 static void ReturnToGloamgate(CcSim *world)
 {
     CcSimInit(world, 4U);
@@ -140,6 +142,9 @@ static void ReturnToGloamgate(CcSim *world)
     Ride(world, TownByName(world, "Silverwick"));
     CcSimAdvanceDays(world, 365);
     Ride(world, TownByName(world, "Gloamgate"));
+    for (int32_t t = 0; t < CC_MAX_SETTLEMENTS; ++t)
+        memset(world->return_memory.towns[t].road_news, 0,
+               sizeof(world->return_memory.towns[t].road_news));
 }
 
 static void CheckRouteVoice(void)

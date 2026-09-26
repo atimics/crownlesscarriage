@@ -4912,18 +4912,19 @@ static void DrawReturnMarketStalls(const CcSettlement *place,
 }
 
 /* A column of smoke, stylised: a stack of puffs, black and dense at the
-   base, thinning and paling as it climbs and leans with the wind. */
-static void DrawReturnSmokeColumn(CcReturnStagePoint at, float clock)
+   base, thinning and paling as it climbs and leans with the wind. `scale`
+   sizes the whole column: 1 in a town, larger seen from the road
+   (milestone 4's smoke on the horizon, open_world.inc). */
+static void DrawSmokeColumnAt(Vector3 base, float scale, float seed_yaw, float clock)
 {
-    Vector3 base = TerrainWorldPoint(at.x, at.z);
     const int32_t puffs = 14;
     const float rise_height = 16.0f;
     for (int32_t puff = 0; puff < puffs; ++puff) {
         float cycle = fmodf(clock * 0.05f + (float)puff / (float)puffs +
-                            at.yaw * 0.37f, 1.0f);
+                            seed_yaw * 0.37f, 1.0f);
         /* Each puff keeps its own small wobble so the column billows. */
         uint32_t h = TownFireHash((uint32_t)puff * UINT32_C(2654435761) +
-                                  (uint32_t)(at.yaw * 17.0f));
+                                  (uint32_t)(seed_yaw * 17.0f));
         float wobble_x = ((float)(h & 0xffU) / 255.0f - 0.5f) * 1.4f;
         float wobble_z = ((float)((h >> 8) & 0xffU) / 255.0f - 0.5f) * 1.4f;
         float height = 0.8f + cycle * rise_height;
@@ -4931,14 +4932,19 @@ static void DrawReturnSmokeColumn(CcReturnStagePoint at, float clock)
         float radius = 0.75f + cycle * 1.9f;
         Color dense = {16, 14, 14, 255};
         Color thin = {74, 70, 72, 255};
-        DrawScenerySphere((Vector3){base.x + lean + wobble_x * cycle,
-                                    base.y + height,
-                                    base.z + wobble_z * cycle},
-                          radius, BlendColor(dense, thin, cycle));
+        DrawScenerySphere((Vector3){base.x + (lean + wobble_x * cycle) * scale,
+                                    base.y + height * scale,
+                                    base.z + wobble_z * cycle * scale},
+                          radius * scale, BlendColor(dense, thin, cycle));
     }
     /* The fire's glow still at the foot of the column. */
-    DrawScenerySphere((Vector3){base.x, base.y + 0.5f, base.z}, 0.8f,
+    DrawScenerySphere((Vector3){base.x, base.y + 0.5f * scale, base.z}, 0.8f * scale,
                       TOWN_EMBER);
+}
+
+static void DrawReturnSmokeColumn(CcReturnStagePoint at, float clock)
+{
+    DrawSmokeColumnAt(TerrainWorldPoint(at.x, at.z), 1.0f, at.yaw, clock);
 }
 
 /* Boards nailed over the lost service's own front door and windows, drawn

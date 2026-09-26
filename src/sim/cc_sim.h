@@ -75,9 +75,11 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 122
+#define CC_SIM_SCHEMA_VERSION 123
 /* The Return: the company's last view of each town (cc_return.h). */
 #define CC_RETURN_SCHEMA_VERSION 122U
+/* The Return, milestone 4: news met on the road (cc_road_news.h). */
+#define CC_ROAD_NEWS_SCHEMA_VERSION 123U
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -2254,6 +2256,24 @@ typedef struct CcNoticeBoard {
     CcNotice notices[CC_MAX_SITUATIONS];
 } CcNoticeBoard;
 
+/* The Return, milestone 4: one piece of news about a town that the company
+   met on the road since it last left that town. A zero channel is an empty
+   slot. The kind, detail and subject match a CcReturnChange. */
+#define CC_RETURN_ROAD_NEWS 3
+typedef struct CcRoadNews {
+    int32_t channel;    /* CcRoadNewsChannel: told, read, or witnessed */
+    int32_t kind;       /* CcReturnChangeKind */
+    int32_t detail;
+    int32_t confidence; /* 0..100; a notice or the company's own eyes is 100 */
+    CcId subject_id;
+    CcId event_id;      /* the evidence event, or 0 */
+    CcId source_id;     /* the traveller who told it; 0 for read or witnessed */
+    CcId route_id;      /* the road it was met on */
+    int32_t story_slot; /* the gossip slot the traveller told, or -1 */
+    int32_t day;
+    uint64_t tick;      /* the world tick it was met, for the travel view */
+} CcRoadNews;
+
 /* The Return: how the company last saw a town, captured when it leaves.
    A zero settlement_id means the company has not left that town yet. */
 #define CC_RETURN_FACES 4
@@ -2275,6 +2295,8 @@ typedef struct CcTownSeen {
     int32_t fire_damage;
     int32_t stock[CC_GOOD_COUNT];
     int32_t price[CC_GOOD_COUNT];
+    /* News about this town met on the road since then (schema 123). */
+    CcRoadNews road_news[CC_RETURN_ROAD_NEWS];
 } CcTownSeen;
 
 typedef struct CcReturnMemory {
@@ -2400,7 +2422,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 1736040,
+_Static_assert(sizeof(CcSim) == 1737192,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
