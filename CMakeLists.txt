@@ -128,6 +128,7 @@ add_library(crownless_sim
     src/sim/cc_census.c
     src/sim/cc_return.c
     src/sim/cc_road_news.c
+    src/sim/cc_known_prices.c
     src/sim/cc_return_ride.c
     src/sim/cc_census_layout.c
     src/sim/cc_shared_clock.c

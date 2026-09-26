@@ -23,6 +23,7 @@ typedef struct CcCaptureRequest {
     bool capture_road_zoom;
     float capture_road_zoom_weight;
     bool capture_map_case;
+    bool capture_known_prices;
     bool capture_dragon_hoard_map;
     bool capture_carriage;
     bool capture_carriage_target;
@@ -157,6 +158,10 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
     }
     request->capture_map_case = argc >= 2 &&
         strcmp(argv[1], "--capture-map-case") == 0;
+    /* --capture-map-case PNG fog: Silverwick was last seen weeks ago, its
+       live prices have moved since, and a shortage story was told. */
+    request->capture_known_prices = request->capture_map_case &&
+        argc >= 4 && strcmp(argv[3], "fog") == 0;
     request->capture_dragon_hoard_map = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-hoard-map") == 0;
     request->capture_carriage = argc >= 2 &&

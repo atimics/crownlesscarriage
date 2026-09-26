@@ -23,6 +23,7 @@
 #include "sim/cc_road_position.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_oven_court.h"
+#include "sim/cc_known_prices.h"
 #include "sim/cc_return.h"
 #include "sim/cc_return_ride.h"
 #include "sim/cc_road_news.h"
@@ -5252,7 +5253,19 @@ static ContextActionSet BuildContextActions(
             bool available = CcSimTravelPreview(sim,
                 RouteOtherEnd(route, sim->player.location_id),
                 &preview, reason, sizeof(reason));
-            if (available) {
+            CcKnownPrices known;
+            if (available && preview.destination_known &&
+                CcKnownPricesFor(sim, preview.destination_id, &known)) {
+                /* Prices at the far end are the last ones the company saw. */
+                char age[32];
+                CcKnownPriceAgeText(known.age_days, age, sizeof(age));
+                for (char *c = age; *c != '\0'; ++c)
+                    if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
+                (void)snprintf(detail, sizeof(detail),
+                    "%d HOURS \xC2\xB7 BREAD %dc \xC2\xB7 %s",
+                    preview.travel_watches * 8,
+                    (int)known.price[CC_GOOD_BREAD], age);
+            } else if (available) {
                 (void)snprintf(detail, sizeof(detail),
                     "%d HOURS ON THE ROAD", preview.travel_watches * 8);
             } else {
@@ -6693,6 +6706,53 @@ static void DrawMap(const CcSim *sim, int32_t selected, float clock,
     }
 }
 
+/* The staples the map case lists for each depicted town. */
+static const CcGood KNOWN_PRICE_GOODS[] = {
+    CC_GOOD_BREAD, CC_GOOD_WHEAT, CC_GOOD_WOOD, CC_GOOD_STONE
+};
+
+/* One town's prices as the company knows them: today's only where it
+   stands, the last-seen snapshot with its age elsewhere, none if unseen. */
+static int DrawKnownTownPrices(const CcSim *sim, const CcSettlement *town,
+                               int x, int y)
+{
+    if (town == NULL) return y;
+    CcKnownPrices known;
+    bool have = CcKnownPricesFor(sim, town->id, &known);
+    char age[32];
+    CcKnownPriceAgeText(known.age_days, age, sizeof(age));
+    CcOverlayDrawText(TextFormat("%s  %s", town->name,
+                        !have ? "no prices known" :
+                        known.source == CC_KNOWN_PRICE_HERE ? "here today" :
+                        TextFormat("seen %s", age)),
+                      x, y, 11, have ? INK : MUTED);
+    y += 16;
+    if (!have) return y + 4;
+    char line[128] = "";
+    size_t used = 0U;
+    for (size_t i = 0; i < sizeof(KNOWN_PRICE_GOODS) / sizeof(KNOWN_PRICE_GOODS[0]); ++i) {
+        CcGood good = KNOWN_PRICE_GOODS[i];
+        int wrote = snprintf(line + used, sizeof(line) - used, "%s%s %dc",
+                             i > 0 ? "   " : "", CcGoodName(good),
+                             (int)known.price[good]);
+        if (wrote < 0 || (size_t)wrote >= sizeof(line) - used) break;
+        used += (size_t)wrote;
+    }
+    /* Old prices fade on the page as they fade in the company's mind. */
+    float ink = 0.45f + 0.55f * (float)known.confidence / 100.0f;
+    CcOverlayDrawText(line, x, y, 10,
+                      known.source == CC_KNOWN_PRICE_HERE ? TEAL : Fade(INK, ink));
+    y += 15;
+    if (known.news != CC_KNOWN_PRICE_NEWS_NONE) {
+        CcOverlayDrawText(TextFormat("Since then: %s (day %d)",
+                            CcKnownPriceNewsText(known.news),
+                            (int)known.news_day),
+                          x, y, 9, CC_GOLD);
+        y += 14;
+    }
+    return y + 4;
+}
+
 static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
 {
     Rectangle panel = {938.0f, 82.0f, 322.0f, 310.0f};
@@ -6730,23 +6790,26 @@ static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
     DrawBar(958, 337, 124, "ACCURACY", map->accuracy, TEAL);
     DrawBar(958, 361, 124, "ROAD INK", map->recorded_condition, CC_GOLD);
     DrawBar(958, 385, 124, "DANGER", map->recorded_danger, DANGER);
+    CcOverlayDrawText("KNOWN PRICES", 958, 414, 10, TEAL);
+    int price_y = DrawKnownTownPrices(sim, from, 958, 432);
+    (void)DrawKnownTownPrices(sim, to, 958, price_y);
     bool owned = map->owner_id == sim->player.id;
     bool archived = CcSimMapIsArchived(sim, map);
     if (!owned) {
         CcOverlayDrawText(TextFormat("B  BUY FOR %d CROWNS", map->ask_price),
-                 958, 486, 13, CC_GOLD);
+                 958, 538, 13, CC_GOLD);
     } else if (archived) {
         CcOverlayDrawText("A  RETRIEVE FROM ARCHIVE",
-                 958, 486, 12, TEAL);
+                 958, 538, 12, TEAL);
         CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS",
                             map->ask_price * 2 / 3),
-                 958, 511, 11, MUTED);
+                 958, 559, 11, MUTED);
     } else {
         CcOverlayDrawText(TextFormat("S  SELL FOR %d CROWNS", map->ask_price * 2 / 3),
-                 958, 486, 11, MUTED);
+                 958, 538, 11, MUTED);
         if (sim->player.location_id == sim->settlements[1].id) {
             CcOverlayDrawText("A  STORE IN GLOAMGATE ARCHIVE",
-                     958, 511, 10, TEAL);
+                     958, 559, 10, TEAL);
         }
     }
     CcOverlayDrawText("LEFT/RIGHT  leaf through objects", 958, 584, 9, MUTED);
