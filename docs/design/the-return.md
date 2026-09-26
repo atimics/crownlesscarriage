@@ -168,17 +168,25 @@ shows it. Building is pure. It reads the simulation and writes only the voice.
    `told_player`, so the digest ranks the change as told and the next voice
    moves on. No new saved state.
 
-The client opens the voice when the carriage parks in a town the company has
-seen before. It shows the speaker's name and trade, the line, and "Tell me
-more" or "Thank you". While it is open it replaces the local panel and the
-arrival note. The line is also a `CcSpeech` turn (`return.gate`), so it goes
-through the existing speech and audio path.
+The client opens the voice at the gate, in a town the company has seen
+before. The speaker waits at the staged scene's `cues.speaker` spot, inside
+the gate among the milestone 2 props. When the arriving carriage comes within
+a few steps of them, the carriage stops and the voice opens, once per arrival
+(`OfferGateVoiceAtGate`). If the player parks early, before the carriage
+reaches the spot, the voice opens after the park instead. It shows the
+speaker's name and trade, the line, and "Tell me more" or "Thank you". While
+it is open it holds the input, replaces the local panel, the arrival note and
+the context actions. The line is also a `CcSpeech` turn (`return.gate`), so
+it goes through the existing speech and audio path.
 
 The speaker stands in the scene. The update path stages them
-(`CcLocalCourseStageGateSpeaker`): a few steps ahead of the player, a little
-to the side, facing the player, with their own appearance seed. The renderer
-only draws the staged agent, and the conversation camera frames the two of
-them. The staging is one small function, apart from the town crowd.
+(`CcLocalCourseStageGateSpeaker`): at the `cues.speaker` spot when the
+company is by the gate, otherwise a few steps ahead of the player, a little
+to the side. Either way they face the player, with their own appearance seed.
+The renderer only draws the staged agent, and the conversation camera frames
+the two of them. The staging is one small function, apart from the town crowd.
+The combined review (all three milestones together) is in
+`docs/reviews/the-return-combined-2026-09-26/`.
 
 Review: `crownless_return_digest --seed 4 --days 365 --voice` and
 `--capture-gate-voice SEED DAYS TOWN PNG [TURNS]`; frames are in

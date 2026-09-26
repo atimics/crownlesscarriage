@@ -4702,6 +4702,9 @@ static ContextActionSet BuildContextActions(
     ContextActionSet set = {0};
     if (sim == NULL || local == NULL) return set;
     if (sim->mine.phase != CC_MINE_NONE) return set;
+    /* The gate voice holds the input until it ends, and ENTER means
+       "Thank you" there: offer nothing else meanwhile. */
+    if (view == VIEW_LOCAL && local->gate_voice_open) return set;
     if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER || view == VIEW_OVEN_COURT)) return set;
     int32_t pony = CcPonyOnRoad(sim);
     if (view == VIEW_LOCAL && pony >= 0 && !LocalCombatActive(local)) {
