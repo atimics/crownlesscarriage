@@ -5,10 +5,15 @@
 
 #define CC_RETURN_CANDIDATE_CAP 96
 #define CC_RETURN_MARKET_LINES 3
-#define CC_RETURN_ENCODING_VERSION 1U
+/* Version 1 (schema 122) is the town record; version 2 (schema 123) adds
+   the road news after each town. */
+#define CC_RETURN_ENCODING_VERSION 2U
 #define CC_RETURN_TOWN_BYTES \
     (7U * 8U + (1U + CC_RETURN_FACES) * CC_NAME_CAPACITY + 9U * 4U + \
      2U * CC_GOOD_COUNT * 4U)
+#define CC_RETURN_ROAD_NEWS_BYTES (6U * 4U + 5U * 8U)
+#define CC_RETURN_TOWN_BYTES_V2 \
+    (CC_RETURN_TOWN_BYTES + CC_RETURN_ROAD_NEWS * CC_RETURN_ROAD_NEWS_BYTES)
 
 static int32_t ClampI32(int32_t value, int32_t low, int32_t high)
 {
@@ -279,8 +284,22 @@ static CcId FindEvidence(const CcSim *sim, const CcTownSeen *before,
     return best;
 }
 
-static void FindKnowledge(const CcSim *sim, CcReturnChange *change)
+static void FindKnowledge(const CcSim *sim, const CcTownSeen *before,
+                          CcReturnChange *change)
 {
+    /* News met on the road since the company left (milestone 4). */
+    for (int32_t i = 0; i < CC_RETURN_ROAD_NEWS; ++i) {
+        const CcRoadNews *news = &before->road_news[i];
+        if (news->channel == CC_ROAD_NEWS_NONE || news->kind != (int32_t)change->kind ||
+            news->detail != change->detail || news->subject_id != change->subject_id)
+            continue;
+        change->on_road = true;
+        change->knowledge = news->channel == CC_ROAD_NEWS_TOLD ? CC_RETURN_TOLD :
+            news->channel == CC_ROAD_NEWS_READ ? CC_RETURN_READ : CC_RETURN_WITNESSED;
+        change->source_id = news->source_id;
+        change->source_confidence = news->confidence;
+        return;
+    }
     CcId id = change->evidence_event_id;
     if (id == 0U) return;
     for (int32_t offset = 0; offset < sim->event_count; ++offset) {
@@ -315,7 +334,8 @@ static int32_t Score(const CcReturnChange *change)
         (100 + change->magnitude) * (100 + change->surprise) / 40000;
     /* News the company already heard ranks lower: the gate voice should
        lead with what the player does not know. */
-    if (change->knowledge == CC_RETURN_TOLD) score /= 3;
+    if (change->knowledge == CC_RETURN_TOLD ||
+        change->knowledge == CC_RETURN_READ) score /= 3;
     else if (change->knowledge == CC_RETURN_WITNESSED) score /= 4;
     return (int32_t)score;
 }
@@ -514,7 +534,7 @@ void CcReturnCompare(const CcSim *sim, const CcTownSeen *before,
     for (int32_t i = 0; i < list.count; ++i) {
         CcReturnChange *change = &list.items[i];
         change->evidence_event_id = FindEvidence(sim, before, change);
-        FindKnowledge(sim, change);
+        FindKnowledge(sim, before, change);
         change->score = Score(change);
     }
     /* Insertion sort with a total order keeps the ranking deterministic. */
@@ -575,7 +595,8 @@ const char *CcReturnChangeKindName(CcReturnChangeKind kind)
 const char *CcReturnKnowledgeName(CcReturnKnowledge knowledge)
 {
     return knowledge == CC_RETURN_TOLD ? "told" :
-        knowledge == CC_RETURN_WITNESSED ? "witnessed" : "new";
+        knowledge == CC_RETURN_WITNESSED ? "witnessed" :
+        knowledge == CC_RETURN_READ ? "read" : "new";
 }
 
 static const char *GoodName(int32_t good)
@@ -820,6 +841,23 @@ uint64_t CcReturnMemoryHash(const CcReturnMemory *memory)
             hash = HashU64(hash, (uint32_t)seen->stock[good]);
             hash = HashU64(hash, (uint32_t)seen->price[good]);
         }
+        /* Empty road news adds nothing, like an empty town slot. */
+        for (int32_t n = 0; n < CC_RETURN_ROAD_NEWS; ++n) {
+            const CcRoadNews *news = &seen->road_news[n];
+            if (news->channel == CC_ROAD_NEWS_NONE) continue;
+            hash = HashU64(hash, UINT64_C(0x524f4144) + (uint64_t)n);
+            hash = HashU64(hash, (uint32_t)news->channel);
+            hash = HashU64(hash, (uint32_t)news->kind);
+            hash = HashU64(hash, (uint32_t)news->detail);
+            hash = HashU64(hash, (uint32_t)news->confidence);
+            hash = HashU64(hash, news->subject_id);
+            hash = HashU64(hash, news->event_id);
+            hash = HashU64(hash, news->source_id);
+            hash = HashU64(hash, news->route_id);
+            hash = HashU64(hash, (uint32_t)news->story_slot);
+            hash = HashU64(hash, (uint32_t)news->day);
+            hash = HashU64(hash, news->tick);
+        }
     }
     return hash;
 }
@@ -836,7 +874,20 @@ bool CcReturnMemoryValidate(const CcSim *sim)
         const CcTownSeen *seen = &sim->return_memory.towns[i];
         if (seen->settlement_id == 0U) {
             if (seen->seen_day != 0) return false;
+            for (int32_t n = 0; n < CC_RETURN_ROAD_NEWS; ++n)
+                if (seen->road_news[n].channel != CC_ROAD_NEWS_NONE) return false;
             continue;
+        }
+        for (int32_t n = 0; n < CC_RETURN_ROAD_NEWS; ++n) {
+            const CcRoadNews *news = &seen->road_news[n];
+            if (news->channel == CC_ROAD_NEWS_NONE) continue;
+            if (news->channel > CC_ROAD_NEWS_WITNESSED ||
+                news->kind < 0 || news->kind >= CC_RETURN_CHANGE_KIND_COUNT ||
+                news->confidence < 0 || news->confidence > 100 ||
+                news->story_slot < -1 || news->story_slot >= CC_MAX_GOSSIP ||
+                news->day < seen->seen_day || news->day > sim->current_day ||
+                (news->channel == CC_ROAD_NEWS_TOLD) != (news->source_id != 0U))
+                return false;
         }
         if (i >= sim->settlement_count ||
             sim->settlements[i].id != seen->settlement_id ||
@@ -855,7 +906,7 @@ bool CcReturnMemoryValidate(const CcSim *sim)
 size_t CcReturnMemoryEncodedSize(const CcReturnMemory *memory)
 {
     if (memory == NULL) return 0U;
-    return 4U + (size_t)CC_MAX_SETTLEMENTS * CC_RETURN_TOWN_BYTES;
+    return 4U + (size_t)CC_MAX_SETTLEMENTS * CC_RETURN_TOWN_BYTES_V2;
 }
 
 static void Write32(uint8_t **at, uint32_t value)
@@ -912,6 +963,20 @@ size_t CcReturnMemoryEncode(const CcReturnMemory *memory, uint8_t *bytes,
             Write32(&at, (uint32_t)seen->stock[good]);
             Write32(&at, (uint32_t)seen->price[good]);
         }
+        for (int32_t n = 0; n < CC_RETURN_ROAD_NEWS; ++n) {
+            const CcRoadNews *news = &seen->road_news[n];
+            Write32(&at, (uint32_t)news->channel);
+            Write32(&at, (uint32_t)news->kind);
+            Write32(&at, (uint32_t)news->detail);
+            Write32(&at, (uint32_t)news->confidence);
+            Write32(&at, (uint32_t)news->story_slot);
+            Write32(&at, (uint32_t)news->day);
+            Write64(&at, news->subject_id);
+            Write64(&at, news->event_id);
+            Write64(&at, news->source_id);
+            Write64(&at, news->route_id);
+            Write64(&at, news->tick);
+        }
     }
     return (size_t)(at - bytes);
 }
@@ -919,11 +984,14 @@ size_t CcReturnMemoryEncode(const CcReturnMemory *memory, uint8_t *bytes,
 bool CcReturnMemoryDecode(CcReturnMemory *memory, const uint8_t *bytes,
                           size_t length)
 {
-    if (memory == NULL || bytes == NULL ||
-        length != 4U + (size_t)CC_MAX_SETTLEMENTS * CC_RETURN_TOWN_BYTES)
-        return false;
+    if (memory == NULL || bytes == NULL || length < 4U) return false;
     const uint8_t *at = bytes;
-    if (Read32(&at) != CC_RETURN_ENCODING_VERSION) return false;
+    /* Schema 122 saves hold version 1, with no road news. */
+    uint32_t version = Read32(&at);
+    if ((version != 1U && version != CC_RETURN_ENCODING_VERSION) ||
+        length != 4U + (size_t)CC_MAX_SETTLEMENTS *
+            (version == 1U ? CC_RETURN_TOWN_BYTES : CC_RETURN_TOWN_BYTES_V2))
+        return false;
     *memory = (CcReturnMemory){0};
     for (int32_t i = 0; i < CC_MAX_SETTLEMENTS; ++i) {
         CcTownSeen *seen = &memory->towns[i];
@@ -947,6 +1015,20 @@ bool CcReturnMemoryDecode(CcReturnMemory *memory, const uint8_t *bytes,
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             seen->stock[good] = (int32_t)Read32(&at);
             seen->price[good] = (int32_t)Read32(&at);
+        }
+        for (int32_t n = 0; version >= 2U && n < CC_RETURN_ROAD_NEWS; ++n) {
+            CcRoadNews *news = &seen->road_news[n];
+            news->channel = (int32_t)Read32(&at);
+            news->kind = (int32_t)Read32(&at);
+            news->detail = (int32_t)Read32(&at);
+            news->confidence = (int32_t)Read32(&at);
+            news->story_slot = (int32_t)Read32(&at);
+            news->day = (int32_t)Read32(&at);
+            news->subject_id = Read64(&at);
+            news->event_id = Read64(&at);
+            news->source_id = Read64(&at);
+            news->route_id = Read64(&at);
+            news->tick = Read64(&at);
         }
     }
     return true;
