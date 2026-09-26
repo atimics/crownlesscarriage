@@ -1,3 +1,4 @@
+#include "sim/cc_wants.h"
 #include "sim/cc_scriven.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_road_council.h"
@@ -1705,6 +1706,7 @@ static void DescribeUnderroad(const CcMetagame *metagame,
 static void DescribeHelp(char *output, size_t capacity)
 {
     Append(output, capacity,
+           "Personal requests:\n  wants, want NUMBER (choose an offered item action)\n"
            "Calendar and tomes:\n  calendar, tomes, scribe read|borrow|return|copy|observe NUMBER\n  scribe hearing|deliver|sky|wait|commission\n"
            "See the world:\n"
            "  look, people, talk NUMBER, rumors, charters, roads, council\n"
@@ -1941,6 +1943,24 @@ void CcMetagameIntro(const CcMetagame *metagame,
     DescribeLook(metagame, output, output_capacity);
 }
 
+static int LocalWantOffers(const CcSim *sim, CcWantOffer *offers, int capacity)
+{
+    int count = CcWantsOffers(sim, 0, offers, capacity);
+    for (int i = 0; i < sim->character_count && count < capacity; ++i) {
+        const CcCharacter *p = &sim->characters[i];
+        if (p->death_day <= sim->current_day || p->current_settlement_id != sim->player.location_id ||
+            p->activity == CC_CHARACTER_ACTIVITY_TRAVELLING || p->travel_destination_id != 0) continue;
+        int added = CcWantsOffers(sim, p->id, offers + count, capacity - count);
+        for (int j = count; j < count + added; ++j) {
+            char label[96];
+            (void)snprintf(label, sizeof(label), "%.31s: %.60s", p->name, offers[j].label);
+            (void)snprintf(offers[j].label, sizeof(offers[j].label), "%s", label);
+        }
+        count += added;
+    }
+    return count;
+}
+
 bool CcMetagameExecute(CcMetagame *metagame, const char *line,
                        char *output, size_t output_capacity)
 {
@@ -1961,7 +1981,31 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
     if (command == NULL) return true;
 
     if (strcmp(command, "help") == 0) DescribeHelp(output, output_capacity);
-    else if (strcmp(command, "calendar") == 0) {
+    else if (strcmp(command, "wants") == 0 || strcmp(command, "want") == 0) {
+        CcWantOffer offers[CC_PERSONAL_WANTS + CC_BELONGINGS];
+        int count = LocalWantOffers(&metagame->sim, offers, CC_PERSONAL_WANTS + CC_BELONGINGS);
+        if (strcmp(command, "want") == 0) {
+            int32_t index;
+            if (!ParseIndex(first, count, &index)) {
+                Append(output, output_capacity, "Choose an action number from 'wants'.\n");
+                return false;
+            }
+            if (!ApplyCommand(metagame, &offers[index].command, output, output_capacity)) return false;
+            if (offers[index].command.amount == CC_WANT_DISCOVER) {
+                if (!CcWantsPersonText(&metagame->sim, offers[index].command.target_id, output, output_capacity))
+                    Append(output, output_capacity, "I have what I need today. Ask the other workers about their tools and supplies.\n");
+            } else if (offers[index].command.amount == CC_WANT_LEARN)
+                (void)CcWantsRequestText(&metagame->sim, offers[index].command.target_id, output, output_capacity);
+            else Append(output, output_capacity, "%s: done.\n", offers[index].label);
+        } else {
+            CcWantsDescribe(&metagame->sim, output, output_capacity);
+            Append(output, output_capacity, "\nHere in town:\n");
+            for (int i = 0; i < count; ++i)
+                Append(output, output_capacity, "%d. %s%s — %s\n", i + 1, offers[i].label,
+                    offers[i].ready ? "" : " (prepare first)", offers[i].detail);
+            Append(output, output_capacity, "Use want NUMBER to choose an action.\n");
+        }
+    } else if (strcmp(command, "calendar") == 0) {
         CcScrivenDescribe(&metagame->sim, output, output_capacity);
         Append(output, output_capacity, "\n%s\n", metagame->sim.scriven.player_report);
     } else if (strcmp(command, "tomes") == 0) {
@@ -2850,7 +2894,7 @@ static void DescribeAgentActions(const CcMetagame *metagame,
            "Send exactly one command on the next line. Available command families:\n"
            "  look, people, talk NUMBER, rumors, charters, roads, council, causes, notes, cargo, status\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
-           "  relief pickup|stow\n"
+           "  relief pickup|stow, wants, want NUMBER\n"
            "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"
            "  archive-map NUMBER, retrieve-map NUMBER\n"
            "  buy-treasure NUMBER, sell-treasure NUMBER, travel NUMBER\n"
@@ -2969,7 +3013,7 @@ static bool AgentCommandAllowed(const CcMetagame *metagame,
             strcmp(command, "help") == 0 || strcmp(command, "quit") == 0 ||
             (strcmp(command, "road") == 0 && JourneyActionAllowed(&metagame->sim, first));
     }
-    if (strcmp(command, "calendar") == 0 || strcmp(command, "tomes") == 0 || strcmp(command, "scribe") == 0 ||
+    if (strcmp(command, "wants") == 0 || strcmp(command, "want") == 0 || strcmp(command, "calendar") == 0 || strcmp(command, "tomes") == 0 || strcmp(command, "scribe") == 0 ||
         strcmp(command, "help") == 0 || strcmp(command, "look") == 0 ||
         strcmp(command, "people") == 0 ||
         strcmp(command, "rumors") == 0 ||

@@ -1,4 +1,5 @@
 #include "sim/cc_scriven.h"
+#include "sim/cc_wants.h"
 #include "sim/cc_census.h"
 #include "persistence/cc_save.h"
 #include "test_support.h"
@@ -225,6 +226,7 @@ int main(int argc, char **argv)
     CcTestAdoptCurrentGoods(&sim, 73U);
     CcSimInitializeGoblinPolitics(&sim);
     CcScrivenInit(&sim);
+    sim.wants = (CcWantsState){.initialized = 1, .last_day = sim.current_day};
     for (int32_t i = 0; i < sim.character_count; ++i) {
         CC_CHECK(restored.characters[i].detail_active);
         CC_CHECK(restored.characters[i].last_active_day == sim.current_day);

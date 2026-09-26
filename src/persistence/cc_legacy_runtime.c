@@ -1,3 +1,4 @@
+#include "sim/cc_wants.h"
 #include "sim/cc_scriven.h"
 #include "persistence/cc_legacy_runtime_internal.h"
 #include "sim/cc_mine.h"
@@ -798,5 +799,6 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     MakeLegacyCharacterNamesUnique(sim);
     if (legacy_version < 113U) CcScrivenInit(sim);
     if (legacy_version < 115U) CcCrownCalendarInit(sim);
+    if (legacy_version < 121U) CcWantsInit(sim);
     return true;
 }

@@ -41,9 +41,9 @@ static int RunCoreLanguageRegression(const char *model_path)
                     "Redraw preserves words and spoken history.");
     }
     ContextActionSet actions = BuildContextActions(&sim, &local, VIEW_CHARACTER, 0, 0);
-    MODEL_CHECK(actions.count == 2 && actions.items[0].kind == CONTEXT_ACTION_GOSSIP_CHAT &&
-                actions.items[1].kind == CONTEXT_ACTION_CLOSE_VIEW,
-                "The conversation offers Chat and Farewell.");
+    MODEL_CHECK(actions.count == 3 && actions.items[0].kind == CONTEXT_ACTION_GOSSIP_CHAT &&
+                actions.items[2].kind == CONTEXT_ACTION_CLOSE_VIEW,
+                "The conversation offers Chat, an item question, and Farewell.");
     (void)remove(journal_path);
     journal = CcJournalStart(journal_path, &sim, journal_error, sizeof(journal_error));
     MODEL_CHECK(journal != NULL, "Start the test campaign journal.");
@@ -78,7 +78,7 @@ static int RunCoreLanguageRegression(const char *model_path)
                 "The exact player line becomes the next spoken event.");
     (void)printf("You: %s\n", speech.text);
     actions = BuildContextActions(&sim, &local, VIEW_CHARACTER, 0, 0);
-    MODEL_CHECK(actions.count == 2 && !actions.items[0].enabled && actions.items[1].enabled,
+    MODEL_CHECK(actions.count == 3 && !actions.items[0].enabled && actions.items[2].enabled,
                 "A running turn keeps Farewell available.");
     CcCoreConversationStep(&core_conversation, 1000U);
     MODEL_CHECK(core_conversation.round_phase == 3U, "The player line stays visible for reading.");
@@ -100,7 +100,7 @@ static int RunCoreLanguageRegression(const char *model_path)
         feedback, sizeof(feedback), &feedback_age);
     ClientInputClearPressed();
     MODEL_CHECK(core_conversation.round_phase == 1U, "A further Chat starts another pair.");
-    queued_key_press[KEY_TWO] = true;
+    queued_key_press[KEY_THREE] = true;
     HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view, &local,
         (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, "", "", message, sizeof(message),
         feedback, sizeof(feedback), &feedback_age);

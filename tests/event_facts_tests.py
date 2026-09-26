@@ -35,8 +35,8 @@ def with_knowledge(value, **changes):
 class EventFactsTests(unittest.TestCase):
     def test_registry_has_every_sim_kind(self):
         receipt = validate_event_registry()
-        self.assertEqual(receipt["event_count"], 139)
-        self.assertEqual(sorted(v for v in EVENT_KIND_REGISTRY.values()), list(range(139)))
+        self.assertEqual(receipt["event_count"], 144)
+        self.assertEqual(sorted(v for v in EVENT_KIND_REGISTRY.values()), list(range(144)))
 
     def test_facts_use_held_accounts_and_keep_fields(self):
         fact = build_facts(with_knowledge(participant(account(kind=0, confidence=73)), certainty=2, private=True))[0]
@@ -139,7 +139,7 @@ class EventFactsTests(unittest.TestCase):
             {'kind': 'report', 'fact_ref': fact.account_ref}, own))
 
     def test_malformed_and_foreign_fields_are_rejected(self):
-        for changes, message in (({"kind": 139}, "unknown event kind"),
+        for changes, message in (({"kind": 144}, "unknown event kind"),
                                  ({"day": -1}, "non-negative"),
                                  ({"confidence": 101}, "0 through 100")):
             with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, message):

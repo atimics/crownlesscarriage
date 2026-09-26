@@ -2604,6 +2604,112 @@
         "file": "src/sim/cc_sim.c",
         "format": "%s progresses to %d of %d with recorded evidence."
       }
+    },
+    {
+      "id": "want_created_158",
+      "kind": "WANT_CREATED",
+      "roles": [
+        "actor",
+        "detail"
+      ],
+      "source": "{0} asks for {1}.",
+      "outputs": [
+        "{0} asks for {1}.",
+        "The account says: {0} asks for {1}."
+      ],
+      "challenge": "{0} asks for {1}.",
+      "emitter": {
+        "file": "src/sim/cc_wants.c",
+        "format": "%.31s asks for %.95s."
+      }
+    },
+    {
+      "id": "want_fulfilled_159",
+      "kind": "WANT_FULFILLED",
+      "roles": [
+        "actor",
+        "detail"
+      ],
+      "source": "{0} receives {1} from the company.",
+      "outputs": [
+        "{0} receives {1} from the company.",
+        "The account says: {0} receives {1} from the company."
+      ],
+      "challenge": "{0} receives {1} from the company.",
+      "emitter": {
+        "file": "src/sim/cc_wants.c",
+        "format": "%.31s receives %.79s from the company."
+      }
+    },
+    {
+      "id": "want_closed_160",
+      "kind": "WANT_CLOSED",
+      "roles": [
+        "detail"
+      ],
+      "source": "The request for {0} ends.",
+      "outputs": [
+        "The request for {0} ends.",
+        "The account says: The request for {0} ends."
+      ],
+      "challenge": "The request for {0} ends.",
+      "emitter": {
+        "file": "src/sim/cc_wants.c",
+        "format": "The request for %.95s ends."
+      }
+    },
+    {
+      "id": "belonging_moved_161",
+      "kind": "BELONGING_MOVED",
+      "roles": [
+        "detail",
+        "place"
+      ],
+      "source": "{0} is kept at {1}.",
+      "outputs": [
+        "{0} is kept at {1}.",
+        "The account says: {0} is kept at {1}."
+      ],
+      "challenge": "{0} is kept at {1}.",
+      "emitter": {
+        "file": "src/sim/cc_wants.c",
+        "format": "%.47s is kept at %.31s."
+      }
+    },
+    {
+      "id": "belonging_moved_162",
+      "kind": "BELONGING_MOVED",
+      "roles": [
+        "detail"
+      ],
+      "source": "The company carries {0}.",
+      "outputs": [
+        "The company carries {0}.",
+        "The account says: The company carries {0}."
+      ],
+      "challenge": "The company carries {0}.",
+      "emitter": {
+        "file": "src/sim/cc_wants.c",
+        "format": "The company carries %.47s."
+      }
+    },
+    {
+      "id": "belonging_repaired_163",
+      "kind": "BELONGING_REPAIRED",
+      "roles": [
+        "actor",
+        "detail"
+      ],
+      "source": "{0} repairs {1} with iron.",
+      "outputs": [
+        "{0} repairs {1} with iron.",
+        "The account says: {0} repairs {1} with iron."
+      ],
+      "challenge": "{0} repairs {1} with iron.",
+      "emitter": {
+        "file": "src/sim/cc_wants.c",
+        "format": "%.31s repairs %.47s with iron."
+      }
     }
   ]
 }

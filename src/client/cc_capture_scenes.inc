@@ -370,6 +370,11 @@ static bool CcCapturePrepareDeparture(const CcCaptureRequest *request, CcCapture
 static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScene *scene)
 {
     uint32_t walk_cycle_mask = 0;
+    if (request->capture_requests) {
+        scene->local->book_page = 5;
+        scene->local->book_offset = 0;
+        scene->local->want_scroll = 0.0f;
+    }
     if (request->capture_dragon_cave) {
         scene->local->site_kind = CC_LOCAL_SITE_DRAGON_CAVE;
         RepositionHero(

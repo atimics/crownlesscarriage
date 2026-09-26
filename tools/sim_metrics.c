@@ -553,6 +553,7 @@ int main(int argc, char **argv)
 {
     int32_t seeds = 100;
     int32_t years = 10;
+    int32_t step_days = 365;
     int32_t first_seed = 1;
     bool final_only = false;
     bool campaign_metrics = false;
@@ -570,6 +571,10 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--years") == 0 &&
                    argument + 1 < argc) {
             if (!ParsePositive(argv[++argument], &years)) return EXIT_FAILURE;
+        } else if (strcmp(argv[argument], "--step-days") == 0 &&
+                   argument + 1 < argc) {
+            if (!ParsePositive(argv[++argument], &step_days) || step_days > 365)
+                return EXIT_FAILURE;
         } else if (strcmp(argv[argument], "--campaign-metrics") == 0) {
             campaign_metrics = true;
         } else if (strcmp(argv[argument], "--nutrition-csv") == 0 &&
@@ -591,7 +596,7 @@ int main(int argc, char **argv)
         } else {
             (void)fprintf(stderr,
                           "Usage: %s [--seed NUMBER | --seeds COUNT]"
-                          " [--years COUNT] [--final-only] [--nutrition-csv PATH] [--route-csv PATH] [--campaign-metrics]"
+                          " [--years COUNT] [--step-days COUNT] [--final-only] [--nutrition-csv PATH] [--route-csv PATH] [--campaign-metrics]"
                           " [--settlements-csv PATH] [--trace-every-days COUNT] [--trace-start-day DAY]\n",
                           argv[0]);
             return EXIT_FAILURE;
@@ -733,9 +738,12 @@ int main(int argc, char **argv)
             .trace_every_days = trace_every_days, .final_day = years * 365
         };
         for (int32_t year = 1; year <= years; ++year) {
-            CcSimAdvanceDaysObserved(&sim, 365,
-                nutrition_csv != NULL ? &nutrition : NULL,
-                ObserveMetricDay, &day_context);
+            for (int32_t elapsed = 0; elapsed < 365; elapsed += step_days) {
+                int32_t count = step_days < 365 - elapsed ? step_days : 365 - elapsed;
+                CcSimAdvanceDaysObserved(&sim, count,
+                    nutrition_csv != NULL ? &nutrition : NULL,
+                    ObserveMetricDay, &day_context);
+            }
             UpdateHistory(&sim, &history);
             if (!CcSimValidate(&sim, error, sizeof(error))) {
                 (void)fprintf(stderr,

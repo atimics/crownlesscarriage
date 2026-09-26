@@ -1,3 +1,4 @@
+#include "sim/cc_wants.h"
 #include "sim/cc_sim_custody.h"
 #include "sim/cc_mine.h"
 #include <limits.h>
@@ -100,6 +101,13 @@ static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
         *capacity = INT64_MAX;
         return true;
     }
+    if (sim->schema_version >= 121U && holder.kind == CC_CUSTODY_CHARACTER) {
+        const CcCharacter *person = CcSimCharacter(sim, holder.id);
+        if (person == NULL) return false;
+        *location = (CcCustodyLocation){.place_id = person->current_settlement_id};
+        *capacity = INT64_MAX;
+        return true;
+    }
     const CcRoyalCarriage *carrier = CustodyCarrier(sim, holder.id);
     if (holder.kind != CC_CUSTODY_CARRIER || carrier == NULL ||
         carrier->active_shipment_id != 0 || carrier->archive_contract ||
@@ -130,6 +138,11 @@ static bool ResolveStoredCustody(const void *context, CcCustodyHolder holder,
     return true;
 }
 
+static bool StoredReference(const void *context, CcCustodyKind kind, uint64_t id)
+{
+    return kind == CC_CUSTODY_BELONGING && CcWantsItem(context, id) != NULL;
+}
+
 bool CcSimStoredCustodyValid(const CcSim *sim)
 {
     if (sim == NULL) return false;
@@ -137,7 +150,7 @@ bool CcSimStoredCustodyValid(const CcSim *sim)
         CC_CUSTODY_LEGACY_CAPACITY : CC_CUSTODY_CAPACITY;
     if (CcCustodyEffectiveCapacity(&sim->custody) != expected_capacity) return false;
     const CcCustodyRules rules = {.context = sim,
-        .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad, .resolve = ResolveStoredCustody};
+        .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad, .reference_valid = StoredReference, .resolve = ResolveStoredCustody};
     if (!CcCustodyValidate(&sim->custody, &rules)) return false;
     for (int i = 0; i < CcCustodyEffectiveCapacity(&sim->custody); ++i) {
         const CcCustodyEntry *entry = &sim->custody.entries[i];
@@ -150,7 +163,7 @@ bool CcSimStoredCustodyValid(const CcSim *sim)
              (entry->holder.kind == CC_CUSTODY_MINE_PACK && entry->holder.id == sim->player.id) ||
              (sim->schema_version >= 106U && CcSimMineEntryTracked(sim,entry) &&
               entry->holder.kind == CC_CUSTODY_PLAYER && entry->holder.id == sim->player.id));
-        if (!mine_load && entry->owner_id != sim->player.id &&
+        if (!mine_load && !CcWantsCustodyReference(sim, entry) && entry->owner_id != sim->player.id &&
             CcSimSettlement(sim, entry->owner_id) == NULL &&
             /* Schema 102: a fallen person's purse is owned by the dead,
                recorded as a historic character (#288/#406). */
@@ -209,7 +222,7 @@ CcCustodyResult CcSimTransferMineGoods(CcSim *sim, CcCustodyHolder source,
     CcCustodyState original=sim->custody;
     CcCustodyState candidate=original;
     const CcCustodyRules rules={.context=sim,.good_count=CC_GOOD_COUNT,
-        .load=MineCustodyLoad,.resolve=ResolveStoredCustody,.permit=PermitMineTransfer};
+        .load=MineCustodyLoad,.reference_valid=StoredReference,.resolve=ResolveStoredCustody,.permit=PermitMineTransfer};
     int64_t available=0;
     for (int32_t i=0;i<CcCustodyEffectiveCapacity(&sim->custody);++i) {
         const CcCustodyEntry *entry=&candidate.entries[i];
@@ -325,7 +338,7 @@ static CcCustodyResult MineSaleCandidate(const CcSim *sim, CcId town_id,
         return CC_CUSTODY_INVALID;
     CcCustodyState candidate=sim->custody;
     const CcCustodyRules rules={.context=sim,.good_count=CC_GOOD_COUNT,
-        .load=StoredCustodyLoad,.resolve=ResolveStoredCustody,.permit=PermitMineSale};
+        .load=StoredCustodyLoad,.reference_valid=StoredReference,.resolve=ResolveStoredCustody,.permit=PermitMineSale};
     int32_t remaining=quantity;
     int32_t tracked=0;
     for (int32_t i=0;i<CcCustodyEffectiveCapacity(&candidate) && remaining>0;++i) {
@@ -354,7 +367,7 @@ static CcCustodyResult MineSaleCandidate(const CcSim *sim, CcId town_id,
     }
     /* Ordinary cargo can make up the rest of a larger sale. */
     if (!CcCustodyValidate(&candidate,&(CcCustodyRules){.context=sim,
-        .good_count=CC_GOOD_COUNT,.load=StoredCustodyLoad,.resolve=ResolveStoredCustody}))
+        .good_count=CC_GOOD_COUNT,.load=StoredCustodyLoad,.reference_valid=StoredReference,.resolve=ResolveStoredCustody}))
         return CC_CUSTODY_INVALID;
     if (result != NULL) *result=candidate;
     if (tracked_quantity != NULL) *tracked_quantity=tracked;
@@ -456,7 +469,7 @@ CcCustodyResult CcSimPackStoreGoods(CcSim *sim, CcId town_id,
         .condition = 100, .active = true};
     candidate.next_id++;
     const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad,
-        .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
+        .reference_valid = StoredReference, .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
     const CcCustodyTransfer move = {.entry_id = next_id, .revision = 1,
         .actor_id = town_id, .event_id = event_id,
         .destination = {CC_CUSTODY_CONTAINER_HOLDER, container_id}, .quantity = quantity};
@@ -484,7 +497,7 @@ CcCustodyResult CcSimUnpackStoreGoods(CcSim *sim, CcId town_id,
     if (town->stock[good] > CC_SIM_MAX_UNITS - quantity) return CC_CUSTODY_FULL;
     CcCustodyState candidate = sim->custody;
     const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT, .load = StoredCustodyLoad,
-        .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
+        .reference_valid = StoredReference, .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
     const CcCustodyTransfer move = {.entry_id = entry_id, .revision = revision,
         .actor_id = town_id, .event_id = event_id,
         .destination = {CC_CUSTODY_STORE, town_id}, .quantity = quantity};
@@ -511,7 +524,7 @@ CcCustodyResult CcSimTransferCustody(CcSim *sim, const CcCustodyTransfer *transf
     if (sim == NULL || sim->schema_version < 99U || !CcSimStoredCustodyValid(sim))
         return CC_CUSTODY_INVALID;
     const CcCustodyRules rules = {.context = sim, .good_count = CC_GOOD_COUNT,
-        .load = StoredCustodyLoad, .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
+        .load = StoredCustodyLoad, .reference_valid = StoredReference, .resolve = ResolveStoredCustody, .permit = PermitStoreTransfer};
     return CcCustodyApplyTransfer(&sim->custody, &rules, transfer, result_id);
 }
 
