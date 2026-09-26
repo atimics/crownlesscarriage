@@ -1431,7 +1431,7 @@ class CoopTests(unittest.TestCase):
         self.worlds.last_tick[self.id] = now
         now = self.live_ticks(4, now)
         self.assertIn(self.id, self.worlds.live)
-        with patch('server.FLUSH_SECONDS', 0.4):
+        with patch('server.FLUSH_SECONDS', 0.25):
             now = self.live_ticks(1, now)
         live = self.worlds.view(self.id, self.a)
         state, view, revision = self.saved()
