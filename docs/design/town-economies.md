@@ -94,7 +94,55 @@ The game starts in Thornford, which has no market hall. The first run must
 still work: the player can buy wheat at the grain exchange and sell it at the
 Gloamgate market hall or bakery. Keep the opening journey test green.
 
-## Open questions for the implementation audit
+## Implementation
+
+An audit of main (17f4ae6b) found:
+
+- **Production already consumes inputs.** `src/sim/cc_production.c` runs
+  recipes: wheat to bread (`CcEconomyRunBakery`), iron and wood to tools and
+  weapons (`CcEconomyRunSmithy`), and wood to paper (`CcEconomyRunPaperMill`).
+  Raw goods come from farms and mines at settlement rates. Goods are conserved
+  (`CcSimTrackedGood`). The maker rule is therefore real economics.
+- **What a town can make is set by its services**, seeded once at world
+  generation by `SeedSettlementServices` in `src/sim/cc_sim.c` (bakery, smithy,
+  mill, farm, mine). Shops (`src/client/cc_local_shops.c`) are only a client
+  table over the town's shared stock. So this change belongs in the services,
+  with the shop table following them.
+- **Buyback is built in twice**: `CcLocalShopBuys` lets shops take back what
+  they sell, and `CcSimTradeResalePrice` in `src/sim/cc_supply_trade.inc`
+  supports selling wheat and raw stone back into the same chain.
+- **No NPC carriers exist.** Towns without a service depend on the player.
+- **Tools and weapons are two bulk goods.** `CcBelonging` (from #928) already
+  names tools "axe", "pick" or "hammer" by occupation and can be repaired with a
+  smith's iron.
+- **Banes are `CcTreasure`**, a relic you can sell or display, not a weapon.
+- **Light is a fixed budget** in the mine (`CcMineState.light`) and the
+  Underroad (`light_remaining`), with nothing to refuel it.
+- **Hunting does not exist.**
+
+### Pull requests, in order
+
+1. **Town services and makers.** Make `SeedSettlementServices` follow the
+   table above: bakeries in Thornford, Gloamgate and Rosespire only; a
+   weaponsmith in Alderwatch and a toolsmith in Silverwick; paper mills only
+   where there is a stationer; market halls only in Gloamgate and Rosespire; a
+   fence in Hollowbarrow. Makers stop buying their own products, in the client
+   shop table and in `CcSimTradeResalePrice`. The client shop table follows the
+   services. This needs a save schema bump with a migration for existing worlds.
+2. **Prices under the fog.** Known prices carry the day they were learned and
+   fade with age. This builds on the existing settlement knowledge sources.
+3. **Six carried items.** Replace `CC_GOOD_TOOLS` and `CC_GOOD_WEAPONS` with
+   pick, axe, hammer, sword, bow and lantern, plus lamp oil. Keep each
+   recipe's current uses: tools gate production, weapons drive raids and
+   defence. A migration splits the old goods into the new ones.
+4. **Lanterns and oil.** Lantern and oil in the company's kit refuel the mine
+   and Underroad light budgets, and thin the fog on the moor.
+5. **Background carriers.** Slow, unreliable NPC carriers move staples between
+   towns, so no town starves only because the player went elsewhere.
+6. **Hunting and banes as weapons**, later. A bow brings meat on the road, and
+   a bane can be wielded as an upgraded sword or bow.
+
+## Questions the audit answered
 
 - Does settlement production consume input goods today, or is output produced
   from nothing by settlement function? The maker rule is only real if the
@@ -105,4 +153,4 @@ Gloamgate market hall or bakery. Keep the opening journey test green.
 - Where are the tools and weapons goods used (mine yield, defence, repairs), and
   can the named-belongings system from #928 hold the six item kinds?
 
-These are answered in "Implementation" below once the audit is done.
+The answers are in "Implementation" above.
