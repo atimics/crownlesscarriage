@@ -3598,8 +3598,9 @@ static void DrawStreetTraversalPortals(const CcLocalAgent *agent,
         char label[96];
         (void)snprintf(label, sizeof(label), "%s  %s",
                        portal.exit != NULL ? "ROAD" : "TO", name);
-    int32_t text_width = CcOverlayMeasureText(label, 9);
-    float bubble_width = (float)text_width + 16.0f;
+        /* Measure at the size the label is drawn, or long names overrun. */
+        int32_t text_width = CcOverlayMeasureText(label, 10);
+        float bubble_width = (float)text_width + 20.0f;
         float bubble_x = point.x < viewport.x + viewport.width * 0.5f ?
             point.x + 10.0f : point.x - bubble_width - 10.0f;
         float bubble_y = point.y - 10.0f;

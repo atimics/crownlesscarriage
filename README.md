@@ -59,7 +59,7 @@ Read the current action labels for the choices available at your location.
   or **Travel** action. Open **Road options** while stopped to camp, step down,
   or turn back. At a landmark, choose **Travel on** or the named side road.
 - Underground, click visible floor to walk. W/S move forward/back; A/D turn.
-  E uses a nearby mine object. Looking and turning keep the campaign position.
+  F (or E) uses a nearby mine object. Looking and turning keep the campaign position.
 - B opens the Company Book; M opens the map; F5 saves; Escape opens the menu.
 - At the mine carriage, use the pack controls to prepare for entry.
 - Open **Settings & controls** to change text size, contrast, motion, or key bindings.

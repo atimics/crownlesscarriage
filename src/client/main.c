@@ -488,6 +488,8 @@ typedef enum CommandActionKind {
     COMMAND_ACTION_COUNT
 } CommandActionKind;
 
+static Rectangle CommandActionBounds(CommandActionKind action);
+
 static bool queued_save_shortcut = false;
 
 static GLFWkeyfun previous_key_callback = NULL;
@@ -3348,8 +3350,14 @@ static void DrawLocalHeader(const CcSim *sim, const LocalState *local,
         CcPlayerCargoUsed(&sim->player), sim->player.cargo_capacity);
     int summary_width = CcOverlayMeasureText(summary, 10);
     int summary_x = GetScreenWidth() - summary_width - 22;
+    int title_limit = summary_x - 44;
+    if (local->opening_step == CC_LOCAL_OPENING_COMPLETE && !local->adventure_ui) {
+        /* Stop short of the centred command bar rather than run under it. */
+        int bar_x = (int)CommandActionBounds(COMMAND_ACTION_QUESTS).x;
+        if (bar_x - 46 < title_limit) title_limit = bar_x - 46;
+    }
     char fitted_title[256];
-    int title_size = HeaderFitText(title, summary_x - 44, 18, 12,
+    int title_size = HeaderFitText(title, title_limit, 18, 12,
                                    fitted_title, sizeof(fitted_title));
     CcOverlayDrawText(fitted_title, 22, 18, title_size, INK);
     CcOverlayDrawText(summary, summary_x, 22, 10, road ? TEAL : CC_GOLD);
@@ -6755,7 +6763,7 @@ static int DrawKnownTownPrices(const CcSim *sim, const CcSettlement *town,
 
 static void DrawSettlementPanel(const CcSim *sim, int32_t selected)
 {
-    Rectangle panel = {938.0f, 82.0f, 322.0f, 310.0f};
+    Rectangle panel = {938.0f, 82.0f, 322.0f, 568.0f};
     DrawPanel(panel, PANEL);
     const CcMap *map = SelectedVisibleMap(sim, selected);
     const CcSettlement *here = CcSimSettlement(sim, sim->player.location_id);
