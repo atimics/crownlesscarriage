@@ -1045,8 +1045,13 @@ async function main() {
               await controls.button('Travel on').tap();
               await mobile.waitForTimeout(1000);
             } else if (names.includes('Park carriage')) {
-              await controls.button('Park carriage').tap();
-              await mobile.waitForTimeout(1000);
+              // The carriage can finish parking on its own between this
+              // snapshot and the click (a single slow frame can carry the
+              // whole road-book-to-parked animation): treat "already gone"
+              // as parked too, instead of asserting the card must still be
+              // there.
+              if (await controls.button('Park carriage').clickIfVisible())
+                await mobile.waitForTimeout(1000);
             } else if (names.includes('Travel')) {
               if (await controls.button('Travel').clickIfVisible())
                 await mobile.waitForTimeout(300);

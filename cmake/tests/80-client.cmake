@@ -21,6 +21,8 @@ if(CC_BUILD_CLIENT)
     add_test(NAME travel_hold_input COMMAND crownless_carriage --test-travel-hold)
     add_test(NAME storybook_travel_boundaries
              COMMAND crownless_carriage --test-storybook-travel)
+    add_test(NAME the_return_road_news_view
+             COMMAND crownless_carriage --test-road-news)
     add_test(NAME travel_audio_presentation
              COMMAND crownless_carriage --test-travel-audio)
     add_test(NAME adventure_town_routes

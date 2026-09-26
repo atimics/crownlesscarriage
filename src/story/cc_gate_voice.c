@@ -267,6 +267,14 @@ static const char *FireExtent(int32_t damage)
         damage >= 20 ? "part of the town" : "a corner of the town";
 }
 
+/* On the road the town is named: "most of Gloamgate". */
+static void FireExtentOf(int32_t damage, const char *town, char *out, size_t capacity)
+{
+    (void)snprintf(out, capacity, "%s %s",
+                   damage >= 60 ? "most of" : damage >= 40 ? "half of" :
+                   damage >= 20 ? "part of" : "a corner of", town);
+}
+
 static const char *GoodWord(int32_t good)
 {
     return good >= 0 && good < CC_GOOD_COUNT ? CcGoodName((CcGood)good) : "goods";
@@ -559,24 +567,28 @@ static bool SayHeard(const CcSim *sim, const CcCharacter *speaker,
     for (int32_t i = 0; i < voice->fact_count; ++i)
         if (voice->facts[i].role != CC_CORE_PLACE || strcmp(voice->facts[i].value, town) != 0)
             only_here = false;
-    if (only_here) return SaySeen(sim, voice);
+    /* On the road the story naming the town is the news itself. */
+    if (only_here && !voice->on_road) return SaySeen(sim, voice);
 
     char claim[CC_SPEECH_TEXT_CAPACITY];
     if (!RenderEventFirst(&account, actor, actor_named, claim, sizeof(claim))) return false;
     TrimPeriod(claim);
-    Localize(claim, sizeof(claim), town);
+    if (!voice->on_road) Localize(claim, sizeof(claim), town);
 
     if (voice->change.kind == CC_RETURN_CHANGE_FIRE && here && cause != NULL &&
         StoryIsEvent(voice->change.kind, story->kind)) {
         /* The gate render mode for a burning: who burned how much of the
            town, then why, then who said so. */
         bool from_story = actor_named;
-        if (actor_named)
-            (void)snprintf(text, sizeof(text), "%s burned %s.", actor->value,
-                           FireExtent(voice->change.after));
+        char extent[2 * CC_NAME_CAPACITY];
+        if (voice->on_road)
+            FireExtentOf(voice->change.after, town, extent, sizeof(extent));
         else
-            (void)snprintf(text, sizeof(text), "Fire took %s.",
-                           FireExtent(voice->change.after));
+            Copy(extent, sizeof(extent), FireExtent(voice->change.after));
+        if (actor_named)
+            (void)snprintf(text, sizeof(text), "%.80s burned %.60s.", actor->value, extent);
+        else
+            (void)snprintf(text, sizeof(text), "Fire took %.60s.", extent);
         (void)AddClause(voice, CC_GATE_PART_EVENT,
                         from_story ? CC_GATE_EVIDENCE_STORY : CC_GATE_EVIDENCE_TOWN,
                         from_story ? story->event_id : voice->settlement_id, true, text);
@@ -587,7 +599,8 @@ static bool SayHeard(const CcSim *sim, const CcCharacter *speaker,
         AddAttributed(voice, &from, CC_GATE_PART_CAUSE, false, text, hedged);
         return true;
     }
-    if (StoryIsEvent(voice->change.kind, story->kind)) {
+    if (StoryIsEvent(voice->change.kind, story->kind) || voice->on_road) {
+        /* A traveller has not seen the town now: they pass on the story. */
         AddAttributed(voice, &from, CC_GATE_PART_EVENT, false, claim, false);
         return true;
     }
@@ -612,6 +625,83 @@ static void JoinLine(CcGateVoice *voice)
     }
 }
 
+/* A traveller's telling as the sim words it, hedged and attributed the same
+   way, when the grammar has no rule for the story. */
+static bool SayTelling(const CcSim *sim, const CcCharacter *speaker,
+                       CcGateVoice *voice)
+{
+    const CcGossip *story = CcSimGossipStory(sim, voice->story_slot);
+    const CcGossipCarrier *carrier = CcSimGossipCarrier(sim, speaker->id);
+    if (story == NULL || carrier == NULL) return false;
+    const CcGossipVersion *version = &carrier->versions[voice->story_slot];
+    voice->version = *version;
+    voice->confidence = version->confidence;
+    CcGossipVersion plain = *version;
+    plain.court_bias = 0;
+    plain.alarm = 0;
+    char telling[CC_EVENT_TEXT_CAPACITY];
+    CcGossipText(sim, story, &plain, telling, sizeof(telling));
+    /* The event, not the ledger: "raids Gloamgate: 16 Bread" says the raid. */
+    char *tally = strchr(telling, ':');
+    if (tally != NULL) *tally = '\0';
+    TrimPeriod(telling);
+    if (telling[0] == '\0') return false;
+    /* Without the tally the grammar may read it after all: "raided". */
+    CcCoreAccount account;
+    char claim[CC_SPEECH_TEXT_CAPACITY];
+    if (CcCoreAccountPrepare(story->kind, telling, version->confidence,
+                             version->retellings, &account) &&
+        RenderEventFirst(&account, NULL, false, claim, sizeof(claim))) {
+        TrimPeriod(claim);
+        if (claim[0] != '\0') Copy(telling, sizeof(telling), claim);
+    }
+    HeardFrom from = {.story_id = story->event_id,
+                      .source_id = version->source_character_id,
+                      .confidence = version->confidence};
+    from.witnessed = version->source_character_id == speaker->id;
+    from.named = !from.witnessed && from.source_id != 0U && from.source_id != sim->player.id;
+    if (from.named) SourcePhrase(sim, from.source_id, voice->settlement_id, from.who,
+                                 sizeof(from.who), voice->source_name,
+                                 sizeof(voice->source_name));
+    if (from.who[0] == '\0') from.named = false;
+    AddAttributed(voice, &from, CC_GATE_PART_EVENT, false, telling, false);
+    return voice->clause_count > 0;
+}
+
+/* A traveller who has just left the town says so, in a few words about their
+   own road. Traced to the traveller's journey: where they set out from. */
+static void AddRoadClause(const CcSim *sim, const CcCharacter *speaker,
+                          CcGateVoice *voice)
+{
+    (void)sim;
+    if (speaker->current_settlement_id != voice->settlement_id ||
+        speaker->activity != CC_CHARACTER_ACTIVITY_TRAVELLING) return;
+    const char *text =
+        voice->change.kind == CC_RETURN_CHANGE_FIRE ? "I left before the smoke cleared." :
+        voice->change.kind == CC_RETURN_CHANGE_HUNGER ||
+        voice->change.kind == CC_RETURN_CHANGE_STALL_EMPTY ?
+            "I left while there was still bread for the road." :
+        voice->change.kind == CC_RETURN_CHANGE_BANDIT_CAMP ||
+        voice->change.kind == CC_RETURN_CHANGE_LAWLESS ?
+            "I didn't stay to see more." :
+            "I've just come from there.";
+    (void)AddClause(voice, CC_GATE_PART_SOURCE, CC_GATE_EVIDENCE_ROAD,
+                    speaker->current_settlement_id, false, text);
+}
+
+bool CcGateVoiceSayOnRoad(const CcSim *sim, CcId traveller_id, CcId town,
+                          const CcReturnChange *change, CcGateVoice *voice)
+{
+    if (voice == NULL) return false;
+    *voice = (CcGateVoice){0};
+    voice->story_slot = -1;
+    voice->chosen_fact = -1;
+    voice->settlement_id = town;
+    voice->on_road = true;
+    if (sim == NULL || town == 0U) return false;
+    return CcGateVoiceSay(sim, traveller_id, change, voice);
+}
+
 bool CcGateVoiceSay(const CcSim *sim, CcId speaker_id,
                     const CcReturnChange *change, CcGateVoice *voice)
 {
@@ -627,7 +717,7 @@ bool CcGateVoiceSay(const CcSim *sim, CcId speaker_id,
              "official" : CcCoreOccupationName(speaker->occupation));
     voice->remembered_face = false;
     const CcTownSeen *seen = CcReturnLastSeen(sim, voice->settlement_id);
-    for (int32_t i = 0; seen != NULL && i < CC_RETURN_FACES; ++i)
+    for (int32_t i = 0; seen != NULL && !voice->on_road && i < CC_RETURN_FACES; ++i)
         if (seen->face_ids[i] == speaker->id) voice->remembered_face = true;
 
     voice->change = *change;
@@ -645,6 +735,20 @@ bool CcGateVoiceSay(const CcSim *sim, CcId speaker_id,
                         speaker->id, false, "You're back.");
     int32_t opening = voice->clause_count;
     voice->telling = CC_GATE_VOICE_HEARD;
+    if (voice->on_road) {
+        /* A traveller only passes on a story they hold: in the grammar's
+           words when it can read the telling, else in the telling's own. */
+        if (voice->story_slot < 0) return false;
+        if (!SayHeard(sim, speaker, voice)) {
+            voice->clause_count = opening;
+            voice->fact_count = 0;
+            voice->chosen_fact = -1;
+            if (!SayTelling(sim, speaker, voice)) return false;
+        }
+        AddRoadClause(sim, speaker, voice);
+        JoinLine(voice);
+        return voice->line[0] != '\0';
+    }
     if (voice->story_slot < 0 || !SayHeard(sim, speaker, voice)) {
         /* Not their story, or not one the grammar can say: fall back to
            what is plain to see. */
@@ -733,7 +837,8 @@ bool CcGateVoiceSpeech(const CcSim *sim, const CcGateVoice *voice, CcSpeech *spe
         voice->confidence < 40 ? CC_SPEECH_QUIET : CC_SPEECH_PLAIN;
     CcId source = voice->telling == CC_GATE_VOICE_HEARD ?
         voice->change.evidence_event_id : 0U;
-    return CcSpeechCompose(speech, "return.gate", voice->speaker_id, voice->speaker,
+    return CcSpeechCompose(speech, voice->on_road ? "return.road" : "return.gate",
+                           voice->speaker_id, voice->speaker,
                            voice_index, voice->line, delivery,
                            CC_SPEECH_CONVERSATION, source);
 }
@@ -745,6 +850,7 @@ const char *CcGateVoiceEvidenceName(CcGateVoiceEvidence evidence)
     case CC_GATE_EVIDENCE_SOURCE: return "source";
     case CC_GATE_EVIDENCE_TOWN: return "town";
     case CC_GATE_EVIDENCE_FACE: return "face";
+    case CC_GATE_EVIDENCE_ROAD: return "road";
     default: return "none";
     }
 }

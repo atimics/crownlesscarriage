@@ -1,6 +1,7 @@
 #include "sim/cc_journey_internal.h"
 #include "sim/cc_mine.h"
 #include "sim/cc_road_position.h"
+#include "sim/cc_road_news.h"
 
 #include <stdio.h>
 
@@ -238,6 +239,8 @@ void CcJourneyAdvanceTicks(CcSim *sim, int32_t ticks,
         if (mine_stop > sim->journey.elapsed_subticks)
             next_limit = MinimumI32(next_limit, mine_stop);
         int32_t previous_elapsed = sim->journey.elapsed_subticks;
+        int32_t news_before = sim->journey.road_position_active ?
+            CcRoadRouteProgressSubticks(sim) : sim->journey.elapsed_subticks;
         int32_t advance = MinimumI32(
             journey_rate, next_limit - sim->journey.elapsed_subticks);
         if (sim->journey.road_position_active) {
@@ -281,6 +284,9 @@ void CcJourneyAdvanceTicks(CcSim *sim, int32_t ticks,
         bool road_arrived = sim->journey.road_position_active &&
             advance > 0 && CcRoadAdvanceLeg(sim, advance);
         services->reveal_journey_road(sim);
+        /* The Return, milestone 4: news met on the road. */
+        CcRoadNewsAdvance(sim, news_before, sim->journey.road_position_active ?
+            CcRoadRouteProgressSubticks(sim) : sim->journey.elapsed_subticks);
         if (mine_stop >= 0 && sim->journey.elapsed_subticks == mine_stop) break;
         if (!sim->journey.road_position_active &&
             sim->journey.elapsed_subticks >= sim->journey.total_subticks) {

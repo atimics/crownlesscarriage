@@ -9,3 +9,9 @@ target_link_libraries(gate_voice_tests PRIVATE crownless_persistence crownless_s
 cc_strict_warnings(gate_voice_tests)
 cc_large_sim_stack(gate_voice_tests)
 add_test(NAME the_return_gate_voice COMMAND gate_voice_tests)
+
+add_executable(road_news_tests tests/road_news_tests.c)
+target_link_libraries(road_news_tests PRIVATE crownless_persistence crownless_story)
+cc_strict_warnings(road_news_tests)
+cc_large_sim_stack(road_news_tests)
+add_test(NAME the_return_road_news COMMAND road_news_tests)
