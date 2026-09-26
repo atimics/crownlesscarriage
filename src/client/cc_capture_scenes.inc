@@ -1215,7 +1215,7 @@ static bool CcCapturePrepareMessage(const CcCaptureRequest *request, CcCaptureSc
     if (request->capture_golden) {
         (void)snprintf(message, message_size, "Town square.");
     } else if (request->capture_town || request->capture_town_arrival) {
-        (void)snprintf(message, message_size, "%s town plan.",
+        (void)snprintf(message, message_size, "%s plan.",
                        CcSettlementFunctionName(
                            scene->sim->settlements[request->capture_town_index].function));
     } else if (request->capture_return) {
