@@ -29,7 +29,10 @@ kill_timeout = 30
   initial_size = "1gb"
   snapshot_retention = 7
 
+# A dedicated core: on shared-cpu-1x the host's per-tick world saves drained
+# the CPU burst balance within about 20 minutes of play, and throttling then
+# slowed shared carriage travel below real time.
 [[vm]]
-  cpu_kind = "shared"
+  cpu_kind = "performance"
   cpus = 1
-  memory = "512mb"
+  memory = "2048mb"
