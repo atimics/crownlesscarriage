@@ -372,6 +372,10 @@ typedef struct LocalState {
     /* The Return: the resident at the gate and what they have said. */
     bool gate_voice_open;
     CcGateVoice gate_voice;
+    /* The voice already spoke at the gate on this arrival, so parking does
+       not open it again. ResetLocalState leaves it alone: it has to carry
+       over the park, and the park clears it. */
+    bool gate_voice_offered_at_gate;
     float travel_time_blend;
     bool travel_fast_forward;
     bool travel_pointer_down;
@@ -4698,6 +4702,9 @@ static ContextActionSet BuildContextActions(
     ContextActionSet set = {0};
     if (sim == NULL || local == NULL) return set;
     if (sim->mine.phase != CC_MINE_NONE) return set;
+    /* The gate voice holds the input until it ends, and ENTER means
+       "Thank you" there: offer nothing else meanwhile. */
+    if (view == VIEW_LOCAL && local->gate_voice_open) return set;
     if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER || view == VIEW_OVEN_COURT)) return set;
     int32_t pony = CcPonyOnRoad(sim);
     if (view == VIEW_LOCAL && pony >= 0 && !LocalCombatActive(local)) {
@@ -10855,18 +10862,24 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (HandleTownArrivalAction(
                     sim, local, selected, context_action, enter_pressed,
                     message, message_capacity)) {
-                BeginGateVoice(*journal, sim, local, true);
+                BeginGateVoiceOnPark(*journal, sim, local);
                 /* The voice replaces the parked-carriage note. */
                 if (local->gate_voice_open) message[0] = '\0';
                 return;
             }
             if (RoadBookArrivalInProgress(local)) return;
+            /* The carriage reaches the resident standing inside the gate:
+               it waits there while they speak. */
+            if (OfferGateVoiceAtGate(*journal, sim, local, true)) {
+                message[0] = '\0';
+                return;
+            }
             ConvoyUpdateResult convoy_update = UpdateDrivenConvoy(
                 local, sim, delta_time);
             if (convoy_update == CONVOY_UPDATE_PARKED) {
                 FinishTownArrivalState(
                     sim, local, selected, message, message_capacity);
-                BeginGateVoice(*journal, sim, local, true);
+                BeginGateVoiceOnPark(*journal, sim, local);
                 if (local->gate_voice_open) message[0] = '\0';
                 return;
             }

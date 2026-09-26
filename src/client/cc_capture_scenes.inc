@@ -784,16 +784,23 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
         }
     }
     if (request->capture_gate_voice) {
-        /* The moment the game opens the voice: the carriage has rolled in
-           and parked, and FinishTownArrivalState has staged the town's
-           changes, so the speaker stands at the staged scene's reserved
-           spot among the same props as --capture-return shows. */
-        int32_t selected = 0;
-        char parked[128];
+        /* The moment the game opens the voice: the carriage rolls in
+           through the staged gate (the same pose as --capture-return) and
+           reaches the resident waiting at the staging's speaker spot. A
+           town without a staged spot in reach hears it after parking. */
         BeginTownArrivalState(scene->local);
-        FinishTownArrivalState(scene->sim, scene->local, &selected,
-                               parked, sizeof(parked));
-        BeginGateVoice(NULL, scene->sim, scene->local, false);
+        scene->local->convoy.phase_progress = CcCaptureArrivalProgressAt(
+            CcLocalTownEstablishingSubjectDistance());
+        SetConvoyTownPose(&scene->local->convoy, 0.0f);
+        StageReturnScene(scene->sim, scene->local);
+        scene->local->gate_voice_offered_at_gate = false;
+        if (!OfferGateVoiceAtGate(NULL, scene->sim, scene->local, false)) {
+            int32_t selected = 0;
+            char parked[128];
+            FinishTownArrivalState(scene->sim, scene->local, &selected,
+                                   parked, sizeof(parked));
+            BeginGateVoice(NULL, scene->sim, scene->local, false);
+        }
         if (!scene->local->gate_voice_open) {
             (void)fprintf(stderr, "Nobody at the gate has news of a change.\n");
             return false;
