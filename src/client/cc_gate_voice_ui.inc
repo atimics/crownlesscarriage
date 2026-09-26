@@ -7,6 +7,15 @@
    stand there (world units). */
 #define GATE_VOICE_SPOT_REACH 6.0f
 
+/* How far the company is from `spot`: the carriage while it is still rolling
+   in through the gate, the player once it has parked. */
+static float GateVoiceCompanyDistance(const LocalState *local, Vector2 spot)
+{
+    Vector3 at = local->convoy.phase == CC_LOCAL_CONVOY_ARRIVING ?
+        local->convoy.town_position : local->agent.position;
+    return hypotf(spot.x - at.x, spot.y - at.z);
+}
+
 /* Stand the speaker in the scene. This runs in the update path; the renderer
    only draws what the course holds. */
 static void StageGateSpeaker(const CcSim *sim, LocalState *local)
@@ -31,9 +40,7 @@ static void StageGateSpeaker(const CcSim *sim, LocalState *local)
        buildings between them. */
     Vector2 spot = {local->return_scene.speaker.x, local->return_scene.speaker.z};
     bool at_gate = local->return_scene.placed &&
-        hypotf(spot.x - local->agent.position.x,
-               spot.y - local->agent.position.z) <
-            GATE_VOICE_SPOT_REACH;
+        GateVoiceCompanyDistance(local, spot) < GATE_VOICE_SPOT_REACH;
     CcLocalCourseStageGateSpeaker(&local->course, &local->agent,
                                   at_gate ? &spot : NULL,
                                   person->id, person->appearance_seed, role);
@@ -56,13 +63,40 @@ static void GateVoiceSpeak(CcJournal *journal, CcSim *sim, LocalState *local,
     }
 }
 
-/* Open the gate voice when the company parks in a town it has seen before. */
+/* Open the gate voice in a town the company has seen before. */
 static void BeginGateVoice(CcJournal *journal, CcSim *sim, LocalState *local,
                            bool audio)
 {
     local->gate_voice_open = !sim->journey.active &&
         CcGateVoiceBegin(sim, sim->player.location_id, &local->gate_voice);
     if (local->gate_voice_open) GateVoiceSpeak(journal, sim, local, audio);
+}
+
+/* The Return: the resident waits at the spot the arrival staging kept for
+   them inside the gate, among the staged changes. When the arriving carriage
+   reaches them, the voice opens there, once per arrival; the carriage waits
+   until it ends. True when the voice opened. */
+static bool OfferGateVoiceAtGate(CcJournal *journal, CcSim *sim, LocalState *local,
+                                 bool audio)
+{
+    if (local->gate_voice_offered_at_gate || local->gate_voice_open ||
+        !local->return_scene.placed ||
+        local->convoy.phase != CC_LOCAL_CONVOY_ARRIVING) return false;
+    Vector2 spot = {local->return_scene.speaker.x, local->return_scene.speaker.z};
+    if (GateVoiceCompanyDistance(local, spot) >= GATE_VOICE_SPOT_REACH) return false;
+    local->gate_voice_offered_at_gate = true;
+    BeginGateVoice(journal, sim, local, audio);
+    return local->gate_voice_open;
+}
+
+/* When the carriage parks: the voice opens here only if it did not already
+   speak at the gate on the way in (the player may also park early, before
+   the carriage reaches the gate spot). */
+static void BeginGateVoiceOnPark(CcJournal *journal, CcSim *sim, LocalState *local)
+{
+    bool spoke_at_gate = local->gate_voice_offered_at_gate;
+    local->gate_voice_offered_at_gate = false;
+    if (!spoke_at_gate) BeginGateVoice(journal, sim, local, true);
 }
 
 static void GateVoiceName(const LocalState *local, char *name, size_t capacity)
