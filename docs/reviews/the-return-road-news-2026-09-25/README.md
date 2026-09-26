@@ -11,9 +11,9 @@ storybook travel view at the moment the news is met.
 | ![Smoke](road-smoke.png) | 4, 365 | Near Gloamgate, a day after the dragon burned it: the town's smoke columns rise over it. *From the bench:* "Black smoke hangs over Gloamgate. Something there has burned." The fire is marked witnessed. |
 | ![Gate](gate-after-road.png) | 4, 365 | The payoff. At the gate the resident no longer leads with the fire, which the company saw, or the famine, which it read. *Ilyra Senn, shepherd:* "The market is closed. Varkesh the Unappeased burned the town over money missing from the hoard, I hear." Compare `the-return-gate-voice-2026-09-25/gate-fire.png`, the same return without road news. |
 
-The header still says "The town still smells of smoke": the arrival scene
-stages news met on the road, because a notice is not the town and smoke on
-the horizon is not the burned street.
+The arrival scene still stages news met on the road (the smoke, the hungry
+crowd), because a notice is not the town and smoke on the horizon is not the
+burned street. Only the words move on.
 
 ## Capture recipe
 
