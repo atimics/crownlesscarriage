@@ -5115,6 +5115,11 @@ static void DrawCourseRunners(const CcLocalCourse *course, Vector3 focus)
                             course->situation_witness.position.z, focus)) {
         DrawRobotShell(&course->situation_witness);
     }
+    if (course->gate_speaker_active &&
+        SceneryPointVisible(course->gate_speaker.position.x,
+                            course->gate_speaker.position.z, focus)) {
+        DrawRobotShell(&course->gate_speaker);
+    }
     for (int32_t i = 0; i < CC_LOCAL_TRAVELLER_COUNT; ++i) {
         const CcLocalTraveller *traveller = &course->travellers[i];
         if (traveller->active &&

@@ -167,8 +167,55 @@ static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
     });
 }
 
+/* The Return's review trip, shared by --capture-return and
+   --capture-gate-voice so both frames show the same world: ride the region
+   by the real roads, wait out the days away, and ride back -- the same
+   shape of trip as tools/return_digest.c's RideAll, using its ride driver
+   (sim/cc_return_ride.h). Only Thornford and Silverwick are ever the ride's
+   two ends; TOWN is always the return leg's destination, so an intermediate
+   town (Gloamgate) is read the moment the company arrives there, before a
+   further departure would stamp a new "last seen" over the one we want to
+   compare against. */
+static bool CaptureReturnTrip(CcSim *sim, CcId town, int32_t days)
+{
+    CcId thornford = CcReturnRideTownByName(sim, "Thornford");
+    CcId silverwick = CcReturnRideTownByName(sim, "Silverwick");
+    if (town == 0U || thornford == 0U || silverwick == 0U) {
+        (void)fprintf(stderr, "capture return: unknown town\n");
+        return false;
+    }
+    CcId home = town == silverwick ? silverwick : thornford;
+    CcId far = home == thornford ? silverwick : thornford;
+    if (sim->player.location_id != home) {
+        sim->player.location_id = home;
+        sim->carriage.location_id = home;
+    }
+    char ride_error[256];
+    if (!CcReturnRideAlongPath(sim, far, ride_error, sizeof(ride_error))) {
+        (void)fprintf(stderr, "capture return: %s\n", ride_error);
+        return false;
+    }
+    CcSimAdvanceDays(sim, days);
+    if (!CcReturnRideAlongPath(sim, town, ride_error, sizeof(ride_error))) {
+        (void)fprintf(stderr, "capture return: %s\n", ride_error);
+        return false;
+    }
+    return true;
+}
+
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
+    if (request->capture_gate_voice) {
+        /* The same trip as --capture-return; TOWN is a settlement index. */
+        if (request->capture_town_index >= sim->settlement_count ||
+            !CaptureReturnTrip(sim,
+                sim->settlements[request->capture_town_index].id,
+                request->capture_gate_days)) {
+            (void)fprintf(stderr, "The gate-voice ride did not reach the town.\n");
+            return false;
+        }
+        return true;
+    }
     if (request->capture_ux && request->capture_ux_view >= 21 && request->capture_ux_view <= 24) {
         char path[1024], error[256];
         if (!ResolveClientAssetPath(CC_DEEP_WYRM_ASSET, path, sizeof(path))) return false;
@@ -179,41 +226,13 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
         return true;
     }
     if (request->capture_return) {
-        /* The Return, milestone 2: ride the region by the real roads, wait
-           out the days away, and ride back -- the same shape of trip as
-           tools/return_digest.c's RideAll, sharing its ride driver
-           (sim/cc_return_ride.h) so this reflects an actual journey. Only
-           Thornford and Silverwick are ever the ride's two ends; TOWN
-           (Thornford, Gloamgate, or Silverwick) is always the return leg's
-           destination, so an intermediate town (Gloamgate) is read the
-           moment the company arrives there, before a further departure
-           would stamp a new "last seen" over the one we want to compare
-           against. */
-        CcId thornford = CcReturnRideTownByName(sim, "Thornford");
-        CcId silverwick = CcReturnRideTownByName(sim, "Silverwick");
         CcId town = CcReturnRideTownByName(sim, request->capture_return_town);
-        if (town == 0U || thornford == 0U || silverwick == 0U) {
+        if (town == 0U) {
             (void)fprintf(stderr, "capture return: unknown town %s\n",
                           request->capture_return_town);
             return false;
         }
-        CcId home = town == silverwick ? silverwick : thornford;
-        CcId far = home == thornford ? silverwick : thornford;
-        if (sim->player.location_id != home) {
-            sim->player.location_id = home;
-            sim->carriage.location_id = home;
-        }
-        char ride_error[256];
-        if (!CcReturnRideAlongPath(sim, far, ride_error, sizeof(ride_error))) {
-            (void)fprintf(stderr, "capture return: %s\n", ride_error);
-            return false;
-        }
-        CcSimAdvanceDays(sim, request->capture_return_days);
-        if (!CcReturnRideAlongPath(sim, town, ride_error, sizeof(ride_error))) {
-            (void)fprintf(stderr, "capture return: %s\n", ride_error);
-            return false;
-        }
-        return true;
+        return CaptureReturnTrip(sim, town, request->capture_return_days);
     }
     if (request->capture_creature_media &&
         strcmp(request->capture_creature_family, "goblins") == 0) {
@@ -763,6 +782,29 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
             CcLocalAgentUpdate(&scene->local->agent, 1.0f / 60.0f, false);
             if (!scene->local->agent.grounded && scene->local->agent.position.y > 0.65f) break;
         }
+    }
+    if (request->capture_gate_voice) {
+        /* The moment the game opens the voice: the carriage has rolled in
+           and parked, and FinishTownArrivalState has staged the town's
+           changes, so the speaker stands at the staged scene's reserved
+           spot among the same props as --capture-return shows. */
+        int32_t selected = 0;
+        char parked[128];
+        BeginTownArrivalState(scene->local);
+        FinishTownArrivalState(scene->sim, scene->local, &selected,
+                               parked, sizeof(parked));
+        BeginGateVoice(NULL, scene->sim, scene->local, false);
+        if (!scene->local->gate_voice_open) {
+            (void)fprintf(stderr, "Nobody at the gate has news of a change.\n");
+            return false;
+        }
+        for (int32_t turn = 0; turn < request->capture_gate_turns; ++turn) {
+            if (!scene->local->gate_voice.more ||
+                !CcGateVoiceNext(scene->sim, &scene->local->gate_voice)) break;
+            GateVoiceSpeak(NULL, scene->sim, scene->local, false);
+        }
+        (void)printf("gate voice: %s: %s\n", scene->local->gate_voice.speaker,
+                     scene->local->gate_voice.line);
     }
     return true;
 }

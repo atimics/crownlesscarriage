@@ -61,6 +61,11 @@ typedef struct CcCaptureRequest {
     uint32_t capture_return_seed;
     int32_t capture_return_days;
     const char * capture_return_town;
+    /* The Return's gate voice: a real ride, a wait, and a return. */
+    bool capture_gate_voice;
+    uint32_t capture_gate_seed;
+    int32_t capture_gate_days;
+    int32_t capture_gate_turns;
     bool capture_dragon_cave;
     bool capture_mine_yard;
     bool capture_mine_menu;
@@ -348,6 +353,34 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         request->capture_return_days = (int32_t)days;
         request->capture_return_town = argv[4];
     }
+    request->capture_gate_voice = argc >= 2 &&
+        strcmp(argv[1], "--capture-gate-voice") == 0;
+    if (request->capture_gate_voice) {
+        /* SEED DAYS TOWN FRAME [TURNS]: TOWN is a settlement index from 0
+           to 5; TURNS is how many times "Tell me more" is chosen. */
+        char *seed_end = NULL, *days_end = NULL, *town_end = NULL, *turns_end = NULL;
+        unsigned long seed = argc >= 6 ? strtoul(argv[2], &seed_end, 10) : 0UL;
+        long days = argc >= 6 ? strtol(argv[3], &days_end, 10) : -1L;
+        long town = argc >= 6 ? strtol(argv[4], &town_end, 10) : -1L;
+        long turns = argc >= 7 ? strtol(argv[6], &turns_end, 10) : 0L;
+        if (argc < 6 || argc > 7 || seed_end == argv[2] || *seed_end != '\0' ||
+            days_end == argv[3] || *days_end != '\0' || days < 0 || days > 3650 ||
+            town_end == argv[4] || *town_end != '\0' || town < 0 || town >= 6 ||
+            (argc == 7 && (turns_end == argv[6] || *turns_end != '\0' ||
+                           turns < 0 || turns > 15))) {
+            (void)fprintf(stderr,
+                "capture gate voice: SEED DAYS TOWN(0-5) FRAME [TURNS 0-15]\n");
+            return false;
+        }
+        request->capture_gate_seed = (uint32_t)seed;
+        request->capture_gate_days = (int32_t)days;
+        request->capture_gate_turns = (int32_t)turns;
+        /* Framed like a town capture, from the arrival side of the town. */
+        request->capture_town = true;
+        request->capture_town_index = (int32_t)town;
+        request->capture_town_x = 82.0f;
+        request->capture_town_z = 36.0f;
+    }
     request->capture_dragon_cave = argc >= 2 &&
         strcmp(argv[1], "--capture-dragon-cave") == 0;
     request->capture_mine_yard = argc >= 2 && strcmp(argv[1],"--capture-mine-yard") == 0;
@@ -520,7 +553,8 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
                     request->capture_atmosphere || request->capture_face ||
                     request->capture_room || request->capture_npc_review || request->capture_heraldry ||
                     request->capture_creature_media);
-    request->capture_path = request->capture_shop ? argv[4] :
+    request->capture_path = request->capture_gate_voice ? argv[5] :
+                               request->capture_shop ? argv[4] :
                                request->capture_ux ? argv[3] : request->capture_storybook ? argv[4] :
                                request->capture_creature_media ? argv[3] :
                                request->capture_room ? argv[4] :

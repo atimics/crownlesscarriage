@@ -1,7 +1,7 @@
 # The Return
 
-Status: milestone 2 (the scene shows the changes), building on milestone 1
-(design, last-seen record, change digest).
+Status: milestones 1 (design, last-seen record, change digest), 2 (the scene
+shows the changes) and 3 (the gate voice).
 
 Crownless is a small life inside a big living history. The player sits on a
 carriage company's bench. The simulation is deep, but today the player mostly
@@ -117,6 +117,72 @@ keeps at most three market lines.
 
 Passive story swaps on arrival do not count as told, because nobody said
 anything to the player.
+
+## The gate voice (milestone 3)
+
+`src/story/cc_gate_voice.[ch]` builds the line; `src/client/cc_gate_voice_ui.inc`
+shows it. Building is pure. It reads the simulation and writes only the voice.
+
+1. **Who speaks.** A face from `CcTownSeen.face_ids` who is alive, grown, and
+   in town. The dead leave the character table, so a dead face is skipped. With
+   no face, a local speaks: one who holds the evidence story first, then a
+   resident, then an official, innkeeper, or courier, then the lowest id.
+2. **What they say.** The top change in the digest that is still new and not
+   yet spoken on this visit. "Tell me more" gives the next one, from the same
+   speaker.
+3. **Gate order.** A line is spoken in a fixed order: what happened, then
+   why, then who said so. Short sentences. A resident says "here" or "the
+   town", never their own town's name.
+4. **Heard.** If the speaker holds the evidence story, the line comes from
+   their own telling (`versions[slot]`), parsed by the account grammar
+   (`CcCoreAccountPrepare`). Typed fact selection asks the role the change is
+   about (who did it, or where) and chooses the matching fact, most certain
+   first. A doubtful answer is withheld.
+   - **The story is the change** (a burning, a succession, a death): the event
+     comes first. For a dragon fire the gate render mode says who burned how
+     much of the town now, then the rule's reason: "Varkesh burned most of the
+     town. It was over missing hoard money, I hear." With a doubtful actor:
+     "Fire took most of the town. Some say it was over missing hoard money ..."
+   - **The story is the reason** (an empty market after a raid): what anyone
+     can see comes first, then the story: "There's no bread in the market. The
+     Cinder Tithe raided the town, I hear."
+   - **The story only names this town** ("Hunger was reported in
+     Gloamgate."): it adds nothing, so the resident says what they see: "Bread's
+     gone. People are going hungry here." It still counts as told.
+   - **Who said so:** their own eyes, "I saw it myself."; a named source,
+     "— Thora at the inn told me." (70 or more), "— I heard it from Thora at the
+     inn." (40 to 69), "— Thora at the inn said so, but I'm not sure of it."
+     (below 40); no named source, ", I hear.", ", so people say.", ", if the
+     story's true." A reason that already hedges ("Folk say it was ...") does
+     not hedge twice.
+5. **Seen.** If the speaker does not hold the story, or the grammar cannot
+   read it, they say only what is plain to see, at full confidence: "Fire took
+   most of the town."
+6. **Evidence.** Every clause records its part (greeting, event, cause,
+   source) and what it traces to: the story's event, the version's source, the
+   town against the company's record (and the town now, for "most of the town"
+   or "Bread's gone"), or the remembered face. `tests/gate_voice_tests.c`
+   checks each clause and the order.
+7. **Told.** When a heard line is spoken, the client applies
+   `CC_COMMAND_HEARD_STORY` (speaker, slot) through the journal. That sets
+   `told_player`, so the digest ranks the change as told and the next voice
+   moves on. No new saved state.
+
+The client opens the voice when the carriage parks in a town the company has
+seen before. It shows the speaker's name and trade, the line, and "Tell me
+more" or "Thank you". While it is open it replaces the local panel and the
+arrival note. The line is also a `CcSpeech` turn (`return.gate`), so it goes
+through the existing speech and audio path.
+
+The speaker stands in the scene. The update path stages them
+(`CcLocalCourseStageGateSpeaker`): a few steps ahead of the player, a little
+to the side, facing the player, with their own appearance seed. The renderer
+only draws the staged agent, and the conversation camera frames the two of
+them. The staging is one small function, apart from the town crowd.
+
+Review: `crownless_return_digest --seed 4 --days 365 --voice` and
+`--capture-gate-voice SEED DAYS TOWN PNG [TURNS]`; frames are in
+`docs/reviews/the-return-gate-voice-2026-09-25/`.
 
 ## Milestones
 

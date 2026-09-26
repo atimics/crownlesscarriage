@@ -182,6 +182,7 @@ add_library(crownless_story
     src/story/cc_core_model.c
     src/story/cc_core_conversation.c
     src/story/cc_core_participant.c
+    src/story/cc_gate_voice.c
     src/story/cc_speech_json.c
 )
 target_include_directories(crownless_story PUBLIC src)
@@ -389,7 +390,7 @@ if(CC_BUILD_BENCHMARKS)
     cc_strict_warnings(crownless_sim_metrics)
 
     add_executable(crownless_return_digest tools/return_digest.c)
-    target_link_libraries(crownless_return_digest PRIVATE crownless_sim)
+    target_link_libraries(crownless_return_digest PRIVATE crownless_story)
     cc_strict_warnings(crownless_return_digest)
 
     add_executable(crownless_quest_cast_experiment tools/quest_cast_experiment.c)
