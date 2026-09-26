@@ -12657,11 +12657,15 @@ int main(int argc, char **argv)
         }
     }
     if (CcCoopClientHasSession() && !restored_local_session) {
-        char close_error[192];
-        (void)CcJournalClose(&journal, &sim, close_error, sizeof(close_error));
+        /* The saved view came from an older client or an earlier moment of
+           this shared world and no longer fits it. The world itself came
+           from the host and the view above was set from it, so carry on
+           from there rather than locking the player out of the company. */
+        TraceLog(LOG_WARNING,
+                 "COOP: saved view did not fit the shared world; starting "
+                 "from the host's state");
         (void)snprintf(startup_message, sizeof(startup_message),
-            "Your saved place needs recovery. Reconnect after the host recovers it.");
-        CcCoopClientReady(startup_message);
+            "Rejoined the shared world. Your view starts at the carriage.");
     }
     if (!capture_active && sim.dungeon_expedition.active) {
         local.site_kind = CC_LOCAL_SITE_DUNGEON;
