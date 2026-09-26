@@ -167,9 +167,26 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: live-deploy-pages
+      cancel-in-progress: false
     steps:
+      - name: Skip when main has moved on
+        id: head
+        # Deploy only the newest commit. An older run finishing late (or
+        # racing a manual hotfix) must not replace a newer live build; the
+        # run for the newer commit deploys it.
+        run: |
+          head=$(git ls-remote "https://github.com/${{ github.repository }}" refs/heads/main | cut -f1)
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "main is at $head, not $GITHUB_SHA; the newer run deploys."
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Deploy
         id: deployment
+        if: steps.head.outputs.stale != 'true'
         uses: actions/deploy-pages@v5
 
   deploy-shared-world:
@@ -177,18 +194,38 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.CROWNLESS_FLY_APP != ''
     needs: [build, browser, host]
     runs-on: ubuntu-latest
+    concurrency:
+      group: live-deploy-fly
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
+      - name: Skip when main has moved on
+        id: head
+        # Deploy only the newest commit. An older run finishing late (or
+        # racing a manual hotfix) must not replace a newer live build; the
+        # run for the newer commit deploys it.
+        run: |
+          head=$(git ls-remote "https://github.com/${{ github.repository }}" refs/heads/main | cut -f1)
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "main is at $head, not $GITHUB_SHA; the newer run deploys."
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/download-artifact@v4
+        if: steps.head.outputs.stale != 'true'
         with:
           name: shared-world-game
           path: out/build/web/site
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        if: steps.head.outputs.stale != 'true'
       - name: Deploy the tested game and host
+        if: steps.head.outputs.stale != 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.CROWNLESS_FLY_API_TOKEN }}
         run: flyctl deploy --remote-only --ha=false --strategy immediate --build-arg CROWNLESS_REVISION="$GITHUB_SHA" --yes
       - name: Verify the live revision
+        if: steps.head.outputs.stale != 'true'
         env:
           EXPECTED_REVISION: ${{ github.sha }}
         run: |
