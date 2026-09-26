@@ -3,6 +3,10 @@
    this file only shows them and offers one follow-up. Marking a story as told
    is a journalled command, applied when the line is spoken. */
 
+/* How near the player must be to the staged speaker spot for the speaker to
+   stand there (world units). */
+#define GATE_VOICE_SPOT_REACH 6.0f
+
 /* Stand the speaker in the scene. This runs in the update path; the renderer
    only draws what the course holds. */
 static void StageGateSpeaker(const CcSim *sim, LocalState *local)
@@ -20,8 +24,19 @@ static void StageGateSpeaker(const CcSim *sim, LocalState *local)
         person->occupation == CC_OCCUPATION_INNKEEPER ||
         person->occupation == CC_OCCUPATION_BAKER ? CC_NPC_ROLE_MERCHANT :
             CC_NPC_ROLE_LABORER;
-    CcLocalCourseStageGateSpeaker(&local->course, &local->agent, person->id,
-                                  person->appearance_seed, role);
+    /* Stand at the spot the arrival staging (milestone 2) reserved by the
+       gate, when the player is there to hear it. A player already parked
+       deep in town is spoken to where they stand instead: the conversation
+       camera frames both people, and a speaker back at the gate would put
+       buildings between them. */
+    Vector2 spot = {local->return_scene.speaker.x, local->return_scene.speaker.z};
+    bool at_gate = local->return_scene.placed &&
+        hypotf(spot.x - local->agent.position.x,
+               spot.y - local->agent.position.z) <
+            GATE_VOICE_SPOT_REACH;
+    CcLocalCourseStageGateSpeaker(&local->course, &local->agent,
+                                  at_gate ? &spot : NULL,
+                                  person->id, person->appearance_seed, role);
 }
 
 static void GateVoiceSpeak(CcJournal *journal, CcSim *sim, LocalState *local,

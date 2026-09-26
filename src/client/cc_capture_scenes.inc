@@ -167,124 +167,54 @@ static void CcCapturePrepareJourney(const CcCaptureRequest *request, CcSim *sim)
     });
 }
 
-/* The gate-voice capture rides the real roads, as crownless_return_digest
-   does: Thornford to Silverwick, a wait, and back to the chosen town. */
-static bool CaptureGateStep(CcSim *sim, CcCommandKind kind, CcId target)
+/* The Return's review trip, shared by --capture-return and
+   --capture-gate-voice so both frames show the same world: ride the region
+   by the real roads, wait out the days away, and ride back -- the same
+   shape of trip as tools/return_digest.c's RideAll, using its ride driver
+   (sim/cc_return_ride.h). Only Thornford and Silverwick are ever the ride's
+   two ends; TOWN is always the return leg's destination, so an intermediate
+   town (Gloamgate) is read the moment the company arrives there, before a
+   further departure would stamp a new "last seen" over the one we want to
+   compare against. */
+static bool CaptureReturnTrip(CcSim *sim, CcId town, int32_t days)
 {
-    char error[192];
-    CcCommand command = {.kind = kind, .target_id = target};
-    return CcSimApply(sim, &command, error, sizeof(error));
-}
-
-static bool CaptureGateRideLeg(CcSim *sim, CcId destination)
-{
-    if (!CaptureGateStep(sim, CC_COMMAND_TRAVEL, destination)) return false;
-    sim->journey.ambush_pending = false;
-    sim->pony_company.encounter = -1;
-    for (int32_t step = 0; step < 200000 && sim->journey.active; ++step) {
-        bool ok = true;
-        if (sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
-            CcSimAdvanceRuntimeTicks(sim, CC_WORLD_TICKS_PER_SECOND);
-        } else if (sim->journey.phase == CC_JOURNEY_PHASE_RESTING) {
-            ok = CaptureGateStep(sim, CcSimJourneyStop(sim) == CC_JOURNEY_STOP_MIDDAY ?
-                CC_COMMAND_TAKE_JOURNEY_BREAK : CC_COMMAND_MAKE_CAMP, 0U);
-        } else if (sim->journey.phase == CC_JOURNEY_PHASE_ROAD_CHOICE) {
-            const CcRoadSite *site = CcSimJourneyRoadSiteStop(sim);
-            ok = false;
-            if (site != NULL) {
-                ok = CaptureGateStep(sim, CC_COMMAND_PASS_ROAD_SITE, site->id);
-            } else {
-                CcRoadLegPreview previews[3];
-                int32_t count = CcRoadNextLegPreviews(sim, previews, 3);
-                for (int32_t i = 0; i < count && !ok; ++i)
-                    if (previews[i].direction == sim->journey.road_direction &&
-                        previews[i].segment_id != CC_PILOT_ROAD_MILL_SEGMENT_ID)
-                        ok = CaptureGateStep(sim, CC_COMMAND_CHOOSE_ROAD_LEG,
-                                             previews[i].decision_token);
-            }
-        } else if (sim->journey.phase == CC_JOURNEY_PHASE_BLOCKED) {
-            ok = CaptureGateStep(sim, CC_COMMAND_RESOLVE_ENCOUNTER_NEGOTIATE, 0U) ||
-                CaptureGateStep(sim, CC_COMMAND_RESOLVE_ENCOUNTER_COMBAT, 0U);
-        } else {
-            ok = false;
-        }
-        if (!ok) return false;
-    }
-    return !sim->journey.active && sim->player.location_id == destination;
-}
-
-static int32_t CaptureGateTownSlot(const CcSim *sim, const char *name)
-{
-    for (int32_t i = 0; i < sim->settlement_count; ++i)
-        if (strcmp(sim->settlements[i].name, name) == 0) return i;
-    return -1;
-}
-
-/* Ride town to town along the road graph (fewest legs, lower route first). */
-static bool CaptureGateRide(CcSim *sim, CcId to)
-{
-    for (int32_t guard = 0; guard < CC_MAX_SETTLEMENTS &&
-         sim->player.location_id != to; ++guard) {
-        CcId previous[CC_MAX_SETTLEMENTS] = {0};
-        bool seen[CC_MAX_SETTLEMENTS] = {false};
-        CcId queue[CC_MAX_SETTLEMENTS];
-        int32_t head = 0, tail = 0;
-        CcId from = sim->player.location_id;
-        queue[tail++] = from;
-        for (int32_t i = 0; i < sim->settlement_count; ++i)
-            if (sim->settlements[i].id == from) seen[i] = true;
-        while (head < tail) {
-            CcId at = queue[head++];
-            for (int32_t r = 0; r < sim->route_count; ++r) {
-                CcId next = sim->routes[r].from_id == at ? sim->routes[r].to_id :
-                    sim->routes[r].to_id == at ? sim->routes[r].from_id : 0U;
-                for (int32_t i = 0; next != 0U && i < sim->settlement_count; ++i) {
-                    if (sim->settlements[i].id != next || seen[i]) continue;
-                    seen[i] = true;
-                    previous[i] = at;
-                    queue[tail++] = next;
-                }
-            }
-        }
-        /* Walk back from the goal to the first leg out of here. */
-        CcId step = to;
-        for (int32_t hops = 0; hops <= CC_MAX_SETTLEMENTS; ++hops) {
-            CcId back = 0U;
-            for (int32_t i = 0; i < sim->settlement_count; ++i)
-                if (sim->settlements[i].id == step) back = previous[i];
-            if (back == 0U) return false;
-            if (back == from) break;
-            step = back;
-        }
-        if (!CaptureGateRideLeg(sim, step)) return false;
-    }
-    return sim->player.location_id == to;
-}
-
-static bool CaptureGateReturn(const CcCaptureRequest *request, CcSim *sim)
-{
-    CcSimInit(sim, request->capture_gate_seed);
-    int32_t home = CaptureGateTownSlot(sim, "Thornford");
-    int32_t away = CaptureGateTownSlot(sim, "Silverwick");
-    if (home < 0 || away < 0 || request->capture_town_index >= sim->settlement_count)
+    CcId thornford = CcReturnRideTownByName(sim, "Thornford");
+    CcId silverwick = CcReturnRideTownByName(sim, "Silverwick");
+    if (town == 0U || thornford == 0U || silverwick == 0U) {
+        (void)fprintf(stderr, "capture return: unknown town\n");
         return false;
-    sim->player.location_id = sim->settlements[home].id;
-    sim->carriage.location_id = sim->settlements[home].id;
-    CcId town = sim->settlements[request->capture_town_index].id;
-    CcId outward = town == sim->settlements[away].id ?
-        sim->settlements[home].id : sim->settlements[away].id;
-    if (!CaptureGateRide(sim, outward)) return false;
-    CcSimAdvanceDays(sim, request->capture_gate_days);
-    if (!CaptureGateRide(sim, town)) return false;
-    CcLocalTerrainSetSeed(sim->world_seed);
+    }
+    CcId home = town == silverwick ? silverwick : thornford;
+    CcId far = home == thornford ? silverwick : thornford;
+    if (sim->player.location_id != home) {
+        sim->player.location_id = home;
+        sim->carriage.location_id = home;
+    }
+    char ride_error[256];
+    if (!CcReturnRideAlongPath(sim, far, ride_error, sizeof(ride_error))) {
+        (void)fprintf(stderr, "capture return: %s\n", ride_error);
+        return false;
+    }
+    CcSimAdvanceDays(sim, days);
+    if (!CcReturnRideAlongPath(sim, town, ride_error, sizeof(ride_error))) {
+        (void)fprintf(stderr, "capture return: %s\n", ride_error);
+        return false;
+    }
     return true;
 }
 
 static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, char **argv)
 {
-    if (request->capture_gate_voice && !CaptureGateReturn(request, sim)) {
-        (void)fprintf(stderr, "The gate-voice ride did not reach the town.\n");
-        return false;
+    if (request->capture_gate_voice) {
+        /* The same trip as --capture-return; TOWN is a settlement index. */
+        if (request->capture_town_index >= sim->settlement_count ||
+            !CaptureReturnTrip(sim,
+                sim->settlements[request->capture_town_index].id,
+                request->capture_gate_days)) {
+            (void)fprintf(stderr, "The gate-voice ride did not reach the town.\n");
+            return false;
+        }
+        return true;
     }
     if (request->capture_ux && request->capture_ux_view >= 21 && request->capture_ux_view <= 24) {
         char path[1024], error[256];
@@ -296,41 +226,13 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
         return true;
     }
     if (request->capture_return) {
-        /* The Return, milestone 2: ride the region by the real roads, wait
-           out the days away, and ride back -- the same shape of trip as
-           tools/return_digest.c's RideAll, sharing its ride driver
-           (sim/cc_return_ride.h) so this reflects an actual journey. Only
-           Thornford and Silverwick are ever the ride's two ends; TOWN
-           (Thornford, Gloamgate, or Silverwick) is always the return leg's
-           destination, so an intermediate town (Gloamgate) is read the
-           moment the company arrives there, before a further departure
-           would stamp a new "last seen" over the one we want to compare
-           against. */
-        CcId thornford = CcReturnRideTownByName(sim, "Thornford");
-        CcId silverwick = CcReturnRideTownByName(sim, "Silverwick");
         CcId town = CcReturnRideTownByName(sim, request->capture_return_town);
-        if (town == 0U || thornford == 0U || silverwick == 0U) {
+        if (town == 0U) {
             (void)fprintf(stderr, "capture return: unknown town %s\n",
                           request->capture_return_town);
             return false;
         }
-        CcId home = town == silverwick ? silverwick : thornford;
-        CcId far = home == thornford ? silverwick : thornford;
-        if (sim->player.location_id != home) {
-            sim->player.location_id = home;
-            sim->carriage.location_id = home;
-        }
-        char ride_error[256];
-        if (!CcReturnRideAlongPath(sim, far, ride_error, sizeof(ride_error))) {
-            (void)fprintf(stderr, "capture return: %s\n", ride_error);
-            return false;
-        }
-        CcSimAdvanceDays(sim, request->capture_return_days);
-        if (!CcReturnRideAlongPath(sim, town, ride_error, sizeof(ride_error))) {
-            (void)fprintf(stderr, "capture return: %s\n", ride_error);
-            return false;
-        }
-        return true;
+        return CaptureReturnTrip(sim, town, request->capture_return_days);
     }
     if (request->capture_creature_media &&
         strcmp(request->capture_creature_family, "goblins") == 0) {
@@ -882,6 +784,15 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
         }
     }
     if (request->capture_gate_voice) {
+        /* The moment the game opens the voice: the carriage has rolled in
+           and parked, and FinishTownArrivalState has staged the town's
+           changes, so the speaker stands at the staged scene's reserved
+           spot among the same props as --capture-return shows. */
+        int32_t selected = 0;
+        char parked[128];
+        BeginTownArrivalState(scene->local);
+        FinishTownArrivalState(scene->sim, scene->local, &selected,
+                               parked, sizeof(parked));
         BeginGateVoice(NULL, scene->sim, scene->local, false);
         if (!scene->local->gate_voice_open) {
             (void)fprintf(stderr, "Nobody at the gate has news of a change.\n");

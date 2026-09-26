@@ -591,11 +591,13 @@ CcCombatOutcome CcLocalCombatResolveStrike(CcLocalAgent *attacker,
 const char *CcLocalCombatOutcomeName(CcCombatOutcome outcome);
 const char *CcLocalCombatTeamName(CcCombatTeam team);
 void CcLocalCourseInit(CcLocalCourse *course);
-/* Stand the gate-voice speaker a few steps ahead of the player, facing them.
-   Staging the same character again keeps the placement. */
+/* Stand the gate-voice speaker at `spot` (the arrival staging's reserved
+   speaker spot, CcReturnSceneCues.speaker) facing the player, or a few
+   steps ahead of the player when `spot` is NULL. Staging the same character
+   again keeps the placement. */
 void CcLocalCourseStageGateSpeaker(CcLocalCourse *course, const CcLocalAgent *player,
-                                   CcId character_id, uint32_t appearance_seed,
-                                   CcNpcRole role);
+                                   const Vector2 *spot, CcId character_id,
+                                   uint32_t appearance_seed, CcNpcRole role);
 void CcLocalCourseClearGateSpeaker(CcLocalCourse *course);
 void CcLocalCourseUpdate(CcLocalCourse *course, CcLocalAgent *player,
                          const CcSim *sim, float delta_time);

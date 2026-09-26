@@ -12586,7 +12586,9 @@ int main(int argc, char **argv)
        tools/return_digest.c); every other capture keeps the fixed seed the
        rest of the review fixtures were authored against. */
     CcSimInit(&sim, capture_request.capture_return ?
-              capture_request.capture_return_seed : UINT32_C(0xc0a71a9e));
+              capture_request.capture_return_seed :
+              capture_request.capture_gate_voice ?
+              capture_request.capture_gate_seed : UINT32_C(0xc0a71a9e));
     CcJournal *journal = NULL;
     char startup_message[256] = "";
     char saved_world_load_error[256] = "";
@@ -12600,7 +12602,8 @@ int main(int argc, char **argv)
         (void)snprintf(startup_message, sizeof(startup_message), "%s",
                        journal != NULL ? "The company shares this carriage and clock." : error);
         CcCoopClientReady(journal != NULL ? "" : error);
-    } else if (capture_request.capture_return) {
+    } else if (capture_request.capture_return ||
+               capture_request.capture_gate_voice) {
         /* CcCapturePrepareWorld rides the region and waits out the days
            itself, so the digest reflects an actual ride, not a flat
            28-day skip. */

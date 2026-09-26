@@ -6262,18 +6262,20 @@ static const CcHumanoidPose *AgentRenderPose(const CcLocalAgent *agent)
                                       &agent->humanoid.pose;
 }
 
-/* The Return: the resident at the gate stands a few steps ahead of the
-   player and a little to the side, so the camera sees both, and turns to
-   face the player. Kept apart from the ambient town crowd. */
+/* The Return: the resident at the gate stands at the spot the arrival
+   staging kept clear for them (inside the gate, apart from the hungry crowd
+   and the stalls), and turns to face the player. Without a staged spot they
+   stand a few steps ahead of the player and a little to the side, so the
+   camera sees both. */
 void CcLocalCourseStageGateSpeaker(CcLocalCourse *course, const CcLocalAgent *player,
-                                   CcId character_id, uint32_t appearance_seed,
-                                   CcNpcRole role)
+                                   const Vector2 *spot, CcId character_id,
+                                   uint32_t appearance_seed, CcNpcRole role)
 {
     if (course == NULL || player == NULL || character_id == 0U) return;
     if (course->gate_speaker_active &&
         course->gate_speaker_character_id == character_id) return;
     float yaw = player->facing_yaw;
-    Vector2 at = {
+    Vector2 at = spot != NULL ? *spot : (Vector2){
         player->position.x + sinf(yaw) * 1.9f + cosf(yaw) * 0.5f,
         player->position.z + cosf(yaw) * 1.9f - sinf(yaw) * 0.5f
     };
