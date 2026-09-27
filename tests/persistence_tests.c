@@ -4038,8 +4038,33 @@ static void CheckRecentRecruitmentJournal(uint32_t schema)
 }
 
 
+static void CheckSchema123RoadLineUpgrade(void)
+{
+    const char *path = "persistence-schema123-road-line.ccsave";
+    static CcSim legacy;
+    static CcSim restored;
+    char error[256];
+    RemoveDatabase(path);
+    CcSimInit(&legacy, UINT32_C(0x123e1));
+    legacy.schema_version = 123U;
+    CC_CHECK(CcSaveWrite(path, &legacy, error, sizeof(error)));
+    sqlite3 *database = NULL;
+    RequireSqlite(sqlite3_open_v2(path, &database, SQLITE_OPEN_READWRITE,
+                                  NULL), database, "could not open road line fixture");
+    ExecuteFixtureSql(database,
+        "ALTER TABLE player_road_position DROP COLUMN road_line;",
+        "could not remove new road line from old save");
+    sqlite3_close(database);
+    CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
+    CC_CHECK(restored.schema_version == CC_SIM_SCHEMA_VERSION);
+    CC_CHECK(restored.journey.road_line == 0);
+    CC_CHECK(CcSimValidate(&restored, error, sizeof(error)));
+    RemoveDatabase(path);
+}
+
 int main(void)
 {
+    CheckSchema123RoadLineUpgrade();
     CheckSchema95RecruitmentJournal();
     CheckRecentRecruitmentJournal(96U);
     CheckRecentRecruitmentJournal(97U);
@@ -4195,6 +4220,8 @@ int main(void)
         .amount = CC_JOURNEY_PACE_PUSH
     };
     CC_CHECK(CcSimApply(&original, &push_pace, error, sizeof(error)));
+    CcCommand guide = {.kind = CC_COMMAND_SET_ROAD_LINE, .amount = 1};
+    CC_CHECK(CcSimApply(&original, &guide, error, sizeof(error)));
     CcSimAdvanceRuntimeTicks(&original, 480);
     CC_CHECK(original.journey.phase == CC_JOURNEY_PHASE_TRAVELLING);
     CC_CHECK(original.carriage.progress_milli > 0);
@@ -4315,6 +4342,7 @@ int main(void)
     CC_CHECK(restored.journey.elapsed_subticks ==
              original.journey.elapsed_subticks);
     CC_CHECK(restored.journey.pace == CC_JOURNEY_PACE_PUSH);
+    CC_CHECK(restored.journey.road_line == 1);
     CC_CHECK(restored.clock.tick == original.clock.tick);
     CC_CHECK(restored.clock.minute_subticks ==
              original.clock.minute_subticks);

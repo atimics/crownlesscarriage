@@ -361,6 +361,9 @@ static bool EnsureJourneyColumns(sqlite3 *database,
             error, error_capacity) &&
         EnsureColumn(database, "runtime_state", "road_site_stop_mask",
             "ALTER TABLE runtime_state ADD COLUMN road_site_stop_mask INTEGER NOT NULL DEFAULT 0;",
+            error, error_capacity) &&
+        EnsureColumn(database, "player_road_position", "road_line",
+            "ALTER TABLE player_road_position ADD COLUMN road_line INTEGER NOT NULL DEFAULT 0;",
             error, error_capacity);
 }
 
@@ -1272,7 +1275,8 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " leg_elapsed_subticks INTEGER NOT NULL,"
         " leg_total_subticks INTEGER NOT NULL,"
         " geometry_length_units INTEGER NOT NULL,"
-        " compatibility_milli INTEGER NOT NULL, revision INTEGER NOT NULL);"
+        " compatibility_milli INTEGER NOT NULL, revision INTEGER NOT NULL,"
+        " road_line INTEGER NOT NULL DEFAULT 0);"
         "CREATE TABLE IF NOT EXISTS player_road_geometry ("
         " sample INTEGER PRIMARY KEY, x_units INTEGER NOT NULL,"
         " z_units INTEGER NOT NULL);"
@@ -3389,7 +3393,7 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
 
     if (sim->schema_version >= 105U) {
         if (!Prepare(database,
-                "INSERT INTO player_road_position VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+                "INSERT INTO player_road_position VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
                 &statement, error, error_capacity)) return false;
         int road_column = 1;
         BindInt(statement, road_column++,
@@ -3423,6 +3427,7 @@ static bool SaveJourneyState(sqlite3 *database, const CcSim *sim,
                 sim->journey.road_compatibility_milli);
         BindInt(statement, road_column++,
                 (int32_t)sim->journey.road_revision);
+        BindInt(statement, road_column++, sim->journey.road_line);
         result = StepDone(database, statement, error, error_capacity);
         sqlite3_finalize(statement);
         if (!result || !Prepare(database,
@@ -6366,6 +6371,21 @@ static bool ReadJourneyState(sqlite3 *database, CcSim *sim,
             return false;
         }
         sqlite3_finalize(statement);
+        if (sim->schema_version >= 124U) {
+            if (!Prepare(database,
+                    "SELECT road_line FROM player_road_position WHERE id=1;",
+                    &statement, error, error_capacity)) return false;
+            result = sqlite3_step(statement);
+            if (result == SQLITE_ROW)
+                sim->journey.road_line = sqlite3_column_int(statement, 0);
+            else if (result != SQLITE_DONE) {
+                SetSqlError(error, error_capacity, database,
+                            "Could not read saved road line");
+                sqlite3_finalize(statement);
+                return false;
+            }
+            sqlite3_finalize(statement);
+        }
         if (!Prepare(database,
                 "SELECT sample,x_units,z_units FROM player_road_geometry "
                 "ORDER BY sample;", &statement, error, error_capacity)) {

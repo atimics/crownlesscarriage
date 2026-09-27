@@ -948,6 +948,8 @@ uint64_t CcSimHash(const CcSim *sim)
             HASH_VALUE(sim->journey.road_geometry_length_units);
             HASH_VALUE(sim->journey.road_compatibility_milli);
             HASH_VALUE(sim->journey.road_revision);
+            if (sim->schema_version >= 124U)
+                HASH_VALUE(sim->journey.road_line);
             for (int32_t i = 0; i < 33; ++i) {
                 HASH_VALUE(sim->journey.road_geometry_x_units[i]);
                 HASH_VALUE(sim->journey.road_geometry_z_units[i]);

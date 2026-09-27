@@ -1312,13 +1312,12 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
             urge, rein_in, stopped, delta_time);
     }
 
-    float centering_step = delta_time * 1.30f;
-    if (fabsf(convoy->lateral_offset) <= centering_step) {
-        convoy->lateral_offset = 0.0f;
-    } else {
-        convoy->lateral_offset -= copysignf(
-            centering_step, convoy->lateral_offset);
-    }
+    float line_target = captain_pace && sim->journey.road_position_active ?
+        (float)sim->journey.road_line * 1.25f : 0.0f;
+    float line_step = delta_time * 2.4f;
+    float line_change = line_target - convoy->lateral_offset;
+    convoy->lateral_offset += fmaxf(-line_step,
+        fminf(line_step, line_change));
 
     if (convoy->phase == CC_LOCAL_CONVOY_DEPARTING) {
         CcClientDepartureAdvance(
@@ -2272,6 +2271,12 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
         point.z,
     };
+    if (physical) {
+        position.x += cosf(heading) * local->convoy.lateral_offset;
+        position.z -= sinf(heading) * local->convoy.lateral_offset;
+        position.y = CcWorldStreamHeightAt(&local->world_stream,
+                                           position.x, position.z);
+    }
     /* Wheel distance grows through reversals and side legs. */
     float travelled = physical && sim->journey.total_subticks > 0 ?
         (float)sim->journey.elapsed_subticks /
@@ -3478,6 +3483,14 @@ static const char *TravelForecastLine(const CcSim *sim)
     }
     const CcSettlement *to = CcSimSettlement(sim, sim->journey.destination_id);
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
+    if (sim->journey.road_position_active &&
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING) {
+        const char *line[] = {"LEFT", "CENTRE", "RIGHT"};
+        return TextFormat(
+            "SMOOTH TRACK %s / REINS %s / A X D",
+            line[CcJourneySmoothRoadLine(sim) + 1],
+            line[sim->journey.road_line + 1]);
+    }
     return TextFormat(
         "ROAD AHEAD  /  %s  %d WATCHES   %s",
         to != NULL ? to->name : "?", CcSimJourneyWatchCount(sim),
@@ -8269,12 +8282,23 @@ static int RunRoadCarriageTargetRegression(void)
         return ClientRegressionFailure("Mara's eight Bread delivery must load at Thornford.");
     }
     if (!CcSimApply(&sim, &listen, error, sizeof(error)) ||
-        !CcSimApply(&sim, &pledge, error, sizeof(error)) ||
-        sim.player.cargo[CC_GOOD_BREAD] != 8) {
+        !CcSimApply(&sim, &pledge, error, sizeof(error))) {
         (void)fprintf(stderr, "Mara delivery setup: %s / cargo %d\n", error,
                       sim.player.cargo[CC_GOOD_BREAD]);
         return ClientRegressionFailure("Mara's eight Bread delivery must load at Thornford.");
     }
+    for (int32_t crate = 0; crate < 8; ++crate) {
+        CcCommand lift = {.kind = CC_COMMAND_PICKUP_RELIEF_CRATE,
+                          .target_id = offer->id};
+        CcCommand stow = {.kind = CC_COMMAND_STOW_RELIEF_CRATE,
+                          .target_id = offer->id};
+        if (!CcSimApply(&sim, &lift, error, sizeof(error)) ||
+            !CcSimApply(&sim, &stow, error, sizeof(error))) {
+            return ClientRegressionFailure(error);
+        }
+    }
+    if (sim.player.cargo[CC_GOOD_BREAD] != 8)
+        return ClientRegressionFailure("The loaded Bread must be aboard.");
     CcCommand travel = {.kind = CC_COMMAND_TRAVEL, .target_id = destination->id};
     if (!CcSimApply(&sim, &travel, error, sizeof(error)) ||
         !InitializeOpenWorld(&sim, &local, false)) {
@@ -10164,6 +10188,44 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         (void)SaveClientWorld(*journal, sim, local, save_path, session_path,
                               save_feedback, save_feedback_capacity);
         return;
+    }
+
+    if (*view == VIEW_LOCAL && local->journey_travel_active &&
+        sim->journey.active && sim->journey.road_position_active &&
+        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+        (!local->open_world || local->world_carriage.hero_embarked) &&
+        sim->pony_company.encounter < 0) {
+        int32_t line = sim->journey.road_line;
+        bool guide = false;
+        if (ClientKeyPressed(KEY_A) ||
+            (local->adventure_ui && AdventureHit(AdventureReinBounds(-1)))) {
+            line = line > -1 ? line - 1 : -1;
+            guide = true;
+        } else if (ClientKeyPressed(KEY_X) ||
+                   (local->adventure_ui && AdventureHit(AdventureReinBounds(0)))) {
+            line = 0;
+            guide = true;
+        } else if (ClientKeyPressed(KEY_D) ||
+                   (local->adventure_ui && AdventureHit(AdventureReinBounds(1)))) {
+            line = line < 1 ? line + 1 : 1;
+            guide = true;
+        }
+        if (guide) {
+            if (line != sim->journey.road_line) {
+                CcCommand reins = {.kind = CC_COMMAND_SET_ROAD_LINE,
+                                    .amount = line};
+                if (ApplyCommand(*journal, sim, reins, message,
+                                 message_capacity)) {
+                    (void)snprintf(message, message_capacity,
+                        "Reins %s. Smooth track %s.",
+                        line < 0 ? "left" : line > 0 ? "right" : "centre",
+                        CcJourneySmoothRoadLine(sim) < 0 ? "left" :
+                        CcJourneySmoothRoadLine(sim) > 0 ? "right" :
+                        "centre");
+                }
+            }
+            return;
+        }
     }
 
     if (context_action == CONTEXT_ACTION_TRANSFER_ROAD_SITE) {
@@ -12340,7 +12402,10 @@ static void UpdatePlayAudio(CcSoundscape *soundscape, const CcSim *sim,
                 local->world_carriage.pace :
                 (travel || local->site_travel_active ||
                  local->convoy.phase == CC_LOCAL_CONVOY_DEPARTING ?
-                    local->convoy.pace : 0.0f)) : 0.0f
+                    local->convoy.pace : 0.0f)) : 0.0f,
+        .rough_road = travel && sim->journey.active &&
+            sim->journey.road_position_active &&
+            sim->journey.road_line != CcJourneySmoothRoadLine(sim)
     };
     for (int foot = 0; foot < CC_HUMANOID_LEG_COUNT; ++foot) {
         uint32_t contact = foot == 0 ? CC_MOTION_MARKER_LEFT_CONTACT :
@@ -13574,6 +13639,15 @@ int main(int argc, char **argv)
                 for (int32_t pace = CC_JOURNEY_PACE_CAREFUL; pace <= CC_JOURNEY_PACE_PUSH; ++pace)
                     AdventureButton(AdventurePaceBounds(pace), CcJourneyPaceName((CcJourneyPace)pace),
                         sim.pony_company.encounter < 0, pace == (int32_t)sim.journey.pace);
+                if (sim.journey.road_position_active &&
+                    sim.journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+                    (!local.open_world || local.world_carriage.hero_embarked)) {
+                    const char *rein_label[] = {"Left A", "Centre X", "Right D"};
+                    for (int32_t line = -1; line <= 1; ++line)
+                        AdventureButton(AdventureReinBounds(line),
+                            rein_label[line + 1], sim.pony_company.encounter < 0,
+                            line == sim.journey.road_line);
+                }
             }
         }
         if (normal_play && !menu_frame && CcAudioCurrentSpeech() != NULL) {
