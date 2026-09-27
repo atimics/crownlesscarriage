@@ -10484,6 +10484,10 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (*view == VIEW_CHARACTER) {
+        /* Let the local body settle and perform its greeting during dialogue. */
+        if (local->adventure_ui) {
+            CcLocalAgentUpdate(&local->agent, delta_time, local->market_interior);
+        }
         ContextActionSet replies=BuildContextActions(
             sim,local,VIEW_CHARACTER,*selected,*selected_situation);
         for (int32_t i=0;i<replies.count && i<9;++i)

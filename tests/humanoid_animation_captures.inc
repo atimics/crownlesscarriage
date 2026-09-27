@@ -34,13 +34,15 @@ static void CaptureHumanoidAnimation(const char *directory)
                 true, 1.0f / 60.0f, FlatSkinProbe, NULL);
             agent->position.x += agent->humanoid.root_velocity.x / 60.0f;
             agent->position.z += agent->humanoid.root_velocity.z / 60.0f;
+            CcLocalAgentPresentationStepInternal(agent);
             CcLocalAgentInterpolateInternal(agent, 1.0f);
         }
         if (tick % 4 != 0) continue;
         for (int32_t sample = 0; sample < 3; ++sample) {
             CcLocalAgent *agent = &agents[sample];
             CcHumanoidSkinPose skin;
-            CcHumanoidSkinPoseResolve(AgentRenderPose(agent), &skin);
+            CcHumanoidSkinPoseResolveGaze(AgentRenderPose(agent),
+                agent->render_head_yaw, agent->render_head_pitch, &skin);
             Camera3D camera = {
                 .position = {agent->position.x + 4.0f, 2.8f,
                              agent->position.z + 6.0f},

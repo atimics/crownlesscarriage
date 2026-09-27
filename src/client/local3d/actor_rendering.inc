@@ -1262,15 +1262,7 @@ static bool DrawDynamicNpcModules(const CcLocalAgent *agent,
     Vector3 body_forward = FromLimbVector(skin->body_forward);
     float movement_weight = agent->humanoid.ragdoll.active ? 0.0f :
         SmoothStep01(fabsf(agent->humanoid.speed.value) / 0.90f);
-    static const float stepped_wave[8] = {
-        0.0f, 0.70f, 1.0f, 0.70f, 0.0f, -0.70f, -1.0f, -0.70f,
-    };
-    float secondary_wave = 0.0f;
-    if (agent->stepped_pose.initialized &&
-        agent->stepped_pose.locomotion_bin >= 0 &&
-        agent->stepped_pose.locomotion_bin < 8) {
-        secondary_wave = stepped_wave[agent->stepped_pose.locomotion_bin];
-    }
+    float secondary_wave = sinf(agent->humanoid.phase * 2.0f * PI);
     Vector3 gear_up = PhysicsNormalizeOr(
         PhysicsAdd(body_up,
                    PhysicsAdd(PhysicsScale(body_right,
@@ -1652,7 +1644,8 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     const CcHumanoidGait *gait = &agent->humanoid;
     const CcHumanoidPose *pose = AgentRenderPose(agent);
     CcHumanoidSkinPose skin;
-    CcHumanoidSkinPoseResolve(pose, &skin);
+    CcHumanoidSkinPoseResolveGaze(pose, agent->render_head_yaw,
+                                  agent->render_head_pitch, &skin);
     if (!skin.valid) return;
     bool modular_hero = agent->crowned;
     CcNpcAppearance procedural_hero = ProceduralHeroAppearance(agent);
@@ -2034,9 +2027,9 @@ static void DrawCharacterContactEffects(const CcLocalAgent *agent)
                     agent->grounded && !agent->climbing &&
                     !agent->humanoid.ragdoll.active &&
                     agent->humanoid.speed.value > 0.16f &&
-                    agent->stepped_pose.initialized;
+                    agent->pose_history.snapshots_valid;
     if (!stepping) return;
-    int32_t bin = agent->stepped_pose.locomotion_bin;
+    int32_t bin = (int32_t)floorf(agent->humanoid.phase * 8.0f) & 7;
     if (bin != 0 && bin != 4) return;
     int32_t leg = bin == 0 ? 0 : 1;
     const CcHumanoidPose *pose = AgentRenderPose(agent);
@@ -4808,7 +4801,8 @@ void CcLocalDrawAvatarPreview3D(const CcLocalAgent *agent,
 {
     Vector3 center = Vector3Add(agent->position, (Vector3){0.0f, 0.85f, 0.0f});
     CcHumanoidSkinPose skin;
-    CcHumanoidSkinPoseResolve(AgentRenderPose(agent), &skin);
+    CcHumanoidSkinPoseResolveGaze(AgentRenderPose(agent), agent->render_head_yaw,
+                                  agent->render_head_pitch, &skin);
     Vector3 forward = skin.valid ? FromLimbVector(skin.bones[CC_HUMANOID_SKIN_HEAD].forward) :
         (Vector3){sinf(agent->facing_yaw), 0.0f, cosf(agent->facing_yaw)};
     Vector3 right = Vector3CrossProduct((Vector3){0, 1, 0}, forward);
@@ -4848,7 +4842,8 @@ void CcLocalDrawAgentPortrait3D(const CcLocalAgent *agent,
         !IsRenderTextureValid(npc_portrait_target)) return;
     const CcHumanoidPose *pose = AgentRenderPose(agent);
     CcHumanoidSkinPose skin;
-    CcHumanoidSkinPoseResolve(pose, &skin);
+    CcHumanoidSkinPoseResolveGaze(pose, agent->render_head_yaw,
+                                  agent->render_head_pitch, &skin);
     if (!skin.valid) return;
 
     const CcHumanoidSkinBonePose *head_bone =

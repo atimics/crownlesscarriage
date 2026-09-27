@@ -407,6 +407,8 @@ static void AdventureActivate(CcSim *sim, LocalState *local, const CcInteraction
             local->conversation_character_id = target->character_id;
             local->conversation_situation_id = target->situation_id;
             local->conversation_position = (Vector3){target->x, target->y, target->z};
+            CcLocalAgentAttend(&local->agent,
+                (Vector3){target->x, target->y + 1.55f, target->z}, 5.0f, true);
             (void)snprintf(local->conversation_name, sizeof(local->conversation_name), "%s", target->name);
             (void)snprintf(local->conversation_line, sizeof(local->conversation_line),
                 "Welcome. I was passing the %s. How was your journey?",

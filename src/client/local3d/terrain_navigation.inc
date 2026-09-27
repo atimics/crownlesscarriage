@@ -2695,7 +2695,10 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
         ApplyAgentWalkingProfile(agent);
         agent->support_state = agent->humanoid.support_state;
         agent->render_pose = agent->humanoid.pose;
-        agent->stepped_pose = (CcSteppedPoseState){0};
+        agent->pose_history = (CcCharacterPoseState){0};
+        agent->performance = (CcCharacterPerformance){0};
+        agent->render_head_yaw = 0.0f;
+        agent->render_head_pitch = 0.0f;
         agent->render_pose_valid = true;
         agent->simulation_accumulator = 0.0f;
         agent->cape = (CcLocalCapeState){0};
@@ -2705,7 +2708,10 @@ void CcLocalAgentSetMorphology(CcLocalAgent *agent, CcMorphologyPreset preset,
     } else {
         agent->humanoid = (CcHumanoidGait){0};
         agent->render_pose = (CcHumanoidPose){0};
-        agent->stepped_pose = (CcSteppedPoseState){0};
+        agent->pose_history = (CcCharacterPoseState){0};
+        agent->performance = (CcCharacterPerformance){0};
+        agent->render_head_yaw = 0.0f;
+        agent->render_head_pitch = 0.0f;
         agent->render_pose_valid = false;
         agent->simulation_accumulator = 0.0f;
         agent->cape = (CcLocalCapeState){0};

@@ -247,8 +247,8 @@ const char *CcHumanoidSkinSocketName(CcHumanoidSkinSocket socket)
     return SOCKET_NAMES[socket];
 }
 
-void CcHumanoidSkinPoseResolve(const CcHumanoidPose *source,
-                               CcHumanoidSkinPose *result)
+void CcHumanoidSkinPoseResolveGaze(const CcHumanoidPose *source,
+    float head_yaw, float head_pitch, CcHumanoidSkinPose *result)
 {
     if (result == NULL) return;
     (void)memset(result, 0, sizeof(*result));
@@ -281,14 +281,22 @@ void CcHumanoidSkinPoseResolve(const CcHumanoidPose *source,
                 source->chest, result->body_forward, false);
     ResolveBone(result, CC_HUMANOID_SKIN_CHEST, source->chest,
                 source->neck, result->body_forward, false);
+    CcLimbVec3 gaze_forward = Add(
+        Scale(result->body_forward, cosf(head_yaw)),
+        Scale(result->body_right, sinf(head_yaw)));
     ResolveBone(result, CC_HUMANOID_SKIN_NECK, source->neck,
-                source->head, result->body_forward, false);
+                source->head, gaze_forward, false);
     CcLimbVec3 head_direction = NormalizeOr(Subtract(source->head,
                                                      source->neck),
                                              result->body_up);
+    gaze_forward = NormalizeOr(Subtract(gaze_forward,
+        Scale(head_direction, Dot(gaze_forward, head_direction))), result->body_forward);
+    CcLimbVec3 head_up = Add(Scale(head_direction, cosf(head_pitch)),
+                             Scale(gaze_forward, sinf(head_pitch)));
+    CcLimbVec3 head_forward = Add(Scale(gaze_forward, cosf(head_pitch)),
+                                  Scale(head_direction, -sinf(head_pitch)));
     ResolveBone(result, CC_HUMANOID_SKIN_HEAD, source->head,
-                Add(source->head, Scale(head_direction, 0.18f)),
-                result->body_forward, false);
+                Add(source->head, Scale(head_up, 0.18f)), head_forward, false);
 
     const CcHumanoidSkinBone upper_bones[] = {
         CC_HUMANOID_SKIN_UPPER_ARM_LEFT,
@@ -379,4 +387,10 @@ void CcHumanoidSkinPoseResolve(const CcHumanoidPose *source,
                   CC_HUMANOID_SKIN_FOOT_RIGHT,
                   Midpoint(source->heel[1], source->toe[1]));
     result->valid = true;
+}
+
+void CcHumanoidSkinPoseResolve(const CcHumanoidPose *source,
+                               CcHumanoidSkinPose *result)
+{
+    CcHumanoidSkinPoseResolveGaze(source, 0.0f, 0.0f, result);
 }

@@ -1277,6 +1277,20 @@ static int RunAdventureInputRegression(void)
     UX_CHECK(!LocalCombatActive(&local), "Fixture needs a distant alarm.");
     UX_KEY(KEY_F);
     UX_CHECK(view == VIEW_CHARACTER, "A distant alarm must allow the offered conversation.");
+    uint64_t greeting_world = CcSimHash(&sim);
+    float greeting_peak = 0.0f;
+    for (int32_t frame = 0; frame < 90; ++frame) {
+        HandleInput(&journal, &sim, &selected, &selected_situation, &view, &return_view,
+            &local, (RenderTexture2D){0}, (Rectangle){0}, 1.0f / 60.0f, path, "",
+            message, sizeof(message), feedback, sizeof(feedback), &feedback_age);
+        ClientInputClearPressed();
+        greeting_peak = fmaxf(greeting_peak, local.agent.performance.nod.value);
+    }
+    UX_CHECK(view == VIEW_CHARACTER && greeting_peak > 0.15f &&
+        fabsf(local.agent.performance.nod.value) < 0.001f,
+        "The greeting must play and settle while the conversation stays open.");
+    UX_CHECK(CcSimHash(&sim) == greeting_world,
+        "The greeting must preserve the saved world state.");
     UX_KEY(KEY_B);
     UX_CHECK(view == VIEW_LEDGER, "Book must open from conversation.");
     UX_KEY(KEY_ESCAPE);

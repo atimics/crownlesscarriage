@@ -307,12 +307,29 @@ typedef struct CcLocalCapeState {
     bool initialized;
 } CcLocalCapeState;
 
-typedef struct CcSteppedPoseState {
-    CcHumanoidPose from_local;
-    CcHumanoidPose target_local;
-    int32_t locomotion_bin;
-    bool initialized;
-} CcSteppedPoseState;
+typedef struct CcCharacterPoseState {
+    CcHumanoidPose previous_pose;
+    CcHumanoidPose pose;
+    float previous_head_yaw;
+    float previous_head_pitch;
+    float head_yaw;
+    float head_pitch;
+    uint64_t sequence;
+    CcHumanoidAction action;
+    bool snapshots_valid;
+} CcCharacterPoseState;
+
+typedef struct CcCharacterPerformance {
+    CcHumanoidSpring gaze_yaw;
+    CcHumanoidSpring gaze_pitch;
+    CcHumanoidSpring chest_yaw;
+    CcHumanoidSpring lean;
+    CcHumanoidSpring nod;
+    Vector3 attention_point;
+    float attention_seconds;
+    float greeting_time;
+    bool greeting_active;
+} CcCharacterPerformance;
 
 #include "client/cc_crew.h"
 void CcLocalCrewSetExchange(CcCrewExchange exchange);
@@ -362,7 +379,10 @@ typedef struct CcLocalAgent {
     CcRobotClimbRoute climb_route;
     CcHumanoidGait humanoid;
     CcHumanoidPose render_pose;
-    CcSteppedPoseState stepped_pose;
+    float render_head_yaw;
+    float render_head_pitch;
+    CcCharacterPoseState pose_history;
+    CcCharacterPerformance performance;
     CcLocalCapeState cape;
     CcLocalCapeState previous_cape;
     CcLocalCapeState render_cape;
@@ -523,6 +543,9 @@ void CcLocalAgentInit(CcLocalAgent *agent, Vector2 position, bool market_interio
 void CcLocalAgentSetNpcAppearance(CcLocalAgent *agent, uint32_t seed,
                                   CcNpcRole role, Color accent);
 void CcLocalAgentUpdate(CcLocalAgent *agent, float delta_time, bool market_interior);
+/* The attention point is at eye height; greeting adds one small nod. */
+void CcLocalAgentAttend(CcLocalAgent *agent, Vector3 point, float seconds,
+                        bool greeting);
 bool CcLocalAgentSetExactTarget(CcLocalAgent *agent, Vector3 target,
                                 bool market_interior);
 bool CcLocalAgentSetStreetTarget(CcLocalAgent *agent, Vector3 target);
