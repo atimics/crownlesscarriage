@@ -32,6 +32,16 @@ static int RunRoadTravelInputRegression(const char *capture_directory)
     uint64_t waiting_hash = 0;
     bool saw_wait = false;
     for (int f = 0; f < 480; ++f) {
+        if (f == 5) queued_key_press[KEY_D] = true;
+        if (f == 10) queued_key_press[KEY_A] = true;
+        if (f == 15) {
+            Rectangle b = AdventureReinBounds(1);
+            client_test_pointer = (Vector2){b.x + b.width / 2,
+                                            b.y + b.height / 2};
+            client_test_pointer_active = true;
+            queued_mouse_button_press[MOUSE_BUTTON_LEFT] = true;
+        }
+        if (f == 20) queued_key_press[KEY_X] = true;
         if (f == 30) queued_key_press[KEY_SPACE] = true;
         if (f == 120) {
             ContextActionSet actions = BuildContextActions(&sim, &local, view, selected, situation);
@@ -85,6 +95,10 @@ static int RunRoadTravelInputRegression(const char *capture_directory)
             save_feedback, sizeof(save_feedback), &save_age);
         ClientInputClearPressed();
         client_test_pointer_active = false;
+        if ((f == 5 || f == 15) && sim.journey.road_line != 1)
+            return ClientRegressionFailure("The right rein must guide the saved road line.");
+        if ((f == 10 || f == 20) && sim.journey.road_line != 0)
+            return ClientRegressionFailure("The left and centre reins must guide the saved road line.");
         if (f == 30) {
             if (!local.carriage_stopped) return ClientRegressionFailure("Space must stop on key press, not release.");
             stopped_hash = CcSimHash(&sim);

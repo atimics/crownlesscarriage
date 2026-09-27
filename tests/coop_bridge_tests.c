@@ -67,6 +67,8 @@ static void CheckCurrentSharedCommandNames(void)
                     "pickup_relief_crate")==0);
     CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_STOW_RELIEF_CRATE),
                     "stow_relief_crate")==0);
+    CC_CHECK(strcmp(CcCoopActionName(CC_COMMAND_SET_ROAD_LINE),
+                    "road_line")==0);
     CC_CHECK(CcCoopActionName(CC_COMMAND_COUNT)[0]=='\0');
     for (int32_t kind=1;kind<(int32_t)CC_COMMAND_COUNT;++kind) {
         const char *name=CcCoopActionName((CcCommandKind)kind);
@@ -216,6 +218,12 @@ static void CheckSharedDepartureAndRoadStop(void)
     host->player.coins = 0;
     CC_CHECK(CcCoopApply(host, "travel", host->settlements[1].id, 0, 0, error, sizeof(error)));
     CC_CHECK(host->journey.active && host->player.coins == 0);
+    CC_CHECK(CcCoopApply(host, "road_line", 0U, 0, 1, error, sizeof(error)));
+    CC_CHECK(host->journey.road_line == 1);
+    char snapshot[CC_COOP_JSON_CAPACITY];
+    CC_CHECK(CcCoopSnapshot(host, snapshot, sizeof(snapshot)));
+    CC_CHECK(strstr(snapshot, "\"line\":1") != NULL);
+    CC_CHECK(strstr(snapshot, "\"smooth_line\":") != NULL);
     host->journey.ambush_pending = false;
     host->journey.encounter_triggered = true;
     const CcRoadSite *site = NULL;

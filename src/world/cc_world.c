@@ -263,6 +263,60 @@ bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
     return true;
 }
 
+/* The saved road coordinate owns travel placement. Elapsed journey time also
+   includes reversals and side legs, so it cannot locate the carriage. */
+bool CcWorldJourneyRoadPose(const CcWorldManifest *manifest, const CcSim *sim,
+                            float coordinate_units, CcWorldPoint *position,
+                            float *heading_yaw, float *route_amount)
+{
+    if (manifest == NULL || sim == NULL || position == NULL ||
+        heading_yaw == NULL || route_amount == NULL ||
+        !sim->journey.road_position_active ||
+        sim->journey.road_geometry_length_units <= 0) return false;
+    const CcWorldRoutePlacement *route = CcWorldRoutePlacementForId(
+        manifest, sim->journey.route_id);
+    CcPilotRoadTopology pilot;
+    if (route == NULL || !CcPilotRoadTopologyBuildWithLength(
+            sim, sim->journey.road_geometry_length_units, &pilot)) return false;
+
+    if (sim->journey.road_segment_id == pilot.mill_segment_id) {
+        const CcWorldRoadSitePlacement *site =
+            CcWorldRoadSitePlacementForId(manifest, pilot.mill_site_id);
+        if (site == NULL || pilot.mill_spur_length_units <= 0) return false;
+        float first = PointDistance(site->junction, site->bend);
+        float second = PointDistance(site->bend, site->destination);
+        float length = first + second;
+        if (length <= 0.0001f) return false;
+        float along = ClampUnit(coordinate_units /
+            (float)pilot.mill_spur_length_units) * length;
+        CcWorldPoint start = along <= first ? site->junction : site->bend;
+        CcWorldPoint end = along <= first ? site->bend : site->destination;
+        float part = along <= first ? along / fmaxf(first, 0.0001f) :
+            (along - first) / fmaxf(second, 0.0001f);
+        *position = (CcWorldPoint){
+            start.x + (end.x - start.x) * part,
+            start.z + (end.z - start.z) * part};
+        float sign = sim->journey.road_direction == CC_ROAD_DIRECTION_REVERSE ?
+            -1.0f : 1.0f;
+        *heading_yaw = atan2f((end.x - start.x) * sign,
+                              (end.z - start.z) * sign);
+        *route_amount = CcWorldRouteJourneyAmount(route, route->from_id,
+            (float)pilot.origin_to_junction_units /
+                (float)pilot.main_length_units);
+        return true;
+    }
+
+    float progress = ClampUnit(coordinate_units /
+        (float)pilot.main_length_units);
+    *route_amount = CcWorldRouteJourneyAmount(
+        route, route->from_id, progress);
+    bool reverse = sim->journey.road_direction == CC_ROAD_DIRECTION_REVERSE;
+    return CcWorldRoutePose(route,
+        reverse ? route->to_id : route->from_id,
+        reverse ? 1.0f - *route_amount : *route_amount,
+        position, heading_yaw);
+}
+
 const CcWorldSettlementPlacement *CcWorldSettlementPlacementForId(
     const CcWorldManifest *manifest, CcId settlement_id)
 {

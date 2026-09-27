@@ -1,5 +1,6 @@
 #include "sim/cc_sim.h"
 #include "sim/cc_road_position.h"
+#include "sim/cc_journey_internal.h"
 #include "persistence/cc_save.h"
 
 #include "test_support.h"
@@ -582,8 +583,39 @@ static void CheckBorderOfficeSuccession(void)
     CC_CHECK(strstr(error, "ruler home allegiance") != NULL);
 }
 
+static void CheckGuidedReins(void)
+{
+    static CcSim smooth;
+    static CcSim rough;
+    char error[256];
+    CcSimInit(&smooth, UINT32_C(0x351e));
+    CcSimInit(&rough, UINT32_C(0x351e));
+    CcCommand travel = {.kind = CC_COMMAND_TRAVEL,
+                        .target_id = smooth.settlements[1].id};
+    CC_CHECK(CcSimApply(&smooth, &travel, error, sizeof(error)));
+    CC_CHECK(CcSimApply(&rough, &travel, error, sizeof(error)));
+    CC_CHECK(smooth.journey.road_position_active);
+    int32_t safe = CcJourneySmoothRoadLine(&smooth);
+    CcCommand reins = {.kind = CC_COMMAND_SET_ROAD_LINE, .amount = safe};
+    CC_CHECK(CcSimApply(&smooth, &reins, error, sizeof(error)));
+    reins.amount = safe == 1 ? -1 : safe + 1;
+    CC_CHECK(CcSimApply(&rough, &reins, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&smooth) != CcSimHash(&rough));
+    reins.amount = 2;
+    uint64_t hash = CcSimHash(&rough);
+    CC_CHECK(!CcSimApply(&rough, &reins, error, sizeof(error)));
+    CC_CHECK(CcSimHash(&rough) == hash);
+    CcJourneyApplyWatchStrain(&smooth);
+    CcJourneyApplyWatchStrain(&rough);
+    CC_CHECK(smooth.carriage.condition > rough.carriage.condition);
+    CC_CHECK(smooth.horse_team[0].fatigue < rough.horse_team[0].fatigue);
+    CC_CHECK(CcSimValidate(&smooth, error, sizeof(error)));
+    CC_CHECK(CcSimValidate(&rough, error, sizeof(error)));
+}
+
 int main(void)
 {
+    CheckGuidedReins();
     CheckBorderOfficeSuccession();
     static CcSim first;
     static CcSim second;

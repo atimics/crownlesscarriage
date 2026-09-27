@@ -20328,6 +20328,7 @@ static bool ApplySimCommand(CcSim *sim, const CcCommand *command,
         case CC_COMMAND_CLEAR_ROAD_SITE:
             return ApplyClearRoadSite(sim, command, error, error_capacity);
         case CC_COMMAND_SET_JOURNEY_PACE:
+        case CC_COMMAND_SET_ROAD_LINE:
         case CC_COMMAND_TAKE_JOURNEY_BREAK:
         case CC_COMMAND_PRESS_ON:
         case CC_COMMAND_MAKE_CAMP:
@@ -22767,6 +22768,9 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
                 sim->journey.fare_reserved < 0 ||
                 sim->journey.pace < CC_JOURNEY_PACE_CAREFUL ||
                 sim->journey.pace > CC_JOURNEY_PACE_PUSH ||
+                (sim->schema_version >= 124U &&
+                 (sim->journey.road_line < -1 ||
+                  sim->journey.road_line > 1)) ||
                 (sim->journey.ambush_warned &&
                  !sim->journey.ambush_pending &&
                  !sim->journey.ambush_resolved) ||

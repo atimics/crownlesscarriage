@@ -47,6 +47,37 @@ static bool ApplyJourneyPace(CcSim *sim, const CcCommand *command,
     return true;
 }
 
+int32_t CcJourneySmoothRoadLine(const CcSim *sim)
+{
+    if (sim == NULL || !sim->journey.active) return 0;
+    int32_t watch = sim->journey.elapsed_subticks <= 0 ? 1 :
+        (sim->journey.elapsed_subticks + CC_WORLD_WATCH_SUBTICKS - 1) /
+            CC_WORLD_WATCH_SUBTICKS;
+    uint32_t pattern = sim->world_seed ^ (uint32_t)sim->journey.route_id ^
+        (uint32_t)watch * UINT32_C(0x9e3779b9);
+    pattern ^= pattern >> 16;
+    return (int32_t)(pattern % 3U) - 1;
+}
+
+static bool ApplyRoadLine(CcSim *sim, const CcCommand *command,
+                          char *error, size_t error_capacity)
+{
+    if (sim == NULL || command == NULL || !sim->journey.active ||
+        sim->journey.phase != CC_JOURNEY_PHASE_TRAVELLING ||
+        !sim->journey.road_position_active || sim->schema_version < 124U) {
+        SetError(error, error_capacity,
+                 "Guide the reins while the carriage is moving.");
+        return false;
+    }
+    if (command->amount < -1 || command->amount > 1) {
+        SetError(error, error_capacity, "Road line is invalid.");
+        return false;
+    }
+    sim->journey.road_line = command->amount;
+    SetError(error, error_capacity, "");
+    return true;
+}
+
 void CcJourneyApplyWatchStrain(CcSim *sim)
 {
     const CcRoute *route = CcSimRoute(sim, sim->journey.route_id);
@@ -62,6 +93,17 @@ void CcJourneyApplyWatchStrain(CcSim *sim)
     int32_t pace_wear =
         sim->journey.pace == CC_JOURNEY_PACE_PUSH ? 2 :
         sim->journey.pace == CC_JOURNEY_PACE_STEADY ? 1 : 0;
+    int32_t line_strain = 0;
+    if (sim->schema_version >= 124U &&
+        sim->journey.road_position_active &&
+        sim->journey.pace != CC_JOURNEY_PACE_CAREFUL) {
+        if (sim->journey.road_line == CcJourneySmoothRoadLine(sim)) {
+            pace_wear = MaximumI32(0, pace_wear - 1);
+        } else {
+            pace_wear += 1;
+            line_strain = 1;
+        }
+    }
     sim->carriage.condition = ClampI32(
         sim->carriage.condition - road_wear - pace_wear, 0, 100);
     for (int32_t i = 0; i < CcSimHorseTeamCount(sim); ++i) {
@@ -69,7 +111,8 @@ void CcJourneyApplyWatchStrain(CcSim *sim)
         int32_t strength_strain = sim->schema_version >= 15U ?
             cargo_strain * MaximumI32(50, 150 - horse->strength) / 100 :
             cargo_strain;
-        int32_t strain = 4 + strength_strain + road_strain + pace_strain -
+        int32_t strain = 4 + strength_strain + road_strain + pace_strain +
+            line_strain -
             horse->hardiness / 35;
         horse->fatigue = ClampI32(
             horse->fatigue + MaximumI32(1, strain), 0, 100);
@@ -294,6 +337,8 @@ bool CcJourneyApplyCommand(CcSim *sim, const CcCommand *command,
     switch (command->kind) {
         case CC_COMMAND_SET_JOURNEY_PACE:
             return ApplyJourneyPace(sim, command, error, error_capacity);
+        case CC_COMMAND_SET_ROAD_LINE:
+            return ApplyRoadLine(sim, command, error, error_capacity);
         case CC_COMMAND_TAKE_JOURNEY_BREAK:
         case CC_COMMAND_PRESS_ON:
         case CC_COMMAND_MAKE_CAMP:

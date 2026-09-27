@@ -398,6 +398,10 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     if (follow_ground) {
         CarriageChassisTilt(base, yaw, pace, clock, scene, bridge_checkpoint,
                             vehicle_scale, &chassis_pitch, &chassis_sway);
+        if (sim->journey.active && sim->journey.road_position_active &&
+            sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+            sim->journey.road_line != CcJourneySmoothRoadLine(sim))
+            chassis_sway += sinf(clock * 8.0f) * pace * 0.55f;
         rlPushMatrix();
         rlTranslatef(base.x, base.y, base.z);
         rlRotatef(chassis_pitch * RAD2DEG, cosf(yaw), 0.0f, -sinf(yaw));

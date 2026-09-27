@@ -30,6 +30,7 @@ typedef enum CcSoundCue {
 typedef struct CcSoundFrame {
     float x, z;
     float travel_pace;
+    bool rough_road;
     float strike_time;
     float impact_time;
     uint64_t place;

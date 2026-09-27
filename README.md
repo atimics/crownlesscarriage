@@ -58,6 +58,10 @@ Read the current action labels for the choices available at your location.
 - Choosing a destination starts road travel. Space uses the displayed **Stop**
   or **Travel** action. Open **Road options** while stopped to camp, step down,
   or turn back. At a landmark, choose **Travel on** or the named side road.
+- While travelling, use **W/S** to change pace and **A/D** to guide one road
+  line left or right. **X** centres the reins. The three rein buttons support
+  touch. The road banner shows the smoother line for the current watch. At
+  steady and push pace, that line eases wheel wear and horse strain.
 - Underground, click visible floor to walk. W/S move forward/back; A/D turn.
   F (or E) uses a nearby mine object. Looking and turning keep the campaign position.
 - B opens the Company Book; M opens the map; F5 saves; Escape opens the menu.
