@@ -386,6 +386,47 @@ static void TestSoftFootfalls(void)
             "the swing should ease into takeoff and ground contact");
 }
 
+static void TestWalkArmFollowThrough(void)
+{
+    float arm_range[2] = {0};
+    for (int32_t pace = 0; pace < 2; ++pace) {
+        CcHumanoidGait gait;
+        CcLimbVec3 body = {0};
+        CcHumanoidGaitInit(&gait, body, 0.0f, PlaneProbe, NULL);
+        float minimum = 10.0f;
+        float maximum = -10.0f;
+        float peak_flex = 0.0f;
+        float speed = pace == 0 ? 0.35f : 1.3f;
+        for (int32_t tick = 0; tick < 960; ++tick) {
+            CcHumanoidGaitAdvance(&gait, body, 0.0f,
+                (CcLimbVec3){0.0f, 0.0f, speed}, true, 1.0f / 120.0f,
+                PlaneProbe, NULL);
+            body.x += gait.root_velocity.x / 120.0f;
+            body.z += gait.root_velocity.z / 120.0f;
+            if (tick < 240) continue;
+            float shoulder = CcBiomechRigJointAngle(&gait.body,
+                CC_HUMANOID_LEFT_SHOULDER);
+            float elbow = CcBiomechRigJointAngle(&gait.body,
+                CC_HUMANOID_LEFT_ELBOW);
+            minimum = fminf(minimum, shoulder);
+            maximum = fmaxf(maximum, shoulder);
+            peak_flex = fmaxf(peak_flex, elbow);
+            Require(fabsf(Distance(gait.pose.shoulder[0], gait.pose.elbow[0]) -
+                            0.34f) < 0.0001f &&
+                    fabsf(Distance(gait.pose.elbow[0], gait.pose.hand[0]) -
+                            0.35f) < 0.0001f,
+                    "walking arms must preserve their bone lengths");
+        }
+        arm_range[pace] = maximum - minimum;
+        Require(peak_flex > 0.28f && peak_flex < 0.50f,
+                "walking forearms need a bounded follow-through");
+    }
+    Require(arm_range[1] > arm_range[0] * 1.25f,
+            "brisk steps must use a wider arm swing than slow steps");
+    (void)printf("arm swing range: slow %.4f, brisk %.4f radians\n",
+                 arm_range[0], arm_range[1]);
+}
+
 int main(void)
 {
     TestMotionTimeline();
@@ -394,6 +435,7 @@ int main(void)
     TestStableIdleAndSnapshots();
     TestPoseOwnership();
     TestFootTurns();
+    TestWalkArmFollowThrough();
     TestSoftFootfalls();
     (void)printf("motion system tests passed\n");
     return 0;
