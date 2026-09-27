@@ -1,7 +1,6 @@
 #include "sim/cc_wants.h"
 #include "sim/cc_scriven.h"
 #include "sim/cc_mine.h"
-#include "sim/cc_road_council.h"
 #include "sim/cc_road_position.h"
 #include "sim/cc_journey_internal.h"
 #include "metagame/cc_metagame.h"
@@ -1709,7 +1708,7 @@ static void DescribeHelp(char *output, size_t capacity)
            "Personal requests:\n  wants, want NUMBER (choose an offered item action)\n"
            "Calendar and tomes:\n  calendar, tomes, scribe read|borrow|return|copy|observe NUMBER\n  scribe hearing|deliver|sky|wait|commission\n"
            "See the world:\n"
-           "  look, people, talk NUMBER, rumors, charters, roads, council\n"
+           "  look, people, talk NUMBER, rumors, charters, roads\n"
            "  causes, notes, cargo, animals, economy, treasures, inequality, kingdoms, war, dragon, goblins, archives, status, history [COUNT]\n"
            "  relics — named artifacts of world-historical deeds\n"
            "  mark — compare this campaign against a no-action control of the same seed\n"
@@ -2450,20 +2449,6 @@ bool CcMetagameExecute(CcMetagame *metagame, const char *line,
         };
         if (!ApplyCommand(metagame, &action, output, output_capacity)) return false;
         if (!FinishTravel(metagame, output, output_capacity)) return false;
-    } else if (strcmp(command, "council") == 0) {
-        CcRoadCouncil council = CcSimRoadCouncil(&metagame->sim, metagame->sim.player.location_id);
-        Append(output, output_capacity, "Road meeting: current needs and public commissions.\n");
-        for (int i = 0; i < CC_ROAD_COUNCIL_ROWS; ++i) {
-            const CcRoadCouncilRow *row = &council.rows[i];
-            Append(output, output_capacity, "%s: %s\n", row->name, row->detail);
-            if (row->situation_id != 0U) {
-                const CcSituation *quest = CcSimSituation(&metagame->sim, row->situation_id);
-                if (quest != NULL) Append(output, output_capacity, "  Public work: %s; reward %d; deadline day %d. See charters.\n",
-                    CcSituationKindName(quest->kind), (int)quest->reward, quest->deadline_day);
-            }
-        }
-        Append(output, output_capacity, "Choices: grain fund; bakery support; repair NUMBER tools|cash; charters; wait DAYS.\n");
-        return true;
     } else if (strcmp(command, "grain") == 0) {
         CcId town = metagame->sim.player.location_id;
         if (first != NULL && (strcmp(first, "fund") == 0 || strcmp(first, "end") == 0)) {
@@ -2892,7 +2877,7 @@ static void DescribeAgentActions(const CcMetagame *metagame,
     }
     Append(output, capacity,
            "Send exactly one command on the next line. Available command families:\n"
-           "  look, people, talk NUMBER, rumors, charters, roads, council, causes, notes, cargo, status\n"
+           "  look, people, talk NUMBER, rumors, charters, roads, causes, notes, cargo, status\n"
            "  tell NUMBER, keep NUMBER, accept NUMBER, refuse NUMBER, abandon\n"
            "  relief pickup|stow, wants, want NUMBER\n"
            "  buy GOOD COUNT, sell GOOD COUNT, buy-map NUMBER, sell-map NUMBER\n"

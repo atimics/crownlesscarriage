@@ -1019,8 +1019,9 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             CcCommand inspect = {.kind = CC_COMMAND_OBSERVE_OVEN_COURT, .target_id = town->id};
             if (!CcSimApply(sim, &inspect, error, sizeof(error)) || !CcOvenCourtRead(sim, &local->oven_observation)) return false;
             local->oven_note_event = CcOvenCourtNote(sim, 0)->id;
-            local->oven_page = request->capture_ux_view == 30 ? 1 : 0;
-            *scene->view = VIEW_OVEN_COURT;
+            local->book_page = 3;
+            local->book_offset = 0;
+            *scene->view = VIEW_LEDGER;
         }
         if (request->capture_ux_view == 29) {
             /* A later supply change does not edit the acquired note. */
@@ -1136,13 +1137,10 @@ static bool CcCapturePrepareUX(const CcCaptureRequest *request, CcCaptureScene *
             scene->local->trade_mode = 4;
         }
         if (request->capture_ux_view == 20) {
-            scene->sim->player.location_id = scene->sim->settlements[1].id;
-            scene->sim->carriage.location_id = scene->sim->player.location_id;
-            (*scene->view) = VIEW_TRADE;
-            scene->local->trade_mode = 5;
-            scene->local->trade_good = (CcGood)1;
+            (*scene->view) = VIEW_LEDGER;
+            scene->local->book_page = 0;
         }
-        if (request->capture_ux_view >= 15 && request->capture_ux_view <= 20) {
+        if (request->capture_ux_view >= 15 && request->capture_ux_view <= 19) {
             const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(
                 CcSimSettlement(scene->sim, scene->sim->player.location_id));
             scene->local->market_interior = true;

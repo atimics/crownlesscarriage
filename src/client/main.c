@@ -120,8 +120,7 @@ typedef enum ClientView {
     VIEW_DUNGEON,
     VIEW_DRAGON_CAVE,
     VIEW_TRADE,
-    VIEW_PAUSE,
-    VIEW_OVEN_COURT
+    VIEW_PAUSE
 } ClientView;
 
 typedef enum CarriageTab {
@@ -316,7 +315,6 @@ typedef struct LocalState {
     CcId conversation_oven_event;
     CcOvenCourtObservation oven_observation;
     CcId oven_note_event;
-    int32_t oven_page;
     int32_t conversation_gossip_slot;
     bool conversation_gossip_source;
     Vector3 conversation_position;
@@ -4718,7 +4716,7 @@ static ContextActionSet BuildContextActions(
     /* The gate voice holds the input until it ends, and ENTER means
        "Thank you" there: offer nothing else meanwhile. */
     if (view == VIEW_LOCAL && local->gate_voice_open) return set;
-    if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER || view == VIEW_OVEN_COURT)) return set;
+    if (local->adventure_ui && (view == VIEW_TRADE || view == VIEW_PAUSE || view == VIEW_LEDGER)) return set;
     int32_t pony = CcPonyOnRoad(sim);
     if (view == VIEW_LOCAL && pony >= 0 && !LocalCombatActive(local)) {
         if (sim->pony_company.encounter < 0) {
@@ -5155,7 +5153,7 @@ static ContextActionSet BuildContextActions(
             &set, CONTEXT_ACTION_OPEN_MAP, "Open map case", "M",
             "CHARTS AND ROAD NOTES", true, false);
         AddDetailedContextAction(
-            &set, CONTEXT_ACTION_OPEN_PROMISES, "Review quest papers", "Q",
+            &set, CONTEXT_ACTION_OPEN_PROMISES, "Review work", "Q",
             "ACTIVE LOAD AND COMMITMENTS", true, false);
         AddDetailedContextAction(
             &set, CONTEXT_ACTION_CLOSE_VIEW, "Step away", "BKSP",
@@ -6334,7 +6332,7 @@ static Rectangle CommandActionBounds(CommandActionKind action)
 static const char *CommandActionLabel(CommandActionKind action)
 {
     switch (action) {
-        case COMMAND_ACTION_QUESTS: return "Quests";
+        case COMMAND_ACTION_QUESTS: return "Work";
         case COMMAND_ACTION_LEDGER: return "Book";
         case COMMAND_ACTION_MAP: return "Map";
         case COMMAND_ACTION_SAVE: return "Save";
@@ -10025,14 +10023,12 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             CcInteractionCancel(&local->interaction, "");
             CcLocalAgentStop(&local->agent);
         }
-        if ((*view == VIEW_TRADE || *view == VIEW_CHARACTER || *view == VIEW_OVEN_COURT) &&
+        if ((*view == VIEW_TRADE || *view == VIEW_CHARACTER) &&
             (ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_book : KEY_B) || ClientKeyPressed(KEY_TAB))) {
-            if (*view == VIEW_OVEN_COURT) { local->book_page = 3; local->book_offset = 0; }
             *return_view = *view;
             *view = VIEW_LEDGER;
             return;
         }
-        if (HandleOvenCourt(sim, local, view, return_view, message, message_capacity)) return;
         bool pause_handled = HandleAdventurePause(local, view, return_view);
         if (pause_handled ||
             HandleAdventureTrade(*journal, sim, local, view, message, message_capacity) ||
@@ -10641,7 +10637,8 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
     bool quests_requested = ClientKeyPressed(adventure_preferences != NULL ? adventure_preferences->key_promises : KEY_Q) ||
                             command_action == COMMAND_ACTION_QUESTS ||
                             context_action == CONTEXT_ACTION_OPEN_PROMISES;
-    if (quests_requested && road_local && !local->open_world) {
+    if (quests_requested && road_local && !local->open_world &&
+        !local->adventure_ui) {
         (void)snprintf(message, message_capacity,
                        local->road_choice_active ?
                            "Choose this branch or keep moving first." :
@@ -10652,6 +10649,13 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
         return;
     }
     if (quests_requested) {
+        if (local->adventure_ui) {
+            local->book_page = 0;
+            local->book_offset = 0;
+            if (*view != VIEW_LEDGER)
+                ToggleCommandOverlay(VIEW_LEDGER, view, return_view);
+            return;
+        }
         if (*view != VIEW_SITUATIONS) {
             if (SelectedActiveSituation(sim, *selected_situation) == NULL) {
                 *selected_situation = FirstActiveSituationIndex(sim);
@@ -11501,10 +11505,9 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             if (local->open_world && !local->market_interior &&
                 context_action == CONTEXT_ACTION_OPEN_PROMISES) {
                 *return_view = VIEW_LOCAL;
-                if (SelectedActiveSituation(sim, *selected_situation) == NULL) {
-                    *selected_situation = FirstActiveSituationIndex(sim);
-                }
-                *view = VIEW_SITUATIONS;
+                local->book_page = 0;
+                local->book_offset = 0;
+                *view = local->adventure_ui ? VIEW_LEDGER : VIEW_SITUATIONS;
                 return;
             }
             if (local->open_world && !local->market_interior &&
@@ -13478,7 +13481,6 @@ int main(int argc, char **argv)
             if (local.adventure_ui) DrawAdventureBook(&sim, &local);
             else DrawLedger(&sim);
         }
-        if (view == VIEW_OVEN_COURT) { CcOverlayFlush(); DrawOvenCourt(&sim, &local); }
         if (view == VIEW_TRADE) { CcOverlayFlush(); DrawAdventureTrade(&sim, &local, map_textures.economic_goods); }
         if (view == VIEW_PAUSE) { CcOverlayFlush(); DrawAdventurePause(&local); }
         if (view == VIEW_CARRIAGE) {
@@ -13520,7 +13522,6 @@ int main(int argc, char **argv)
         }
         if (!persistence_blocked && presentation.commands &&
             view != VIEW_DRAGON_CAVE && view != VIEW_TRADE && view != VIEW_PAUSE && view != VIEW_LEDGER &&
-            view != VIEW_OVEN_COURT &&
             view != VIEW_DUNGEON &&
             view != VIEW_CARRIAGE && view != VIEW_CHARACTER) {
             if (!local.adventure_ui) DrawCommandBar(view, &local);
@@ -13610,7 +13611,6 @@ int main(int argc, char **argv)
         ClientTouchScene(frontend.screen != FRONTEND_PLAYING ? "menu" :
             sim.mine.phase != CC_MINE_NONE &&
                 (view == VIEW_LOCAL || view == VIEW_ROADS) ? "mine" :
-            view == VIEW_OVEN_COURT ? "oven-court" :
             view == VIEW_LEDGER || view == VIEW_SITUATIONS ? "book" :
             view == VIEW_DUNGEON || view == VIEW_DRAGON_CAVE ? "dungeon" :
             view == VIEW_CARRIAGE ? "carriage" :

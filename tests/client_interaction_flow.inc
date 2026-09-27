@@ -1940,15 +1940,14 @@ static int RunAdventureTradeTermsRegression(void)
         "The grain fund button must start the displayed agreement.");
     TERMS_CHECK(strstr(local.receipt, "grain fund") != NULL,
         "Funding must show its receipt.");
-    uint64_t meeting_hash = CcSimHash(&sim);
+    uint64_t funded_hash = CcSimHash(&sim);
     queued_key_press[KEY_FIVE] = true;
     (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
     ClientInputClearPressed();
-    TERMS_CHECK(local.trade_mode == 5, "The fifth grain merchant tab must open the road meeting.");
-    queued_key_press[KEY_ENTER] = true;
-    (void)HandleAdventureTrade(NULL, &sim, &local, &view, message, sizeof(message));
-    ClientInputClearPressed();
-    TERMS_CHECK(CcSimHash(&sim) == meeting_hash, "Reading the meeting must preserve funds and commitments.");
+    TERMS_CHECK(local.trade_mode == 4,
+        "The grain merchant has four relevant tabs.");
+    TERMS_CHECK(CcSimHash(&sim) == funded_hash,
+        "An absent tab preserves funds and commitments.");
 
 #undef TERMS_CHECK
     puts("adventure trade terms passed");

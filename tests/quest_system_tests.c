@@ -135,13 +135,12 @@ static int TestResolutionEvidenceOutcomesAndEchoQueue(void)
     const CcFront *supply_front = CcSimFront(&sim, supply_front_id);
     CC_CHECK(supply_front != NULL);
     CC_CHECK(supply_front->status == CC_FRONT_RESOLVED);
-    CC_CHECK(supply_front->outcome ==
-             CC_FRONT_OUTCOME_ROUTE_RESTORED);
+    CC_CHECK(supply_front->outcome == CC_FRONT_OUTCOME_ROUTE_RESTORED);
     const CcQuestOutcomeRecord *repair_outcome =
         CcSimQuestOutcome(&sim, repair_id);
     CC_CHECK(repair_outcome != NULL);
     CC_CHECK(repair_outcome->end_reason == CC_QUEST_END_COMPLETED);
-    CC_CHECK(sim.delayed_echo.active);
+    CC_CHECK(!sim.delayed_echo.active);
 
     for (int32_t i = 0; i < sim.situation_count; ++i) {
         const CcSituation *other = &sim.situations[i];
@@ -190,8 +189,7 @@ static int TestResolutionEvidenceOutcomesAndEchoQueue(void)
     monster = (CcSituation *)CcSimSituation(&sim, monster_id);
     CC_CHECK(monster != NULL &&
              monster->status == CC_SITUATION_RESOLVED);
-    CC_CHECK(sim.pending_echo_count == 1);
-    CC_CHECK(sim.pending_echoes[0].situation_id == monster_id);
+    CC_CHECK(sim.pending_echo_count == 0);
     CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
 
     const char *path = "/tmp/crownless-quest-system-tests.ccsave";
@@ -199,7 +197,7 @@ static int TestResolutionEvidenceOutcomesAndEchoQueue(void)
     CcSim restored;
     CC_CHECK(CcSaveRead(path, &restored, error, sizeof(error)));
     CC_CHECK(CcSimHash(&restored) == CcSimHash(&sim));
-    CC_CHECK(restored.pending_echo_count == 1);
+    CC_CHECK(restored.pending_echo_count == 0);
     CC_CHECK(CcSimQuestOutcome(&restored, repair_id) != NULL);
     (void)remove(path);
     return 0;
@@ -240,75 +238,30 @@ static int TestDangerFailure(void)
     return 0;
 }
 
-/* A crew that resolves a quest and drives away leaves an echo nobody is
-   present to hear. A year of away time recycles the situation slot and
-   overwrites the outcome archive, and the echo must leave with its subject:
-   an echo about a quest the world no longer holds cannot be saved, and the
-   away clock would never advance the world again. */
-static int TestUnheardEchoExpiresWithItsSubject(void)
+/* Old saves can hold a pending echo. Retire it without inventing a result. */
+static int TestLegacyEchoRetiresWithoutStory(void)
 {
     CcSim sim;
     CcSimInit(&sim, UINT32_C(0x51a7f00d));
     char error[256];
-    CcSituation *repair = FindSituation(
-        &sim, CC_SITUATION_ROUTE_REPAIR);
+    CcSituation *repair = FindSituation(&sim, CC_SITUATION_ROUTE_REPAIR);
     CC_CHECK(repair != NULL);
-    CcId repair_id = repair->id;
-    sim.player.location_id = CcSimSituationOfferSettlementId(&sim, repair);
-    sim.carriage.location_id = sim.player.location_id;
-    sim.player.cargo[CC_GOOD_TOOLS] = 2;
-    sim.player.cargo[CC_GOOD_WOOD] = 2;
-    sim.player.cargo[CC_GOOD_STONE] = 2;
-    CcCommand accept = {
-        .kind = CC_COMMAND_ACCEPT_SITUATION,
-        .target_id = repair_id
+    sim.delayed_echo = (CcDelayedEcho){
+        .active = true,
+        .situation_id = repair->id,
+        .settlement_id = sim.player.location_id,
+        .outcome = CC_JOURNEY_OUTCOME_NEGOTIATED,
+        .due_day = sim.current_day + 30
     };
-    CC_CHECK(CcSimApply(&sim, &accept, error, sizeof(error)));
-    CcCommand repair_command = {
-        .kind = CC_COMMAND_REPAIR_ROUTE,
-        .target_id = repair->target_id,
-        .amount = 1
-    };
-    CC_CHECK(CcSimApply(&sim, &repair_command, error, sizeof(error)));
-    CC_CHECK(sim.delayed_echo.active);
-    CC_CHECK(sim.delayed_echo.situation_id == repair_id);
-
-    CcId elsewhere = 0U;
-    for (int32_t i = 0; i < sim.settlement_count; ++i) {
-        if (sim.settlements[i].id != sim.delayed_echo.settlement_id) {
-            elsewhere = sim.settlements[i].id;
-            break;
-        }
-    }
-    CC_CHECK(elsewhere != 0U);
-    sim.player.location_id = elsewhere;
-    sim.carriage.location_id = elsewhere;
-
-    /* Two away-clock batches, the size the shared host advances at once.
-       The second one is where the situation slot and the archived outcome
-       both go. */
-    for (int32_t batch = 0; batch < 2; ++batch) {
-        CcSimAdvanceDays(&sim, 365);
-        CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
-    }
-    CC_CHECK(CcSimSituation(&sim, repair_id) == NULL);
-    CC_CHECK(CcSimQuestOutcome(&sim, repair_id) == NULL);
-    CC_CHECK(!sim.delayed_echo.active ||
-             sim.delayed_echo.situation_id != repair_id);
-    for (int32_t i = 0; i < sim.pending_echo_count; ++i) {
-        CC_CHECK(sim.pending_echoes[i].situation_id != repair_id);
-    }
-    /* Every surviving echo still has something to be about. */
-    if (sim.delayed_echo.active) {
-        CC_CHECK(CcSimSituation(&sim, sim.delayed_echo.situation_id) != NULL ||
-                 CcSimQuestOutcome(
-                     &sim, sim.delayed_echo.situation_id) != NULL);
-    }
-    for (int32_t i = 0; i < sim.pending_echo_count; ++i) {
-        CcId subject = sim.pending_echoes[i].situation_id;
-        CC_CHECK(CcSimSituation(&sim, subject) != NULL ||
-                 CcSimQuestOutcome(&sim, subject) != NULL);
-    }
+    (void)snprintf(sim.delayed_echo.character_name,
+                   sizeof(sim.delayed_echo.character_name), "A local witness");
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
+    CcSimAdvanceDays(&sim, 1);
+    CC_CHECK(!sim.delayed_echo.active);
+    CC_CHECK(sim.pending_echo_count == 0);
+    for (int32_t i = 0; i < sim.event_count; ++i)
+        CC_CHECK(sim.events[i].kind != CC_EVENT_DELAYED_ECHO);
+    CC_CHECK(CcSimValidate(&sim, error, sizeof(error)));
     return 0;
 }
 
@@ -318,7 +271,7 @@ int main(void)
     CC_CHECK(TestFrontGroupingAndUrgency() == 0);
     CC_CHECK(TestResolutionEvidenceOutcomesAndEchoQueue() == 0);
     CC_CHECK(TestDangerFailure() == 0);
-    CC_CHECK(TestUnheardEchoExpiresWithItsSubject() == 0);
+    CC_CHECK(TestLegacyEchoRetiresWithoutStory() == 0);
     (void)printf("Quest fronts and clocks tests passed\n");
     return 0;
 }

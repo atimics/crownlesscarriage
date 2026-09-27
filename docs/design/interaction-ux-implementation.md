@@ -11,7 +11,7 @@ This PR builds the town interaction flow from [the design](interaction-ux-redesi
 | E / Shift+E | Select the next / previous visible target |
 | F | Use the selected action |
 | B or Tab | Open or close the Company Book |
-| Q | Read local promises |
+| Q | Open Work in the Company Book |
 | M | Open the map case near the carriage |
 | Escape | Cancel an approach, close a page, or open the menu |
 | F5 | Save |
@@ -20,7 +20,7 @@ This PR builds the town interaction flow from [the design](interaction-ux-redesi
 
 Conversation replies use the numbered buttons. Trade has separate Buy, Sell, and Deliver tabs. Choose a good, set its quantity, and check the full price before confirming with Enter. The arrow keys choose goods; minus and plus change quantity. Hold Shift to change ten units at a time. The Deliver tab uses the full remaining promise load. A receipt shows the actual purse change.
 
-The Company Book has Promises, People, Cargo, and Journal pages. It returns to the conversation, trade screen, or menu it came from. The combined title menu offers save, motion, text size, target hints, sound, return to title, and world controls. Solo play pauses while the menu is open. Shared play shows that the host keeps company time.
+The Company Book has Work, People, and Notes tabs. Work shows accepted work, board notices, and personal requests. Notes holds mine records, dated bakery notes, and the almanac. The book returns to the conversation, trade screen, or menu it came from. The combined title menu offers save, motion, text size, target hints, sound, return to title, and world controls. Solo play pauses while the menu is open. Shared play shows that the host keeps company time.
 
 ## How actions work
 
@@ -32,7 +32,7 @@ Trade checks stock, purse, cargo space, the keeper's coins, and delivery proof. 
 
 ## Review captures
 
-These images show the interaction panels before the latest graphics and title-menu merge. They use a fixed native game fixture. Trade and book use 1040 × 620 with the largest text setting. Conversation uses 1200 × 700. The CI artifact `interaction-screen-review` captures the final combined build, including the menu.
+These images show an earlier set of interaction panels. They use a fixed native game fixture. Trade and book use 1040 × 620 with the largest text setting. Conversation uses 1200 × 700. The CI artifact `interaction-screen-review` captures the combined build, including the menu.
 
 ![Conversation](interaction-ux-captures/conversation.png)
 
@@ -48,7 +48,7 @@ Trade checks cover purse, stock, cargo space, market funds, a changed quote, ful
 
 Run the native checks with `cmake --build --preset play -j 4` and `ctest --preset play --output-on-failure`. The focused checks match `adventure_`, `interaction_planner`, and `daily_play_policy`.
 
-For a separate play session, pass `--campaign /path/to/review.ccsave`. Native review captures use `--capture-ux MODE image.png WIDTH TEXT_SIZE`. Use a relative output filename in the desired output folder. Modes are 0 town, 1 interior, 2 conversation, 3 trade, 4 journal, 5 menu, and 6 local promises. Supported desktop sizes are 1040×620, 1200×700, 1280×720, 1600×900, and 1920×1080. Pass the width to select its matching height; text size 2 selects the largest setting.
+For a separate play session, pass `--campaign /path/to/review.ccsave`. Native review captures use `--capture-ux MODE image.png WIDTH TEXT_SIZE`. Use a relative output filename in the desired output folder. Modes are 0 town, 1 interior, 2 conversation, 3 trade, 4 journal, 5 menu, and 6 local work. Supported desktop sizes are 1040×620, 1200×700, 1280×720, 1600×900, and 1920×1080. Pass the width to select its matching height; text size 2 selects the largest setting.
 
 ## Follow-up work
 

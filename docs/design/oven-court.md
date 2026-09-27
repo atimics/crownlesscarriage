@@ -7,9 +7,9 @@ quest, fuel recipe, delivery reward, automatic recovery, or a second inventory.
 
 Approach **Oven Court tally**, on the Company store frontage. Use its pointer
 or object-card action, or cycle focus with E and activate with F. Inspecting
-acquires a dated Company Book note. Tally shows the local stores and current
-next-act bottleneck; What helps? distinguishes missing Wheat, absent capacity,
-rebuilding, reserved grain, full Bread storage, and a supplied but not-yet-executed batch.
+records a dated Company Book note and shows the current Bread and Wheat stock
+in a short message. The note explains the current work limit, such as missing
+Wheat or a full Bread store.
 
 Company store starts an ordinary walk to the existing door, not a teleport.
 Use the existing counter and Sell tab for actual quantities and payment, or
@@ -21,9 +21,9 @@ can answer **What do the ovens need?** through the character reply path.
 They consult the same public tally; arbitrary residents are not granted its
 knowledge. This authored reply remains usable without a language model.
 
-B opens the Court page from inspection. Latest/Earlier retain two acquired
+B opens the Company Book. Notes > Bakery notes holds the latest two acquired
 notes. Reading a saved note, selling supplies, or someone changing a distant
-store never rewrites its date or text. Re-inspect locally to learn a change.
+store leaves its date and text intact. Re-inspect locally to learn a change.
 Consecutive identical same-day acquisitions from the same source are idempotent.
 Switching between the tally and a worker records the source just consulted;
 it cannot silently borrow the other source's event for the current reply.

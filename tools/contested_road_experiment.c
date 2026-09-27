@@ -1,4 +1,4 @@
-#include "sim/cc_road_council.h"
+#include "sim/cc_sim.h"
 #include "sim/cc_production.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -52,9 +52,14 @@ int main(int argc, char **argv)
     town->hunger = 45;
     for (int g = 0; g < CC_GOOD_COUNT; ++g)
         if (CcGoodNutritionValue((CcGood)g, CC_NUTRITION_CIVILIAN) > 0) town->stock[g] = 0;
-    CcRoadCouncil initial = CcSimRoadCouncil(&base, town->id);
-    if (initial.route_slot < 0) return 3;
-    int road_slot = initial.route_slot;
+    int road_slot = -1, road_score = -1;
+    for (int i = 0; i < base.route_count; ++i) {
+        const CcRoute *route = &base.routes[i];
+        if (route->from_id != town->id && route->to_id != town->id) continue;
+        int score = (route->closed ? 200 : 0) + 100 - route->condition;
+        if (score > road_score) { road_slot = i; road_score = score; }
+    }
+    if (road_slot < 0) return 3;
     base.routes[road_slot].condition = 0;
     base.routes[road_slot].closed = true;
     if (!CcSimValidate(&base, error, sizeof(error))) { fprintf(stderr, "fixture: %s\n", error); return 1; }

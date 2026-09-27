@@ -55,33 +55,6 @@ static int CarriageOverviewDetails(const CcSim *sim, const LocalState *local,
     int width = (int)pane.width - 32;
     int body = AdventureTextSize(15);
     int heading = AdventureTextSize(19);
-    const CcSituation *quest = CcSimAcceptedSituation(sim);
-    CarriageOverviewParagraph("PROMISE & NEXT STEP", x, &y, width, heading, TEAL, draw);
-    if (quest != NULL) {
-        char target[96], next[192];
-        SituationTargetLabel(sim, quest, target, sizeof(target));
-        SituationNextAction(sim, quest, next, sizeof(next));
-        CarriageOverviewParagraph(TextFormat("%s — %s / %s",
-            SituationTitle(quest->kind), target, quest->affected_name),
-            x, &y, width, body, INK, draw);
-        CarriageOverviewParagraph(next, x, &y, width, body, CC_GOLD, draw);
-        CarriageOverviewParagraph(TextFormat("Due day %d  /  Reward +%" PRId64 " crowns",
-            quest->deadline_day, quest->reward), x, &y, width, body, TEAL, draw);
-        if (quest->kind == CC_SITUATION_RELIEF_DELIVERY ||
-            quest->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
-            int remaining = quest->quantity - quest->progress;
-            if (remaining < 0) remaining = 0;
-            int aboard = sim->player.cargo[quest->good];
-            if (aboard > remaining) aboard = remaining;
-            CarriageOverviewParagraph(TextFormat("Committed load: %d / %d %s aboard",
-                aboard, remaining, CcGoodName(quest->good)), x, &y, width, body,
-                aboard >= remaining ? TEAL : DANGER, draw);
-        }
-    } else {
-        CarriageOverviewParagraph("No active promise. The notices and Company Book hold available leads.",
-            x, &y, width, body, INK, draw);
-    }
-    y += 8;
     CarriageOverviewParagraph("TEAM & DEPARTURE", x, &y, width, heading, CC_VIOLET, draw);
     for (int horse = 0; horse < CcSimHorseTeamCount(sim); ++horse)
         CarriageOverviewParagraph(TextFormat("%s — health %d, fatigue %d",

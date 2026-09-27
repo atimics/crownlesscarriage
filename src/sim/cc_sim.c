@@ -13446,18 +13446,6 @@ static void RememberCharacter(CcCharacter *character,
                               CcCharacterMemoryKind kind,
                               CcId subject_id, CcId event_id, int32_t day);
 
-static bool ScheduleDelayedEcho(CcSim *sim, const CcDelayedEcho *echo)
-{
-    if (sim == NULL || echo == NULL || !echo->active) return false;
-    if (!sim->delayed_echo.active) {
-        sim->delayed_echo = *echo;
-        return true;
-    }
-    if (sim->pending_echo_count >= CC_MAX_PENDING_ECHOES) return false;
-    sim->pending_echoes[sim->pending_echo_count++] = *echo;
-    return true;
-}
-
 static void PromotePendingEcho(CcSim *sim)
 {
     if (sim == NULL || sim->delayed_echo.active ||
@@ -13546,52 +13534,6 @@ static void ResolveSituation(CcSim *sim, CcSituation *situation)
     RefreshSituationCharacterActivities(sim, situation);
     FinishFrontAfterSituation(sim, situation, resolution_id);
     ArchiveSituationOutcome(sim, situation, resolution_id);
-    if (accepted) {
-        CcId echo_settlement = 0U;
-        if (situation->kind == CC_SITUATION_RELIEF_DELIVERY ||
-            situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
-            echo_settlement = situation->target_id;
-        } else if (situation->kind == CC_SITUATION_ROUTE_REPAIR) {
-            const CcRoute *route = CcSimRoute(sim, situation->target_id);
-            if (route != NULL) {
-                echo_settlement = sim->player.location_id == route->to_id ?
-                    route->to_id : route->from_id;
-            }
-        } else {
-            for (int32_t i = 0; i < sim->dungeon_count; ++i) {
-                if (sim->dungeons[i].id == situation->target_id) {
-                    echo_settlement = sim->dungeons[i].settlement_id;
-                    break;
-                }
-            }
-        }
-        if (echo_settlement != 0U) {
-            char witness[CC_NAME_CAPACITY];
-            const char *witness_name =
-                (situation->kind == CC_SITUATION_ROUTE_REPAIR ||
-                 situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) &&
-                        situation->sponsor_name[0] != '\0' ?
-                    situation->sponsor_name : situation->affected_name;
-            (void)snprintf(witness, sizeof(witness), "%.31s",
-                           witness_name[0] != '\0' ? witness_name :
-                               "A local witness");
-            CcDelayedEcho echo = (CcDelayedEcho){
-                .active = true,
-                .situation_id = situation->id,
-                .settlement_id = echo_settlement,
-                .parent_event_id = resolution->id,
-                .outcome = sim->resolved_journey_outcome !=
-                        CC_JOURNEY_OUTCOME_NONE ?
-                    sim->resolved_journey_outcome :
-                    CC_JOURNEY_OUTCOME_NEGOTIATED,
-                .due_day = sim->current_day + 30
-            };
-            (void)snprintf(echo.character_name,
-                           sizeof(echo.character_name), "%s",
-                           witness);
-            (void)ScheduleDelayedEcho(sim, &echo);
-        }
-    }
     SupersedeCompetingCrisisSituations(sim, situation);
 }
 
@@ -18758,79 +18700,11 @@ static bool ApplyCharacterResponse(CcSim *sim, const CcCommand *command,
 
 static void DeliverDelayedEchoIfReady(CcSim *sim)
 {
-    if (sim == NULL || !sim->delayed_echo.active ||
-        sim->journey.active ||
-        sim->current_day < sim->delayed_echo.due_day ||
-        sim->player.location_id != sim->delayed_echo.settlement_id) return;
-    const CcSettlement *place = CcSimSettlement(
-        sim, sim->delayed_echo.settlement_id);
-    const CcSituation *situation = CcSimSituation(
-        sim, sim->delayed_echo.situation_id);
-    int32_t prior_echoes = 0;
-    for (int32_t offset = 0; offset < sim->event_count; ++offset) {
-        const CcEvent *event = CcSimRecentEvent(sim, offset);
-        if (event != NULL && event->kind == CC_EVENT_DELAYED_ECHO &&
-            event->subject_id == sim->delayed_echo.situation_id) {
-            prior_echoes += 1;
-        }
-    }
-    char text[CC_EVENT_TEXT_CAPACITY];
-    if (situation != NULL &&
-        situation->kind == CC_SITUATION_ROUTE_REPAIR && prior_echoes == 0) {
-        (void)snprintf(text, sizeof(text),
-                       "A letter from %.16s holds a broken chain link. Carts cross again; the hungry boy now eats before the officers do.",
-                       sim->delayed_echo.character_name);
-    } else if (situation != NULL &&
-               situation->kind == CC_SITUATION_ROUTE_REPAIR) {
-        (void)snprintf(text, sizeof(text),
-                       "A second letter from %.16s says the bridge feeds %.16s, but its toll keepers are buying very large hats.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
-    } else if (situation != NULL &&
-               situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY &&
-               prior_echoes == 0) {
-        (void)snprintf(text, sizeof(text),
-                       "A letter from %.16s smells of onion soup. A fox sits beside %.16s's new toll sign. Food reached the hungry first.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
-    } else if (situation != NULL &&
-               situation->kind == CC_SITUATION_BLACK_MARKET_DELIVERY) {
-        (void)snprintf(text, sizeof(text),
-                       "A second letter from %.16s has no drawing. Night Road collectors now demand a share of every load entering %.16s.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
-    } else if (situation != NULL &&
-               situation->kind == CC_SITUATION_MONSTER_EXPEDITION) {
-        (void)snprintf(text, sizeof(text),
-                       prior_echoes == 0 ?
-                       "A letter from %.16s leaves silver dust. Three rings came back from %.16s's mine. The guild still calls the keepers thieves." :
-                       "A second letter from %.16s says the mine below %.16s has made safer crews, new debts, and enemies with names.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
-    } else if (prior_echoes == 0) {
-        (void)snprintf(text, sizeof(text),
-                       "A letter from %.16s is tied with red thread. The ovens of %.16s are warm, though the bread line still reaches the well.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
-    } else {
-        (void)snprintf(text, sizeof(text),
-                       "A second letter from %.16s says families followed the smell of bread to %.16s, and the old stores found new locks.",
-                       sim->delayed_echo.character_name,
-                       place != NULL ? place->name : "the settlement");
-    }
-    CcEvent *echo = PushEvent(sim, CC_EVENT_DELAYED_ECHO,
-                              sim->delayed_echo.situation_id,
-                              sim->delayed_echo.settlement_id,
-                              sim->delayed_echo.parent_event_id,
-                              sim->current_day - sim->delayed_echo.due_day,
-                              text);
-    if (prior_echoes == 0) {
-        sim->delayed_echo.parent_event_id = echo->id;
-        sim->delayed_echo.due_day = sim->current_day + 30;
-    } else {
-        sim->delayed_echo.active = false;
-        PromotePendingEcho(sim);
-    }
+    if (sim == NULL) return;
+    sim->delayed_echo = (CcDelayedEcho){0};
+    for (int32_t i = 0; i < sim->pending_echo_count; ++i)
+        sim->pending_echoes[i] = (CcDelayedEcho){0};
+    sim->pending_echo_count = 0;
 }
 
 static void CreateJourneyTraffic(CcSim *sim,
