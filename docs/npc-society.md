@@ -18,6 +18,20 @@ Gossip stays readable. Retellings gradually change counts, people, directions, o
 
 ## Delivery order
 
+Status, checked 27 September 2026:
+
+- Step 1 is done.
+- Step 2 is mostly done. Towns with a farm or stable keep common pony herds that
+  eat and breed (schema 51), and the company carriage pulls one animal (schema
+  52). Royal carriages do not draw on the herds.
+- Step 3 is not started. Royal carriages have no purse, and there are no
+  stranded-carriage quests, recovery riders, wayfarer state (the client has
+  only a wayfarer figure), bandit ranks, or paid passage.
+- Step 4 is partial. Characters carry a personal purse (`travel_coins`) that
+  falls as a custody purse when they die. Bandits hold coins and supplies per
+  group, not per person. Traveller needs, inn lodging, and goblin pressure on
+  bandit camps are not in the simulation.
+
 1. Personal gossip, spoken accounts, source questions, and exchanges. PR #371.
 2. Common pony herds and one animal per carriage.
 3. Carriage purses, physical sale proceeds, abandoned carriages, and recovery.

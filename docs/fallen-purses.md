@@ -38,7 +38,9 @@ Bodies are purses in this slice: carried *goods* on dead persons do not yet
 drop (characters carry coin, not cargo); the player traveler's death, the
 successor transition and mourning follow in #289 once this foundation has
 its fixtures in place; witness knowledge of a looting rides the event ledger
-and becomes speech when the new event kind gains account rules (it ships
-`legacy_or_uncovered` in the corpus, like the crown road events). Lootable
+and becomes speech through its account rule (`BODY_LOOTED` first shipped
+`legacy_or_uncovered`; it now has the `body_looted_source_0` rule in
+`src/story/cc_core_account_rules.inc` and is `field_rules` in
+`docs/core-account-coverage.json`). Lootable
 graves, armor and named effects are #288's later deliveries on this same
 custody contract.

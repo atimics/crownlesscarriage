@@ -3,6 +3,11 @@
 Design proposal, 5 September 2026. The measured baseline is linked below. The
 experiments and political rules in this document are proposed work.
 
+Status: proposal. Coin concentration is measured: `tools/sim_metrics.c` prints
+hoard, treasury, goblin and circulating share columns, and
+[the 13 September review](../reviews/coin-concentration-2026-09-13/README.md) reports
+them. None of the experiments below is built. Checked 2026-09-27.
+
 ## The central question
 
 Who gets obeyed today, and how will people explain that obedience tomorrow?

@@ -5,15 +5,18 @@ quest, fuel recipe, delivery reward, automatic recovery, or a second inventory.
 
 ## Ordinary controls
 
-Approach **Oven Court tally**, on the Company store frontage. Use its pointer
+Approach **Oven Court tally**, on the Company store frontage. The Company store
+is the building that holds Silverwick's grain merchant, so the Company Book hint
+says the tally stands beside the grain merchant. Use its pointer
 or object-card action, or cycle focus with E and activate with F. Inspecting
 records a dated Company Book note and shows the current Bread and Wheat stock
 in a short message. The note explains the current work limit, such as missing
 Wheat or a full Bread store.
 
-Company store starts an ordinary walk to the existing door, not a teleport.
-Use the existing counter and Sell tab for actual quantities and payment, or
-Bakery for the existing support/repair rules. Wheat and Bread retain their
+There is no separate Oven Court view since #955; the tally only prints its
+message. Walk to the grain merchant's door as usual, then use the existing
+counter and Sell tab for actual quantities and payment, or the Bakery for the
+existing support/repair rules. Wheat and Bread retain their
 other uses. No shipment or purchase is reserved by inspecting the tally.
 
 An eligible, living, present baker or the existing bakery-support receiver

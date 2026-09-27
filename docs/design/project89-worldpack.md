@@ -1,7 +1,10 @@
 # Project 89 Worldpack for Crownless — Design Spec v0
 
 Status: PROPOSED (architect's directive 2026-09-24: "build the Project 89
-Worldpack for Crownless"). WIP issue required before any code.
+Worldpack for Crownless"). Module 1 primitives built in #926 as
+`src/sim/cc_doubt.c` (not `src/worldpack/`), tested by
+`tests/cult_doubt_tests.c`; nothing in the game calls them yet. Modules 2–4 not
+started. Checked 2026-09-27.
 
 ## What it is
 

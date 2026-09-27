@@ -4,6 +4,10 @@ Every town has nine shops. Look for the painted sign above each door. Walk to
 the door and press **F** to enter. Each shop has its own goods and posted prices.
 Silverwick also has a mine supply office near the quarry.
 
+This is the current rule. Step 2 of the
+[town economies design](design/town-economies.md) will replace it with a
+different set of shops in each town.
+
 | Shop | Goods |
 | --- | --- |
 | Bakery | Bread |

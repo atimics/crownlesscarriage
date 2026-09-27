@@ -3,6 +3,9 @@
 Companion to `docs/design/project89-worldpack.md`. This is the first slice:
 the doubt-mark epistemics made computable.
 
+Status: the primitives below are built (#926, `src/sim/cc_doubt.c`); nothing
+in the game calls them yet. Wiring steps 1–4 are not started.
+
 ## Doctrine (recap)
 
 A record that is not read is a debt; a record that is read is an heir.
@@ -15,7 +18,8 @@ not asserted:
 
 ## What this slice adds
 
-`src/sim/cc_doubt.{c,h}` — five pure primitives, no simulation state, no
+`src/sim/cc_doubt.{c,h}` — six pure primitives plus a default config
+(`CcDoubtDefaultConfig`), no simulation state, no
 I/O, deterministic:
 
 - `CcDoubtRunWeight` — exponential age decay (half-life in days).

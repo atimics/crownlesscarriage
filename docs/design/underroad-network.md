@@ -1,6 +1,10 @@
 # The Underroad as a road network
 
-Status: proposed · 2026-09-20
+Status: P1 partly built in the sim · proposed 2026-09-20, status checked 2026-09-27.
+P1: `GenerateUnderroadNetwork` in `src/sim/cc_sim.c` builds the graph from the
+world seed at schema 108; it is hashed, saved and loaded, validated, and printed
+by the `underroad map` text verb. Nothing else reads it yet: goblin porters do
+not path it and there is no travel. P2–P4 not started.
 
 One sentence: **the Underroad should be a second transport layer under the whole
 map — a generated graph of goblin haul roads connecting every settlement — not a
@@ -14,11 +18,11 @@ Successor to the standalone growth proof in `tools/underroad_construction.c`
 Today the Underroad is a point, not a network:
 
 - The sim has **one** dungeon, `sim->dungeons[0]` at Silverwick, a 24-room graph
-  (`GenerateUnderroad`, `src/sim/cc_sim.c:1626`).
-- The only surface link is `ApplyGoblinTunnelTraversal` (`src/sim/cc_sim.c:18927`),
+  (`GenerateUnderroad` in `src/sim/cc_sim.c`).
+- The only surface link is `ApplyGoblinTunnelTraversal` in `src/sim/cc_sim.c`,
   an abstract one-day crossing between the goblin lair and the dragon roost.
 - The three clans of the Cinder Tithe share that one physical dungeon and BFS
-  loot toward room 19 (`src/sim/cc_goblin_politics.inc:109`).
+  loot toward room 19 (`src/sim/cc_goblin_politics.inc`).
 
 `tools/underroad_construction.c` already proves the harder idea: a real tile
 mountain that goblin crews *dig into haul roads over simulated years*. That work
@@ -51,7 +55,12 @@ Two scales, built in order:
 
 ## Data model
 
-New structs beside the dungeon structs in `src/sim/cc_sim.h:1378-1440`:
+New structs beside the dungeon structs in `src/sim/cc_sim.h`. The sketch below
+is the proposal. The built sim is smaller: node kinds are only ENTRANCE, LAIR,
+HOARD and JUNCTION, and no JUNCTION is generated yet; road kinds are only HAUL,
+SMUGGLER and NATURAL, and only HAUL and SMUGGLER are generated. Each road's
+`faction_id` is the clan of the lair nearest its first node, not a Voronoi
+territory with contested borders.
 
 ```c
 typedef enum CcUnderroadNodeKind {
@@ -105,7 +114,7 @@ typedef struct CcUnderroadNetwork {
 ```
 
 Caps mirror the existing style. `sizeof(CcSim)` is a hard static assert
-(`cc_sim.h:2115`), so either keep the caps tight (e.g. `CC_MAX_UR_NODES 16`,
+in `cc_sim.h`, so either keep the caps tight (e.g. `CC_MAX_UR_NODES 16`,
 `CC_MAX_UR_ROADS 32`) or persist the network in its own table loaded alongside
 the sim. First pass keeps it in-sim so goblin logic can path it, and takes the
 version bump.
@@ -148,8 +157,9 @@ Port the tools' year loop onto the macro edges:
 
 - Entrances become discoverable world sites (extend `CC_WORLD_SITE_COUNT`,
   `src/world/cc_world.c:625-652`) and route-book knowledge.
-- New text verbs beside the existing ones (`src/metagame/cc_metagame.c:2486`):
-  `underroad map`, `underroad travel NODE`, `underroad dig`.
+- New text verbs beside the existing `underroad` verbs in
+  `src/metagame/cc_metagame.c`: `underroad map` (built), `underroad travel NODE`,
+  `underroad dig`.
 - `CcDungeonExpedition` gains `node_id` / `road_id`; travelling a road spends
   turns, light, strain and rations; encounters scale with `security`; tolls are
   paid to the owning clan.
@@ -158,7 +168,7 @@ Port the tools' year loop onto the macro edges:
 
 ## Rendering
 
-- Native automap: extend `DrawDungeonPanel` (`src/client/main.c:3757`).
+- Native automap: extend `DrawDungeonPanel` in `src/client/main.c`.
 - First-person micro: reuse the mine pattern (`src/sim/cc_mine.c`,
   `src/client/local3d/mine_scene.inc`).
 - Web atlas: extend `tools/underroad-map.html` from 24 zones to the network.
@@ -166,14 +176,15 @@ Port the tools' year loop onto the macro edges:
 
 ## Required plumbing (this codebase is strict)
 
-- `CC_SIM_SCHEMA_VERSION 102 → 103`, `CC_GENERATOR_VERSION 25 → 26`
-  (`src/sim/cc_sim.h:70`); recompute the `sizeof(CcSim)` assert.
-- Hash block beside `hash_underroad` (`src/sim/cc_sim_hash.c:461-505`).
-- Persistence beside `underroad_schema` (`src/persistence/cc_save.c:1383`):
-  write (`SaveDungeons`, `:2416`) and read (`ReadUnderroad`, `:4683`).
-- `CcSimValidate` dungeon block (`src/sim/cc_sim.c:20422`).
-- Versions tables: `src/sim/cc_sim_versions_internal.h`, `cc_sim_versions.c`.
-- Defaults in `CcSimInit` / `CcSimInitializeUnderroad`.
+All of this plumbing is done:
+
+- The network landed at schema 108. `CC_GENERATOR_VERSION` stayed at 25. The
+  `sizeof(CcSim)` assert was recomputed.
+- Hash block for schema 108+ in `src/sim/cc_sim_hash.c`.
+- Persistence in `src/persistence/cc_save.c`: `SaveUnderroadNetwork` and
+  `ReadUnderroadNetwork`. Older saves generate the network on load.
+- Network checks in `CcSimValidate` (`src/sim/cc_sim.c`).
+- Generation through `CcSimInitializeUnderroadNetwork`.
 
 ## Tests
 
@@ -191,6 +202,8 @@ carries its own acceptance report before anything is wired into the sim.
   `tools/underroad_world.c` and their CMake registration were untracked.
 - **P1 — macro network.** Generate, hash and persist the graph; goblin porters
   path it. Prototype lands as `tools/underroad_network.c`. No player access yet.
+  Partly built: generate, hash and persist are in the sim; porters do not path
+  it yet.
 - **P2 — entrances.** World sites + text `underroad map` / `underroad travel`.
 - **P3 — micro.** Lazily generate the tile crawl per road for first-person play.
 - **P4 — politics.** Faction territory, tolls, war effects on roads.

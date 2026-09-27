@@ -37,9 +37,9 @@ The playable town–road–mine trip gives you a small journey with lasting choi
 1. **Prepare in Silverwick.** Buy food and ask Jory Fen about Low Silver Pit.
 2. **Take the road.** Travel toward Alderwatch, inspect your carriage, and take
    the mine turn-off. Pack supplies beside the carriage before walking inside.
-3. **Explore the mine.** Entry costs one ration. Find the workers' records,
-   trade two Bread for one Raw Gold, and use the Rope Store cache. Your pack
-   holds eight goods, so supplies and treasure share the space.
+3. **Explore the mine.** Find the workers' records, deal with the goblin
+   haulers in the Lower Passage, and use the Rope Store cache. Your pack holds
+   eight goods, so supplies and treasure share the space.
 4. **Bring something home.** Unload at the carriage, board, and return to town.
    Sell your gold to Oren or tell Jory what you found. Save and resume with your
    goods, position, and Company Book notes intact.

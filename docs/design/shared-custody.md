@@ -163,7 +163,17 @@ work, and result outputs. Repairs advance the container revision and preserve
 its contents. The carrier tests now begin with a manufactured container.
 Producer scheduling and player craft commands remain open integration work.
 
-Player, character and captor holders, named treasure migration, document work identity,
-producer scheduling, transfer commands, and the player journey remain open.
+Player and character holders are now live in the world. Mine goods move
+between the site, the mine pack and the player (`src/sim/cc_sim_custody.c`,
+`src/sim/cc_mine.c`). Belongings use the `CC_CUSTODY_BELONGING` kind with
+character, player and store holders (`src/sim/cc_wants.c`, schema 121). Dropped
+purses of the fallen are store-held custody purses (schema 102; see
+[fallen purses](../fallen-purses.md)).
+
+Captor holders, treasure and document entries in the world (the world reference
+check accepts only belongings), interception, named treasure migration,
+document work identity, producer scheduling, and the carriage transfer commands
+remain open. `CcSimMakeCustodyContainer` and `CcSimDispatchCustodyCarrier` are
+still called only from tests. Checked 2026-09-27.
 The draft is complete when the implementation and evidence satisfy the whole
 acceptance list.

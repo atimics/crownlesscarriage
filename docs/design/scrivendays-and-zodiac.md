@@ -1,8 +1,16 @@
 # Scrivendays and zodiac signs
 
 The Company Book now has a Calendar page. A dragon's first change into a Deep
-Wyrm starts an age in the simulation. Scribes learn about that change through
-journeys, dated field notes, and the books that reach their annual meeting.
+Wyrm records an age anchor in the simulation and can be dated as a Deep Wyrm
+Epoch. Scribes learn about that change through journeys, dated field notes, and
+the books that reach their annual meeting.
+
+Since schema 115 (#912) the Crown Calendar also dates a Crown Age from witnessed
+Crowned Dragon sightings. At Scrivendays, two independent sightings of the same
+dragon, from different source books and authors, and scribes from at least two
+schools set the Crown Age's start at the earliest sighting. The register is
+`CcCrownCalendar` in `src/sim/cc_scriven_types.h`; the rules are in
+`src/sim/cc_crown_calendar.inc`. Older saves keep the Deep Wyrm hearing only.
 
 ## The sky calendar
 
