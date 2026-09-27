@@ -75,11 +75,14 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 123
+#define CC_SIM_SCHEMA_VERSION 124
 /* The Return: the company's last view of each town (cc_return.h). */
 #define CC_RETURN_SCHEMA_VERSION 122U
 /* The Return, milestone 4: news met on the road (cc_road_news.h). */
 #define CC_ROAD_NEWS_SCHEMA_VERSION 123U
+/* Outlaw trophies hold no gold or gems, so a roll of 12 no longer adds
+   metal to the world (docs/design/treasure-and-loot.md). */
+#define CC_TROPHY_MATERIALS_SCHEMA_VERSION 124U
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60

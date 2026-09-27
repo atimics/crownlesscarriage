@@ -13180,7 +13180,7 @@ int main(int argc, char **argv)
            local_target.texture.height!=local_target_height) {
             UnloadRenderTexture(local_target);
             local_target=LoadRenderTexture(local_target_width,local_target_height);
-            SetTextureFilter(local_target.texture,TEXTURE_FILTER_POINT);
+            SetTextureFilter(local_target.texture,CcArtUpscaleFilter());
         }
         CcLocalRendererBeginFrame(frame_delta_time);
         CcLocalBindPlace(&sim);
