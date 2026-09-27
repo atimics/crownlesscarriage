@@ -426,6 +426,7 @@ jobs:
           xvfb-run --auto-servernum cmake --build build --target run_character_material_captures
           python3 tools/art/check_character_materials.py build/character-materials
           xvfb-run --auto-servernum cmake --build build --target run_humanoid_animation_captures
+          xvfb-run --auto-servernum cmake --build build --target run_humanoid_performance_captures
       - name: Upload character material captures
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4

@@ -103,6 +103,14 @@ if(CC_BUILD_CLIENT)
         USES_TERMINAL
     )
 
+    add_custom_target(run_humanoid_performance_captures
+        COMMAND renderer_regression_tests --performance-captures
+            "${CMAKE_CURRENT_BINARY_DIR}/humanoid-animation/performance"
+        DEPENDS renderer_regression_tests
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        USES_TERMINAL
+    )
+
     add_executable(creature_frame_tests tests/creature_frame_tests.c)
     target_link_libraries(creature_frame_tests PRIVATE crownless_local_renderer raylib)
     cc_strict_warnings(creature_frame_tests)

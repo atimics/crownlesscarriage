@@ -1491,6 +1491,7 @@ void CcLocalCourseResolveContactsInternal(CcLocalCourse *course, CcLocalAgent *p
                                       ToLimbVector(agent->velocity), agent->grounded);
         CcHumanoidGaitResolvePose(&agent->humanoid, ToLimbVector(agent->position),
                                   agent->facing_yaw);
+        CcLocalAgentPresentationStepInternal(agent);
     }
 }
 
@@ -3955,6 +3956,7 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
     if (agent->morphology == CC_MORPHOLOGY_BIPED) {
         CcHumanoidGaitBeginClimb(&agent->humanoid);
         agent->humanoid_needs_reset = false;
+        agent->pose_history = (CcCharacterPoseState){0};
     } else {
         (void)CcLimbRigRequestPace(&agent->limb_rig, CC_LIMB_PACE_WALK);
     }
@@ -5192,7 +5194,7 @@ static void ApplyRagdollWaterResponse(CcHumanoidGait *gait,
     }
 }
 
-void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
+static void StepLocalAgent(CcLocalAgent *agent, float delta_time,
                                    bool market_interior)
 {
     const float gravity = 9.81f;
@@ -5217,6 +5219,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                             agent->facing_yaw, ProbeLocalSurface, &context);
         ApplyAgentWalkingProfile(agent);
         agent->humanoid_needs_reset = false;
+        agent->pose_history = (CcCharacterPoseState){0};
     }
     if (!biped && agent->multileg_ragdoll.active) {
         bool active = CcMultilegRagdollStep(
@@ -5763,22 +5766,6 @@ static void BlendHumanoidPose(CcHumanoidPose *result,
                                          after->chest_pitch, amount);
 }
 
-static CcLimbVec3 PosePointToLocal(CcLimbVec3 point, CcLimbVec3 origin,
-                                   CcLimbVec3 right, CcLimbVec3 up,
-                                   CcLimbVec3 forward)
-{
-    CcLimbVec3 offset = {
-        point.x - origin.x,
-        point.y - origin.y,
-        point.z - origin.z,
-    };
-    return (CcLimbVec3){
-        offset.x * right.x + offset.y * right.y + offset.z * right.z,
-        offset.x * up.x + offset.y * up.y + offset.z * up.z,
-        offset.x * forward.x + offset.y * forward.y + offset.z * forward.z,
-    };
-}
-
 static CcLimbVec3 PosePointToWorld(CcLimbVec3 point, CcLimbVec3 origin,
                                    CcLimbVec3 right, CcLimbVec3 up,
                                    CcLimbVec3 forward)
@@ -5788,46 +5775,6 @@ static CcLimbVec3 PosePointToWorld(CcLimbVec3 point, CcLimbVec3 origin,
         origin.y + right.y * point.x + up.y * point.y + forward.y * point.z,
         origin.z + right.z * point.x + up.z * point.y + forward.z * point.z,
     };
-}
-
-static void HumanoidPoseToLocal(CcHumanoidPose *result,
-                                const CcHumanoidPose *world,
-                                CcLimbVec3 origin, float yaw)
-{
-    CcLimbVec3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
-    CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
-    CcLimbVec3 forward = {sinf(yaw), 0.0f, cosf(yaw)};
-    *result = *world;
-#define LOCALIZE_POSE_POINT(point) \
-    result->point = PosePointToLocal(world->point, origin, right, up, forward)
-    LOCALIZE_POSE_POINT(pelvis);
-    LOCALIZE_POSE_POINT(spine);
-    LOCALIZE_POSE_POINT(chest);
-    LOCALIZE_POSE_POINT(neck);
-    LOCALIZE_POSE_POINT(head);
-    for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
-        result->hip[leg] = PosePointToLocal(
-            world->hip[leg], origin, right, up, forward);
-        result->knee[leg] = PosePointToLocal(
-            world->knee[leg], origin, right, up, forward);
-        result->ankle[leg] = PosePointToLocal(
-            world->ankle[leg], origin, right, up, forward);
-        result->heel[leg] = PosePointToLocal(
-            world->heel[leg], origin, right, up, forward);
-        result->ball[leg] = PosePointToLocal(
-            world->ball[leg], origin, right, up, forward);
-        result->toe[leg] = PosePointToLocal(
-            world->toe[leg], origin, right, up, forward);
-    }
-    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
-        result->shoulder[arm] = PosePointToLocal(
-            world->shoulder[arm], origin, right, up, forward);
-        result->elbow[arm] = PosePointToLocal(
-            world->elbow[arm], origin, right, up, forward);
-        result->hand[arm] = PosePointToLocal(
-            world->hand[arm], origin, right, up, forward);
-    }
-#undef LOCALIZE_POSE_POINT
 }
 
 static void HumanoidPoseToWorld(CcHumanoidPose *result,
@@ -5870,7 +5817,7 @@ static void HumanoidPoseToWorld(CcHumanoidPose *result,
 #undef WORLDIZE_POSE_POINT
 }
 
-static void PreserveSteppedFootContacts(CcHumanoidPose *stepped,
+static void PreservePhysicalFootContacts(CcHumanoidPose *stepped,
                                         const CcHumanoidPose *physical)
 {
     for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
@@ -5888,56 +5835,6 @@ static void PreserveSteppedFootContacts(CcHumanoidPose *stepped,
         stepped->toe[leg] = physical->toe[leg];
         stepped->foot_pitch[leg] = physical->foot_pitch[leg];
     }
-}
-
-static bool ApplySteppedLocomotionPose(CcLocalAgent *agent,
-                                       const CcHumanoidPose *physical,
-                                       CcHumanoidPose *result)
-{
-    const int32_t pose_count = 8;
-    const float transition_fraction = 0.55f;
-    bool active = agent->humanoid.action == CC_HUMANOID_ACTION_LOCOMOTION &&
-                  agent->grounded && !agent->climbing && !agent->swimming &&
-                  !agent->humanoid.ragdoll.active &&
-                  agent->humanoid.speed.value > 0.10f;
-    if (!active) {
-        agent->stepped_pose.initialized = false;
-        return false;
-    }
-
-    float phase = agent->humanoid.phase - floorf(agent->humanoid.phase);
-    float stepped_phase = phase * (float)pose_count;
-    int32_t bin = (int32_t)floorf(stepped_phase);
-    if (bin < 0) bin = 0;
-    if (bin >= pose_count) bin = pose_count - 1;
-    CcHumanoidPose local;
-    HumanoidPoseToLocal(&local, physical, physical->pelvis,
-                        agent->facing_yaw);
-    CcSteppedPoseState *state = &agent->stepped_pose;
-    if (!state->initialized) {
-        state->from_local = local;
-        state->target_local = local;
-        state->locomotion_bin = bin;
-        state->initialized = true;
-    } else if (state->locomotion_bin != bin) {
-        state->from_local = state->target_local;
-        state->target_local = local;
-        state->locomotion_bin = bin;
-    }
-
-    float within = stepped_phase - floorf(stepped_phase);
-    float transition = SmoothStep01(within / transition_fraction);
-    CcHumanoidPose local_result;
-    BlendHumanoidPose(&local_result, &state->from_local,
-                      &state->target_local, transition);
-    HumanoidPoseToWorld(result, &local_result, physical->pelvis,
-                        agent->facing_yaw);
-    /* Let the held pose join and leave the walk as speed changes. */
-    float walk_weight = SmoothStep01((agent->humanoid.speed.value - 0.10f) /
-                                      0.25f);
-    BlendHumanoidPose(result, physical, result, walk_weight);
-    PreserveSteppedFootContacts(result, physical);
-    return true;
 }
 
 static CcLimbVec3 OffsetPosePoint(CcLimbVec3 point, CcLimbVec3 right,
@@ -6039,6 +5936,8 @@ static bool ApplyLocomotionPostureCorrection(const CcLocalAgent *agent,
     }
     return true;
 }
+
+#include "client/local3d/actor_performance.inc"
 
 static float HeldGestureWeight(const CcLocalAgent *agent)
 {
@@ -6268,6 +6167,49 @@ static void UpdateRenderCape(CcLocalAgent *agent, float amount)
     agent->render_cape.anchor = render_anchor;
 }
 
+/* Pose history advances once per physical step, including off-screen actors. */
+void CcLocalAgentPresentationStepInternal(CcLocalAgent *agent)
+{
+    if (agent == NULL) return;
+    CcCharacterPoseState *state = &agent->pose_history;
+    if (agent->morphology != CC_MORPHOLOGY_BIPED ||
+        !agent->humanoid.initialized) {
+        *state = (CcCharacterPoseState){0};
+        return;
+    }
+    const CcHumanoidPoseSnapshot *snapshot =
+        CcHumanoidGaitCurrentSnapshot(&agent->humanoid);
+    CcHumanoidPose physical = snapshot != NULL ? snapshot->pose :
+        agent->humanoid.pose;
+    (void)ApplyLocomotionPostureCorrection(agent, &physical);
+    uint64_t sequence = snapshot != NULL ? snapshot->sequence : 0;
+    /* Contact resolution can revise the current tick after agents step. */
+    bool new_tick = state->sequence != sequence || !state->snapshots_valid;
+    if (new_tick) {
+        state->previous_pose = state->pose;
+        state->previous_head_yaw = state->head_yaw;
+        state->previous_head_pitch = state->head_pitch;
+        AdvanceCharacterPerformance(agent, agent->humanoid.last_delta_time);
+    }
+    state->pose = physical;
+    ApplyCharacterPerformance(agent, &state->pose);
+    state->head_yaw = agent->performance.gaze_yaw.value -
+                      agent->performance.chest_yaw.value;
+    state->head_pitch = agent->performance.gaze_pitch.value +
+                        agent->performance.nod.value;
+    if (!state->snapshots_valid) state->previous_pose = state->pose;
+    state->sequence = sequence;
+    state->action = agent->humanoid.action;
+    state->snapshots_valid = true;
+}
+
+void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
+                                   bool market_interior)
+{
+    StepLocalAgent(agent, delta_time, market_interior);
+    CcLocalAgentPresentationStepInternal(agent);
+}
+
 void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
 {
     if (agent == NULL) return;
@@ -6286,8 +6228,21 @@ void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
         BlendHumanoidPose(&physical_pose, before_pose, after_pose, amount);
         (void)ApplyLocomotionPostureCorrection(agent, &physical_pose);
         agent->render_pose = physical_pose;
-        (void)ApplySteppedLocomotionPose(
-            agent, &physical_pose, &agent->render_pose);
+        agent->render_head_yaw = 0.0f;
+        agent->render_head_pitch = 0.0f;
+        const CcCharacterPoseState *state = &agent->pose_history;
+        if (state->snapshots_valid && after != NULL &&
+            state->sequence == after->sequence &&
+            state->action == agent->humanoid.action &&
+            !reduced_motion_enabled) {
+            BlendHumanoidPose(&agent->render_pose, &state->previous_pose,
+                              &state->pose, amount);
+            agent->render_head_yaw = BlendPoseAngle(state->previous_head_yaw,
+                                                    state->head_yaw, amount);
+            agent->render_head_pitch = BlendPoseAngle(state->previous_head_pitch,
+                                                      state->head_pitch, amount);
+            PreservePhysicalFootContacts(&agent->render_pose, &physical_pose);
+        }
         (void)ApplyRoleIdleGesture(agent, &agent->render_pose);
         ApplyIdleBreathing(agent, &agent->render_pose, amount);
         (void)ApplyHeroKnockdownPresentationPose(agent,
