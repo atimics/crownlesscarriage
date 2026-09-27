@@ -43,6 +43,7 @@ void CcLocalCourseFixedStepInternal(CcLocalCourse *course,
                                     CcLocalAgent *player,
                                     const CcSim *sim, float delta_time);
 void CcLocalCourseResolveContactsInternal(CcLocalCourse *course, CcLocalAgent *player);
+void CcLocalAgentPresentationStepInternal(CcLocalAgent *agent);
 void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount);
 void CcLocalCourseInterpolateInternal(CcLocalCourse *course, float amount);
 void CcLocalSetStreetMarketCratesInternal(int32_t count);

@@ -15,6 +15,11 @@ physical pose as speed rises from 0.10 to 0.35 m/s. This gives starts and stops
 a soft transition. Body lean is captured with each pose. Feet blend from their
 walking pose into the climb preparation.
 
+Pose history advances on each fixed simulation step. Rendering blends the
+previous and current poses. A regression test compares matched poses at 30,
+60, and 120 presentation samples per second, plus uneven sampling. It covers
+a turn, a walk, and a stop, and requires exact matches.
+
 Arm swings grow with walking speed. Forearm bend follows the shoulder with a
 small delay. In the flat-ground test, the shoulder's swing spans 0.622 radians
 at 0.35 m/s and 1.181 radians at 1.30 m/s. Both arm bones keep their lengths.

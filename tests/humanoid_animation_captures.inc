@@ -34,6 +34,7 @@ static void CaptureHumanoidAnimation(const char *directory)
                 true, 1.0f / 60.0f, FlatSkinProbe, NULL);
             agent->position.x += agent->humanoid.root_velocity.x / 60.0f;
             agent->position.z += agent->humanoid.root_velocity.z / 60.0f;
+            CcLocalAgentPresentationStepInternal(agent);
             CcLocalAgentInterpolateInternal(agent, 1.0f);
         }
         if (tick % 4 != 0) continue;
