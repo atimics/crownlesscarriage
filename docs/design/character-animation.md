@@ -57,6 +57,9 @@ repeated rendering, reduced motion, guard poses, and the walk-to-idle threshold.
 
 `CcLocalAgentAttend` accepts a point at eye height and a duration. A greeting
 adds a small head lift, a nod, and a settle. Talking to a person uses this call.
+The conversation input loop advances the local actor so the greeting plays
+while the dialogue is open. Its regression test also checks the saved world
+hash through the complete greeting.
 Attention, chest turn, lean, and nod advance once per fixed tick. Rendering
 blends their snapshots. The reduced-motion setting uses the resting head pose.
 Combat, climbing, swimming, and falling use their physical action poses.
