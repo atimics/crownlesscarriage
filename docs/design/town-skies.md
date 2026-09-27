@@ -27,7 +27,10 @@ art, not new settlements, services, mine entrances, stock or production events.
 The existing atmosphere controller supplies continuously blended clear,
 rain/overcast, amber dusk, moonlit night and dragon-omen parameters. Clear
 weather also receives a dawn tint during the existing clock's first 90 daytime
-minutes. Night adds fixed stars and a moon; rain/omen suppress the solar disc.
+minutes. Night adds fixed background stars and a moon. It also draws the 13
+zodiac constellations (five points each) and a gold wanderer placed by
+`CcCalendarWanderer()`; both turn with the day clock (`DrawTownSky`'s star
+pass in `town_sky.inc`). Rain/omen suppress the solar disc.
 No weather, clock, economy or save schema is added or changed. Burn damage
 adds low haze only. Hunger cannot summon rain; damage is not evidence of a
 still-burning fire, so no ungrounded smoke/production plumes are fabricated.
