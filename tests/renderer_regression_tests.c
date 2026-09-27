@@ -141,6 +141,7 @@ static void WriteViewportFixture(const char *path)
 #include "character_material_captures.inc"
 #include "hero_face_captures.inc"
 #include "humanoid_animation_captures.inc"
+#include "humanoid_presentation_tests.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
 #include "creature_captures.inc"
@@ -205,6 +206,7 @@ int main(int argc, char **argv)
     TestStableVisibility();
     TestBuildingRevealTiming();
     TestSkinTurns();
+    TestHumanoidPresentation();
     TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--sky-captures") == 0 ||
                       strcmp(argv[1], "--sky-graphics") == 0 ||

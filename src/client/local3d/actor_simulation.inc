@@ -5895,7 +5895,7 @@ static bool ApplySteppedLocomotionPose(CcLocalAgent *agent,
                                        CcHumanoidPose *result)
 {
     const int32_t pose_count = 8;
-    const float transition_fraction = 0.24f;
+    const float transition_fraction = 0.55f;
     bool active = agent->humanoid.action == CC_HUMANOID_ACTION_LOCOMOTION &&
                   agent->grounded && !agent->climbing && !agent->swimming &&
                   !agent->humanoid.ragdoll.active &&
@@ -5932,6 +5932,10 @@ static bool ApplySteppedLocomotionPose(CcLocalAgent *agent,
                       &state->target_local, transition);
     HumanoidPoseToWorld(result, &local_result, physical->pelvis,
                         agent->facing_yaw);
+    /* Let the held pose join and leave the walk as speed changes. */
+    float walk_weight = SmoothStep01((agent->humanoid.speed.value - 0.10f) /
+                                      0.25f);
+    BlendHumanoidPose(result, physical, result, walk_weight);
     PreserveSteppedFootContacts(result, physical);
     return true;
 }
@@ -5944,6 +5948,45 @@ static CcLimbVec3 OffsetPosePoint(CcLimbVec3 point, CcLimbVec3 right,
     point.y += right.y * side + up.y * rise + forward.y * depth;
     point.z += right.z * side + up.z * rise + forward.z * depth;
     return point;
+}
+
+/* Breathing follows the same fixed-tick clock as the body pose. */
+static void ApplyIdleBreathing(const CcLocalAgent *agent,
+                                CcHumanoidPose *pose, float amount)
+{
+    const CcHumanoidGait *gait = &agent->humanoid;
+    if (reduced_motion_enabled || !agent->grounded || agent->climbing ||
+        agent->swimming || gait->ragdoll.active ||
+        gait->action != CC_HUMANOID_ACTION_LOCOMOTION) return;
+
+    float time = fmaxf(0.0f, gait->action_time -
+                       (1.0f - amount) * gait->last_delta_time);
+    float weight = SmoothStep01(time / 0.6f) *
+        (1.0f - SmoothStep01(fabsf(gait->speed.value) / 0.30f));
+    float phase = time * (2.0f * PI / 3.6f) +
+        (float)(agent->appearance.seed & UINT32_C(0xff)) / 255.0f * 2.0f * PI;
+    float breath = sinf(phase) * weight;
+    CcLimbVec3 right = {cosf(agent->facing_yaw), 0.0f,
+                        -sinf(agent->facing_yaw)};
+    CcLimbVec3 up = {0.0f, 1.0f, 0.0f};
+    CcLimbVec3 forward = {sinf(agent->facing_yaw), 0.0f,
+                          cosf(agent->facing_yaw)};
+    pose->spine = OffsetPosePoint(pose->spine, right, up, forward,
+                                  0.0f, breath * 0.003f, breath * 0.002f);
+    pose->chest = OffsetPosePoint(pose->chest, right, up, forward,
+                                  0.0f, breath * 0.016f, breath * 0.009f);
+    pose->neck = OffsetPosePoint(pose->neck, right, up, forward,
+                                 0.0f, breath * 0.016f, breath * 0.009f);
+    pose->head = OffsetPosePoint(pose->head, right, up, forward,
+                                 0.0f, breath * 0.016f, breath * 0.009f);
+    for (int32_t arm = 0; arm < CC_HUMANOID_ARM_COUNT; ++arm) {
+        pose->shoulder[arm] = OffsetPosePoint(pose->shoulder[arm],
+            right, up, forward, 0.0f, breath * 0.016f, breath * 0.009f);
+        pose->elbow[arm] = OffsetPosePoint(pose->elbow[arm],
+            right, up, forward, 0.0f, breath * 0.016f, breath * 0.009f);
+        pose->hand[arm] = OffsetPosePoint(pose->hand[arm],
+            right, up, forward, 0.0f, breath * 0.016f, breath * 0.009f);
+    }
 }
 
 static bool ApplyLocomotionPostureCorrection(const CcLocalAgent *agent,
@@ -6246,6 +6289,7 @@ void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
         (void)ApplySteppedLocomotionPose(
             agent, &physical_pose, &agent->render_pose);
         (void)ApplyRoleIdleGesture(agent, &agent->render_pose);
+        ApplyIdleBreathing(agent, &agent->render_pose, amount);
         (void)ApplyHeroKnockdownPresentationPose(agent,
                                                  &agent->render_pose);
         agent->render_pose_valid = true;
