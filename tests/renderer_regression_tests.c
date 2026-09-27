@@ -207,6 +207,7 @@ int main(int argc, char **argv)
     TestBuildingRevealTiming();
     TestSkinTurns();
     TestHumanoidPresentation();
+    TestHumanoidPresentationSchedules();
     TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--sky-captures") == 0 ||
                       strcmp(argv[1], "--sky-graphics") == 0 ||

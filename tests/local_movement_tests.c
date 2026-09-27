@@ -4212,7 +4212,7 @@ int main(void)
     uint32_t pose_mask = 0;
     uint32_t stepped_pose_mask = 0;
     int32_t held_upper_pose_frames = 0;
-    CcHumanoidPose previous_stepped_render = paced_agent.render_pose;
+    CcHumanoidPose previous_stepped_render = paced_agent.stepped_pose.pose;
     float previous_stepped_yaw = paced_agent.facing_yaw;
     int32_t previous_stepped_bin = -1;
     for (int32_t frame = 0; frame < 600; ++frame) {
@@ -4233,13 +4233,13 @@ int main(void)
             if (stepped_bin == previous_stepped_bin && within > 0.32f &&
                 MaximumRelativeUpperPoseStep(
                     &previous_stepped_render,
-                    &paced_agent.render_pose,
+                    &paced_agent.stepped_pose.pose,
                     paced_agent.facing_yaw - previous_stepped_yaw) < 0.00001f) {
                 held_upper_pose_frames += 1;
             }
             previous_stepped_bin = stepped_bin;
         }
-        previous_stepped_render = paced_agent.render_pose;
+        previous_stepped_render = paced_agent.stepped_pose.pose;
         previous_stepped_yaw = paced_agent.facing_yaw;
 
         const CcHumanoidPoseSnapshot *render_physical =

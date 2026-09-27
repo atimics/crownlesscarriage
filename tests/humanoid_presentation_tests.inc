@@ -64,13 +64,16 @@ static void TestHumanoidPresentation(void)
     /* Cross the walk/idle threshold with a held hand pose still in flight. */
     CcHumanoidGaitSetGuarded(&agent.humanoid, false);
     agent.humanoid.speed.value = 0.7f;
+    CcLocalAgentPresentationStepInternal(&agent);
     CcLocalAgentInterpolateInternal(&agent, 1.0f);
     agent.stepped_pose.from_local.hand[0].z += 0.15f;
     agent.stepped_pose.target_local.hand[0].z += 0.15f;
     agent.humanoid.speed.value = 0.1001f;
+    CcLocalAgentPresentationStepInternal(&agent);
     CcLocalAgentInterpolateInternal(&agent, 1.0f);
     CcHumanoidPose before_stop = agent.render_pose;
     agent.humanoid.speed.value = 0.0999f;
+    CcLocalAgentPresentationStepInternal(&agent);
     CcLocalAgentInterpolateInternal(&agent, 1.0f);
     RequireRenderer(Vector3Distance(FromLimbVector(before_stop.hand[0]),
         FromLimbVector(agent.render_pose.hand[0])) < 0.001f,
@@ -78,4 +81,40 @@ static void TestHumanoidPresentation(void)
     (void)printf("PASS character presentation: idle range %.4f m, "
                  "120 Hz chest step %.6f m, planted feet and eased stops\n",
                  maximum_chest - minimum_chest, maximum_step);
+}
+
+/* Exercise real fixed updates with four independent display schedules. */
+static void TestHumanoidPresentationSchedules(void)
+{
+    CcLocalAgent agents[4];
+    for (int32_t i = 0; i < 4; ++i) {
+        CcLocalAgentInit(&agents[i], (Vector2){4.0f, 5.5f}, true);
+        RequireRenderer(CcLocalAgentSetExactTarget(&agents[i],
+            (Vector3){8.0f, 0.0f, 5.5f}, true),
+            "the presentation timing route must be reachable");
+    }
+    for (int32_t tick = 0; tick < 600; ++tick) {
+        for (int32_t i = 0; i < 4; ++i) {
+            CcLocalAgentFixedStepInternal(&agents[i], 1.0f / 60.0f, true);
+        }
+        CcLocalAgentInterpolateInternal(&agents[0], 1.0f);
+        if (tick % 2 == 0) CcLocalAgentInterpolateInternal(&agents[1], 1.0f);
+        CcLocalAgentInterpolateInternal(&agents[2], 0.5f);
+        CcLocalAgentInterpolateInternal(&agents[2], 1.0f);
+        if (tick % 7 == 0) {
+            CcLocalAgentInterpolateInternal(&agents[3], 0.15f);
+            CcLocalAgentInterpolateInternal(&agents[3], 0.65f);
+        }
+        if (tick % 6 != 0) continue;
+        for (int32_t i = 0; i < 4; ++i) {
+            CcLocalAgentInterpolateInternal(&agents[i], 0.37f);
+            RequireRenderer(memcmp(&agents[0].humanoid, &agents[i].humanoid,
+                sizeof(agents[0].humanoid)) == 0,
+                "display schedules must share the same physical movement");
+            RequireRenderer(memcmp(&agents[0].render_pose, &agents[i].render_pose,
+                sizeof(agents[0].render_pose)) == 0,
+                "30, 60, 120 and uneven display schedules must share poses");
+        }
+    }
+    (void)puts("PASS character pose timing: exact match at 30, 60, 120 and uneven rates");
 }

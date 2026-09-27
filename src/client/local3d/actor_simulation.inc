@@ -1491,6 +1491,7 @@ void CcLocalCourseResolveContactsInternal(CcLocalCourse *course, CcLocalAgent *p
                                       ToLimbVector(agent->velocity), agent->grounded);
         CcHumanoidGaitResolvePose(&agent->humanoid, ToLimbVector(agent->position),
                                   agent->facing_yaw);
+        CcLocalAgentPresentationStepInternal(agent);
     }
 }
 
@@ -3955,6 +3956,7 @@ static bool BeginClimb(CcLocalAgent *agent, const NavPlatform *platform)
     if (agent->morphology == CC_MORPHOLOGY_BIPED) {
         CcHumanoidGaitBeginClimb(&agent->humanoid);
         agent->humanoid_needs_reset = false;
+        agent->stepped_pose = (CcSteppedPoseState){0};
     } else {
         (void)CcLimbRigRequestPace(&agent->limb_rig, CC_LIMB_PACE_WALK);
     }
@@ -5192,7 +5194,7 @@ static void ApplyRagdollWaterResponse(CcHumanoidGait *gait,
     }
 }
 
-void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
+static void StepLocalAgent(CcLocalAgent *agent, float delta_time,
                                    bool market_interior)
 {
     const float gravity = 9.81f;
@@ -5217,6 +5219,7 @@ void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                             agent->facing_yaw, ProbeLocalSurface, &context);
         ApplyAgentWalkingProfile(agent);
         agent->humanoid_needs_reset = false;
+        agent->stepped_pose = (CcSteppedPoseState){0};
     }
     if (!biped && agent->multileg_ragdoll.active) {
         bool active = CcMultilegRagdollStep(
@@ -6268,6 +6271,39 @@ static void UpdateRenderCape(CcLocalAgent *agent, float amount)
     agent->render_cape.anchor = render_anchor;
 }
 
+/* Pose history advances once per physical step, including off-screen actors. */
+void CcLocalAgentPresentationStepInternal(CcLocalAgent *agent)
+{
+    if (agent == NULL) return;
+    CcSteppedPoseState *state = &agent->stepped_pose;
+    if (agent->morphology != CC_MORPHOLOGY_BIPED ||
+        !agent->humanoid.initialized) {
+        *state = (CcSteppedPoseState){0};
+        return;
+    }
+    const CcHumanoidPoseSnapshot *snapshot =
+        CcHumanoidGaitCurrentSnapshot(&agent->humanoid);
+    CcHumanoidPose physical = snapshot != NULL ? snapshot->pose :
+        agent->humanoid.pose;
+    (void)ApplyLocomotionPostureCorrection(agent, &physical);
+    uint64_t sequence = snapshot != NULL ? snapshot->sequence : 0;
+    /* Contact resolution can revise the current tick after agents step. */
+    if (state->sequence != sequence) state->previous_pose = state->pose;
+    state->pose = physical;
+    (void)ApplySteppedLocomotionPose(agent, &physical, &state->pose);
+    if (!state->snapshots_valid) state->previous_pose = state->pose;
+    state->sequence = sequence;
+    state->action = agent->humanoid.action;
+    state->snapshots_valid = true;
+}
+
+void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
+                                   bool market_interior)
+{
+    StepLocalAgent(agent, delta_time, market_interior);
+    CcLocalAgentPresentationStepInternal(agent);
+}
+
 void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
 {
     if (agent == NULL) return;
@@ -6286,8 +6322,14 @@ void CcLocalAgentInterpolateInternal(CcLocalAgent *agent, float amount)
         BlendHumanoidPose(&physical_pose, before_pose, after_pose, amount);
         (void)ApplyLocomotionPostureCorrection(agent, &physical_pose);
         agent->render_pose = physical_pose;
-        (void)ApplySteppedLocomotionPose(
-            agent, &physical_pose, &agent->render_pose);
+        const CcSteppedPoseState *state = &agent->stepped_pose;
+        if (state->snapshots_valid && after != NULL &&
+            state->sequence == after->sequence &&
+            state->action == agent->humanoid.action) {
+            BlendHumanoidPose(&agent->render_pose, &state->previous_pose,
+                              &state->pose, amount);
+            PreserveSteppedFootContacts(&agent->render_pose, &physical_pose);
+        }
         (void)ApplyRoleIdleGesture(agent, &agent->render_pose);
         ApplyIdleBreathing(agent, &agent->render_pose, amount);
         (void)ApplyHeroKnockdownPresentationPose(agent,

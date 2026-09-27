@@ -310,7 +310,12 @@ typedef struct CcLocalCapeState {
 typedef struct CcSteppedPoseState {
     CcHumanoidPose from_local;
     CcHumanoidPose target_local;
+    CcHumanoidPose previous_pose;
+    CcHumanoidPose pose;
+    uint64_t sequence;
+    CcHumanoidAction action;
     int32_t locomotion_bin;
+    bool snapshots_valid;
     bool initialized;
 } CcSteppedPoseState;
 
