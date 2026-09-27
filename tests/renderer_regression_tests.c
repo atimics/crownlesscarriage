@@ -141,6 +141,7 @@ static void WriteViewportFixture(const char *path)
 #include "character_material_captures.inc"
 #include "hero_face_captures.inc"
 #include "humanoid_animation_captures.inc"
+#include "humanoid_performance_captures.inc"
 #include "humanoid_presentation_tests.inc"
 #include "character_surface_tests.inc"
 #include "animal_captures.inc"
@@ -208,6 +209,7 @@ int main(int argc, char **argv)
     TestSkinTurns();
     TestHumanoidPresentation();
     TestHumanoidPresentationSchedules();
+    TestCharacterPerformance();
     TestPonyHarnessAttachment();
     if (argc == 3 && (strcmp(argv[1], "--sky-captures") == 0 ||
                       strcmp(argv[1], "--sky-graphics") == 0 ||
@@ -220,7 +222,8 @@ int main(int argc, char **argv)
                       strcmp(argv[1], "--pony-gait-captures") == 0 ||
                       strcmp(argv[1], "--material-captures") == 0 ||
                       strcmp(argv[1], "--hero-face-captures") == 0 ||
-                      strcmp(argv[1], "--animation-captures") == 0)) {
+                      strcmp(argv[1], "--animation-captures") == 0 ||
+                      strcmp(argv[1], "--performance-captures") == 0)) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN);
         InitWindow(1280, 760, "Renderer regression checks");
         SetTraceLogLevel(LOG_WARNING);
@@ -259,6 +262,8 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[1], "--travel-graphics") == 0) {
             TestTravelForestCameraTurn();
             TestTravelLeafShimmer();
+        } else if (strcmp(argv[1], "--performance-captures") == 0) {
+            CaptureHumanoidPerformance(argv[2]);
         } else if (strcmp(argv[1], "--animation-captures") == 0) {
             CaptureHumanoidAnimation(argv[2]);
         } else if (strcmp(argv[1], "--creature-captures") == 0) {

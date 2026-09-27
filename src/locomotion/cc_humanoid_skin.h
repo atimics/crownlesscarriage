@@ -81,6 +81,8 @@ const char *CcHumanoidSkinBoneName(CcHumanoidSkinBone bone);
 int32_t CcHumanoidSkinBoneParent(CcHumanoidSkinBone bone);
 int32_t CcHumanoidSkinBoneFind(const char *name);
 const char *CcHumanoidSkinSocketName(CcHumanoidSkinSocket socket);
+void CcHumanoidSkinPoseResolveGaze(const CcHumanoidPose *source,
+    float head_yaw, float head_pitch, CcHumanoidSkinPose *result);
 void CcHumanoidSkinPoseResolve(const CcHumanoidPose *source,
                                CcHumanoidSkinPose *result);
 

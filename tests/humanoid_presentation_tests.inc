@@ -61,25 +61,8 @@ static void TestHumanoidPresentation(void)
                             sizeof(agent.render_pose)) == 0,
                     "guard must retain its physical pose");
 
-    /* Cross the walk/idle threshold with a held hand pose still in flight. */
-    CcHumanoidGaitSetGuarded(&agent.humanoid, false);
-    agent.humanoid.speed.value = 0.7f;
-    CcLocalAgentPresentationStepInternal(&agent);
-    CcLocalAgentInterpolateInternal(&agent, 1.0f);
-    agent.stepped_pose.from_local.hand[0].z += 0.15f;
-    agent.stepped_pose.target_local.hand[0].z += 0.15f;
-    agent.humanoid.speed.value = 0.1001f;
-    CcLocalAgentPresentationStepInternal(&agent);
-    CcLocalAgentInterpolateInternal(&agent, 1.0f);
-    CcHumanoidPose before_stop = agent.render_pose;
-    agent.humanoid.speed.value = 0.0999f;
-    CcLocalAgentPresentationStepInternal(&agent);
-    CcLocalAgentInterpolateInternal(&agent, 1.0f);
-    RequireRenderer(Vector3Distance(FromLimbVector(before_stop.hand[0]),
-        FromLimbVector(agent.render_pose.hand[0])) < 0.001f,
-        "the held walk must ease into the resting pose at low speed");
     (void)printf("PASS character presentation: idle range %.4f m, "
-                 "120 Hz chest step %.6f m, planted feet and eased stops\n",
+                 "120 Hz chest step %.6f m, planted feet\n",
                  maximum_chest - minimum_chest, maximum_step);
 }
 
@@ -93,10 +76,15 @@ static void TestHumanoidPresentationSchedules(void)
             (Vector3){8.0f, 0.0f, 5.5f}, true),
             "the presentation timing route must be reachable");
     }
+    float deepest_braking_lean = 0.0f;
     for (int32_t tick = 0; tick < 600; ++tick) {
         for (int32_t i = 0; i < 4; ++i) {
+            if (tick == 300) CcLocalAgentAttend(&agents[i],
+                (Vector3){8.8f, 1.55f, 5.5f}, 2.0f, true);
             CcLocalAgentFixedStepInternal(&agents[i], 1.0f / 60.0f, true);
         }
+        deepest_braking_lean = fminf(deepest_braking_lean,
+                                     agents[0].performance.lean.value);
         CcLocalAgentInterpolateInternal(&agents[0], 1.0f);
         if (tick % 2 == 0) CcLocalAgentInterpolateInternal(&agents[1], 1.0f);
         CcLocalAgentInterpolateInternal(&agents[2], 0.5f);
@@ -114,7 +102,97 @@ static void TestHumanoidPresentationSchedules(void)
             RequireRenderer(memcmp(&agents[0].render_pose, &agents[i].render_pose,
                 sizeof(agents[0].render_pose)) == 0,
                 "30, 60, 120 and uneven display schedules must share poses");
+            RequireRenderer(agents[0].render_head_yaw == agents[i].render_head_yaw &&
+                            agents[0].render_head_pitch == agents[i].render_head_pitch,
+                            "gaze and greeting must match across display rates");
         }
     }
+    RequireRenderer(deepest_braking_lean < -0.015f && deepest_braking_lean > -0.066f,
+                    "arrival must prepare a small backward weight shift");
+    (void)printf("PASS prepared stop: lean %.4f rad\n", deepest_braking_lean);
     (void)puts("PASS character pose timing: exact match at 30, 60, 120 and uneven rates");
+}
+
+static void TestCharacterPerformance(void)
+{
+    CcLocalAgent agent;
+    CcLocalAgentInit(&agent, (Vector2){4.0f, 5.5f}, true);
+    agent.facing_yaw = 0.0f;
+    CcLocalAgentSetMorphology(&agent, CC_MORPHOLOGY_BIPED, true);
+    CcLocalAgentFixedStepInternal(&agent, 1.0f / 60.0f, true);
+    CcLocalAgentAttend(&agent, (Vector3){6.0f, 1.55f, 5.5f}, 1.0f, true);
+    float largest_nod = 0.0f;
+    float maximum_yaw_step = 0.0f;
+    float previous_yaw = 0.0f;
+    for (int32_t tick = 0; tick < 240; ++tick) {
+        CcLocalAgentFixedStepInternal(&agent, 1.0f / 60.0f, true);
+        CcHumanoidGait saved = agent.humanoid;
+        CcCharacterPerformance acting = agent.performance;
+        CcLocalAgentInterpolateInternal(&agent, 1.0f);
+        RequireRenderer(memcmp(&acting, &agent.performance, sizeof(acting)) == 0 &&
+                        memcmp(&saved, &agent.humanoid, sizeof(saved)) == 0,
+                        "rendering must preserve performance and physical state");
+        largest_nod = fmaxf(largest_nod, agent.performance.nod.value);
+        maximum_yaw_step = fmaxf(maximum_yaw_step,
+            fabsf(agent.performance.gaze_yaw.value - previous_yaw));
+        previous_yaw = agent.performance.gaze_yaw.value;
+        if (tick == 5) {
+            RequireRenderer(agent.performance.gaze_yaw.value > 0.55f &&
+                agent.performance.chest_yaw.value > 0.08f &&
+                agent.performance.gaze_yaw.value > agent.performance.chest_yaw.value * 2.0f,
+                "a glance must lead the chest turn");
+        }
+        for (int32_t leg = 0; leg < 2; ++leg) {
+            RequireRenderer(Vector3Distance(FromLimbVector(agent.render_pose.ankle[leg]),
+                FromLimbVector(saved.pose.ankle[leg])) < 0.000001f,
+                "acting must keep physical foot contacts");
+        }
+        for (int32_t arm = 0; arm < 2; ++arm) {
+            float before = Vector3Distance(FromLimbVector(saved.pose.elbow[arm]),
+                                            FromLimbVector(saved.pose.hand[arm]));
+            float after = Vector3Distance(FromLimbVector(agent.pose_history.pose.elbow[arm]),
+                                           FromLimbVector(agent.pose_history.pose.hand[arm]));
+            RequireRenderer(fabsf(after - before) < 0.003f,
+                            "acting must retain forearm length");
+        }
+    }
+    RequireRenderer(largest_nod > 0.15f && largest_nod < 0.23f &&
+                    maximum_yaw_step < 0.18f &&
+                    fabsf(agent.performance.gaze_yaw.value) < 0.0001f &&
+                    fabsf(agent.performance.chest_yaw.value) < 0.0001f &&
+                    fabsf(agent.performance.nod.value) < 0.0001f,
+                    "attention and greeting must ease into a settled pose");
+    CcHumanoidSkinPose plain, gaze;
+    CcHumanoidSkinPoseResolve(&agent.humanoid.pose, &plain);
+    CcHumanoidSkinPoseResolveGaze(&agent.humanoid.pose, 0.7f, 0.2f, &gaze);
+    RequireRenderer(gaze.valid &&
+        Vector3Distance(FromLimbVector(plain.bones[CC_HUMANOID_SKIN_HEAD].forward),
+                        FromLimbVector(gaze.bones[CC_HUMANOID_SKIN_HEAD].forward)) > 0.5f,
+        "the head skin must turn with its gaze");
+    RequireRenderer(fabsf(Vector3Distance(
+        FromLimbVector(gaze.bones[CC_HUMANOID_SKIN_HEAD].head),
+        FromLimbVector(gaze.bones[CC_HUMANOID_SKIN_HEAD].tail)) - 0.18f) < 0.000001f,
+        "gaze must retain the head bone length");
+    for (int32_t bone = CC_HUMANOID_SKIN_THIGH_LEFT;
+         bone < CC_HUMANOID_SKIN_BONE_COUNT; ++bone) {
+        RequireRenderer(memcmp(&plain.bones[bone], &gaze.bones[bone],
+                        sizeof(plain.bones[bone])) == 0,
+                        "head direction must preserve leg skin frames");
+    }
+    CcLocalAgentAttend(&agent, (Vector3){6.0f, 1.55f, 5.5f}, 1.0f, true);
+    CcLocalRendererSetReducedMotion(true);
+    CcLocalAgentFixedStepInternal(&agent, 1.0f / 60.0f, true);
+    CcLocalAgentInterpolateInternal(&agent, 1.0f);
+    RequireRenderer(agent.render_head_yaw == 0.0f && agent.render_head_pitch == 0.0f,
+                    "reduced motion must retain the resting head pose");
+    CcLocalRendererSetReducedMotion(false);
+    CcLocalAgentAttend(&agent, (Vector3){6.0f, 1.55f, 5.5f}, 1.0f, true);
+    CcHumanoidGaitSetGuarded(&agent.humanoid, true);
+    CcLocalAgentFixedStepInternal(&agent, 1.0f / 60.0f, true);
+    CcLocalAgentInterpolateInternal(&agent, 1.0f);
+    RequireRenderer(agent.render_head_yaw == 0.0f && agent.render_head_pitch == 0.0f,
+                    "guard must retain its action pose");
+    (void)printf("PASS character acting: head leads chest, nod %.3f rad, "
+                 "largest gaze step %.3f rad, planted feet and settled rest\n",
+                 largest_nod, maximum_yaw_step);
 }

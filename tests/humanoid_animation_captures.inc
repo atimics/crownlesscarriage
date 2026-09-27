@@ -41,7 +41,8 @@ static void CaptureHumanoidAnimation(const char *directory)
         for (int32_t sample = 0; sample < 3; ++sample) {
             CcLocalAgent *agent = &agents[sample];
             CcHumanoidSkinPose skin;
-            CcHumanoidSkinPoseResolve(AgentRenderPose(agent), &skin);
+            CcHumanoidSkinPoseResolveGaze(AgentRenderPose(agent),
+                agent->render_head_yaw, agent->render_head_pitch, &skin);
             Camera3D camera = {
                 .position = {agent->position.x + 4.0f, 2.8f,
                              agent->position.z + 6.0f},

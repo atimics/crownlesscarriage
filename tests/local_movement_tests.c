@@ -147,7 +147,7 @@ static float RelativePointStep(CcLimbVec3 before, CcLimbVec3 before_root,
         after.y - after_root.y,
         after.z - after_root.z,
     };
-    /* Compare the held pose in the actor's frame as its heading changes. */
+    /* Compare the upper-body pose in the actor's frame as its heading changes. */
     float cosine = cosf(yaw_delta);
     float sine = sinf(yaw_delta);
     before_relative = (CcLimbVec3){
@@ -4210,11 +4210,9 @@ int main(void)
     }
     float maximum_gait_speed = 0.0f;
     uint32_t pose_mask = 0;
-    uint32_t stepped_pose_mask = 0;
-    int32_t held_upper_pose_frames = 0;
-    CcHumanoidPose previous_stepped_render = paced_agent.stepped_pose.pose;
-    float previous_stepped_yaw = paced_agent.facing_yaw;
-    int32_t previous_stepped_bin = -1;
+    float maximum_upper_pose_step = 0.0f;
+    CcHumanoidPose previous_presentation = paced_agent.pose_history.pose;
+    float previous_presentation_yaw = paced_agent.facing_yaw;
     for (int32_t frame = 0; frame < 600; ++frame) {
         CcLocalAgentUpdate(&paced_agent, 1.0f / 60.0f, true);
         float speed = sqrtf(paced_agent.velocity.x * paced_agent.velocity.x +
@@ -4225,26 +4223,18 @@ int main(void)
                 paced_agent.humanoid.phase * 8.0f) & 7;
             pose_mask |= UINT32_C(1) << pose_bin;
         }
-        if (paced_agent.stepped_pose.initialized) {
-            int32_t stepped_bin = paced_agent.stepped_pose.locomotion_bin;
-            stepped_pose_mask |= UINT32_C(1) << stepped_bin;
-            float within = paced_agent.humanoid.phase * 8.0f;
-            within -= floorf(within);
-            if (stepped_bin == previous_stepped_bin && within > 0.32f &&
-                MaximumRelativeUpperPoseStep(
-                    &previous_stepped_render,
-                    &paced_agent.stepped_pose.pose,
-                    paced_agent.facing_yaw - previous_stepped_yaw) < 0.00001f) {
-                held_upper_pose_frames += 1;
-            }
-            previous_stepped_bin = stepped_bin;
+        if (frame > 1 && speed > 0.25f) {
+            maximum_upper_pose_step = fmaxf(maximum_upper_pose_step,
+                MaximumRelativeUpperPoseStep(&previous_presentation,
+                    &paced_agent.pose_history.pose,
+                    paced_agent.facing_yaw - previous_presentation_yaw));
         }
-        previous_stepped_render = paced_agent.stepped_pose.pose;
-        previous_stepped_yaw = paced_agent.facing_yaw;
+        previous_presentation = paced_agent.pose_history.pose;
+        previous_presentation_yaw = paced_agent.facing_yaw;
 
         const CcHumanoidPoseSnapshot *render_physical =
             CcHumanoidGaitPreviousSnapshot(&paced_agent.humanoid);
-        if (render_physical != NULL && paced_agent.stepped_pose.initialized) {
+        if (render_physical != NULL && paced_agent.pose_history.snapshots_valid) {
             for (int32_t leg = 0; leg < CC_HUMANOID_LEG_COUNT; ++leg) {
                 const CcHumanoidPose *physical = &render_physical->pose;
                 const CcHumanoidPose *visual = &paced_agent.render_pose;
@@ -4257,7 +4247,7 @@ int main(void)
                     Distance3(physical->toe[leg], visual->toe[leg]) >
                         0.00001f) {
                     (void)fprintf(stderr,
-                                  "stepped render pose broke foot contact\n");
+                                  "presentation broke foot contact\n");
                     return 1;
                 }
             }
@@ -4289,11 +4279,9 @@ int main(void)
                       pose_mask);
         return 1;
     }
-    if (stepped_pose_mask != UINT32_C(0xff) ||
-        held_upper_pose_frames < 4) {
-        (void)fprintf(stderr,
-                      "stepped gait vocabulary was incomplete: mask 0x%02x holds %d\n",
-                      stepped_pose_mask, held_upper_pose_frames);
+    if (maximum_upper_pose_step > 0.09f) {
+        (void)fprintf(stderr, "continuous upper-body step was too large: %.4f m\n",
+                      maximum_upper_pose_step);
         return 1;
     }
     if (CcBiomechRigMeanActivation(&paced_agent.humanoid.body) <= 0.01f) {
