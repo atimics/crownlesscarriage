@@ -1312,7 +1312,8 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
             urge, rein_in, stopped, delta_time);
     }
 
-    float line_target = captain_pace && sim->journey.road_position_active ?
+    float line_target = captain_pace && sim != NULL &&
+        sim->journey.road_position_active ?
         (float)sim->journey.road_line * 1.25f : 0.0f;
     float line_step = delta_time * 2.4f;
     float line_change = line_target - convoy->lateral_offset;
