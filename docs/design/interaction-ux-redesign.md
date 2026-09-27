@@ -69,6 +69,8 @@ Use one frame's target plan for rendering and input. Recheck the action against 
 
 The final key map should resolve the existing Tab-to-ledger binding before target cycling ships. Suggested default: Tab cycles world targets; J opens the Company Book; F acts; Escape steps back. Keep input remapping and visible key hints in the same contract. Touch uses generous hit areas and the visible alternate-action button.
 
+Current state: the shipped map differs. E selects the next visible target and Shift+E goes back; F uses the selected action; B or Tab opens the Company Book; Q opens it on Work; J is Jump. The target, act, Book, and Work keys can be rebound (`src/client/cc_client_policy.c`).
+
 ### Hard cases
 
 - Use the last presented camera and its viewport for picking. During a room blend, the hit shape follows the rendered object.
@@ -84,6 +86,8 @@ The final key map should resolve the existing Tab-to-ledger binding before targe
 The world is the main surface. Use a quiet top strip for place, time, purse, and access to the Company Book and menu. Keep the current objective and the focused action outside the scene. Reserve one compact region for replies, trading, or road choices. Each mode has one clear primary action.
 
 The Company Book has four sections: **Promises**, **People**, **Cargo**, and **Journal**. Maps and learned road notes are available from the book. Preparing a departure belongs at the carriage. Place-dependent actions explain the needed person or place and offer an approach when the target is known and reachable.
+
+Current state: the Book has three tabs: **Work**, **People**, and **Notes** (`DrawAdventureAhead` and `DrawAdventurePeople` in `src/client/cc_adventure.inc`). Cargo and Journal are not separate tabs.
 
 ### Storyboard A: the first town
 
@@ -103,6 +107,8 @@ The active speaker stays visible. Their current line is the scene's speech capti
 
 Every named character has a stable conversation identity under #275. Local conversation and distant letters share that person's thread. The six reply kinds in #279 use plain, specific text for the current situation. Relevant choices appear first; unavailable choices carry a useful reason where they help explain an option. Message delivery, source, and confidence remain visible in People when mail work lands.
 
+Current state: delayed-echo letters were cut in #955 and are legacy only. People lists up to five known people with name and whereabouts; it does not show source or confidence.
+
 ### Storyboard D: the carriage and road
 
 The carriage opens cargo, company, maps, and departure choices. A departure card names the destination, known travel time, supplies, and reported danger. The hero boards; the wheels begin to move; the view joins the storybook road. Travel keeps the carriage moving. CAREFUL, STEADY, and PUSH set the pace in the toolbar. Nearby stops appear below the scene. Speed and camera ease near a stop, and PUSH gives the player a shorter response window. Choosing a pony opens a close conversation view. Routine breaks continue automatically.
@@ -117,11 +123,15 @@ A visible threat and a short cue explain a change to danger. The focused person 
 
 At Silverwick, Deliver names the accepted promise and its remaining quantity. A receipt shows goods handed over, reward, and promise progress. Jory's response describes the result. The journal links the receipt to the person and place. A later return visit shows the changed town through #269. Promises keeps completed and failed work readable alongside the current commitment.
 
+Current state: the Work page shows only the accepted promise, the latest road receipt, and local board notices. Completed and failed work is not kept there.
+
 ## Time, menus, and save flow
 
 Proposed solo rule: opening the book, a conversation, a trade choice, or the menu pauses local action and campaign advancement. Cosmetic motion can continue if it respects reduced motion. Closing a panel resumes the previous pace; a decision stop resumes at normal time after an explicit Continue. Save and loading feedback use their own persistent status.
 
 Escape follows a fixed order: cancel pending approach; close the top panel; open the pause menu. The pause menu contains Resume, Save, Load, Settings, and New campaign. New campaign shows the existing campaign and an explicit archive choice. Raw time-jump keys move to a visible rest or wait choice; testing shortcuts belong in a declared developer mode.
+
+Current state: the in-game pause menu (`DrawAdventurePause` in `src/client/cc_adventure.inc`) offers Resume, Save game, Company Book, Motion, Text size, Target hints, Sound, and Settings & controls. The title-screen game menu (`src/client/cc_frontend.inc`) offers Resume, Save world, Sound & voices, Reduced motion, Save and return to title, Delete world, and Save and quit. Neither has a Load or New campaign button; F9 reloads the save. Outside the adventure UI, Period rests one day and K passes a week; in the adventure scene, R rests one day (`src/client/main.c`). There is no developer mode.
 
 The menu exposes text size, caption size, reduced motion, input hints, input bindings, and optional focus assistance. Show settings before starting a campaign. The user can return to them during play.
 

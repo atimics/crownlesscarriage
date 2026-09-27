@@ -27,7 +27,10 @@ The two departure refusals are gone:
 
 Feeding at town is a boost, not a toll: a full tray is several days of
 strong recovery while parked, and the weekly stable care at settlements is
-unchanged. A mare near foaling still stays home; that gate is about the
+unchanged. In town, the **Care for horses** action (Shift+F by default)
+spends one day and one wheat from the tray, cargo, or stable market, at the
+crown cost shown on the button (`AddHorseCareAction` in `src/client/main.c`,
+`CcSimHorseCarePreview`). A mare near foaling still stays home; that gate is about the
 foal, not the food.
 
 ## The tray
@@ -70,5 +73,9 @@ chosen again.
 The charge itself is already readable — `CcSimHorseTeamReadiness`, and the
 travel preview's `horse_readiness` — but the client has no progress bar
 for it. That work, plus showing the forced careful pace in the travel UI,
-is tracked as a follow-up issue. The Underroad expedition still requires a
+is tracked as a follow-up issue. The carriage overview still reads "The
+team needs rest before departure." below readiness 30
+(`CarriageOverviewDetails` in `src/client/cc_carriage_overview.inc`), even
+though departure is allowed; that wording has not caught up with this
+contract. The Underroad expedition still requires a
 Bread or Meat to enter: that is dungeon-delving, not travel.

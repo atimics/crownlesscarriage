@@ -1,10 +1,10 @@
 # Readable carriage overview
 
-The combined town / Oven Court / carriage review at main `c5589af` exposed a normal-input UI defect: after accepting Mara's delivery and boarding in Thornford, the fixed third column extended beyond a 1200-pixel window and the last manifest rows were covered by the departure action tray. This cut repairs that reading surface; it does not replace the carriage simulation.
+The combined town / Oven Court (since removed in #955) / carriage review at main `c5589af` exposed a normal-input UI defect: after accepting Mara's delivery and boarding in Thornford, the fixed third column extended beyond a 1200-pixel window and the last manifest rows were covered by the departure action tray. This cut repairs that reading surface; it does not replace the carriage simulation.
 
 ## Controls and scope
 
-The Overview tab has a responsive cargo column and a wrapped promise/team column. Body text uses the existing reading font and text-size preference. Cargo actually carried sorts before empty stock types; every goods type and quantity remains available. Mouse wheel over the reading area, Page Up / Page Down, or the explicit scroll buttons reveal the rest. The departure action tray stays outside the clipped reading viewport and remains available at any scroll offset. The Ponies tab and its controls are unchanged.
+The Overview tab has a responsive cargo column and a wrapped team column. Its sections are TEAM & DEPARTURE and, in town, LOCAL NOURISHMENT (`CarriageOverviewDetails` in `src/client/cc_carriage_overview.inc`). The earlier promise block was removed in #955. Body text uses the existing reading font and text-size preference. Cargo actually carried sorts before empty stock types; every goods type and quantity remains available. Mouse wheel over the reading area, Page Up / Page Down, or the explicit scroll buttons reveal the rest. The departure action tray stays outside the clipped reading viewport and remains available at any scroll offset. The Ponies tab and its controls are unchanged.
 
 The scroll position is local presentation state, not a new save field. Reading and scrolling do not advance the clock, transfer cargo, accept a promise, reserve goods, charge money or change the team. This is not a new inventory screen, a change to economics, or a general mobile UI redesign.
 

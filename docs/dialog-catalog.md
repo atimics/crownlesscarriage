@@ -1,11 +1,28 @@
 # Dialog catalog
 
-Every line a character, company, or pony can say, and every player reply, as
-of the board-directory build. Sources: `src/story/cc_story.c` (authored story
-lines and generated quest speech), `src/story/cc_speech_interactions.c`
-(greetings, gossip, road demands, trade), `src/sim/cc_ponies.c` (ponies),
-`src/sim/cc_sim.c` (gossip mutations), `src/client/main.c` (player voice),
-`src/metagame/cc_metagame.c` (playtest narrator).
+The authored quest, greeting, gossip, pony, and player-voice lines, as of the
+board-directory build. It is not a complete list of everything the game can
+say; see *Not catalogued here* below. Sources: `src/story/cc_story.c`
+(authored story lines and generated quest speech),
+`src/story/cc_speech_interactions.c` (greetings, gossip, road demands, trade),
+`src/sim/cc_ponies.c` (ponies), `src/client/pony_ui.inc` (pony thanks),
+`src/sim/cc_sim.c` (gossip mutations), `src/client/main.c` (player voice and
+"We have what we asked for. Move along."), `src/client/cc_adventure.inc`
+(the fallback greeting in `AdventureActivate`: "Welcome. I was passing the %s.
+How was your journey?"), `src/metagame/cc_metagame.c` (playtest narrator).
+
+## Not catalogued here
+
+These speakers have their own sources and are not transcribed below:
+
+- The gate voice on arrival: `src/story/cc_gate_voice.c`.
+- Road voices: `src/story/cc_road_voice.c`.
+- Hra'khor goblin speech: Nara Soot-Tongue's trade line in
+  `CcSpeechGoblinTrade` (`src/story/cc_speech_interactions.c`) and the
+  corruption layer in `src/story/cc_hrakhor.c` (see [Hra'khor](hrakhor.md)).
+- Core-model conversation output: `src/story/cc_core_conversation.c` and the
+  account rules in `src/story/cc_core_account_rules.inc` (see
+  [Core v2 held accounts](core-v2-accounts.md)).
 
 ## The named cast — quest conversations
 

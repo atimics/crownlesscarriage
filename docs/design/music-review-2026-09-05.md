@@ -2,6 +2,13 @@
 
 Review base: `e02b647`, fetched from main on 5 September 2026.
 
+> Current-state note (27 September 2026): this is a dated review and its body is
+> unchanged. The game catalog has since grown from 64 cues and 149 takes to 82
+> cues and 185 takes (`CC_MUSIC_CUE_COUNT` and `CC_MUSIC_TAKE_COUNT` in
+> `src/client/cc_music_catalog.h`). The distinct Deep Wyrm, Dracolich and dragon
+> identities proposed below, and the kingdom and faction themes, are still
+> unbuilt; the existing general dragon cues remain.
+
 Crownless has a working music director and a large Suno library. The existing
 library and its repetition are part of the intended score. Six clear town themes
 will anchor that library through weighted returns. Three kingdom sound families
