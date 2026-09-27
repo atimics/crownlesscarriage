@@ -3486,10 +3486,13 @@ void CcHumanoidGaitAdvancePhysical(
                        gait->action == CC_HUMANOID_ACTION_STRIKE;
     bool jump_pose = gait->action == CC_HUMANOID_ACTION_JUMP;
     if (combat_pose || jump_pose) gait_weight *= 1.0f - gait->action_blend;
-    float left_arm = -cosf(stride) * 0.34f * gait_weight;
+    /* Brisk steps open the arm swing; forearms follow the shoulder later. */
+    float arm_amplitude = 0.24f + 0.24f * Smooth01(gait->speed.value / 1.5f);
+    float left_arm = -cosf(stride) * arm_amplitude * gait_weight;
     float right_arm = -left_arm;
-    float left_flex = 0.24f + fmaxf(0.0f, left_arm) * 0.34f;
-    float right_flex = 0.24f + fmaxf(0.0f, right_arm) * 0.34f;
+    float forearm_swing = -cosf(stride - 0.35f) * gait_weight;
+    float left_flex = 0.24f + fmaxf(0.0f, forearm_swing) * 0.18f;
+    float right_flex = 0.24f + fmaxf(0.0f, -forearm_swing) * 0.18f;
     float action_spine_yaw = 0.0f;
     float action_spine_pitch = 0.0f;
     if (combat_pose) {
