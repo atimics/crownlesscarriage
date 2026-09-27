@@ -198,6 +198,14 @@ int main(void)
     }
     CC_CHECK(hooves >= 40 && hooves <= 44);
     CC_CHECK(wheels >= 14 && wheels <= 16);
+    state = (CcSoundscape){0};
+    frame.rough_road = true;
+    int rough_wheels = 0;
+    for (int i = 0; i < 600; ++i) {
+        uint32_t cues = CcSoundscapeStep(&state, frame, 1.0f / 60.0f);
+        if ((cues & CUE(CC_SOUND_WHEEL)) != 0U) ++rough_wheels;
+    }
+    CC_CHECK(rough_wheels > wheels);
     frame.travel_pace = 0.0f;
     for (int i = 0; i < 600; ++i) CC_CHECK(CcSoundscapeStep(&state, frame, 0.016f) == 0U);
 

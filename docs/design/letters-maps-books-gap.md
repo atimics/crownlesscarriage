@@ -84,7 +84,7 @@ cartographer's archive — a design decision, now measurable per topic.
    on-topic facts, fills pages, prints the returned page + contradiction
    flags. No sim change; makes the mechanic tangible with real data.
 2. **Sim schema: one notable topic per character + page bound** — add the
-   field, gate on the next schema version (the sim is at 124; the original
+   field, gate on the next schema version (the sim is at 125; the original
    plan named schema 52), update hash/save/validate; bounds holdings to
    ≤3 on-topic facts, breaking the in-town flattening (the observable fix).
 3. **Research mission situation** — `CC_SITUATION_RESEARCH` + scout travel

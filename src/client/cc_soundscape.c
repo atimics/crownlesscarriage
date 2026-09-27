@@ -59,7 +59,8 @@ uint32_t CcSoundscapeStep(CcSoundscape *state, CcSoundFrame frame, float dt)
         state->hoof_time += dt;
         state->wheel_time += dt;
         float hoof_interval = 0.42f - 0.19f * pace;
-        float wheel_interval = 0.95f - 0.30f * pace;
+        float wheel_interval = (frame.rough_road ? 0.54f : 0.95f) -
+            0.30f * pace;
         if (state->hoof_time >= hoof_interval) {
             cues |= CUE(CC_SOUND_HOOF);
             state->hoof_time = fmodf(state->hoof_time, hoof_interval);

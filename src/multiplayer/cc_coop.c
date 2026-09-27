@@ -256,6 +256,7 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
             "\",\"anchor\":\"%" PRIu64 "\",\"stop\":\"%" PRIu64
             "\",\"return\":\"%" PRIu64 "\",\"direction\":%d,"
             "\"coordinate\":%d,\"travelled\":%d,\"remaining\":%d,"
+            "\"line\":%d,\"smooth_line\":%d,"
             "\"leg_length\":%d,\"geometry_length\":%d,"
             "\"progress_milli\":%d,\"revision\":%u,\"next_legs\":[",
             sim->journey.road_journey_id, sim->journey.road_goal_id,
@@ -266,6 +267,8 @@ bool CcCoopSnapshot(const CcSim *sim, char *text, size_t capacity)
             sim->journey.road_coordinate_units,
             sim->journey.road_distance_travelled_units,
             sim->journey.road_distance_remaining_units,
+            sim->journey.road_line,
+            CcJourneySmoothRoadLine(sim),
             sim->journey.road_leg_length_units,
             sim->journey.road_geometry_length_units,
             sim->journey.road_compatibility_milli,

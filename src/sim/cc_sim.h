@@ -75,14 +75,14 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 124
+#define CC_SIM_SCHEMA_VERSION 125
 /* The Return: the company's last view of each town (cc_return.h). */
 #define CC_RETURN_SCHEMA_VERSION 122U
 /* The Return, milestone 4: news met on the road (cc_road_news.h). */
 #define CC_ROAD_NEWS_SCHEMA_VERSION 123U
 /* Outlaw trophies hold no gold or gems, so a roll of 12 no longer adds
    metal to the world (docs/design/treasure-and-loot.md). */
-#define CC_TROPHY_MATERIALS_SCHEMA_VERSION 124U
+#define CC_TROPHY_MATERIALS_SCHEMA_VERSION 125U
 #define CC_ROAD_SITE_CAPACITY 24
 #define CC_GENERATOR_VERSION 25
 #define CC_WORLD_TICKS_PER_SECOND 60
@@ -727,6 +727,7 @@ typedef enum CcCommandKind {
     CC_COMMAND_SCRIVEN = 82,
     CC_COMMAND_TRADE_SUPPLY = 83,
     CC_COMMAND_PERSONAL_WANT = 84,
+    CC_COMMAND_SET_ROAD_LINE = 85,
     CC_COMMAND_COUNT
 } CcCommandKind;
 
@@ -1970,6 +1971,7 @@ typedef struct CcJourneyEncounter {
     CcId road_stop_anchor_id;
     CcId road_return_anchor_id;
     int32_t road_direction;
+    int32_t road_line; /* -1 left, 0 centre, 1 right in travel direction. */
     int32_t road_coordinate_units;
     int32_t road_distance_travelled_units;
     int32_t road_distance_remaining_units;
@@ -2425,7 +2427,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 1737192,
+_Static_assert(sizeof(CcSim) == 1737200,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 
@@ -2523,6 +2525,7 @@ void CcSimUpgradeKnowledgeSourceNames(CcSim *sim);
 uint64_t CcSimHash(const CcSim *sim);
 int32_t CcSimHorseTeamReadiness(const CcSim *sim);
 const char *CcJourneyPaceName(CcJourneyPace pace);
+int32_t CcJourneySmoothRoadLine(const CcSim *sim);
 int32_t CcSimJourneyEtaMinutes(const CcSim *sim);
 int32_t CcSimJourneyWithdrawalMinutes(const CcSim *sim);
 CcJourneyStopKind CcSimJourneyStop(const CcSim *sim);

@@ -8,7 +8,7 @@ Each given name and family name draws from the local pool three quarters of the 
 
 Initial generated residents use their home settlement's function. Descendants draw a new given name from their home and inherit their ancestor's family name. Existing collision checks choose another candidate when a name is already in use. Authored story names retain their spelling.
 
-Schema 58 enabled this rule for resident creation and succession. That is historical; the current save schema is 124 (`CC_SIM_SCHEMA_VERSION` in `src/sim/cc_sim.h`), and the rule still applies. Generator 25 remains the map generator. Older saved names retain their spelling when upgraded. Historical journals run their original naming rule before upgrading. The original `CcGenerateCharacterName` function remains available for those older rules and migrations.
+Schema 58 enabled this rule for resident creation and succession. That is historical; the current save schema is 125 (`CC_SIM_SCHEMA_VERSION` in `src/sim/cc_sim.h`), and the rule still applies. Generator 25 remains the map generator. Older saved names retain their spelling when upgraded. Historical journals run their original naming rule before upgrading. The original `CcGenerateCharacterName` function remains available for those older rules and migrations.
 
 ## Validation
 

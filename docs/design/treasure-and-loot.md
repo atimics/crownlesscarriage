@@ -40,7 +40,7 @@ Source reviewed: main at `5cb651dc6c3657b82d5eefedca5a4fbf79064439`.
 | Named treasures can change hands through trade, goblin activity, and dragon theft or return. | Treasure command handlers in [cc_sim.c](../../src/sim/cc_sim.c). |
 
 Two details needed care during implementation. Trophy creation wrote one gold
-and one gem into a low-value trophy. From schema 124
+and one gem into a low-value trophy. From schema 125
 (`CC_TROPHY_MATERIALS_SCHEMA_VERSION`) outlaw trophies hold no gold or gems;
 older saves keep one of each so their journals replay. The dungeon search flag
 still prevents a second search even when goods remain. Split discovery from

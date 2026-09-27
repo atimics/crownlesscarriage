@@ -1767,6 +1767,12 @@ static Rectangle AdventurePaceBounds(int32_t pace)
     return (Rectangle){(float)GetScreenWidth() - 420.0f + (float)pace * 136.0f, 58, 130, 28};
 }
 
+static Rectangle AdventureReinBounds(int32_t line)
+{
+    return (Rectangle){18.0f + (float)(line + 1) * 105.0f,
+                       58.0f, 100.0f, 28.0f};
+}
+
 static Rectangle SpeechControlBounds(ClientView view, bool skip)
 {
     bool modal = view != VIEW_LOCAL && view != VIEW_CHARACTER;

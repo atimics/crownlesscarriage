@@ -1071,6 +1071,24 @@ static void DrawStorybookRoads(const CcSim *sim,
                     DrawStorybookStrip(first, second, first_side, second_side,
                         first_height, second_height,
                         5.8f, 0.0f, 0.13f, (Color){150, 127, 88, 255}, false);
+                    if (sim->journey.active &&
+                        sim->journey.road_position_active &&
+                        route->route_id == sim->journey.route_id &&
+                        sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&
+                        hypotf(first.x - CarriageRenderAnchor(carriage).x,
+                               first.z - CarriageRenderAnchor(carriage).z) < 42.0f) {
+                        int32_t smooth = CcJourneySmoothRoadLine(sim);
+                        for (int32_t line = -1; line <= 1; ++line) {
+                            bool easy = line == smooth;
+                            float offset = -(float)(line *
+                                sim->journey.road_direction) * 1.25f;
+                            DrawStorybookStrip(first, second, first_side,
+                                second_side, first_height, second_height,
+                                easy ? 0.80f : 0.46f, offset, 0.145f,
+                                easy ? (Color){171, 148, 108, 255} :
+                                       (Color){113, 89, 61, 255}, false);
+                        }
+                    }
                     for (int side = -1; side <= 1; side += 2) {
                         DrawStorybookStrip(first, second, first_side, second_side,
                             first_height, second_height,
