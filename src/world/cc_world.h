@@ -145,6 +145,9 @@ float CcWorldRouteJourneyAmount(const CcWorldRoutePlacement *route,
 bool CcWorldRoutePose(const CcWorldRoutePlacement *route, CcId origin_id,
                       float journey_amount, CcWorldPoint *position,
                       float *heading_yaw);
+bool CcWorldJourneyRoadPose(const CcWorldManifest *manifest, const CcSim *sim,
+                            float coordinate_units, CcWorldPoint *position,
+                            float *heading_yaw, float *route_amount);
 float CcWorldRouteLength(const CcWorldRoutePlacement *route);
 float CcWorldRouteLengthForSim(const CcSim *sim, CcId route_id);
 float CcWorldRouteSampleAmount(const CcWorldRoutePlacement *route,

@@ -2216,9 +2216,23 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
     const CcWorldRoutePlacement *route = CcWorldRoutePlacementForId(
         &local->world_stream.manifest, sim->journey.route_id);
     if (route == NULL) return;
-    float progress = sim->journey.total_subticks > 0 ? ClampUnit(
-        (float)sim->journey.elapsed_subticks /
-        (float)sim->journey.total_subticks) : 0.0f;
+    bool physical = sim->journey.road_position_active;
+    CcPilotRoadTopology pilot;
+    int32_t road_length = sim->journey.road_geometry_length_units;
+    if (physical && CcPilotRoadTopologyBuildWithLength(
+            sim, road_length, &pilot) &&
+        sim->journey.road_segment_id == pilot.mill_segment_id) {
+        road_length = pilot.mill_spur_length_units;
+    }
+    bool reverse = physical &&
+        sim->journey.road_direction == CC_ROAD_DIRECTION_REVERSE;
+    float progress = physical && road_length > 0 ?
+        ClampUnit((float)sim->journey.road_coordinate_units /
+            (float)road_length) :
+        sim->journey.total_subticks > 0 ? ClampUnit(
+            (float)sim->journey.elapsed_subticks /
+            (float)sim->journey.total_subticks) : 0.0f;
+    if (reverse) progress = 1.0f - progress;
     if (CcCoopClientActive()) {
         bool reset = local->shared_travel_route != sim->journey.route_id ||
             local->shared_travel_origin != sim->journey.origin_id ||
@@ -2235,21 +2249,35 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
         local->shared_travel_segment = sim->journey.road_segment_id;
         local->shared_travel_direction = sim->journey.road_direction;
     }
-    float amount = CcWorldRouteJourneyAmount(
-        route, sim->journey.origin_id, progress);
-    CcWorldPoint point;
+    float coordinate = physical && road_length > 0 ?
+        (reverse ? 1.0f - progress : progress) * (float)road_length : 0.0f;
+    float amount = 0.0f;
+    CcWorldPoint point = {0};
     float heading = 0.0f;
-    if (!CcWorldRoutePose(route, sim->journey.origin_id, amount,
-                          &point, &heading)) return;
-    CcWorldStreamFollowRouteTimed(&local->world_stream, route, sim->journey.origin_id, amount, 4, 0.0015);
+    if (physical) {
+        if (!CcWorldJourneyRoadPose(&local->world_stream.manifest, sim,
+                coordinate, &point, &heading, &amount)) return;
+        CcWorldStreamUpdateTimed(&local->world_stream, point.x, point.z,
+                                 4, 0.0015);
+    } else {
+        amount = CcWorldRouteJourneyAmount(
+            route, sim->journey.origin_id, progress);
+        if (!CcWorldRoutePose(route, sim->journey.origin_id, amount,
+                              &point, &heading)) return;
+        CcWorldStreamFollowRouteTimed(&local->world_stream, route,
+            sim->journey.origin_id, amount, 4, 0.0015);
+    }
     Vector3 position = {
         point.x,
         CcWorldStreamHeightAt(&local->world_stream, point.x, point.z),
         point.z,
     };
-    /* Measured from the origin, not from the route's own start, so that a
-       route walked the other way still counts up. */
-    float travelled = amount * CcWorldRouteLength(route);
+    /* Wheel distance grows through reversals and side legs. */
+    float travelled = physical && sim->journey.total_subticks > 0 ?
+        (float)sim->journey.elapsed_subticks /
+            (float)sim->journey.total_subticks *
+            CcWorldRouteLength(route) :
+        amount * CcWorldRouteLength(route);
     PublishCarriagePose(local, position, heading, travelled, sample_steps > 0, alpha);
     if (local->world_carriage.hero_embarked || !local->world_carriage.storybook_travel) {
         local->agent.position = position;
@@ -2257,7 +2285,7 @@ static void PositionOpenWorldJourneyAt(const CcSim *sim, LocalState *local,
         local->agent.exact_target_valid = false;
         local->agent.facing_yaw = heading;
     }
-    local->world_carriage.route_amount =
+    local->world_carriage.route_amount = physical ? amount :
         route->from_id == sim->journey.origin_id ? amount : 1.0f - amount;
     local->world_carriage.pace =
         sim->journey.phase == CC_JOURNEY_PHASE_TRAVELLING &&

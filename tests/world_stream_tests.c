@@ -692,8 +692,59 @@ static int TestActiveJourneyKeepsFrozenRouteSamples(void)
     return 0;
 }
 
+static int TestSavedRoadPose(void)
+{
+    static CcSim sim;
+    static CcWorldManifest manifest;
+    CcSimInit(&sim, UINT32_C(0x3235a7ed));
+    CcPilotRoadTopology pilot;
+    CHECK(CcPilotRoadTopologyBuild(&sim, &pilot));
+    sim.journey = (CcJourneyEncounter){
+        .active = true, .phase = CC_JOURNEY_PHASE_TRAVELLING,
+        .origin_id = pilot.origin_id, .destination_id = pilot.destination_id,
+        .route_id = pilot.route_id, .total_subticks = 10000};
+    CHECK(CcRoadBeginPilotJourney(&sim, UINT64_C(3239300)));
+    CHECK(CcWorldManifestBuild(&manifest, &sim));
+    const CcWorldRoadSitePlacement *mill =
+        CcWorldRoadSitePlacementForId(&manifest, pilot.mill_site_id);
+    CHECK(mill != NULL);
+    CcWorldPoint junction = {0}, back = {0}, spur = {0};
+    float forward_heading = 0.0f, reverse_heading = 0.0f, amount = 0.0f;
+    CHECK(CcWorldJourneyRoadPose(&manifest, &sim,
+        (float)pilot.origin_to_junction_units, &junction,
+        &forward_heading, &amount));
+    CHECK(PointDistance(junction, mill->junction) < 0.05f);
+    sim.journey.road_direction = CC_ROAD_DIRECTION_REVERSE;
+    CHECK(CcWorldJourneyRoadPose(&manifest, &sim,
+        (float)pilot.origin_to_junction_units, &back,
+        &reverse_heading, &amount));
+    CHECK(PointDistance(junction, back) < 0.01f);
+    CHECK(cosf(forward_heading - reverse_heading) < -0.95f);
+    CHECK(CcWorldJourneyRoadPose(&manifest, &sim,
+        (float)(pilot.origin_to_junction_units - 10000), &back,
+        &reverse_heading, &amount));
+    CHECK(PointDistance(junction, back) > 2.0f);
+    sim.journey.road_segment_id = pilot.mill_segment_id;
+    sim.journey.road_direction = CC_ROAD_DIRECTION_FORWARD;
+    CHECK(CcWorldJourneyRoadPose(&manifest, &sim, 0.0f, &spur,
+        &forward_heading, &amount));
+    CHECK(PointDistance(spur, junction) < 0.05f);
+    CHECK(CcWorldJourneyRoadPose(&manifest, &sim,
+        (float)pilot.mill_spur_length_units, &spur,
+        &forward_heading, &amount));
+    CHECK(PointDistance(spur, mill->destination) < 0.05f);
+    sim.journey.road_direction = CC_ROAD_DIRECTION_REVERSE;
+    CHECK(CcWorldJourneyRoadPose(&manifest, &sim,
+        (float)pilot.mill_spur_length_units, &back,
+        &reverse_heading, &amount));
+    CHECK(PointDistance(spur, back) < 0.01f);
+    CHECK(cosf(forward_heading - reverse_heading) < -0.95f);
+    return 0;
+}
+
 int main(void)
 {
+    if (TestSavedRoadPose() != 0) return 1;
     if (TestRoadQueryParity() != 0) return 1;
     if (TestStreamFollowsCarriage() != 0) return 1;
     if (TestRouteLengthForSimNeedsNoWorldStream() != 0) return 1;
