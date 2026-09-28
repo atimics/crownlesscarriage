@@ -1,9 +1,11 @@
 # Core v2 held accounts
 
 Core v2 adds a shared meaning grammar for the game's gossip and a small speech
-model. The grammar has 61 account patterns across 44 event kinds. The generated
-[coverage table](core-account-coverage.json) lists all 136 kinds in schema 95.
-Each covered kind can have several source patterns; further patterns can be
+model. The generated [coverage table](core-account-coverage.json) lists every
+event kind with its account patterns; its `event_count` and `rule_count` give
+the current totals. `python3 tools/compile_core_accounts.py` regenerates it,
+and `--check` reports when it is stale. Each covered kind can have several
+source patterns; further patterns can be
 added as the simulation grows.
 
 `tools/data/core_account_rules.json` owns the source patterns, field roles,
@@ -75,7 +77,7 @@ include two speech variants and repeated observations as accounts change. They
 describe this world and observation window; the coverage table tracks the
 broader inventory separately.
 
-The focused checks cover all 122 native spoken forms, complete source matching,
+The focused checks cover every native spoken form (two per rule), complete source matching,
 field omissions, numeric guards, allowed species words, UTF-8 offsets, generated
 file freshness, diagnostic pairs, and the existing gossip export invariants.
 
@@ -89,3 +91,9 @@ voice-specific training are later integration steps.
 English core-model lines. The process bridge accepts `--hrakhor 0..100` and
 `--english` for model output. Paired records retain the original English and
 held account for evaluation.
+
+## Legacy formats
+
+#955 stopped emitting delayed-echo letters. Their format string now lives only
+in `tests/fixtures/legacy_event_formats.c` (`legacy_delayed_echo_formats`) so
+old saves stay readable.

@@ -5,6 +5,10 @@ Status: analysis, 7 September 2026. Companion to the letter probe
 schema-51 silent-dragon fix. This doc says, for each piece of the design,
 what the code already has, what is missing, and what ships first.
 
+Status (checked 2026-09-27): ship-order step 1 (probe mission mode) is done in
+`tools/letter_probe.c`. Steps 2–4 are not started. Some notes below predate
+later code; they are marked where the code has moved on.
+
 ## The model under analysis
 
 Each character has **one notable topic**. That topic governs the small set of
@@ -54,7 +58,7 @@ test carries the whelp fact end-to-end.
 |---|---|---|---|
 | **Per-character notable topic** | `CcCharacter` has role/goal but no topic; every resident of a town holds the same ~30 accounts (in-town flattening) | One `notable_topic` per character; the gossip they *hold* is filtered to it and bounded to a page (≤3) | Sim change (schema bump): add field, promote/hold by topic, bound holdings |
 | **Page = 3 facts** | `CC_MAX_GOSSIP` 32 per carrier, all kept | Page bound: when a character hears a new on-topic fact, it replaces the least-valuable on-topic fact | Sim change within the same schema bump |
-| **Book = 10 pages** | no book object; `CcTreasure`/`CcMap` are the piecewise carriers | A carried book with bounded pages, each page holding ≤3 facts with provenance | #434 custody object OR reuse `CcTreasure` as the book entity |
+| **Book = 10 pages** | no research-book object; scriven tomes (`CcScrivenBook` in `src/sim/cc_scriven_types.h`, three frozen passages plus margin notes) and the custody `CC_CUSTODY_DOCUMENT` kind now exist but hold no gossip pages | A carried book with bounded pages, each page holding ≤3 facts with provenance | #434 custody object OR reuse `CcTreasure` as the book entity |
 | **Baseline + contradiction** | no record of "what the archive knew on day D" beyond gossip `recorded` | Book pre-filled from archive holdings as of mission day; novelty = after baseline; contradiction = same kind/origin but different claim | Probe `--scan` coverage line is the stand-in; real rule lives in `#438` |
 | **Mission = situation kind** | `CcSituationKind` has no research mission | `CC_SITUATION_RESEARCH` (patron, topic, region, baseline, reward, deadline) | New situation kind + quest objective |
 | **Role-topic mapping** | roles exist, goals produce discourse | one topic per role, e.g. herdsman→herds, guard→bandit/road, official→throne, traveller→road, refugee→wheat | `#277` scorer input; probe `RoleNotableTopic` |
@@ -62,6 +66,9 @@ test carries the whelp fact end-to-end.
 | **Book return + intake** | `HearGossip` handles a single story | returning a book delivers N pages; intake records per-page facts as heard | Extend `HearGossip` to a batch delivered-by-book |
 
 ## The topic table (probe already implements it)
+
+The topic table now lives in the sim as `CcGossipTopic` in
+`src/sim/cc_gossip_topics.h`.
 
 `dragon, goblin, war, throne, wheat, herds, ponies (WIP), road, bandit, treasure`.
 Scan on seed 9 year 10 showed throne/wheat/bandit researchable, war/herds/
@@ -77,7 +84,8 @@ cartographer's archive — a design decision, now measurable per topic.
    on-topic facts, fills pages, prints the returned page + contradiction
    flags. No sim change; makes the mechanic tangible with real data.
 2. **Sim schema: one notable topic per character + page bound** — add the
-   field, gate on schema 52, update hash/save/validate; bounds holdings to
+   field, gate on the next schema version (the sim is at 125; the original
+   plan named schema 52), update hash/save/validate; bounds holdings to
    ≤3 on-topic facts, breaking the in-town flattening (the observable fix).
 3. **Research mission situation** — `CC_SITUATION_RESEARCH` + scout travel
    + book custody (#434), reusing the schema-51 pickup so missions can

@@ -7,7 +7,8 @@ This PR builds the town interaction flow from [the design](interaction-ux-redesi
 | Control | Action |
 | --- | --- |
 | Click a person, door, board, or carriage | Walk over and act |
-| Click clear ground or use movement keys | Walk |
+| Click clear ground | Walk |
+| Movement keys | Cancel an approach in town; steer in the mine |
 | E / Shift+E | Select the next / previous visible target |
 | F | Use the selected action |
 | B or Tab | Open or close the Company Book |
@@ -42,17 +43,17 @@ These images show an earlier set of interaction panels. They use a fixed native 
 
 ## Checks
 
-The native play build passes 72 tests. The new input check exercises both pointer and F conversation, a distant alarm, the full walk from the carriage yard into a shop, trade, exit, pause, book return, and journal reload. A separate route check reaches the service door and keeper in each of the six town types.
+The native play build runs the tests listed by `ctest --preset play -N`. The new input check exercises both pointer and F conversation, a distant alarm, the full walk from the carriage yard into a shop, trade, exit, pause, book return, and journal reload. A separate route check reaches the service door and keeper in each of the six town types.
 
 Trade checks cover purse, stock, cargo space, market funds, a changed quote, full delivery quantity, journey proof, reward, and repeated confirmation. Planner tests cover identity, moving targets, overlap, availability, cancellation, and a blocked route. Preferences tests cover saved settings and older preference files.
 
 Run the native checks with `cmake --build --preset play -j 4` and `ctest --preset play --output-on-failure`. The focused checks match `adventure_`, `interaction_planner`, and `daily_play_policy`.
 
-For a separate play session, pass `--campaign /path/to/review.ccsave`. Native review captures use `--capture-ux MODE image.png WIDTH TEXT_SIZE`. Use a relative output filename in the desired output folder. Modes are 0 town, 1 interior, 2 conversation, 3 trade, 4 journal, 5 menu, and 6 local work. Supported desktop sizes are 1040×620, 1200×700, 1280×720, 1600×900, and 1920×1080. Pass the width to select its matching height; text size 2 selects the largest setting.
+For a separate play session, pass `--campaign /path/to/review.ccsave`. Native review captures use `--capture-ux MODE image.png WIDTH TEXT_SIZE`. Use a relative output filename in the desired output folder. Modes include 0 town, 1 interior, 2 conversation, 3 trade, 4 the Book's Work page, 5 menu, and 6 local work; `CcCaptureRequestParse` in `src/client/cc_capture_request.inc` accepts 0 to 35. Supported desktop sizes are 1040×620, 1200×700, 1280×720, 1600×900, and 1920×1080. The desktop matrix script below uses four of them and skips 1600×900. Pass the width to select its matching height; text size 2 selects the largest setting.
 
 ## Follow-up work
 
-The broader design remains tracked in #216. Further work covers private building interiors, more named conversations, road and site presentation, key remapping, caption options, and full browser and shared-session playtests. New receipt text stays in the current trade screen; lasting history uses the existing journal and quest outcome records. Shared trade uses the existing host command protocol. Host-side binding of price quotes remains a separate improvement.
+The broader design remains tracked in #216. Further work covers private building interiors, more named conversations, road and site presentation, and full browser and shared-session playtests. New receipt text stays in the current trade screen; lasting history uses the existing journal and quest outcome records. Shared trade uses the existing host command protocol. Host-side binding of price quotes remains a separate improvement. Key remapping (Settings & controls, `src/client/cc_frontend.inc`) and a caption size preference (`caption_size` in `src/client/cc_client_policy.c`) now exist.
 
 
 Run `python3 tools/capture_ux_desktop.py PATH_TO_CLIENT` for the desktop reading matrix. It captures conversation, trade, book, and road views at the four required desktop sizes with standard and largest text. Images and per-frame logs go to `out/ux-desktop-review`; `results.json` is written after every frame succeeds. Review the images for layout and readability after the size checks pass.

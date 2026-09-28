@@ -28,8 +28,8 @@ The opening images below record the original campaign before the prophecy item.
 | Sweep ordinal | 310 |
 | Opening day | 73366, Year 202 |
 | Source simulation commit | d665eccedeb2f3795edd72dbe401ac2c5b471033 |
-| Save schema / world generator | 74 / 25 (relabeled; see below) |
-| Historical state hash | 0xb0e9e673428e3ac6 |
+| Save schema / world generator | 74 / 25 in the snapshot (relabeled; see below); identity checked at schema 95 |
+| Historical state hash | 0xbd861fbaed8f8710 (13656637807757592336) at schema 95 |
 | Asset SHA-256 | 501e6d16f3d1837e4e4a0e47f1fd1433b37035a1d772cd711a7fdb31e636f7ec |
 
 The source uses the archive supply dispatch rules in PR #592. This campaign
@@ -45,7 +45,10 @@ the historical state is byte-identical apart from that label. Loading migrates
 it to the current schema, which initializes the goblin-politics and rot-diet
 state, so the recorded historical state hash changed from 0x8c55991e74f0d280
 to 0xb3674235d45d3345 and then to 0xb0e9e673428e3ac6 when schema 78 changed
-the replay rules for the famine casus belli.
+the replay rules for the famine casus belli. The loader now computes the
+recorded hash as of schema 95, 0xbd861fbaed8f8710, after the snapshot migrates
+to the current schema (`src/persistence/cc_starting_campaign.c`). It leaves out
+census IDs issued by later migrations.
 
 The loader checks the recorded seed, day, versions, and complete historical
 state hash before it creates the company. It keeps the world clock, random
@@ -106,11 +109,11 @@ Capture scenes 21 and 22 show the introduction and the town respectively.
 
 ## Prophecy delivery validation
 
-All 125 headless checks pass after the merge. The native Release build and interface regression
-pass, including opening the Prophecy page, handing over the book, and resuming
-the saved result. All 44 shared host checks pass, including a second player's
+All headless checks passed after the merge. The native Release build and interface regression
+passed, including opening the Prophecy page, handing over the book, and resuming
+the saved result. All shared host checks passed, including a second player's
 view of the delivery, repeated requests, and server restart. Static analysis
-passes with the repository's one reviewed baseline item.
+passed with the repository's one reviewed baseline item.
 
 A further 120-day replay after immediate delivery kept the source sequence:
 Roda funds the host on day 73388, Quill leaves Gloamgate on day 73472, the

@@ -17,16 +17,17 @@ Both places use shared world lighting and model helpers from the town renderer. 
 - F5: save the campaign and current position.
 - Escape: open or close the pause menu.
 
-The pack holds eight goods, including supplies and recovered goods. Entry consumes one ration. Explore six rooms joined by narrow passages. The western store provides a loop around the barred middle passage. The workers' survey is in the eastern records room. The lower stair marks the future connection to Lamp Hall.
+The pack holds eight goods, including supplies and recovered goods. Entry is free from schema 116; older saves still spend one Bread or Meat from the pack on entry (`CC_COMMAND_MINE_USE` in `src/sim/cc_mine.c`). Explore six rooms joined by narrow passages. The western store provides a loop around the barred middle passage. The workers' survey is in the eastern records room. The lower stair marks the future connection to Lamp Hall.
 
 The source in the Lower Passage begins with eight Iron, three Raw Gold, and two Gems. Each transfer changes that finite source. The Rope Store cache holds seven goods and persists between visits. Select the quantity that fits, and inspect the remaining load before choosing another trip.
 
 ## The Lower Passage haulers
 
 Two haulers guard the source. Their offer is two packed Bread for one Raw Gold.
-Pack at least three Bread before a first descent: entry spends one, leaving two
-for the offer. The bargain spends the Bread and transfers the Gold together. It
-settles once, and the source keeps its remaining goods.
+The bargain spends the Bread and transfers the Gold together. It settles once,
+and the source keeps its remaining goods. Since #923 the mine view offers only
+Inspect and Contest at the haulers; the bargain remains in the simulation and
+through the `mine bargain` text command.
 
 The western passages provide a physical way around the barred route. Exploring
 that route keeps the choice of returning to the haulers. Walking out is also a
@@ -35,8 +36,8 @@ valid end to the visit.
 A local company can choose Contest to use the existing combat controls. Target
 selects a hauler, Strike attacks, and Break contact returns to exploration at the
 current mine position with the injury retained. The fight and its result persist
-with the local scene. Shared companies can bargain and explore; the displayed
-contest guidance directs that fight to local play.
+with the local scene. Shared companies can explore; the displayed contest
+guidance directs that fight to local play.
 
 Return through the entrance and walk to the carriage. Transfer the chosen goods, then choose Board to resume the same road journey. Remaining supplies return to the carriage. The source, cache, survey, and opened bar remain saved for later visits.
 
@@ -65,7 +66,7 @@ Facing is local camera state. Turning is free. A fresh descent faces east into t
 
 The simulation owns position, collision, carried goods, elapsed time, opened passages, and the road anchor. The screen, text controls, and shared company commands use those rules. Each movement carries the current mine revision so a repeated request cannot take another step.
 
-Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Schema 104 adds the hauler encounter, and local scene version 9 preserves its combat state. Schema 105 saves the pilot road's physical position. Schema 106 adds attributed mine notes, return reports, and cargo provenance through repacking and sale. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
+Schema 59 introduced the mine visit and pack. Schema 103 adds finite source and cache custody. Schema 104 adds the hauler encounter, and local scene version 9 preserves its combat state. Schema 105 saves the pilot road's physical position. Schema 106 adds attributed mine notes, return reports, and cargo provenance through repacking and sale. Schema 116 removes the entry ration. Older saves verify their original hash and replay before migration. Journal replay restores the same position, supplies, goods, and holder identities.
 
 Old aggregate carriage goods retain their saved quantities. Their mine origin
 stays uncertain when the old save lacks a custody chain. An old survey keeps its

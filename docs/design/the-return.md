@@ -45,7 +45,7 @@ with style packs (`assets/stylepacks`, #922), never as pre-rendered plates.
 | Learned names | `CcCharacter.introduced_day` is set when the company meets someone | `cc_sim.c` (introductions) |
 | Arrival | `FinishJourneyArrival` parks the carriage, swaps gossip, and logs the ride | `src/sim/cc_journey_runtime.c` |
 | Departure | `CcJourneyDepart` | `src/sim/cc_journey_departure.c` |
-| Personal requests | #928 (open): needs and requests from residents | `docs/personal-requests.md` on that branch |
+| Personal requests | #928 (merged): needs and requests from residents | `docs/personal-requests.md` |
 
 ## Data model
 
@@ -116,7 +116,9 @@ Town economies uses the record for prices under the fog
 - **here:** today's prices, only for the town the company stands in (not on
   the road);
 - **seen:** the record's prices, with `known_day`, `age_days`, and a
-  confidence that fades from 100 to 10 over 120 days;
+  confidence that fades from 100 by 100 points over 120 days and stops at a
+  floor of 10, reached at about day 108 (`CC_KNOWN_PRICE_FADE_DAYS`,
+  `CC_KNOWN_PRICE_MIN_CONFIDENCE`);
 - **unknown:** nothing, for a town the company has never left.
 
 A shortage or relief story told to the company after the record (by a
@@ -300,9 +302,9 @@ told|read|witnessed PNG` renders the travel view at that moment. Frames are in
 
 ## Milestones
 
-1. **Record and digest (this change).** `src/sim/cc_return.[ch]`, schema 122,
+1. **Record and digest.** `src/sim/cc_return.[ch]`, schema 122,
    `crownless_return_digest` for review, and `tests/return_tests.c`.
-2. **The scene shows the changes (this change).** Drive the town scene from
+2. **The scene shows the changes.** Drive the town scene from
    the digest's top unknown changes (up to three).
    `CcReturnSceneCuesBuild` (`src/client/cc_local_place.[ch]`) maps them to
    cues; `CcLocalReturnStagingPlace` stands each cue's props in the town
@@ -345,11 +347,12 @@ told|read|witnessed PNG` renders the travel view at that moment. Frames are in
    direction). Review frames: `docs/reviews/the-return-scene-2026-09-25/`.
 3. **The gate voice.** A resident at the gate speaks the top unknown change in
    their own words, using their own telling of the evidence story.
-4. **News on the road (this change).** News travels at carriage speed, and the
+4. **News on the road.** News travels at carriage speed, and the
    ride changes what the gate says. See "News on the road" below.
 5. **Fewer panels.** Replace the condition text and panel lines that the scene
-   and voice now carry.
-6. **Polish.**
+   and voice now carry. Not started (milestone 2 already shortened the
+   arrival header).
+6. **Polish.** Not started.
 
 ## Review tool
 
@@ -368,6 +371,9 @@ Gloamgate: last seen day 2, back on day 382 (380 days away); 15 changes, 8 shown
 ```
 
 ## Out of scope for milestone 1
+
+This list is historical. Milestone 4 later built road news and notices as
+knowledge.
 
 - Any change to the scene, the camera, or the panels.
 - Speech: no new grammar rules or model changes.

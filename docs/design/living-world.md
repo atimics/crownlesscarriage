@@ -2,6 +2,15 @@
 
 Design review, 24 September 2026. Status: proposed direction and staged plan.
 
+Progress, checked 27 September 2026: a first census is built at schema 117
+(`src/sim/cc_census.c`). Every settlement has six districts with dwellings,
+resident records and a district road layout (`src/sim/cc_census_layout.c`).
+Only Thornford has its own district names; other towns share generic ones. The
+census is fitted to each `settlement->population` by `CcCensusReconcile`; it
+does not yet drive population. The step 0 shared clock exists as
+`src/sim/cc_shared_clock.c` but only tests call it. Steps 1 and 4–7 are not
+started.
+
 The code audit used `0f196d031dc65d5a8beca2938e43ec62e07c4392`, schema 113,
 generator 25. The [evidence report](../reviews/living-world-2026-09-24/README.md)
 contains source locations, measured counts, reproduction steps, and limits.
@@ -189,7 +198,8 @@ these changes. Seasonal labour can have a permanent home and a temporary bed.
 
 ## Food, work, trade, and construction
 
-Keep the existing fourteen goods during the first migration. Begin with the
+Keep the existing fifteen goods during the first migration (Raw Stone became the
+fifteenth at schema 119). Begin with the
 existing **wheat → bread → household** chain and the tools it needs. Paper,
 archives, mining, weapons, herds, and treasure can then use the same rules.
 

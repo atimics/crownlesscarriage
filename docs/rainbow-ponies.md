@@ -4,19 +4,20 @@ Each campaign starts with two different ponies, chosen from its world seed.
 The seven identities are Ember (red), Marmalade (orange), Dandelion (yellow),
 Clover (green), Puddle (blue), Ink (indigo), and Velvet (violet).
 
-The other five live along the roads. When the carriage meets one, travel pauses
-and a quest card opens. Each request combines that pony's personality with a
+The other five live along the roads. When the carriage passes one, the action
+area offers **Meet a rainbow pony** (or **Talk to [name]** once seen). Travel
+pauses and a quest card opens only after you choose it. Each request combines that pony's personality with a
 small supply quest: bread, wool, or tools. Bring the requested amount and choose
-**Help pony** or press **Enter**. The completed quest increases your bond and
+**Help [name]** or press **Enter**. The completed quest increases your bond and
 allows recruitment.
 
 Choose **Release [name]** or press **1** or **2** to swap that companion for the
 pony you helped. The outgoing pony keeps their bond, completed quest count, and
-condition. They move to another road with a fresh request. **Keep travelling**
+condition. They move to another road with a fresh request. **Say farewell**
 or **Backspace** leaves the meeting; a completed request remains ready for a later visit.
 Ponies greet the carriage at most once per game day.
 
-The Company Book (**B**) holds Promises, People, Cargo, and Journal.
+The Company Book (**B**) holds Work, People, and Notes.
 Open the carriage interface and choose the **Ponies** tab for your pony roster. Press **2** or **F7**
 to select it, or **1** to return to **Overview**. **Esc** or **Backspace** steps
 away from the carriage. Met ponies show their faces, names,

@@ -2,6 +2,9 @@
 
 Design proposal · 7 September 2026.
 
+Status: the current foundation below is built. Delivery phases 1–5 are not
+started.
+
 Backlog groomed and concept art added on 8 September 2026. Start with
 [#408](https://github.com/atimics/crownlesscarriage/issues/408) for the delivery
 order and [the art and backlog guide](treasure-art/README.md) for the six
@@ -32,15 +35,15 @@ Source reviewed: main at `5cb651dc6c3657b82d5eefedca5a4fbf79064439`.
 | A named treasure has an ID, maker settlement, holder, location, material contents, craft work, value, and creation day. Each carried treasure uses one cargo slot. | `CcTreasure` in [cc_sim.h](../../src/sim/cc_sim.h); `ApplyBuyTreasure` in [cc_sim.c](../../src/sim/cc_sim.c). |
 | Workshops make six named forms. Value is gold × 40 + gems × 70 + craft work × 10. | `CompleteTreasure` in [cc_sim.c](../../src/sim/cc_sim.c). |
 | Treasure sells for three quarters of its appraisal, rounded down, with a minimum of one crown. The market pays from its own purse. | `ApplySellTreasure` in [cc_sim.c](../../src/sim/cc_sim.c). |
-| Road combat rolls two dice. Rolls of 4 or more can recover supplies; a roll of 12 can add a trophy worth 2–12 crowns if space and a treasure record are available. | `RollEncounterLoot` in [cc_sim.c](../../src/sim/cc_sim.c). |
+| Road combat rolls two dice. Rolls of 4 or more can recover supplies; a roll of 12 can add a trophy worth 2–12 crowns if space and a treasure record are available. | `RollEncounterLoot` in [cc_journey_encounter.c](../../src/sim/cc_journey_encounter.c). |
 | Searching a dungeon room takes goods up to available cargo space and marks the room searched. | `ApplySearchDungeon` in [cc_sim.c](../../src/sim/cc_sim.c). |
 | Named treasures can change hands through trade, goblin activity, and dragon theft or return. | Treasure command handlers in [cc_sim.c](../../src/sim/cc_sim.c). |
 
-Two details need care during implementation. Trophy creation currently writes
-one gold and one gem into a low-value trophy, while
-[loot_tests.c](../../tests/loot_tests.c) expects zero of each. Give simple
-trophies their actual materials. Also, the dungeon search flag currently
-prevents a second search even when goods remain. Split discovery from
+Two details needed care during implementation. Trophy creation wrote one gold
+and one gem into a low-value trophy. From schema 125
+(`CC_TROPHY_MATERIALS_SCHEMA_VERSION`) outlaw trophies hold no gold or gems;
+older saves keep one of each so their journals replay. The dungeon search flag
+still prevents a second search even when goods remain. Split discovery from
 collection so the player can make room and collect the remainder.
 
 ## What the player finds

@@ -27,10 +27,11 @@ means one road at a time per crown; the scan takes the lowest route id.
 
 The crown is a fallback, not a rival to its own towns. A carriage rides only
 when the roadside recovery plan for that road is blocked — no supplies or no
-hands for the council's public work — and only when the work camp can feed
+hands for local public work (`CcSimRoadRecoveryPlan`) — and only when the work camp can feed
 the repair: two of each material spent, two left for the settlement's own
-road maintenance. A camp that cannot supply its work for a month is
-abandoned; the carriage returns to the realm's service instead of rusting at
+road maintenance, so the camp needs at least four of each. A job still
+unfinished more than 60 days after work began is abandoned; the carriage
+takes 5 damage and returns to the realm's service instead of rusting at
 a closed road. A crown whose treasury cannot fund a war escort (soldiers cost
 30 crowns to hire, paid into the camp's market) lets a contested road lie
 until it can.
@@ -46,14 +47,16 @@ become a way through, worked by a wainwright. The crown's carriage brings
 its own materials:
 
 - **Materials** are drawn from the work endpoint settlement's stock at
-  completion. If the stores are empty, the carriage camps and waits a week
+  completion. If fewer than four of each remain, the carriage camps and waits a week
   for supplies before trying again.
-- **Wainwright.** If a living cartwright exists in any settlement of either
-  holding crown, the carriage brings one along: 21 days of work. If no
-  cartwright serves the crown, unskilled work takes 35 days.
+- **Wainwright.** If a living cartwright lives in a settlement of either
+  holding crown, work takes 21 days. This is only an existence check; no
+  character travels with the carriage. If no cartwright serves either crown,
+  unskilled work takes 28 days.
 - **Joint work.** When both crowns' carriages work the same road at peace,
-  the second arrival halves the remaining time. The road carries both
-  crowns' seals when it reopens, and both gain a little legitimacy.
+  the second arrival sets both to half the remaining time (at least 3 days).
+  The carriage that completes the work reopens the road; only its crown is
+  named in the event and gains 2 legitimacy. The other carriage stands down.
 
 On completion the road reopens at condition 85 with better security, a
 `ROUTE_REPAIRED` event is recorded with the crown's name, and any open
@@ -68,10 +71,12 @@ road, the carriages meet at the work site. A skirmish resolves it, once:
   skirmish: treasury divided by 40, war chest divided by 25, and legitimacy
   divided by 4.
 - **The stronger escort holds the road** and finishes the repair alone, under
-  its own flag. The loser's carriage limps home with damage and a week's
-  rest; the road loses security from the fighting either way.
-- **A stand-off** (equal strength) sees both carriages withdraw. The road
-  stays closed and both crowns pay their soldiers for nothing.
+  its own flag, with a fresh 12-day work timer. The loser's carriage limps
+  home with 25 damage and a week's rest; the road loses 10 security from the
+  fighting either way.
+- **A stand-off** (equal strength) sees both carriages withdraw with 15
+  damage each and a week's rest. The road stays closed and both crowns pay
+  their soldiers for nothing.
 - Both sides pay roughly 20 crowns of war costs when steel is drawn, win or
   lose.
 
@@ -89,7 +94,8 @@ the named ponies are road encounters rather than map furniture:
   and hear about it; the dispatch, skirmish, and completion events carry the
   crown's name into the record and the gossip pool.
 - The visual client should draw the carriage camp on an in-repair route, as
-  it draws road sites. See the roadmap issues for the client work.
+  it draws road sites. Not built yet; see the roadmap issues for the client
+  work.
 
 ## What this removes
 
@@ -123,4 +129,4 @@ spent 24 carriage-days on road work after the fallback guards.
    upgrade without data migration.
 2. The road-steward sweep tool and its CI wiring are removed.
 3. Client/visual exposure: carriage camps on in-repair routes, encounter
-   flavor when crossing them. Tracked as follow-up issues.
+   flavor when crossing them. Not built yet; tracked as follow-up issues.

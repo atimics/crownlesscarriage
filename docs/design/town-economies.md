@@ -7,6 +7,9 @@ needs it, faster and more reliably than the background trade does.
 This note is the spec for the change. It replaces the rule that every town has
 the same nine specialist shops (from #931).
 
+Status: step 1 (prices under the fog, `src/sim/cc_known_prices.c`) is merged.
+Steps 2–6 are not started. Checked 27 September 2026.
+
 ## Three kinds of shop
 
 - **Makers** buy their inputs and sell their products. **A maker never buys its
@@ -111,7 +114,15 @@ An audit of main (17f4ae6b) found:
 - **Buyback is built in twice**: `CcLocalShopBuys` lets shops take back what
   they sell, and `CcSimTradeResalePrice` in `src/sim/cc_supply_trade.inc`
   supports selling wheat and raw stone back into the same chain.
-- **No NPC carriers exist.** Towns without a service depend on the player.
+- **NPC freight already exists, but only as royal trade.** `PlanTrade` in
+  `src/sim/cc_sim.c` sends idle royal carriages from a town with surplus to a
+  town with unmet need, and `CreateTradeShipment` moves the goods. These
+  shipments stay inside one kingdom and serve the crown's supply plans; there
+  are no independent merchants.
+- **Bakeries differ between sim and client.** `SeedSettlementServices` gives
+  the sim bakery service only to farming (when large enough), market and
+  capital towns, but the client shop table in `src/client/cc_local_shops.c`
+  lists a Bakery in all six towns.
 - **Tools and weapons are two bulk goods.** `CcBelonging` (from #928) already
   names tools "axe", "pick" or "hammer" by occupation and can be repaired with a
   smith's iron.
@@ -142,7 +153,9 @@ An audit of main (17f4ae6b) found:
 4. **Lanterns and oil.** Lantern and oil in the company's kit refuel the mine
    and Underroad light budgets, and thin the fog on the moor.
 5. **Background carriers.** Slow, unreliable NPC carriers move staples between
-   towns, so no town starves only because the player went elsewhere.
+   towns, so no town starves only because the player went elsewhere. Royal
+   trade shipments already move goods; this step adds carriers that cross
+   kingdom borders and are not tied to the crown.
 6. **Hunting and banes as weapons**, later. A bow brings meat on the road, and
    a bane can be wielded as an upgraded sword or bow.
 

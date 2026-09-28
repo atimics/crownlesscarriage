@@ -122,7 +122,12 @@ at 2x speed. Nara's successful cave trades use this path with the actual payment
 name collisions, UTF-8, strength, repeatability, and buffer bounds.
 `hrakhor_model_pairs` replays all 24 recorded ZERO outputs from the gossip-flow
 review and checks named fields and retained split labels. These are stored
-model outputs from that review. The existing English grammar, diagnostic,
+model outputs from that review. `hrakhor_cultural_corpus`
+(`tests/hrakhor_corpus_tests.py`, registered in
+`cmake/tests/40-web-shared.cmake`) builds single-turn language pairs from the
+authored scenarios in `tools/data/hrakhor_corpus.json` with
+`tools/build_hrakhor_corpus.py`, and checks that they stay grounded in their
+account rules and separate across splits. The existing English grammar, diagnostic,
 gossip, and speech checks cover the baseline bridge.
 
 ## Voice previews

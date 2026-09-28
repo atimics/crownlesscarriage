@@ -1,6 +1,7 @@
 # Unified characters
 
-Status: goblins migrated (this change). Dragons, NPCs, and a pig follow.
+Status: step 1 (goblins) is done. Steps 2-4 (dragons, NPCs, a pig) are not
+started.
 
 ## Decision
 
@@ -36,7 +37,10 @@ A skeleton family fixes the bone names a GLB must carry and the solver that
 poses them. The C side is `CcSkeletonFamily` in
 `src/locomotion/cc_character_skin.h`. The manifest names the family per
 creature (`"skeleton"` in `assets/creature_manifest.json`), and the generated
-catalog carries it to the runtime (`CcCreatureDefinition.skeleton`).
+catalog carries it to the runtime (`CcCreatureDefinition.skeleton`). That
+field is the family's name as a `const char *`
+(`src/client/cc_creature_catalog.h`), not the enum;
+`CcSkeletonFamilyFind()` turns the name into a `CcSkeletonFamily`.
 
 ### Rest-pose conventions (all families)
 
@@ -236,7 +240,7 @@ vs a crowned dragon).
 
 Each step is one PR with before/after frames at game size.
 
-### 1. Goblins (this change)
+### 1. Goblins (done)
 
 - Humanoid skeleton, 18 bones; one skinned GLB per variant (scavenger,
   raider, tribute bearer). Shapes, sizes and palette slots follow the old C

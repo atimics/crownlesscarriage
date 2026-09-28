@@ -1,6 +1,7 @@
 # Style packs
 
-Status: steps 1-3 shipped 2026-09-24 (this PR); step 4 designed, not built.
+Status: steps 1-3 shipped 2026-09-24; the "Future passes" below are designed,
+not built.
 
 ## Why
 
@@ -83,7 +84,10 @@ Fields:
 - `render_target` -- required. `width`/`height` replace the compile-time
   `CC_LOCAL_ART_WIDTH`/`CC_LOCAL_ART_HEIGHT` (`cc_local_viewport.h`) at
   runtime; `upscale_filter` is `"point"` or `"bilinear"`, replacing a
-  hard-coded `TEXTURE_FILTER_POINT`. Both shipped packs use 630x320/point,
+  hard-coded `TEXTURE_FILTER_POINT`. `main.c` applies it with
+  `CcArtUpscaleFilter()` when it first loads `local_target` and again each
+  time it reallocates the target at a new size (e.g. entering the mine).
+  Both shipped packs use 630x320/point,
   i.e. today's values -- classic must, and sierra_pixel has no reason to
   differ. See "Render target size" below for how the runtime value reaches
   every place that used to read the macro.
@@ -99,7 +103,8 @@ Fields:
 - `post_chain` -- required, 1-4 passes. Each pass has a `name`, a `shader`
   (pack-relative, like the shader roles above), a non-empty `inputs` array
   (`scene_color`, `scene_depth`, `scene_normal`), and an optional `cache`
-  (`per_frame`, the default, or `per_shot`). Exactly one pass, named
+  (`per_frame`, the default, or `per_shot`; `per_shot` is parsed but the
+  renderer does not act on it yet). Exactly one pass, named
   `"grade"`, is actually executed in this PR
   (`PresentTarget`, `actor_rendering.inc`); its `shader` must match
   `shaders.grade_fragment`. Further passes are validated for shape and
@@ -168,8 +173,9 @@ confirms this for six representative scenes.
 - Computed/animated colors (e.g. the ember pulse at
   `(Color){255, (unsigned char)(235 + 12 * pulse), ...}`) are math, not an
   art pick, so there is no fixed literal to name.
-- The remaining ~140-odd literals (creature/NPC/goods/carriage detail
-  colors, most appearing exactly once) are real candidates for the same
+- The remaining literals (creature/NPC/goods/carriage detail colors, most
+  appearing exactly once; 71 `(Color){` occurrences on 68 lines of
+  `actor_rendering.inc` as of 2026-09-27) are real candidates for the same
   treatment, deferred here to keep this PR's diff reviewable and its
   pixel-identity claim easy to verify by inspection. Repeat the mechanical
   process above -- find an exact, byte-identical literal, name it for what

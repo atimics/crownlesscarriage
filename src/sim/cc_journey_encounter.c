@@ -145,8 +145,11 @@ static void RollEncounterLoot(CcSim *sim, CcBanditGroup *bandits,
             trophy->maker_settlement_id = sim->player.location_id;
             trophy->owner_id = sim->player.id;
             trophy->location_id = sim->player.location_id;
-            trophy->gold_content = 1;
-            trophy->gem_content = 1;
+            /* Older journals replay the trophies they minted metal into. */
+            const int32_t legacy_metal =
+                sim->schema_version < CC_TROPHY_MATERIALS_SCHEMA_VERSION ? 1 : 0;
+            trophy->gold_content = legacy_metal;
+            trophy->gem_content = legacy_metal;
             trophy->craft_work = 1;
             trophy->appraised_value = value;
             trophy->created_day = sim->current_day;

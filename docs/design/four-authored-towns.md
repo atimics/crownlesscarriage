@@ -58,7 +58,10 @@ test failure when compilation succeeded; the workflow does not hide that failure
 Its artifact includes screenshots, logs, a revision receipt and native review
 executables. Browser CI remains a separate check; neither CI proves phone comfort.
 
-### Baseline and integration repairs
+### Baseline and integration repairs (history)
+
+This records the state when the four-town PR landed. Later commits may have
+changed these tests.
 
 Before any game code changed, `6bc48a29` built and 21 of 22 selected tests passed.
 `local_collision_space` compared a direct-movement preview with a navigation
