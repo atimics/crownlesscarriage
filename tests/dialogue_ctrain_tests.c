@@ -10,14 +10,30 @@ static double row_loss(Work *w, const int *tok, int T, int target)
     Legal lg; real z[MAXCAND];
     if (!legal_of(tok, T, &lg)) return -1;
     forward(w, tok, T); logits_of(w, &lg, z);
+    if (recipe.softcap > 0) for (int a = 0; a < lg.n; ++a) z[a] = recipe.softcap * tanh(z[a] / recipe.softcap);
     real mx = z[0]; for (int a = 1; a < lg.n; ++a) if (z[a] > mx) mx = z[a];
     real sum = 0; for (int a = 0; a < lg.n; ++a) sum += exp(z[a] - mx);
-    return -(double)(z[target] - mx - log(sum));
+    double loss = 0;
+    for (int a = 0; a < lg.n; ++a)
+        loss -= ((1 - recipe.smoothing) * (a == target) + recipe.smoothing / lg.n) * (z[a] - mx - log(sum));
+    return loss;
 }
+
+static int run(double softcap, double smoothing);
 
 int main(void)
 {
-    Config c = {1100, 8, 2, 2, 6, 16}; Model md; model_alloc(&md, &c, 1); model_init(&md, 5);
+    puts("plain cross-entropy");
+    if (run(0, 0)) return 1;
+    puts("softcap 3 and label smoothing 0.1");
+    if (run(3, 0.1)) return 1;
+    puts("ok"); return 0;
+}
+
+static int run(double softcap, double smoothing)
+{
+    recipe.softcap = softcap; recipe.smoothing = smoothing;
+    Config c = {1600, 8, 2, 2, 6, 16}; Model md; model_alloc(&md, &c, 1); model_init(&md, 5);
     /* Larger weights make every path matter; norms away from one test their gradient. */
     Rng r = {77};
     for (size_t i = 0; i < md.count; ++i) md.w[i] += 0.3 * rnorm(&r);
@@ -46,5 +62,5 @@ int main(void)
     }
     printf("checked %d nonzero gradients, worst relative error %.3g\n", checked, worst);
     if (failed || checked < 500) { puts("FAIL"); return 1; }
-    puts("ok"); return 0;
+    return 0;
 }

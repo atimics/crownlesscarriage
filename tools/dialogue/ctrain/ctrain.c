@@ -61,6 +61,11 @@ typedef float real;
 
 typedef struct { int V, D, L, H, FF, CTX; } Config;
 
+/* Training recipe switches. All are training-only: the exported container and
+ * the native runtime are unchanged (tanh softcap is monotone, so argmax holds). */
+typedef struct { double softcap, smoothing; } Recipe;
+static Recipe recipe = {0, 0};
+
 /* ---------- parameter layout ---------- */
 typedef struct { size_t n1, n2, qkv, out, up, down; } LayerOff;
 typedef struct {
@@ -157,6 +162,44 @@ static void gemm(int ta, int tb, int M, int N, int K, const real *A, int lda,
         }
     }
 #endif
+}
+
+
+/* ---------- Muon (momentum + orthogonalised update for 2-D hidden weights) ---------- */
+typedef struct { size_t off; int rows, cols; } Mat;
+static int hidden_mats(const Model *md, Mat *m)
+{
+    const Config *c = &md->c; int n = 0;
+    for (int l = 0; l < c->L; ++l) {
+        const LayerOff *o = &md->layer[l];
+        m[n++] = (Mat){o->qkv, 3 * c->D, c->D}; m[n++] = (Mat){o->out, c->D, c->D};
+        m[n++] = (Mat){o->up, 2 * c->FF, c->D}; m[n++] = (Mat){o->down, c->D, c->FF};
+    }
+    return n;
+}
+
+/* Five Newton-Schulz steps toward the nearest semi-orthogonal matrix. */
+static void orthogonalise(const real *u, int rows, int cols, real *out)
+{
+    int tall = rows > cols, r = tall ? cols : rows, n = tall ? rows : cols;
+    size_t size = (size_t)rows * cols;
+    real *x = malloc(size * sizeof(real)), *a = malloc((size_t)r * r * sizeof(real)), *b = malloc((size_t)r * r * sizeof(real)),
+         *bx = malloc(size * sizeof(real));
+    double norm = 0; for (size_t i = 0; i < size; ++i) norm += (double)u[i] * u[i];
+    real inv = (real)(1.0 / (sqrt(norm) + 1e-7));
+    if (tall) { for (int i = 0; i < rows; ++i) for (int j = 0; j < cols; ++j) x[(size_t)j * rows + i] = u[(size_t)i * cols + j] * inv; }
+    else for (size_t i = 0; i < size; ++i) x[i] = u[i] * inv;
+    const real ca = (real)3.4445, cb = (real)-4.7750, cc = (real)2.0315;
+    for (int it = 0; it < 5; ++it) {
+        gemm(0, 1, r, r, n, x, n, x, n, a, r, 0);
+        gemm(0, 0, r, r, r, a, r, a, r, b, r, 0);
+        for (size_t i = 0; i < (size_t)r * r; ++i) b[i] = cb * a[i] + cc * b[i];
+        gemm(0, 0, r, n, r, b, r, x, n, bx, n, 0);
+        for (size_t i = 0; i < size; ++i) x[i] = ca * x[i] + bx[i];
+    }
+    if (tall) { for (int i = 0; i < rows; ++i) for (int j = 0; j < cols; ++j) out[(size_t)i * cols + j] = x[(size_t)j * rows + i]; }
+    else memcpy(out, x, size * sizeof(real));
+    free(x); free(a); free(b); free(bx);
 }
 
 /* ---------- per-sequence work ---------- */
@@ -339,10 +382,20 @@ static double step_row(Work *w, const int *tok, int T, int target)
     if (!legal_of(tok, T, &lg) || target < 0 || target >= lg.n) { fputs("bad row\n", stderr); exit(2); }
     forward(w, tok, T);
     logits_of(w, &lg, z);
+    real raw[MAXCAND];
+    for (int a = 0; a < lg.n; ++a) {
+        raw[a] = z[a];
+        if (recipe.softcap > 0) z[a] = (real)recipe.softcap * (real)tanh((double)z[a] / recipe.softcap);
+    }
     real mx = z[0]; for (int a = 1; a < lg.n; ++a) if (z[a] > mx) mx = z[a];
     real sum = 0; for (int a = 0; a < lg.n; ++a) { dz[a] = rexp(z[a] - mx); sum += dz[a]; }
-    double loss = -(double)(z[target] - mx - rlog(sum));
-    for (int a = 0; a < lg.n; ++a) dz[a] = dz[a] / sum - (a == target);
+    double loss = 0, eps = recipe.smoothing;
+    for (int a = 0; a < lg.n; ++a) {
+        double q = (1 - eps) * (a == target) + eps / lg.n, p = dz[a] / sum;
+        loss -= q * (double)(z[a] - mx - rlog(sum));
+        dz[a] = (real)(p - q);
+        if (recipe.softcap > 0) { double t = tanh((double)raw[a] / recipe.softcap); dz[a] *= (real)(1 - t * t); }
+    }
     real *g = w->g; real dh[512];
     for (int j = 0; j < D; ++j) dh[j] = 0;
     for (int a = 0; a < lg.n; ++a) {
@@ -713,6 +766,10 @@ static int cmd_train(int argc, char **argv)
     int steps = atoi(arg_of(argc, argv, "--steps", "4000")), batch = atoi(arg_of(argc, argv, "--batch-size", "32")),
         threads = atoi(arg_of(argc, argv, "--threads", "4")), seed = atoi(arg_of(argc, argv, "--seed", "19"));
     double lr = atof(arg_of(argc, argv, "--lr", "3e-4")), decay = atof(arg_of(argc, argv, "--weight-decay", "0.01"));
+    int use_muon = has_flag(argc, argv, "--muon"), warmup_steps = atoi(arg_of(argc, argv, "--warmup", "0"));
+    double muon_lr = atof(arg_of(argc, argv, "--muon-lr", "0.02")), muon_mu = 0.95;
+    const char *schedule = arg_of(argc, argv, "--schedule", "cosine");
+    recipe.softcap = atof(arg_of(argc, argv, "--softcap", "0")); recipe.smoothing = atof(arg_of(argc, argv, "--label-smoothing", "0"));
     if (!ref || !trp || !out || steps < 1 || batch < 1 || threads < 1 || threads > 64) return 2;
     Container ct; Config c; Data tr, dv = {0}, ts = {0};
     if (!container_open(ref, &ct, &c)) { fputs("bad reference container\n", stderr); return 3; }
@@ -722,7 +779,15 @@ static int cmd_train(int argc, char **argv)
     if (!container_layout_ok(&ct, &md)) { fputs("reference layout differs from this trainer\n", stderr); return 3; }
     if (mkdir(out, 0777) != 0) { fprintf(stderr, "output %s must be fresh\n", out); return 3; }
     model_init(&md, (uint64_t)seed);
+    if (has_flag(argc, argv, "--zero-init-out"))
+        for (int l = 0; l < c.L; ++l) {
+            memset(md.w + md.layer[l].out, 0, (size_t)c.D * c.D * sizeof(real));
+            memset(md.w + md.layer[l].down, 0, (size_t)c.D * c.FF * sizeof(real));
+        }
     if (has_flag(argc, argv, "--warm-start")) container_load(&ct, &md);
+    Mat mats[4 * 64]; int nmats = hidden_mats(&md, mats);
+    char *muon_owned = calloc(md.count, 1);
+    if (use_muon) for (int i = 0; i < nmats; ++i) memset(muon_owned + mats[i].off, 1, (size_t)mats[i].rows * mats[i].cols);
     fprintf(stderr, "parameters trained: %zu; rows: %d; threads: %d\n", md.count, tr.n, threads);
     /* pools by intent, as train_meaning.py samples them */
     int **pool = calloc((size_t)tr.intents, sizeof(int *)); int *psize = calloc((size_t)tr.intents, sizeof(int));
@@ -757,8 +822,26 @@ static int cmd_train(int argc, char **argv)
         if (!isfinite(loss) || !isfinite(sq)) { fputs("non-finite training loss\n", stderr); return 4; }
         double norm = sqrt(sq), clip = norm > 1.0 ? 1.0 / (norm + 1e-6) : 1.0;
         double rate = 3e-5 + 0.5 * (lr - 3e-5) * (1 + cos(3.14159265358979323846 * (step - 1) / steps));
+        if (!strcmp(schedule, "wsd")) {   /* warm up, hold, then decay linearly over the last 30% */
+            double at = (double)(step - 1) / steps;
+            rate = at < 0.7 ? lr : 3e-5 + (lr - 3e-5) * (1 - (at - 0.7) / 0.3);
+        }
+        if (step <= warmup_steps) rate *= (double)step / warmup_steps;
         pw1 *= b1; pw2 *= b2;
+        if (use_muon) for (int q = 0; q < nmats; ++q) {
+            size_t n = (size_t)mats[q].rows * mats[q].cols; real *p = md.w + mats[q].off, *buf = md.m + mats[q].off;
+            real *u = malloc(n * sizeof(real)); real *o = malloc(n * sizeof(real));
+            for (size_t i = 0; i < n; ++i) {
+                real gi = md.g[mats[q].off + i] * (real)clip;
+                buf[i] = (real)muon_mu * buf[i] + gi; u[i] = gi + (real)muon_mu * buf[i];
+            }
+            orthogonalise(u, mats[q].rows, mats[q].cols, o);
+            double shape = sqrt(mats[q].rows > mats[q].cols ? (double)mats[q].rows / mats[q].cols : 1.0), mr = muon_lr * rate / lr;
+            for (size_t i = 0; i < n; ++i) p[i] = (real)(p[i] * (1 - mr * decay) - mr * shape * o[i]);
+            free(u); free(o);
+        }
         for (size_t i = 0; i < md.count; ++i) {
+            if (muon_owned[i]) continue;
             double g = md.g[i] * clip;
             md.m[i] = (real)(b1 * md.m[i] + (1 - b1) * g); md.v[i] = (real)(b2 * md.v[i] + (1 - b2) * g * g);
             double p = md.w[i] * (1 - rate * decay);
