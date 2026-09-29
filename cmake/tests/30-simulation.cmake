@@ -54,6 +54,11 @@ add_executable(core_semantic_tests tests/core_semantic_tests.c)
 target_link_libraries(core_semantic_tests PRIVATE crownless_story)
 cc_strict_warnings(core_semantic_tests)
 add_test(NAME core_semantic_input COMMAND core_semantic_tests ${CMAKE_CURRENT_SOURCE_DIR}/assets/language/core.ccv2)
+
+# The C trainer for the 5M dialogue policy: finite-difference gradient check.
+add_executable(dialogue_ctrain_tests tests/dialogue_ctrain_tests.c)
+target_link_libraries(dialogue_ctrain_tests PRIVATE m)
+add_test(NAME dialogue_ctrain_gradients COMMAND dialogue_ctrain_tests)
 target_link_libraries(core_account_probe PRIVATE crownless_story)
 cc_strict_warnings(core_account_probe)
 target_link_libraries(gossip_language_tests PRIVATE crownless_story)
