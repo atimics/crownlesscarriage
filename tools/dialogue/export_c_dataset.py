@@ -16,10 +16,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--worlds', type=int, default=256)
+    parser.add_argument('--style', choices=('digits', 'buckets', 'afford'), default='digits')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
-    receipt = {'format': 'crownless-meaning-v3', 'worlds': args.worlds, 'splits': {}}
-    for name, rows in dataset(args.worlds).items():
+    receipt = {'format': 'crownless-meaning-v3', 'worlds': args.worlds, 'style': args.style, 'splits': {}}
+    splits = dataset(args.worlds, args.style)
+    # Coarser inputs can collide across splits; report it and any label conflict.
+    seen = {}
+    for row in splits['train']:
+        seen.setdefault(tuple(row['prompt']['tokens']), set()).add(row['teacher_index'])
+    receipt['train_conflicting_inputs'] = sum(len(v) > 1 for v in seen.values())
+    for name in ('development', 'test'):
+        hits = [r for r in splits[name] if tuple(r['prompt']['tokens']) in seen]
+        receipt[name + '_inputs_seen_in_train'] = len(hits)
+        receipt[name + '_seen_with_other_target'] = sum(r['teacher_index'] not in seen[tuple(r['prompt']['tokens'])] for r in hits)
+    for name, rows in splits.items():
         text = ''.join(f"{INTENTS.index(r['teacher_intent'])} {r['teacher_index']} "
                        f"{len(r['prompt']['tokens'])} {' '.join(map(str, r['prompt']['tokens']))}\n" for r in rows)
         path = args.output / f'{name}.txt'

@@ -206,25 +206,45 @@ def validate(act, person, heard):
     return act
 
 
-def encode_input(person, heard, choices=None):
+def band(value):
+    """Magnitude words: count exactly to a dozen, then coarse named amounts."""
+    if value <= 12: return 2400 + value
+    for top, index in ((19, 13), (31, 14), (49, 15), (99, 16), (199, 17), (499, 18)):
+        if value <= top: return 2400 + index
+    return 2419
+
+
+def encode_input(person, heard, choices=None, style='digits'):
+    """Token prefix for one choice. `digits` keeps every exact value; `buckets`
+    uses magnitude words and sign/level tokens; `afford` adds how many units the
+    purse buys at each store's price."""
+    if style not in ('digits', 'buckets', 'afford'): raise ValueError('unknown encoding style')
     choices = candidates(person, heard) if choices is None else choices
     if choices != candidates(person, heard): raise ValueError('candidate list changed')
     known = facts(person); own = person['self']; other = person['listener']
     ids = [1280, 1603]
     def number(value):
         integer(value, 0, 2**31-1)
+        if style != 'digits':
+            ids.append(band(value)); return
         # Exact integers use base-128 digits with an explicit terminator.
         while value >= 128:
             ids.append(2048 + value % 128); value //= 128
         ids.extend((2048 + value, 2304))
     def role(value): return 0 if value == own['id'] else 1 if value == other['id'] else 2
-    for value in (own['coins'], own['hungry_days'], own['stress'],
-                  max(-100, min(100, (person.get('relationship') or {}).get('trust', 0)))+100): number(value)
+    trust = max(-100, min(100, (person.get('relationship') or {}).get('trust', 0)))
+    if style == 'digits':
+        for value in (own['coins'], own['hungry_days'], own['stress'], trust + 100): number(value)
+    else:
+        number(own['coins']); number(own['hungry_days'])
+        ids.append(2445 + (0 if own['stress'] < 30 else 1 if own['stress'] < 60 else 2))
+        ids.append(2440 + (0 if trust < 0 else 1 if trust == 0 else 2))
     ids.append(1610+len(known))
     for f in known:
         ids += [1620+int(f['place_id'] == person['place']['id']), 1630+int(f['source']=='observed'),
                 1640+REASONS.index(severity(f))]
         for value in (f['stock'], f['target'], f['unit_price'], person['day']-f['day']): number(value)
+        if style == 'afford': ids.append(band(own['coins'] // f['unit_price']) + 50)
     ids.append(1660+min(len(heard), 12))
     for event in heard[-3:]:
         a = event['act']; p = a['proposal']

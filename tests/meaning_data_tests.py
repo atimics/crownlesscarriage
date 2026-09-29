@@ -40,6 +40,20 @@ class MeaningDataTests(unittest.TestCase):
         self.assertTrue(any(f['private'] for p in persons for f in p['facts']))
         self.assertTrue(any(p['outcomes'] for p in persons))
 
+    def test_bucketed_styles_keep_rows_and_stay_native_valid(self):
+        for style in ('buckets', 'afford'):
+            other = dataset(36, style)
+            for name, rows in self.rows.items():
+                self.assertEqual([r['teacher_index'] for r in rows], [r['teacher_index'] for r in other[name]])
+                for digits, row in zip(rows, other[name]):
+                    tokens = row['prompt']['tokens']
+                    self.assertLessEqual(len(tokens), len(digits['prompt']['tokens']) + 8)
+                    self.assertTrue(all(9 <= t < 4096 for t in tokens))
+                    self.assertEqual((tokens[0], tokens[-1], tokens.count(1580)), (1280, 1281, 1))
+        self.assertEqual(dataset(36)['test'][0]['prompt']['tokens'], self.rows['test'][0]['prompt']['tokens'])
+        with self.assertRaises(ValueError):
+            dataset(36, 'exact')
+
 
 if __name__ == '__main__':
     unittest.main()
