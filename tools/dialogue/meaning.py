@@ -268,12 +268,12 @@ def encode_input(person, heard, choices=None, style='digits'):
     return ids
 
 
-def choose(person, heard, model=None, probe=None):
+def choose(person, heard, model=None, probe=None, style='digits'):
     options = candidates(person, heard)
     if model is None: index = preferred(person, heard, options)
     else:
         import subprocess
-        prefix = encode_input(person, heard, options)
+        prefix = encode_input(person, heard, options, style)
         result = subprocess.run([str(probe), str(model), '--policy-prefix', ','.join(map(str, prefix)),
                                  '--generate'], capture_output=True, text=True, check=True, timeout=30)
         tokens = result.stdout.split()
