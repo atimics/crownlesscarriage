@@ -53,9 +53,9 @@ def person(seed: int, side: int = 0) -> dict:
     }
 
 
-def _row(p: dict, heard: list[dict], choices: list[dict]) -> dict:
+def _row(p: dict, heard: list[dict], choices: list[dict], style: str = 'digits') -> dict:
     index = preferred(p, heard, choices)
-    prefix = encode_input(p, heard, choices)
+    prefix = encode_input(p, heard, choices, style)
     target = [1024 + index]
     return {
         'input': {'person': copy.deepcopy(p), 'heard': copy.deepcopy(heard)},
@@ -86,7 +86,7 @@ def _profile(p: dict) -> dict:
             'outcomes': outcomes}
 
 
-def dataset(worlds: int = 256) -> dict[str, list[dict]]:
+def dataset(worlds: int = 256, style: str = 'digits') -> dict[str, list[dict]]:
     """Return train/development/test rows with whole profiles in one split."""
     if worlds < 12:
         raise ValueError('at least 12 worlds are needed for three splits')
@@ -106,8 +106,9 @@ def dataset(worlds: int = 256) -> dict[str, list[dict]]:
             for turn in range(10):
                 current = people[turn % 2]
                 choices = candidates(current, heard)
-                row = _row(current, heard, choices)
-                key = tuple(row['prompt']['tokens'])
+                row = _row(current, heard, choices, style)
+                # Deduplicate on the exact-digit input so every style keeps the same rows.
+                key = tuple(row['prompt']['tokens'] if style == 'digits' else encode_input(current, heard, choices))
                 if key not in seen:
                     seen.add(key)
                     # A profile includes exact resource numbers and relationship state.
@@ -129,7 +130,7 @@ def dataset(worlds: int = 256) -> dict[str, list[dict]]:
     if groups['train'] & groups['development'] or groups['train'] & groups['test'] or groups['development'] & groups['test']:
         raise ValueError('profile appears in more than one split')
     token_sets = {name: {tuple(row['prompt']['tokens']) for row in rows} for name, rows in split_rows.items()}
-    if any(token_sets[a] & token_sets[b] for a, b in (('train', 'development'), ('train', 'test'), ('development', 'test'))):
+    if style == 'digits' and any(token_sets[a] & token_sets[b] for a, b in (('train', 'development'), ('train', 'test'), ('development', 'test'))):
         raise ValueError('exact input appears in more than one split')
     return split_rows
 

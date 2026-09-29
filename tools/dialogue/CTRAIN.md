@@ -53,6 +53,38 @@ the same test split; I did not rerun PyTorch, so the seed spread here (95.1% to
 99.4%) is the available measure of run-to-run variation. Errors fall on the
 quantity-dependent choices (offer, counter, accept, decline).
 
+## Bucketed inputs
+
+`export_c_dataset.py --style` selects how numbers enter the prefix.
+
+- `digits` (default): every value as base-128 digit tokens, one token per digit.
+  Each value below 128 is an unrelated token, so the model must learn the
+  ordering of the values one by one.
+- `buckets`: magnitude words. Exact counts up to a dozen, then named bands
+  (13-19, 20-31, 32-49, 50-99, 100-199, 200-499, 500+); trust as
+  distrust / neutral / trust; stress as low / middle / high.
+- `afford`: `buckets` plus, for each store, how many units the purse buys at its
+  price.
+
+The same rows are produced in every style (same order, same targets); only the
+input tokens change, and they stay within the native limits, so the runtime is
+unchanged. Exact numbers stay in the typed act arguments. Three seeds each,
+development plus test rows together (2,081), same recipe:
+
+| Style | Seed 1 | Seed 2 | Seed 3 | Mean | Accuracy |
+| --- | --- | --- | --- | --- | --- |
+| digits | 2056 | 2045 | 2064 | 2055.0 | 98.75% |
+| buckets | 2073 | 2073 | 2065 | 2070.3 | 99.48% |
+| afford | 2074 | 2069 | 2076 | 2073.0 | 99.62% |
+
+The worst bucketed run beats the best digit run, and seed-to-seed spread falls
+from 19 rows to 7-8. A model trained on `afford` inputs matches the native
+runtime on all 692 test rows (691 correct). Recipe changes (Muon, zero-init,
+softcap, label smoothing, WSD) were not distinguishable from noise with digit
+inputs. The runtime path (`choose`, `world_dialogue`) still builds digit
+prefixes; a checkpoint trained on bucketed inputs needs `encode_input(...,
+style=...)` there and a new format version before it ships.
+
 ## Differences from the PyTorch trainer
 
 - Random streams differ (splitmix64 and Box-Muller), so weights are not
