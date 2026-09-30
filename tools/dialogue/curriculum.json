@@ -333,7 +333,7 @@
         "L3"
       ],
       "first_experiment": "Done: hooks, a never-raid bound and an evolution run.",
-      "gate": "Not reached: no gain. The two-sided worry (raiders stripping towns) does not arise in this sim.",
+      "gate": "Not reached as stated: the aim was raiders doing better without collapsing the towns. The evolved policy does better for raiders by taking more from towns. Which side to favour is a design choice; the hook and objective let either be tuned.",
       "risks": [
         "Adversarial: optimising raiders alone will strip the world; needs a two-sided or bounded objective.",
         "Unattended raids are rare per seed (about one bandit group per world)."
@@ -341,8 +341,8 @@
       "evidence": [
         "tools/dialogue/LIFE.md"
       ],
-      "verdict": "null",
-      "result": "Null. Raids barely touch the towns: with no raids at all, hunger changes by -0.03 and prosperity rises by 0.9 of 66. Under an even balance of loot and prosperity a search gave +0.04 +- 0.04 (z = 1.1). The rule already takes the town with the most stock."
+      "verdict": "trade-off",
+      "result": "A trade between raiders and towns, not a gain for both. Raids barely touch towns on their own (with no raids at all, hunger changes by -0.03 and prosperity rises by 0.9 of 66). A full search (120 generations) on 400 fresh worlds takes 6.4 more goods (z = 3.5) but costs prosperity 0.47 (z = -4.1) and raises famine 0.4 points of town-days (z = 2.5). It is better in 123 worlds and worse in 183, so a minority with large hauls carry the average. An even weighting of loot and prosperity calls it a gain (+0.060, z = 3.3); any town-first weighting calls it a loss."
     },
     {
       "id": "L5",
@@ -615,7 +615,7 @@
     }
   ],
   "findings": [
-    "L1 shows a clear gain over the rule and L3 a small one. L2, L4 and L5 are nulls, L6 is a design axis and L7 holds only weakly. The hand-written rules are close to a local optimum for the objectives measured, except where they choose at random (travel destination).",
+    "L1 shows a clear gain over the rule and L3 a small one. L2 and L5 are nulls, L4 is a trade between raiders and towns, L6 is a design axis and L7 holds only weakly. The hand-written rules are close to a local optimum for the objectives measured, except where they choose at random (travel destination).",
     "A reward hack appeared at once: an unconstrained daily-life brain stopped travelling (residents at home are reset to fed) and refused every bandit camp. Fixing the rule's decision to go, leaving story-critical choices with the rule, and tracking movement as an invariant closed it.",
     "Small effects need many worlds, in both directions. A 100-world hint at L5 reversed on 400 fresh worlds, while a marginal 100-world result at L3 became significant on 400. Town outcomes vary by 8 hunger points between worlds.",
     "The unattended sim decays: every road closes within about 20 years, two of six towns are abandoned by year 100, and successors are born as age-0 children. Long-horizon experiments are only valid for the first 10 to 15 simulated years."

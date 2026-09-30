@@ -55,7 +55,7 @@ python3 tools/dialogue/evolve_life.py --output /tmp/life --generations 150 --wor
 The same hook now covers three more decision families, each with the rule's own
 choice as the default and zero weights reproducing it. `evolve_life.py --stage l2|l3|l4`
 runs the search; each stage names the decisions the brain takes, the horizon and what is scored.
-L2 and L4 came out as nulls; L3 gave a small gain once searched properly. Each is reported as found.
+L2 came out as a null, L3 gave a small gain once searched properly, and L4 is a trade between raiders and towns. Each is reported as found.
 
 ## L2: gossip (share or withhold)
 
@@ -113,9 +113,14 @@ offers raid-or-hold and the choice of town at each end of the road.
 - Raids barely touch the towns: with **no raids at all**, hunger changes by -0.03 +- 0.20, famine by
   -0.0001 +- 0.003, and prosperity rises by 0.9 of 66. The two-sided trade-off worried about in the
   curriculum barely exists in this sim.
-- Under an even balance (one goods taken = one point of prosperity) 40 generations gave
-  +0.042 +- 0.037 (z = 1.1): 5 more goods taken and 1 point of prosperity lost. No gain.
-- The rule already takes the town with the most stock, so raiders have no loot headroom.
+- The rule already takes the town with the most stock, but the search still found extra loot by timing and target
+  choice, at the towns' expense (below).
+- A full search (120 generations, 64 candidates, 48 worlds per generation) did better on its own terms and worse
+  for the towns. On 400 fresh worlds: goods taken +6.4 (z = 3.5), prosperity -0.47 (z = -4.1), famine +0.4 points of
+  town-days (z = 2.5), raids +0.18 (z = 1.5), so the even-weight balance rises by +0.060 +- 0.018 (z = 3.3).
+  But it is better in only 123 of 400 worlds and worse in 183: a minority of worlds with large hauls carry the average.
+  It is a trade in the raiders' favour, not a gain for both sides, and it would score negatively under any weighting
+  that values prosperity more than loot. The earlier 40-generation run (+0.04, z = 1.1) was the same effect, unresolved.
 - Goblin raids (19 per world) are a separate code path and are not hooked.
 
 # L5: kingdoms (grain relief)

@@ -13,7 +13,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 
 ## What the runs found
 
-- L1 shows a clear gain over the rule and L3 a small one. L2, L4 and L5 are nulls, L6 is a design axis and L7 holds only weakly. The hand-written rules are close to a local optimum for the objectives measured, except where they choose at random (travel destination).
+- L1 shows a clear gain over the rule and L3 a small one. L2 and L5 are nulls, L4 is a trade between raiders and towns, L6 is a design axis and L7 holds only weakly. The hand-written rules are close to a local optimum for the objectives measured, except where they choose at random (travel destination).
 - A reward hack appeared at once: an unconstrained daily-life brain stopped travelling (residents at home are reset to fed) and refused every bandit camp. Fixing the rule's decision to go, leaving story-critical choices with the rule, and tracking movement as an invariant closed it.
 - Small effects need many worlds, in both directions. A 100-world hint at L5 reversed on 400 fresh worlds, while a marginal 100-world result at L3 became significant on 400. Town outcomes vary by 8 hunger points between worlds.
 - The unattended sim decays: every road closes within about 20 years, two of six towns are abandoned by year 100, and successors are born as age-0 children. Long-horizon experiments are only valid for the first 10 to 15 simulated years.
@@ -26,7 +26,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 | L1 | Villager daily life | done | gain | ready | L0 | A shared 833-weight scorer in C (zero weights reproduce the rule) |
 | L2 | Gossip and requests | done | null | ready | L0 | 5M |
 | L3 | Trade, shipments and production | done | small gain | ready | L1 | 1M to 5M |
-| L4 | Raiders and monsters | done | null | ready | L3 | 5M |
+| L4 | Raiders and monsters | done | trade-off | ready | L3 | 5M |
 | L5 | Kingdoms and war | done | null | ready | L3, L4 | 5M to 10M |
 | L6 | Dragons | done | design axis | partial | L4, L5 | Start at 5M |
 | L7 | Lineages and open-ended evolution | done | weak | partial | L1, L2 | One shared brain plus a per-person trait vector |
@@ -204,7 +204,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 
 ## L4. Raiders and monsters
 
-**Status:** done; verdict: null. **Actors:** bandit group, goblin faction, monster population.
+**Status:** done; verdict: trade-off. **Actors:** bandit group, goblin faction, monster population.
 
 **Decision.** Whether, when and where to raid; what to take; whether to pay or take tribute.
 
@@ -237,7 +237,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 
 **First experiment.** Done: hooks, a never-raid bound and an evolution run.
 
-**Gate to advance.** Not reached: no gain. The two-sided worry (raiders stripping towns) does not arise in this sim.
+**Gate to advance.** Not reached as stated: the aim was raiders doing better without collapsing the towns. The evolved policy does better for raiders by taking more from towns. Which side to favour is a design choice; the hook and objective let either be tuned.
 
 **Risks:**
 - Adversarial: optimising raiders alone will strip the world; needs a two-sided or bounded objective.
