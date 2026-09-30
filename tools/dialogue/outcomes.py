@@ -386,6 +386,7 @@ def main():
     parser.add_argument('--worlds', type=Path, required=True)
     parser.add_argument('--policies', nargs='+', default=list(POLICIES))
     parser.add_argument('--limit', type=int, default=100)
+    parser.add_argument('--offset', type=int, default=0, help='skip this many shuffled scenarios (for held-out evaluation)')
     parser.add_argument('--seeds', type=int, default=120)
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--only-feasible', action='store_true')
@@ -396,7 +397,7 @@ def main():
     if args.crowd:
         scenarios = harvest_crowds(args.worlds, args.food_probe, range(1, args.seeds + 1))
         random.Random(1).shuffle(scenarios)
-        scenarios = scenarios[:args.limit]
+        scenarios = scenarios[args.offset:args.offset + args.limit]
         if args.only_feasible:   # keep crowds whose store has food to divide
             first = evaluate_crowds(scenarios, 'teacher', args.food_probe, args.participant_probe, args.workers)
             scenarios = [s for s, r in zip(scenarios, first) if r['ok'] and r['result']['stock_before'] > 0]
@@ -411,7 +412,7 @@ def main():
         return
     scenarios = harvest(args.worlds, args.food_probe, range(1, args.seeds + 1))
     random.Random(1).shuffle(scenarios)
-    scenarios = scenarios[:args.limit]
+    scenarios = scenarios[args.offset:args.offset + args.limit]
     if args.only_feasible:   # keep the situations where a purchase is possible
         first = evaluate(scenarios, 'teacher', args.food_probe, args.participant_probe, args.workers)
         scenarios = [s for s, r in zip(scenarios, first) if r['ok'] and r['feasible']]
