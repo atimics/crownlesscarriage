@@ -52,3 +52,35 @@ on the procedural test):
   learning from outcomes. A learned policy needs a scenario with a real
   trade-off, such as several hungry people at one store, a helper's future needs,
   or trust that changes over repeated meetings. Those need simulation support.
+
+## A week, and a crowd
+
+`--days 7` has the pair meet once a day for a week (the world advances a day
+between meetings) and scores hungry days for both people. In pairs the teacher
+still ties the alternatives: generous feeds the hungry person better (1.86
+hungry days against 2.57) but leaves the helper hungrier (1.23 against 0.56);
+total hunger is 3.09 against 3.13. Reserve-a-meal variants of the teacher land
+exactly on it, because the hungry side already counters any offer above one unit
+when the store is short.
+
+`--crowd` has one helper meet each of several hungry people in turn, on real
+saves. The store and the helper's purse carry over between conversations.
+Natural crowds are common (1,872 places with two or more hungry people and a
+solvent helper in 399 seeds), but 76% have an empty food store, so
+`--only-feasible` keeps those with stock to divide (375 of 1,500 here).
+
+| Policy | Score | People relieved (of 3.1) | Crowns | Units |
+| --- | --- | --- | --- | --- |
+| one unit each | 0.507 | 2.88 | 18.2 | 2.88 |
+| teacher | 0.477 | 2.86 | 20.4 | 3.44 |
+| generous | 0.094 | 2.39 | 38.4 | 6.22 |
+| random | -0.582 | 0.44 | 4.7 | 0.74 |
+| stingy | -0.752 | 0.00 | 0 | 0 |
+
+Rationing matters: generous drains the store and the helper's purse on the first
+buyer and relieves fewer people. Paired over the same 375 crowds, one unit each
+beats the teacher by +0.032 +- 0.005 (z = 6.8): better in 66 crowds, worse in 7,
+never relieving fewer people, and spending 2.2 fewer crowns. The teacher buys
+extra units for someone who needed one in about 15% of crowds. That is the
+first measured case where the authored rule is beatable, and it is small.
+`--baseline teacher` prints these paired differences.
