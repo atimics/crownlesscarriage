@@ -66,7 +66,10 @@ def main():
     parser.add_argument('--generations', type=int, default=20, help='per phase')
     parser.add_argument('--pairs', type=int, default=16)
     parser.add_argument('--batch', type=int, default=24)
-    parser.add_argument('--opponents', type=int, default=6, help='fixed opponents per phase')
+    parser.add_argument('--opponents', type=int, default=6, help='opponents per phase (generalist: fixed for the phase)')
+    parser.add_argument('--mode', choices=('generalist', 'latest', 'uniform'), default='generalist',
+                        help='generalist: fixed opponents and a held-out filter; latest: only the newest opponent; '
+                             'uniform: a fresh uniform sample of the whole archive each generation; the last two keep the final candidate')
     parser.add_argument('--sigma', type=float, default=0.1)
     parser.add_argument('--lr', type=float, default=0.05)
     parser.add_argument('--seed', type=int, default=1)
@@ -91,8 +94,9 @@ def main():
             other = 'town' if role == 'raider' else 'raider'
             pool_ops = archive[other]
             k = min(args.opponents, len(pool_ops))
-            # the newest opponent always plays; the rest are sampled from the whole archive
-            picks = [len(pool_ops) - 1] + list(rng.choice(len(pool_ops), k - 1, replace=False) if k > 1 else [])
+            # generalist: the newest opponent always plays and the rest are sampled from the whole archive;
+            # latest: only the newest; uniform: resampled from the whole archive every generation (below)
+            picks = [len(pool_ops) - 1] + list(rng.choice(len(pool_ops), k - 1, replace=False) if k > 1 and args.mode == 'generalist' else [])
             opponents = [pool_ops[i] for i in picks]
             held = [o for i, o in enumerate(pool_ops) if i not in picks] or [None]
             theta = np.zeros(size) if archive[role][-1] is None else archive[role][-1].copy()
@@ -102,6 +106,8 @@ def main():
                 batch = rng.choice(train, size=args.batch, replace=False).tolist()
                 eps = rng.normal(0, 1, (args.pairs, size))
                 cands = [theta + args.sigma * e for e in eps] + [theta - args.sigma * e for e in eps]
+                if args.mode == 'uniform':
+                    opponents = [pool_ops[i] for i in rng.choice(len(pool_ops), min(args.opponents, len(pool_ops)), replace=False)]
                 fit = np.array(pool.map(fitness, [(role, c, opponents, batch) for c in cands], chunksize=1))
                 shaped = ranks(fit)
                 grad = ((shaped[:args.pairs] - shaped[args.pairs:])[:, None] * eps).sum(0) / (2 * args.pairs * args.sigma)
@@ -110,8 +116,8 @@ def main():
                 theta = theta + args.lr * (m / (1 - 0.9 ** gen)) / (np.sqrt(v / (1 - 0.999 ** gen)) + 1e-8)
                 if gen % 5 == 0 or gen == args.generations:
                     val = mean_score(role, theta, held, valid)   # unseen opponents on unseen worlds: a regression is rejected
-                    if val > best_valid:
-                        best_valid, best = val, theta.copy()
+                    if args.mode != 'generalist' or val > best_valid:
+                        best_valid, best = val, theta.copy()    # the other arms keep the newest candidate unfiltered
             archive[role].append(best)
             rule_opp = [None]
             row = {'phase': phase, 'role': role, 'opponents': len(opponents), 'held_out': len(held),
