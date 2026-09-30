@@ -1,0 +1,570 @@
+{
+  "environment": "deployed-service",
+  "commit": "8216235febbd11f2c31d86e6d55b8251c1880a07",
+  "deployment_revision": "8216235febbd11f2c31d86e6d55b8251c1880a07",
+  "world_id": "38d7f05478a02bf97c258d398f613991",
+  "seed": 3232176798,
+  "players": [
+    {
+      "id": "d5ba7af86f7e220f",
+      "name": "Mara"
+    },
+    {
+      "id": "20f7c9c2842d4cc4",
+      "name": "Bren"
+    }
+  ],
+  "checkpoints": [
+    {
+      "label": "road-choice-before-reload",
+      "revision": 9,
+      "action_revision": 2,
+      "route": "216172782113783818",
+      "direction": 1,
+      "progress": 160,
+      "choices": [
+        "13141616280114701519",
+        "14889791049444099638"
+      ],
+      "company_hash": "859bab57b4295ad7",
+      "day": 1,
+      "minute": 76,
+      "browser_sync": [
+        {
+          "revision": 9,
+          "hash": "859bab57b4295ad7",
+          "ready": "ready"
+        },
+        {
+          "revision": 9,
+          "hash": "859bab57b4295ad7",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "road-choice-after-reload",
+      "revision": 9,
+      "action_revision": 2,
+      "route": "216172782113783818",
+      "direction": 1,
+      "progress": 160,
+      "choices": [
+        "13141616280114701519",
+        "14889791049444099638"
+      ],
+      "company_hash": "859bab57b4295ad7",
+      "day": 1,
+      "minute": 76,
+      "browser_sync": [
+        {
+          "revision": 9,
+          "hash": "859bab57b4295ad7",
+          "ready": "ready"
+        },
+        {
+          "revision": 9,
+          "hash": "859bab57b4295ad7",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "afternoon-stop",
+      "revision": 25,
+      "action_revision": 12,
+      "route": "216172782113783818",
+      "direction": -1,
+      "progress": 820,
+      "choices": [
+        "11386573126605900322"
+      ],
+      "company_hash": "32b5beedb8728ddb",
+      "day": 1,
+      "minute": 498,
+      "browser_sync": [
+        {
+          "revision": 25,
+          "hash": "32b5beedb8728ddb",
+          "ready": "ready"
+        },
+        {
+          "revision": 24,
+          "hash": "32b5beedb8728ddb",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "afternoon-stop-reloaded",
+      "revision": 25,
+      "action_revision": 12,
+      "route": "216172782113783818",
+      "direction": -1,
+      "progress": 820,
+      "choices": [
+        "11386573126605900322"
+      ],
+      "company_hash": "32b5beedb8728ddb",
+      "day": 1,
+      "minute": 498,
+      "browser_sync": [
+        {
+          "revision": 25,
+          "hash": "32b5beedb8728ddb",
+          "ready": "ready"
+        },
+        {
+          "revision": 25,
+          "hash": "32b5beedb8728ddb",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "camped",
+      "revision": 26,
+      "action_revision": 13,
+      "route": "216172782113783818",
+      "direction": -1,
+      "progress": 820,
+      "choices": [
+        "11386573126605900322"
+      ],
+      "company_hash": "f75182d31ac6301a",
+      "day": 1,
+      "minute": 978,
+      "browser_sync": [
+        {
+          "revision": 26,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        },
+        {
+          "revision": 26,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "camped-reloaded",
+      "revision": 26,
+      "action_revision": 13,
+      "route": "216172782113783818",
+      "direction": -1,
+      "progress": 820,
+      "choices": [
+        "11386573126605900322"
+      ],
+      "company_hash": "f75182d31ac6301a",
+      "day": 1,
+      "minute": 978,
+      "browser_sync": [
+        {
+          "revision": 26,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        },
+        {
+          "revision": 26,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "second-client-reconnected",
+      "revision": 26,
+      "action_revision": 13,
+      "route": "216172782113783818",
+      "direction": -1,
+      "progress": 820,
+      "choices": [
+        "11386573126605900322"
+      ],
+      "company_hash": "f75182d31ac6301a",
+      "day": 1,
+      "minute": 978,
+      "browser_sync": [
+        {
+          "revision": 26,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        },
+        {
+          "revision": 26,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "continue-retry-once",
+      "revision": 28,
+      "action_revision": 15,
+      "route": "216172782113783818",
+      "direction": -1,
+      "progress": 820,
+      "choices": [
+        "11386573126605900322"
+      ],
+      "company_hash": "f75182d31ac6301a",
+      "day": 1,
+      "minute": 978,
+      "browser_sync": [
+        {
+          "revision": 28,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        },
+        {
+          "revision": 28,
+          "hash": "f75182d31ac6301a",
+          "ready": "ready"
+        }
+      ]
+    },
+    {
+      "label": "arrived",
+      "revision": 35,
+      "action_revision": 17,
+      "route": "216172782113783818",
+      "progress": 0,
+      "choices": [],
+      "company_hash": "483834a5525eb8da",
+      "day": 1,
+      "minute": 1074,
+      "browser_sync": [
+        {
+          "revision": 35,
+          "hash": "483834a5525eb8da",
+          "ready": "ready"
+        },
+        {
+          "revision": 35,
+          "hash": "483834a5525eb8da",
+          "ready": "ready"
+        }
+      ]
+    }
+  ],
+  "road_choices": [
+    {
+      "label": "first-site-onward",
+      "route": "216172782113783818",
+      "goal": "144115188075855877",
+      "anchor": "8214569169182523394",
+      "candidates": [
+        {
+          "kind": 1,
+          "direction": -1,
+          "segment": "8286626763220451329",
+          "destination": "144115188075855876",
+          "token": "45683000295666196"
+        },
+        {
+          "kind": 3,
+          "direction": 1,
+          "segment": "8286626763220451329",
+          "destination": "1585267068834414594",
+          "token": "2965844421271730109"
+        }
+      ],
+      "selected": "2965844421271730109"
+    },
+    {
+      "label": "leave-first-site",
+      "route": "216172782113783818",
+      "goal": "144115188075855877",
+      "anchor": "1585267068834414594",
+      "candidates": [
+        {
+          "kind": 4,
+          "direction": -1,
+          "segment": "8286626763220451329",
+          "destination": "8214569169182523394",
+          "token": "6889348221766615815"
+        },
+        {
+          "kind": 2,
+          "direction": 1,
+          "segment": "8286626763220451329",
+          "destination": "8214569169182523393",
+          "token": "16717165362631211630"
+        }
+      ],
+      "selected": "16717165362631211630"
+    },
+    {
+      "label": "mill-visit",
+      "route": "216172782113783818",
+      "goal": "144115188075855877",
+      "anchor": "8214569169182523393",
+      "candidates": [
+        {
+          "kind": 3,
+          "direction": 1,
+          "segment": "8286626763220451331",
+          "destination": "1585267068834414595",
+          "token": "13326024216702167077"
+        },
+        {
+          "kind": 4,
+          "direction": -1,
+          "segment": "8286626763220451329",
+          "destination": "8214569169182523394",
+          "token": "1875366150733067742"
+        },
+        {
+          "kind": 1,
+          "direction": 1,
+          "segment": "8286626763220451330",
+          "destination": "144115188075855877",
+          "token": "17533183636540370196"
+        }
+      ],
+      "selected": "13326024216702167077"
+    },
+    {
+      "label": "return-from-mill",
+      "route": "216172782113783818",
+      "goal": "144115188075855877",
+      "anchor": "1585267068834414595",
+      "candidates": [
+        {
+          "kind": 2,
+          "direction": -1,
+          "segment": "8286626763220451331",
+          "destination": "8214569169182523393",
+          "token": "12944658224068113691"
+        }
+      ],
+      "selected": "12944658224068113691"
+    },
+    {
+      "label": "final-goal",
+      "route": "216172782113783818",
+      "goal": "144115188075855877",
+      "anchor": "8214569169182523393",
+      "candidates": [
+        {
+          "kind": 3,
+          "direction": 1,
+          "segment": "8286626763220451331",
+          "destination": "1585267068834414595",
+          "token": "5249102548994148361"
+        },
+        {
+          "kind": 4,
+          "direction": -1,
+          "segment": "8286626763220451329",
+          "destination": "8214569169182523394",
+          "token": "4802733115263966242"
+        },
+        {
+          "kind": 1,
+          "direction": 1,
+          "segment": "8286626763220451330",
+          "destination": "144115188075855877",
+          "token": "9891869650932925112"
+        }
+      ],
+      "selected": "9891869650932925112"
+    }
+  ],
+  "continuation": {
+    "command": {
+      "protocol": 1,
+      "sequence": 14,
+      "action_revision": 13,
+      "action": "resume_travel",
+      "target": "216172782113783818",
+      "good": 0,
+      "amount": 0,
+      "campaign": true
+    },
+    "first": {
+      "accepted": true,
+      "duplicate": false,
+      "sequence": 14
+    },
+    "retry": {
+      "accepted": true,
+      "duplicate": true,
+      "sequence": 14
+    },
+    "revision": 28
+  },
+  "cleanup": {
+    "deleted": true
+  },
+  "request_timing": {
+    "owner_state": {
+      "count": 126,
+      "median_ms": 72,
+      "p95_ms": 190,
+      "max_ms": 1333,
+      "failures": [],
+      "canceled": []
+    },
+    "crew_state": {
+      "count": 87,
+      "median_ms": 86,
+      "p95_ms": 206,
+      "max_ms": 1234,
+      "failures": [],
+      "canceled": []
+    },
+    "commands": {
+      "count": 20,
+      "median_ms": 176,
+      "p95_ms": 286,
+      "max_ms": 302,
+      "failures": [],
+      "canceled": []
+    },
+    "command_samples": [
+      {
+        "actor": "crew-browser",
+        "endpoint": "command",
+        "action": "trade",
+        "duration_ms": 238,
+        "status": 200
+      },
+      {
+        "actor": "crew-browser",
+        "endpoint": "command",
+        "action": "travel",
+        "duration_ms": 176,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "road_leg",
+        "duration_ms": 181,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "stop_travel",
+        "duration_ms": 72,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "skip_watch",
+        "duration_ms": 165,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "road_leg",
+        "duration_ms": 164,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "skip_watch",
+        "duration_ms": 286,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "road_leg",
+        "duration_ms": 183,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "road_leg",
+        "duration_ms": 188,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "skip_watch",
+        "duration_ms": 302,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "road_leg",
+        "duration_ms": 181,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "skip_watch",
+        "duration_ms": 173,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "press_on",
+        "duration_ms": 215,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "stop_travel",
+        "duration_ms": 66,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "camp",
+        "duration_ms": 186,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "resume_travel",
+        "duration_ms": 72,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "stop_travel",
+        "duration_ms": 160,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "resume_travel",
+        "duration_ms": 66,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "resume_travel",
+        "duration_ms": 71,
+        "status": 200
+      },
+      {
+        "actor": "owner-browser",
+        "endpoint": "command",
+        "action": "road_leg",
+        "duration_ms": 172,
+        "status": 200
+      }
+    ]
+  }
+}
