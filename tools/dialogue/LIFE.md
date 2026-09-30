@@ -48,3 +48,61 @@ analysed which destinations it prefers.
 ```sh
 python3 tools/dialogue/evolve_life.py --output /tmp/life --generations 150 --workers 10
 ```
+
+# L2-L4: gossip, trade, raiders
+
+The same hook now covers three more decision families, each with the rule's own
+choice as the default and zero weights reproducing it. `evolve_life.py --stage l2|l3|l4`
+runs the search; each stage names the decisions the brain takes, the horizon and what is scored.
+All three came out as nulls. They are reported as such.
+
+## L2: gossip (share or withhold)
+
+Carriers pass every story a town lacks, and a town keeps the first version it hears, so a
+carrier could hold a stale version back for a fresher one. The score is how well informed the
+world is: coverage (share of towns knowing the average story) times accuracy (mean confidence of
+the version each holds).
+
+| Withhold anything carried below confidence | Informed | Coverage | Accuracy |
+| --- | --- | --- | --- |
+| never (the rule) | 0.5247 | 67.7% | 77.5% |
+| 30 | 0.5248 | 67.5% | 77.8% |
+| 50 | 0.5233 | 66.2% | 79.1% |
+| 70 | 0.5031 | 61.0% | 82.5% |
+| 80 | 0.4411 | 50.6% | 87.1% |
+
+There is no free lunch: accuracy rises with the floor but coverage falls faster, and the combined
+score is flat at best. 150 generations of evolution found no candidate that beat "always share"
+on validation, so its paired report is exactly zero. The trade-off itself is real, which makes
+gossip reliability a candidate personality trait for L7 rather than something to optimise.
+
+## L3: trade (which cargo a carriage takes next)
+
+The planner enumerates every legal (good, source, destination) and takes the argmax of a
+hand-written score. The hook offers the same candidates. Baseline over 100 worlds and two years:
+town hunger 13.1, famine (hunger 25 or more) in 20.5% of town-days, prosperity 66.3.
+Adding weights to the rule's own score, paired over 100 worlds:
+
+| Change | Hunger | Famine | Prosperity |
+| --- | --- | --- | --- |
+| + hunger bonus 10 / 30 / 100 | +0.11 / +0.16 / +0.43 (worse) | +0.004 to +0.007 | -0.2 to -0.9 |
+| + need bonus 5 / 20 | +0.48 / +0.91 (worse) | +0.006 / +0.016 | -0.4 / -1.1 |
+| prefer far routes | +1.65 (worse) | +0.027 | -2.3 |
+
+A 40-generation search gave -0.003 +- 0.009 (z = -0.3) on 100 held-out worlds. The rule looks
+locally optimal and famine seems driven by production and consumption more than allocation.
+Caveats: the search was short and ran on a loaded machine, outcomes vary by 8 hunger points
+between worlds, and I have not searched longer or with a bigger population.
+
+## L4: raiders (whether and where to raid)
+
+Bandit raids run every 28 days for eligible bands (about 11 per world per two years); the hook
+offers raid-or-hold and the choice of town at each end of the road.
+
+- Raids barely touch the towns: with **no raids at all**, hunger changes by -0.03 +- 0.20, famine by
+  -0.0001 +- 0.003, and prosperity rises by 0.9 of 66. The two-sided trade-off worried about in the
+  curriculum barely exists in this sim.
+- Under an even balance (one goods taken = one point of prosperity) 40 generations gave
+  +0.042 +- 0.037 (z = 1.1): 5 more goods taken and 1 point of prosperity lost. No gain.
+- The rule already takes the town with the most stock, so raiders have no loot headroom.
+- Goblin raids (19 per world) are a separate code path and are not hooked.

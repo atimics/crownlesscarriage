@@ -56,6 +56,25 @@ class DailyLifeTests(unittest.TestCase):
         self.assertLess(evolve_life.welfare(worse), evolve_life.welfare(base))
         self.assertAlmostEqual(evolve_life.welfare(worse), -(0.2 + 0.5 * 0.1 + 0.05))
 
+    def test_gossip_rates_are_coverage_times_accuracy(self):
+        m = {'gossip_pairs': 60.0, 'story_days': 20.0, 'gossip_confidence': 4200.0, 'gossip_retellings': 120.0}
+        r = evolve_life.gossip_rates(m)
+        self.assertAlmostEqual(r['coverage'], 60.0 / (20.0 * evolve_life.SETTLEMENTS))
+        self.assertAlmostEqual(r['accuracy'], 0.7)
+        self.assertAlmostEqual(r['informed'], r['coverage'] * r['accuracy'])
+
+    def test_town_and_raid_scores_move_the_right_way(self):
+        calm = {'town_days': 100.0, 'town_hunger': 500.0, 'town_famine': 5.0, 'town_prosperity': 6600.0,
+                'raids': 10.0, 'loot': 100.0}
+        famine = dict(calm, town_hunger=2500.0, town_famine=50.0)
+        self.assertLess(evolve_life.town_welfare(famine), evolve_life.town_welfare(calm))
+        richer = dict(calm, loot=150.0)
+        self.assertGreater(evolve_life.raid_welfare(richer), evolve_life.raid_welfare(calm))
+
+    def test_every_stage_names_its_decisions_and_scores(self):
+        for name, cfg in evolve_life.STAGES.items():
+            self.assertTrue(cfg['mask'] > 0 and cfg['days'] > 0 and cfg['keys'], name)
+
 
 if __name__ == '__main__':
     unittest.main()

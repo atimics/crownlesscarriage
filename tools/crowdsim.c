@@ -212,9 +212,9 @@ int cs_execute(CrowdSim *w, uint64_t agreement, uint64_t payer, char *buf, size_
 /* ---- daily-life policy: a small network scores each option, in C ---- */
 
 #define CC_MAX_CHARACTERS_HINT 512
-#define POLICY_KINDS 4
+#define POLICY_KINDS 8
 #define ACTOR_FEATURES 19
-#define OPTION_FEATURES 8
+#define OPTION_FEATURES 21
 #define POLICY_INPUTS (POLICY_KINDS + ACTOR_FEATURES + OPTION_FEATURES)
 #define POLICY_HIDDEN 16
 #define POLICY_WEIGHTS (POLICY_INPUTS * POLICY_HIDDEN + POLICY_HIDDEN + POLICY_HIDDEN + 1)
@@ -222,7 +222,10 @@ int cs_execute(CrowdSim *w, uint64_t agreement, uint64_t payer, char *buf, size_
 static double policy_weights[POLICY_WEIGHTS];
 static long policy_offered[POLICY_KINDS], policy_changed[POLICY_KINDS];
 static int policy_active;
-static int policy_mask;   /* bit k set: the network decides kind k; others follow the rule */
+static int policy_mask;
+static double trade_bias[3];   /* probe: rule score + a*destination hunger + b*need + c*path cost */
+static int trade_bias_on;
+static int gossip_floor = -1;   /* >= 0: withhold any story carried below this confidence (a hand-set probe) */   /* bit k set: the network decides kind k; others follow the rule */
 
 int cs_policy_size(void) { return POLICY_WEIGHTS; }
 
@@ -272,7 +275,44 @@ static void OptionFeatures(const CcSim *sim, CcPolicyKind kind, CcId actor, cons
 {
     memset(f, 0, OPTION_FEATURES * sizeof(double));
     const CcCharacter *p = CcSimCharacter(sim, actor);
-    if (kind == CC_POLICY_TRAVEL_DESTINATION) {
+    if (kind == CC_POLICY_RAID_TARGET || kind == CC_POLICY_RAID_LAUNCH) {
+        f[0] = kind == CC_POLICY_RAID_LAUNCH ? is_last : 0.0;   /* hold */
+        const CcSettlement *town = CcSimSettlement(sim, o->target_id);
+        if (town != NULL) {
+            double stock = 0.0;
+            for (int g = 0; g < CC_GOOD_COUNT; ++g) stock += town->stock[g];
+            f[13] = (double)town->security / 100.0;
+            f[14] = Clip(stock / 200.0);
+            f[15] = (double)town->hunger / 100.0;
+            f[16] = (double)town->prosperity / 100.0;
+            f[17] = Clip((double)o->value / 500.0);       /* the rule's own score */
+        }
+    } else if (kind == CC_POLICY_TRADE_ROUTE) {
+        const CcSettlement *to = CcSimSettlement(sim, o->target_id), *from = CcSimSettlement(sim, o->source_id);
+        f[13] = Clip((double)o->need / 100.0);
+        f[14] = Clip((double)o->surplus / 100.0);
+        f[15] = Clip((double)o->path_cost / 200.0);
+        f[16] = (double)o->urgent;
+        f[17] = Clip((double)o->value / 2000.0);          /* the rule's own score */
+        f[18] = (double)o->good / (double)CC_GOOD_COUNT;
+        f[19] = to != NULL ? (double)to->hunger / 100.0 : 0.0;
+        f[20] = to != NULL && from != NULL ? ((double)to->prosperity - (double)from->prosperity) / 100.0 : 0.0;
+    } else if (kind == CC_POLICY_GOSSIP_SHARE) {
+        f[0] = is_last;                                   /* withhold */
+        for (int i = 0; i < CC_MAX_GOSSIP; ++i) {
+            const CcGossip *story = &sim->gossip[i];
+            if (story->event_id != o->target_id) continue;
+            uint32_t mask = story->settlement_mask;
+            int known = 0;
+            for (; mask != 0U; mask &= mask - 1U) ++known;
+            f[8] = Clip((double)(sim->current_day - story->day) / 90.0);
+            f[9] = (double)o->value / 100.0;              /* confidence of the carried version */
+            f[10] = (double)story->heard.alarm / 100.0;
+            f[11] = sim->settlement_count > 0 ? (double)known / (double)sim->settlement_count : 0.0;
+            f[12] = Clip((double)story->heard.retellings / 10.0);
+            break;
+        }
+    } else if (kind == CC_POLICY_TRAVEL_DESTINATION) {
         const CcSettlement *far = CcSimSettlement(sim, o->target_id);
         f[0] = is_last;                                   /* stay */
         f[1] = (double)o->value / 7.0;                    /* travel days */
@@ -295,14 +335,35 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
                       const CcPolicyOption *options, int32_t count, int32_t fallback)
 {
     (void)user;
+    if (kind == CC_POLICY_TRADE_ROUTE && trade_bias_on && ((policy_mask >> (int)kind) & 1)) {
+        int32_t best = fallback; double top = -1e300;
+        for (int32_t i = 0; i < count; ++i) {
+            const CcSettlement *to = CcSimSettlement(sim, options[i].target_id);
+            double score = (double)options[i].value + trade_bias[0] * (to != NULL ? to->hunger : 0) +
+                trade_bias[1] * options[i].need + trade_bias[2] * options[i].path_cost;
+            if (score > top + 1e-9) { top = score; best = i; }
+        }
+        return best;
+    }
+    if (kind == CC_POLICY_GOSSIP_SHARE && gossip_floor >= 0 && ((policy_mask >> (int)kind) & 1))
+        return options[0].value < gossip_floor ? 1 : 0;
     const CcCharacter *p = CcSimCharacter(sim, actor);
-    if (p == NULL || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
+    if ((p == NULL && kind != CC_POLICY_GOSSIP_SHARE && kind != CC_POLICY_TRADE_ROUTE && kind != CC_POLICY_RAID_TARGET && kind != CC_POLICY_RAID_LAUNCH) || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
     /* Whether a traveller leaves is the role's business: keep the rule's decision to stay,
        and when it decides to go, choose only where (never "stay"). */
     if (kind == CC_POLICY_TRAVEL_DESTINATION && fallback == count - 1) return fallback;
     int32_t choices = kind == CC_POLICY_TRAVEL_DESTINATION ? count - 1 : count;
     double x[POLICY_INPUTS], a[ACTOR_FEATURES];
-    ActorFeatures(sim, p, a);
+    if (p != NULL) ActorFeatures(sim, p, a); else memset(a, 0, sizeof(a));   /* a courier or carriage carries stories too */
+    if (kind == CC_POLICY_RAID_LAUNCH) {   /* the actor is a bandit band */
+        for (int32_t i = 0; i < sim->bandit_count; ++i) {
+            const CcBanditGroup *band = &sim->bandits[i];
+            if (band->id != actor) continue;
+            a[0] = (double)band->members / 120.0; a[1] = (double)band->supplies / 100.0;
+            a[2] = (double)band->influence / 100.0; a[3] = Clip((double)band->raids_completed / 10.0);
+            a[4] = (double)band->camp_size / 3.0;
+        }
+    }
     double score[64], best = -1e300;
     int32_t argmax = 0;
     for (int32_t i = 0; i < choices; ++i) {
@@ -328,6 +389,16 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
     return pick;
 }
 
+/* Probe: with biases, trade follows the rule's score plus a*hunger + b*need + c*path cost. */
+void cs_set_trade_bias(double a, double b, double c, int on)
+{
+    trade_bias[0] = a; trade_bias[1] = b; trade_bias[2] = c; trade_bias_on = on;
+    if (on) { policy_mask |= 32; CcSimSetPolicy(Choose, NULL); } else if (!policy_active && gossip_floor < 0) CcSimSetPolicy(NULL, NULL);
+}
+
+/* Probe: with a floor, gossip follows "withhold below this confidence" and ignores the network. */
+void cs_set_gossip_floor(int floor) { gossip_floor = floor; if (floor >= 0) { policy_mask |= 16; CcSimSetPolicy(Choose, NULL); } else if (!policy_active) CcSimSetPolicy(NULL, NULL); }
+
 void cs_set_policy(const double *weights, int count, int mask)
 {
     policy_mask = mask;
@@ -350,15 +421,43 @@ CrowdSim *cs_new(uint32_t seed, int days)
  * (scout, traveller, refugee, courier) are the people whose choices the hook changes.
  * metrics: 0 road person-days, 1 road hungry days, 2 road unsheltered, 3 road bandit,
  * 4 road stress, 5 road coins at the end, 6 all person-days, 7 all hungry days, 8 all bandit,
- * 9 town changes by road-going people (a tracked invariant: a policy must not stop travelling). */
+ * 9 town changes by road-going people (a tracked invariant: a policy must not stop travelling),
+ * 10 known (story, town) pairs, 11 their confidence total, 12 their retellings total, 13 story-days,
+ * 14 town hunger summed over town-days, 15 town-days in famine (hunger >= 25), 16 town prosperity summed,
+ * 17 town-days, 18 raids on towns, 19 goods taken in raids. */
 int cs_run(CrowdSim *w, int days, double *metrics)
 {
     static CcId where[CC_MAX_CHARACTERS_HINT];
-    memset(metrics, 0, 10 * sizeof(double));
+    memset(metrics, 0, 20 * sizeof(double));
+    CcId seen_event = 0U;
+    for (int32_t i = 0; i < w->sim.event_count; ++i) if (w->sim.events[i].id > seen_event) seen_event = w->sim.events[i].id;
     for (int32_t i = 0; i < w->sim.character_count && i < CC_MAX_CHARACTERS_HINT; ++i)
         where[i] = w->sim.characters[i].current_settlement_id;
     for (int d = 0; d < days; ++d) {
         CcSimAdvanceDays(&w->sim, 1);
+        for (int32_t i = 0; i < w->sim.event_count; ++i) {
+            const CcEvent *event = &w->sim.events[i];
+            if (event->id <= seen_event) continue;
+            if (event->kind == CC_EVENT_SETTLEMENT_RAIDED) { metrics[18] += 1.0; metrics[19] += (double)event->magnitude; }
+        }
+        for (int32_t i = 0; i < w->sim.event_count; ++i) if (w->sim.events[i].id > seen_event) seen_event = w->sim.events[i].id;
+        for (int32_t t = 0; t < w->sim.settlement_count; ++t) {
+            const CcSettlement *town = &w->sim.settlements[t];
+            if (CcSettlementIsAbandoned(town)) continue;
+            metrics[14] += (double)town->hunger; metrics[15] += town->hunger >= 25;
+            metrics[16] += (double)town->prosperity; metrics[17] += 1.0;
+        }
+        for (int g = 0; g < CC_MAX_GOSSIP; ++g) {
+            const CcGossip *story = &w->sim.gossip[g];
+            if (story->event_id == 0U) continue;
+            metrics[13] += 1.0;
+            for (int t = 0; t < w->sim.settlement_count && t < CC_MAX_SETTLEMENTS && t < 32; ++t) {
+                if (!((story->settlement_mask >> t) & 1U)) continue;
+                metrics[10] += 1.0;
+                metrics[11] += (double)story->local[t].confidence;
+                metrics[12] += (double)story->local[t].retellings;
+            }
+        }
         for (int32_t i = 0; i < w->sim.character_count; ++i) {
             const CcCharacter *p = &w->sim.characters[i];
             if (i < CC_MAX_CHARACTERS_HINT) {

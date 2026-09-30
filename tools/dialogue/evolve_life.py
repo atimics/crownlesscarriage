@@ -18,8 +18,9 @@ import numpy as np
 import fastworld
 
 START_DAY = 30    # let the world settle before the policy takes over
-SEASON = 180      # days scored
+SEASON = 180      # days scored for L1
 WEIGHTS = {'hungry': 1.0, 'unsheltered': 0.5, 'bandit': 1.0}
+SETTLEMENTS = 6   # towns per world (docs/npc-census.json)
 
 
 def rates(metrics):
@@ -35,13 +36,63 @@ def welfare(metrics):
     return -sum(WEIGHTS[k] * r[k] for k in WEIGHTS)
 
 
-def play(theta, seed):
+def gossip_rates(metrics):
+    """Coverage (share of towns that know the average story), accuracy (mean confidence of the
+    version each town holds), and their product, how well informed the world is."""
+    pairs, story_days = max(1.0, metrics['gossip_pairs']), max(1.0, metrics['story_days'])
+    coverage = metrics['gossip_pairs'] / (story_days * SETTLEMENTS)
+    accuracy = metrics['gossip_confidence'] / pairs / 100.0
+    return {'informed': coverage * accuracy, 'coverage': coverage, 'accuracy': accuracy,
+            'retellings': metrics['gossip_retellings'] / pairs}
+
+
+def town_rates(metrics):
+    """Hunger and famine across towns, and how prosperous they are."""
+    days = max(1.0, metrics['town_days'])
+    return {'hunger': metrics['town_hunger'] / days, 'famine': metrics['town_famine'] / days,
+            'prosperity': metrics['town_prosperity'] / days}
+
+
+def town_welfare(metrics):
+    r = town_rates(metrics)
+    return -r['hunger'] / 100.0 - r['famine'] + 0.2 * r['prosperity'] / 100.0
+
+
+def raid_rates(metrics):
+    """What raiders take, and what it costs the towns."""
+    towns = town_rates(metrics)
+    return {'loot': metrics['loot'], 'raids': metrics['raids'], 'prosperity': towns['prosperity'],
+            'famine': towns['famine']}
+
+
+def raid_welfare(metrics):
+    # One unit of loot and one point of prosperity count the same: a deliberately even split.
+    r = raid_rates(metrics)
+    return r['loot'] / 100.0 + r['prosperity'] / 100.0
+
+
+# Each stage: which decisions the brain takes, when scoring starts, how long, and what is scored.
+STAGES = {
+    'l1': {'mask': fastworld.LEARNED, 'start': START_DAY, 'days': SEASON, 'rates': rates, 'welfare': welfare,
+           'keys': ('hungry', 'unsheltered', 'bandit', 'stress', 'moves'), 'label': 'welfare'},
+    'l2': {'mask': fastworld.GOSSIP, 'start': START_DAY, 'days': 365, 'rates': gossip_rates,
+           'welfare': lambda m: gossip_rates(m)['informed'],
+           'keys': ('informed', 'coverage', 'accuracy', 'retellings'), 'label': 'informed'},
+    'l4': {'mask': fastworld.RAID, 'start': START_DAY, 'days': 730, 'rates': raid_rates, 'welfare': raid_welfare,
+           'keys': ('loot', 'raids', 'prosperity', 'famine'), 'label': 'raid balance'},
+    'l3': {'mask': fastworld.TRADE, 'start': START_DAY, 'days': 730, 'rates': town_rates, 'welfare': town_welfare,
+           'keys': ('hunger', 'famine', 'prosperity'), 'label': 'town welfare'},
+}
+
+
+def play(theta, seed, stage='l1'):
     """One world under a weight vector (None = the simulation's rule); returns its metrics."""
-    fastworld.set_policy(theta)
+    cfg = STAGES[stage]
+    fastworld.set_policy(theta, cfg['mask'])
     try:
-        world = fastworld.FastWorld.new(seed, START_DAY)
+        world = fastworld.FastWorld.new(seed, cfg['start'])
         try:
-            return fastworld.run_days(world, SEASON)
+            return fastworld.run_days(world, cfg['days'])
         finally:
             world.close()
     finally:
@@ -49,13 +100,13 @@ def play(theta, seed):
 
 
 def _fitness(job):
-    theta, seeds = job
-    return float(np.mean([welfare(play(theta, s)) for s in seeds]))
+    theta, seeds, stage = job
+    return float(np.mean([STAGES[stage]['welfare'](play(theta, s, stage)) for s in seeds]))
 
 
 def _metrics(job):
-    theta, seeds = job
-    return [play(theta, s) for s in seeds]
+    theta, seeds, stage = job
+    return [play(theta, s, stage) for s in seeds]
 
 
 def ranks(values):
@@ -67,17 +118,18 @@ def chunks(items, pieces):
     return [items[k::pieces] for k in range(pieces) if items[k::pieces]]
 
 
-def paired(rule, other, name):
+def paired(rule, other, name, stage='l1'):
     """Differences other - rule per world for each rate, with standard errors."""
+    cfg = STAGES[stage]
     lines = []
-    for key in ('hungry', 'unsheltered', 'bandit', 'stress', 'moves'):
-        d = np.array([rates(b)[key] - rates(a)[key] for a, b in zip(rule, other)])
+    for key in cfg['keys']:
+        d = np.array([cfg['rates'](b)[key] - cfg['rates'](a)[key] for a, b in zip(rule, other)])
         se = d.std(ddof=1) / np.sqrt(len(d)) if len(d) > 1 else 0.0
         lines.append(f"{name} vs rule {key:12} {d.mean():+.4f} +- {se:.4f} (z={d.mean() / se if se else 0:.1f}); "
                      f"lower in {int((d < 0).sum())}, higher in {int((d > 0).sum())} of {len(d)}")
-    d = np.array([welfare(b) - welfare(a) for a, b in zip(rule, other)])
+    d = np.array([cfg['welfare'](b) - cfg['welfare'](a) for a, b in zip(rule, other)])
     se = d.std(ddof=1) / np.sqrt(len(d))
-    lines.append(f"{name} vs rule {'welfare':12} {d.mean():+.4f} +- {se:.4f} (z={d.mean() / se:.1f}); "
+    lines.append(f"{name} vs rule {cfg['label']:12} {d.mean():+.4f} +- {se:.4f} (z={d.mean() / se:.1f}); "
                  f"better in {int((d > 0).sum())}, worse in {int((d < 0).sum())} of {len(d)}")
     return lines
 
@@ -85,6 +137,7 @@ def paired(rule, other, name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--stage', choices=sorted(STAGES), default='l1')
     parser.add_argument('--generations', type=int, default=150)
     parser.add_argument('--pairs', type=int, default=32)
     parser.add_argument('--batch', type=int, default=24, help='worlds per generation')
@@ -105,7 +158,7 @@ def main():
     ctx = get_context('spawn')
     with ctx.Pool(args.workers) as pool:
         def mean_welfare(th, seeds):
-            parts = pool.map(_fitness, [(th, c) for c in chunks(seeds, args.workers)])
+            parts = pool.map(_fitness, [(th, c, args.stage) for c in chunks(seeds, args.workers)])
             return float(np.average(parts, weights=[len(c) for c in chunks(seeds, args.workers)]))
         rule_valid = mean_welfare(None, valid)
         best, best_valid, started = theta.copy(), rule_valid, time.time()
@@ -114,7 +167,7 @@ def main():
             batch = rng.choice(train, size=args.batch, replace=False).tolist()
             eps = rng.normal(0, 1, (args.pairs, size))
             cands = [theta + args.sigma * e for e in eps] + [theta - args.sigma * e for e in eps]
-            fit = np.array(pool.map(_fitness, [(c, batch) for c in cands], chunksize=1))
+            fit = np.array(pool.map(_fitness, [(c, batch, args.stage) for c in cands], chunksize=1))
             shaped = ranks(fit)
             grad = ((shaped[:args.pairs] - shaped[args.pairs:])[:, None] * eps).sum(0) / (2 * args.pairs * args.sigma)
             m = 0.9 * m + 0.1 * grad
@@ -130,14 +183,15 @@ def main():
             print(json.dumps(row), flush=True)
         np.save(args.output / 'theta_best_validation.npy', best)
         np.save(args.output / 'theta_last.npy', theta)
-        rule = [r for c in pool.map(_metrics, [(None, c) for c in chunks(test, args.workers)]) for r in c]
-        found = [r for c in pool.map(_metrics, [(best, c) for c in chunks(test, args.workers)]) for r in c]
+        rule = [r for c in pool.map(_metrics, [(None, c, args.stage) for c in chunks(test, args.workers)]) for r in c]
+        found = [r for c in pool.map(_metrics, [(best, c, args.stage) for c in chunks(test, args.workers)]) for r in c]
         # chunks() interleaves seeds, so both lists are in the same interleaved order and pair up
         for name, rows in (('rule', rule), ('evolved', found)):
-            r = {k: np.mean([rates(x)[k] for x in rows]) for k in ('hungry', 'unsheltered', 'bandit', 'stress', 'moves')}
+            cfg = STAGES[args.stage]
+            r = {k: np.mean([cfg['rates'](x)[k] for x in rows]) for k in cfg['keys']}
             print(name, json.dumps({k: round(float(x), 4) for k, x in r.items()}),
-                  'welfare', round(float(np.mean([welfare(x) for x in rows])), 4))
-        print('\n'.join(paired(rule, found, 'evolved')))
+                  cfg['label'], round(float(np.mean([cfg['welfare'](x) for x in rows])), 4))
+        print('\n'.join(paired(rule, found, 'evolved', args.stage)))
 
 
 if __name__ == '__main__':

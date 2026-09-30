@@ -54,6 +54,8 @@ def library():
         lib.cs_policy_size.restype = c_i
         lib.cs_set_policy.argtypes = [ctypes.POINTER(ctypes.c_double), c_i, c_i]
         lib.cs_policy_stats.argtypes = [ctypes.POINTER(ctypes.c_long), c_i]
+        lib.cs_set_gossip_floor.argtypes = [c_i]
+        lib.cs_set_trade_bias.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, c_i]
         lib.cs_run.restype = c_i
         lib.cs_run.argtypes = [c_p, c_i, ctypes.POINTER(ctypes.c_double)]
         lib.cs_promise.restype = c_i
@@ -147,14 +149,17 @@ class FastWorld:
 
 
 METRICS = ('road_days', 'road_hungry', 'road_unsheltered', 'road_bandit', 'road_stress', 'road_coins',
-           'all_days', 'all_hungry', 'all_bandit', 'road_moves')
+           'all_days', 'all_hungry', 'all_bandit', 'road_moves',
+           'gossip_pairs', 'gossip_confidence', 'gossip_retellings', 'story_days',
+           'town_hunger', 'town_famine', 'town_prosperity', 'town_days', 'raids', 'loot')
 
 
 def policy_size():
     return library().cs_policy_size()
 
 
-TRAVEL, MEAL, LODGING, BANDIT_JOIN = 1, 2, 4, 8
+TRAVEL, MEAL, LODGING, BANDIT_JOIN, GOSSIP, TRADE, RAID_TARGET, RAID_LAUNCH = 1, 2, 4, 8, 16, 32, 64, 128
+RAID = RAID_TARGET | RAID_LAUNCH
 LEARNED = TRAVEL | MEAL | LODGING   # bandit recruitment stays with the rule (story-critical)
 
 
@@ -178,7 +183,17 @@ def run_days(world, days):
 
 def policy_stats(reset=True):
     """How often each decision kind was offered and how often the policy changed the rule's choice."""
-    out = (ctypes.c_long * 8)()
+    out = (ctypes.c_long * 16)()
     library().cs_policy_stats(out, int(reset))
-    names = ('travel', 'meal', 'lodging', 'bandit')
-    return {n: {'offered': out[i], 'changed': out[4 + i]} for i, n in enumerate(names)}
+    names = ('travel', 'meal', 'lodging', 'bandit', 'gossip', 'trade', 'raid_target', 'raid_launch')
+    return {n: {'offered': out[i], 'changed': out[8 + i]} for i, n in enumerate(names)}
+
+
+def set_gossip_floor(floor):
+    """A hand-set probe: withhold any story carried below this confidence (None clears it)."""
+    library().cs_set_gossip_floor(-1 if floor is None else int(floor))
+
+
+def set_trade_bias(hunger=0.0, need=0.0, path_cost=0.0, on=True):
+    """A hand-set probe: trade follows the rule's score plus these weights (on=False clears it)."""
+    library().cs_set_trade_bias(hunger, need, path_cost, int(on))

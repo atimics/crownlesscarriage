@@ -57,10 +57,13 @@ int main(void)
     }
     if (calls[CC_POLICY_TRAVEL_DESTINATION] == 0) { puts("the travel decision was never offered"); ++failures; }
     if (calls[CC_POLICY_MEAL] == 0) { puts("the meal decision was never offered"); ++failures; }
+    if (calls[CC_POLICY_GOSSIP_SHARE] == 0) { puts("the gossip decision was never offered"); ++failures; }
+    if (calls[CC_POLICY_TRADE_ROUTE] == 0) { puts("the trade decision was never offered"); ++failures; }
+    if (calls[CC_POLICY_RAID_LAUNCH] == 0) { puts("the raid launch decision was never offered"); ++failures; }
     if (changed == 0) { puts("choosing differently never changed a world"); ++failures; }
-    printf("offered: travel %ld, meal %ld, lodging %ld, bandit %ld; %d of %d worlds changed\n",
+    printf("offered: travel %ld, meal %ld, lodging %ld, bandit %ld, gossip %ld, trade %ld, raid target %ld, raid launch %ld; %d of %d worlds changed\n",
            calls[CC_POLICY_TRAVEL_DESTINATION], calls[CC_POLICY_MEAL], calls[CC_POLICY_LODGING],
-           calls[CC_POLICY_BANDIT_JOIN], changed, SEEDS);
+           calls[CC_POLICY_BANDIT_JOIN], calls[CC_POLICY_GOSSIP_SHARE], calls[CC_POLICY_TRADE_ROUTE], calls[CC_POLICY_RAID_TARGET], calls[CC_POLICY_RAID_LAUNCH], changed, SEEDS);
     puts(failures ? "FAIL" : "ok");
     return failures ? 1 : 0;
 }
