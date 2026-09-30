@@ -327,6 +327,10 @@ add_executable(core_model_probe tools/core_model_probe.c)
 target_link_libraries(core_model_probe PRIVATE crownless_story)
 cc_strict_warnings(core_model_probe)
 
+add_executable(crownless_sim_census tools/sim_census.c)
+target_link_libraries(crownless_sim_census PRIVATE crownless_sim)
+cc_strict_warnings(crownless_sim_census)
+
 add_executable(core_account_batch tools/core_account_batch.c)
 target_link_libraries(core_account_batch PRIVATE crownless_story)
 cc_strict_warnings(core_account_batch)
