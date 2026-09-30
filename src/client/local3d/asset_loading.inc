@@ -2206,7 +2206,7 @@ static void DrawCreatureMuscleLimbs(const CcCreatureRigPose *rig,
                 end.y -= 0.28f * scale * (1.0f - (float)(segment + 1) / (float)leg->segment_count);
             }
             Color color = segment == 0 ? upper : lower;
-            DrawCylinderEx(start, end, radius, radius * 0.78f, 7, color);
+            DrawLitCylinderEx(start, end, radius, radius * 0.78f, 7, color);
             if (segment + 1 < leg->segment_count) {
                 DrawCharacterSphere(end, radius * 0.94f,
                                     BlendColor(upper, lower, 0.46f));
@@ -2256,7 +2256,7 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
                                   rig->body_length * 0.48f, yaw);
         Vector3 head = LocalPoint(body, 0.0f, -0.04f * scale,
                                   rig->body_length * 0.70f, yaw);
-        DrawCylinderEx(neck, head, 0.17f * scale, 0.14f * scale, 7,
+        DrawLitCylinderEx(neck, head, 0.17f * scale, 0.14f * scale, 7,
                        palette->secondary);
         DrawCharacterEllipsoid(
             head, (Vector3){0.21f * scale, 0.24f * scale,
@@ -2275,14 +2275,14 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
             Vector3 ear_tip = LocalPoint(
                 head, (float)side * 0.32f * scale, 0.10f * scale,
                 -0.04f * scale, yaw);
-            DrawCylinderEx(ear_root, ear_tip, 0.045f * scale,
+            DrawLitCylinderEx(ear_root, ear_tip, 0.045f * scale,
                            0.012f * scale, 5, palette->secondary);
         }
         Vector3 tail_root = LocalPoint(body, 0.0f, 0.12f * scale,
                                        -rig->body_length * 0.47f, yaw);
         Vector3 tail_tip = LocalPoint(body, 0.0f, 0.02f * scale,
                                       -rig->body_length * 0.62f, yaw);
-        DrawCylinderEx(tail_root, tail_tip, 0.10f * scale,
+        DrawLitCylinderEx(tail_root, tail_tip, 0.10f * scale,
                        0.055f * scale, 6, palette->cloth);
         return;
     }
@@ -2303,7 +2303,7 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
                                   0.72f * scale, yaw);
         Vector3 head = LocalPoint(body, 0.0f, 0.40f * scale,
                                   0.94f * scale, yaw);
-        DrawCylinderEx(neck_base, neck, 0.25f * scale, 0.19f * scale,
+        DrawLitCylinderEx(neck_base, neck, 0.25f * scale, 0.19f * scale,
                        8, palette->skin);
         DrawCharacterEllipsoid(
             head, (Vector3){0.26f * scale, 0.28f * scale,
@@ -2333,7 +2333,7 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
             Vector3 ear_tip = LocalPoint(
                 head, (float)side * 0.13f * scale, 0.38f * scale,
                 -0.02f * scale, yaw);
-            DrawCylinderEx(ear_root, ear_tip, 0.050f * scale,
+            DrawLitCylinderEx(ear_root, ear_tip, 0.050f * scale,
                            0.012f * scale, 5, palette->skin);
         }
         for (int32_t plume = 0; plume < 3; ++plume) {
@@ -2359,7 +2359,7 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
     Vector3 head = LocalPoint(
         body, 0.0f, -0.10f * scale,
         rig->body_length * 0.82f, yaw);
-    DrawCylinderEx(neck_base, neck, 0.25f * scale, 0.21f * scale,
+    DrawLitCylinderEx(neck_base, neck, 0.25f * scale, 0.21f * scale,
                    7, palette->hide);
     DrawCharacterEllipsoid(
         head, (Vector3){0.31f * scale, 0.25f * scale, 0.34f * scale},
@@ -2375,19 +2375,19 @@ static void DrawFarmAnimalRig(CcCreatureVariant variant,
         Vector3 ear_tip = LocalPoint(
             head, (float)side * 0.24f * scale,
             0.29f * scale, 0.0f, yaw);
-        DrawCylinderEx(ear_root, ear_tip, 0.045f * scale,
+        DrawLitCylinderEx(ear_root, ear_tip, 0.045f * scale,
                        0.012f * scale, 5, palette->secondary);
         Vector3 horn_tip = LocalPoint(
             head, (float)side * 0.40f * scale, 0.30f * scale,
             0.02f * scale, yaw);
-        DrawCylinderEx(ear_root, horn_tip, 0.055f * scale, 0.0f, 6,
+        DrawLitCylinderEx(ear_root, horn_tip, 0.055f * scale, 0.0f, 6,
                        palette->horn);
     }
     Vector3 tail_root = LocalPoint(body, 0.0f, 0.22f * scale,
                                    -rig->body_length * 0.48f, yaw);
     Vector3 tail_tip = LocalPoint(body, 0.0f, -0.40f * scale,
                                   -rig->body_length * 0.70f, yaw);
-    DrawCylinderEx(tail_root, tail_tip, 0.045f * scale,
+    DrawLitCylinderEx(tail_root, tail_tip, 0.045f * scale,
                    0.018f * scale, 6, palette->secondary);
     Vector3 udder = LocalPoint(body, 0.0f, -0.48f * scale,
                                -0.10f * scale, yaw);
@@ -2424,7 +2424,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
             palette->hide);
         Vector3 head = LocalPoint(body, 0.0f, 0.22f * scale,
                                   0.88f * scale, yaw);
-        DrawCylinderEx(body, head, 0.24f * scale, 0.20f * scale, 7,
+        DrawLitCylinderEx(body, head, 0.24f * scale, 0.20f * scale, 7,
                        palette->hide);
         DrawDragonFace(
             head, (Vector3){0.48f * scale, 0.40f * scale,
@@ -2472,7 +2472,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
                 (0.48f - crest_index * 0.42f) * scale, yaw);
             Vector3 tip = root;
             tip.y += (0.15f - crest_index * 0.02f) * scale;
-            DrawCylinderEx(root, tip, 0.050f * scale, 0.0f, 5,
+            DrawLitCylinderEx(root, tip, 0.050f * scale, 0.0f, 5,
                            palette->horn);
         }
         return;
@@ -2512,7 +2512,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
             Vector3 horn_tip = LocalPoint(
                 head, (float)side * 0.36f * scale, 0.50f * scale,
                 -0.72f * scale, yaw);
-            DrawCylinderEx(horn_root, horn_tip, 0.065f * scale, 0.0f, 6,
+            DrawLitCylinderEx(horn_root, horn_tip, 0.065f * scale, 0.0f, 6,
                            palette->horn);
 
             Vector3 wing_root = LocalPoint(
@@ -2545,7 +2545,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
                 (1.02f - blade_index * 1.00f) * scale, yaw);
             Vector3 tip = root;
             tip.y += 0.34f * scale;
-            DrawCylinderEx(root, tip, 0.055f * scale, 0.0f, 5,
+            DrawLitCylinderEx(root, tip, 0.055f * scale, 0.0f, 5,
                            palette->horn);
         }
         return;
@@ -2613,7 +2613,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
                     head, (float)side * (0.74f + amount * 0.24f) * scale,
                     (1.66f - amount * 0.28f) * scale,
                     (-1.06f - amount * 0.12f) * scale, yaw);
-                DrawCylinderEx(horn_root, horn_tip,
+                DrawLitCylinderEx(horn_root, horn_tip,
                                (0.13f - amount * 0.022f) * scale,
                                0.0f, 7, palette->horn);
             }
@@ -2624,7 +2624,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
             Vector3 whisker_tip = LocalPoint(
                 head, (float)side * 1.48f * scale, -0.10f * scale,
                 1.72f * scale, yaw);
-            DrawCylinderEx(whisker_root, whisker_tip, 0.035f * scale,
+            DrawLitCylinderEx(whisker_root, whisker_tip, 0.035f * scale,
                            0.008f * scale, 6, palette->horn);
 
             Vector3 wing_root = LocalPoint(
@@ -2647,7 +2647,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
             Vector3 arm_tip = LocalPoint(
                 body, (float)side * 1.06f * scale, -0.32f * scale,
                 3.62f * scale, yaw);
-            DrawCylinderEx(arm_root, arm_tip, 0.13f * scale,
+            DrawLitCylinderEx(arm_root, arm_tip, 0.13f * scale,
                            0.045f * scale, 7, palette->skin);
         }
         for (int32_t plate = 0; plate < serpent_count - 1; ++plate) {
@@ -2656,7 +2656,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
             Vector3 tip = root;
             float plate_amount = (float)plate / (float)(serpent_count - 2);
             tip.y += (0.62f - plate_amount * 0.40f) * scale;
-            DrawCylinderEx(root, tip,
+            DrawLitCylinderEx(root, tip,
                            fmaxf(0.055f, 0.16f - plate_amount * 0.10f) *
                                scale,
                            0.0f, 6,
@@ -2716,7 +2716,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
                                        0.29f * scale, 0.05f * scale, yaw);
         Vector3 horn_tip = LocalPoint(head, (float)side * 0.72f * scale,
                                       0.92f * scale, -0.72f * scale, yaw);
-        DrawCylinderEx(horn_root, horn_tip, 0.105f * scale, 0.0f, 7,
+        DrawLitCylinderEx(horn_root, horn_tip, 0.105f * scale, 0.0f, 7,
                        palette->horn);
 
         Vector3 wing_root = LocalPoint(body, (float)side * 0.58f * scale,
@@ -2745,9 +2745,9 @@ static void DrawDragonRig(CcCreatureVariant variant,
                 yaw);
             const CcCreatureRigLimbPose *limb = &rig->limbs[pair * 2 + (side > 0 ? 1 : 0)];
             leg_foot.y = limb->joints[limb->segment_count].y;
-            DrawCylinderEx(leg_root, leg_knee, 0.17f * scale,
+            DrawLitCylinderEx(leg_root, leg_knee, 0.17f * scale,
                            0.11f * scale, 7, palette->skin);
-            DrawCylinderEx(leg_knee, leg_foot, 0.11f * scale,
+            DrawLitCylinderEx(leg_knee, leg_foot, 0.11f * scale,
                            0.045f * scale, 7, palette->secondary);
             DrawDragonClaws(leg_foot, yaw, scale, palette);
         }
@@ -2778,7 +2778,7 @@ static void DrawDragonRig(CcCreatureVariant variant,
                                   (4.18f - amount * 7.40f) * scale, yaw);
         Vector3 tip = root;
         tip.y += (0.46f - amount * 0.24f) * scale;
-        DrawCylinderEx(root, tip, 0.085f * scale, 0.0f, 6,
+        DrawLitCylinderEx(root, tip, 0.085f * scale, 0.0f, 6,
                        palette->horn);
     }
 }
