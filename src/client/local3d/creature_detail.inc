@@ -100,7 +100,7 @@ static void DrawDragonWing(Vector3 root, Vector3 joint, Vector3 tip, Vector3 bac
         Color shade = ShadeColor(membrane, 1.0f - (float)panel * 0.08f);
         DrawDoubleSidedTriangle(joint, fingers[panel], scallop, shade);
         DrawDoubleSidedTriangle(joint, scallop, fingers[panel + 1], shade);
-        DrawCylinderEx(joint, fingers[panel], 0.052f * scale, 0.014f * scale,
+        DrawLitCylinderEx(joint, fingers[panel], 0.052f * scale, 0.014f * scale,
                        6, palette->hide);
     }
     Vector3 root_fold = Vector3Lerp(joint, fingers[3], 0.42f);
@@ -108,11 +108,11 @@ static void DrawDragonWing(Vector3 root, Vector3 joint, Vector3 tip, Vector3 bac
         Vector3Scale(wing_normal, -fold_depth * 0.6f));
     DrawDoubleSidedTriangle(root, joint, root_fold, membrane);
     DrawDoubleSidedTriangle(root, root_fold, fingers[3], membrane);
-    DrawCylinderEx(root, joint, 0.125f * scale, 0.062f * scale, 7, palette->skin);
-    DrawCylinderEx(joint, tip, 0.062f * scale, 0.018f * scale, 6, palette->skin);
+    DrawLitCylinderEx(root, joint, 0.125f * scale, 0.062f * scale, 7, palette->skin);
+    DrawLitCylinderEx(joint, tip, 0.062f * scale, 0.018f * scale, 6, palette->skin);
     Vector3 thumb = Vector3Add(joint, Vector3Scale(Vector3Normalize(
         Vector3Subtract(joint, root)), 0.20f * scale));
-    DrawCylinderEx(joint, thumb, 0.058f * scale, 0.0f, 6, palette->horn);
+    DrawLitCylinderEx(joint, thumb, 0.058f * scale, 0.0f, 6, palette->horn);
 }
 
 static void DrawDragonMane(Vector3 head, Vector3 radii, float yaw, Color hair)
@@ -173,7 +173,7 @@ static void DrawDragonFace(Vector3 head, Vector3 radii, float yaw, float scale,
                                      radii.y * 0.48f, radii.z * 0.67f, yaw);
         Vector3 brow_out = LocalPoint(head, sign * radii.x * 0.96f,
                                       radii.y * 0.57f, radii.z * 0.35f, yaw);
-        DrawCylinderEx(brow_in, brow_out, eye_size * 0.58f, eye_size * 0.32f, 6, palette->hide);
+        DrawLitCylinderEx(brow_in, brow_out, eye_size * 0.58f, eye_size * 0.32f, 6, palette->hide);
         Vector3 nostril = LocalPoint(head, sign * radii.x * 0.43f,
                                      -radii.y * 0.07f, radii.z * 1.19f, yaw);
         DrawCreatureEllipsoid(nostril,
@@ -182,12 +182,12 @@ static void DrawDragonFace(Vector3 head, Vector3 radii, float yaw, float scale,
                                         -radii.y * 0.44f, radii.z * 0.46f, yaw);
         Vector3 mouth_front = LocalPoint(head, sign * radii.x * 0.52f,
                                          -radii.y * 0.47f, radii.z * 1.17f, yaw);
-        DrawCylinderEx(mouth_back, mouth_front, 0.012f * scale, 0.010f * scale, 5, dark);
+        DrawLitCylinderEx(mouth_back, mouth_front, 0.012f * scale, 0.010f * scale, 5, dark);
         for (int32_t tooth = 0; tooth < 2; ++tooth) {
             Vector3 root = Vector3Lerp(mouth_back, mouth_front, 0.36f + (float)tooth * 0.38f);
             Vector3 tip = root;
             tip.y -= radii.y * (young ? 0.18f : 0.28f);
-            DrawCylinderEx(root, tip, radii.x * 0.05f, 0.0f, 5, palette->horn);
+            DrawLitCylinderEx(root, tip, radii.x * 0.05f, 0.0f, 5, palette->horn);
         }
     }
 }
@@ -202,6 +202,6 @@ static void DrawDragonClaws(Vector3 foot, float yaw, float scale,
                                   0.035f * scale, 0.17f * scale, yaw);
         Vector3 tip = LocalPoint(foot, (float)toe * 0.14f * scale,
                                  0.008f * scale, (toe == 0 ? 0.35f : 0.31f) * scale, yaw);
-        DrawCylinderEx(root, tip, 0.045f * scale, 0.0f, 6, palette->horn);
+        DrawLitCylinderEx(root, tip, 0.045f * scale, 0.0f, 6, palette->horn);
     }
 }

@@ -53,7 +53,7 @@ static void DrawOrientedBox(Vector3 base, Vector3 local_center, Vector3 size,
 
 static void DrawBoneSegment(Vector3 a, Vector3 b, Color color)
 {
-    DrawCylinderEx(a, b, 0.028f, 0.028f, 7, color);
+    DrawLitCylinderEx(a, b, 0.028f, 0.028f, 7, color);
 }
 
 static void DrawBoneJoint(Vector3 point, Color color)
@@ -355,7 +355,7 @@ static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
             DrawCharacterEllipsoid(crown,
                 (Vector3){head_width * 1.04f, 0.125f * scale,
                           head_depth * 1.02f}, appearance->hair);
-            DrawCylinderEx(PhysicsAdd(head, PhysicsScale(forward,
+            DrawLitCylinderEx(PhysicsAdd(head, PhysicsScale(forward,
                                       -head_depth * 0.80f)),
                            PhysicsAdd(head, (Vector3){0.0f, -0.18f * scale, 0.0f}),
                            0.075f * scale, 0.045f * scale, 7,
@@ -383,7 +383,7 @@ static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
             for (int32_t side = -1; side <= 1; side += 2) {
                 Vector3 braid = PhysicsAdd(head, PhysicsScale(right,
                     (float)side * head_width * 0.78f));
-                DrawCylinderEx(braid,
+                DrawLitCylinderEx(braid,
                     PhysicsAdd(braid, (Vector3){0.0f, -0.24f * scale, 0.0f}),
                     0.027f * scale, 0.018f * scale, 6, appearance->hair);
             }
@@ -408,11 +408,11 @@ static void DrawNpcHead(const CcNpcAppearance *appearance, Vector3 head,
     if ((appearance->equipment & CC_NPC_EQUIPMENT_HEADWEAR) != 0U) {
         Color headwear = appearance->role == CC_NPC_ROLE_GUARD ?
                          appearance->metal : appearance->outer;
-        DrawCylinder(PhysicsAdd(head, (Vector3){0.0f, 0.18f * scale, 0.0f}),
+        DrawLitCylinder(PhysicsAdd(head, (Vector3){0.0f, 0.18f * scale, 0.0f}),
                      0.19f * scale, 0.15f * scale, 0.09f * scale, 10,
                      headwear);
         if (appearance->role != CC_NPC_ROLE_GUARD) {
-            DrawCylinder(PhysicsAdd(head,
+            DrawLitCylinder(PhysicsAdd(head,
                          (Vector3){0.0f, 0.145f * scale, 0.0f}),
                          0.24f * scale, 0.24f * scale, 0.025f * scale, 12,
                          ShadeColor(headwear, 0.72f));
@@ -458,7 +458,7 @@ static void DrawNpcEquipment(const CcNpcAppearance *appearance,
         DrawOrientedBox(bag, (Vector3){0},
                         (Vector3){0.20f * scale, 0.24f * scale,
                                   0.11f * scale}, yaw, appearance->leather);
-        DrawCylinderEx(shoulder_l, bag, 0.018f * scale, 0.018f * scale,
+        DrawLitCylinderEx(shoulder_l, bag, 0.018f * scale, 0.018f * scale,
                        5, ShadeColor(appearance->leather, 0.82f));
     }
     if ((appearance->equipment & CC_NPC_EQUIPMENT_PACK) != 0U) {
@@ -473,7 +473,7 @@ static void DrawNpcEquipment(const CcNpcAppearance *appearance,
         appearance->role != CC_NPC_ROLE_RAIDER) {
         Vector3 tool_end = PhysicsAdd(hand_l,
             (Vector3){0.0f, 0.62f * scale, 0.0f});
-        DrawCylinderEx(hand_l, tool_end, 0.022f * scale, 0.016f * scale,
+        DrawLitCylinderEx(hand_l, tool_end, 0.022f * scale, 0.016f * scale,
                        6, appearance->leather);
         DrawSmallSphere(tool_end, 0.045f * scale, appearance->metal);
     }
@@ -505,7 +505,7 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
 
             Vector3 sash_end = LocalPoint(hip, 0.14f * scale,
                                            0.08f * scale, 0.17f * scale, yaw);
-            DrawCylinderEx(shoulder_l, sash_end, 0.025f * scale,
+            DrawLitCylinderEx(shoulder_l, sash_end, 0.025f * scale,
                            0.025f * scale, 5, appearance->leather);
             break;
         }
@@ -521,7 +521,7 @@ static void DrawNpcGarmentCut(const CcNpcAppearance *appearance,
         case 4:
         default:
 
-            DrawCylinder(PhysicsAdd(hip,
+            DrawLitCylinder(PhysicsAdd(hip,
                          (Vector3){0.0f, -0.03f * scale, 0.0f}),
                          0.22f * scale, 0.205f * scale, 0.15f * scale, 10,
                          shadow);
@@ -760,13 +760,13 @@ static void DrawNpcAppearancePoseFigure3D(
         (Vector3){position.x, position.y + 0.006f, position.z},
         0.62f * scale, 0.43f * scale, yaw, CC_STYLE_CONTACT_SHADOW_STRONG);
     float thigh = (0.084f + muscle * 0.024f) * mass * scale;
-    DrawCylinderEx(hip, knee_l, thigh, thigh * 0.82f, 9,
+    DrawLitCylinderEx(hip, knee_l, thigh, thigh * 0.82f, 9,
                    appearance.trousers);
-    DrawCylinderEx(hip, knee_r, thigh, thigh * 0.82f, 9,
+    DrawLitCylinderEx(hip, knee_r, thigh, thigh * 0.82f, 9,
                    appearance.trousers);
-    DrawCylinderEx(knee_l, foot_l, thigh * 0.82f, thigh * 0.62f, 9,
+    DrawLitCylinderEx(knee_l, foot_l, thigh * 0.82f, thigh * 0.62f, 9,
                    ShadeColor(appearance.trousers, 0.82f));
-    DrawCylinderEx(knee_r, foot_r, thigh * 0.82f, thigh * 0.62f, 9,
+    DrawLitCylinderEx(knee_r, foot_r, thigh * 0.82f, thigh * 0.62f, 9,
                    ShadeColor(appearance.trousers, 0.82f));
     DrawOrientedBox(foot_l, (Vector3){0.0f, 0.02f * scale, 0.07f * scale},
                     (Vector3){0.19f * scale, 0.11f * scale, 0.32f * scale},
@@ -774,7 +774,7 @@ static void DrawNpcAppearancePoseFigure3D(
     DrawOrientedBox(foot_r, (Vector3){0.0f, 0.02f * scale, 0.07f * scale},
                     (Vector3){0.19f * scale, 0.11f * scale, 0.32f * scale},
                     yaw, appearance.leather);
-    DrawCylinderEx(hip, chest, 0.18f * mass * scale,
+    DrawLitCylinderEx(hip, chest, 0.18f * mass * scale,
                    0.24f * appearance.shoulder_scale * mass * scale, 10,
                    appearance.underlayer);
     Vector3 waist = LocalPoint(position, sway * 0.48f,
@@ -782,19 +782,19 @@ static void DrawNpcAppearancePoseFigure3D(
                                lean * 0.46f, yaw);
     Vector3 upper_chest = LocalPoint(position, sway,
                                      1.29f * scale + bob, lean, yaw);
-    DrawCylinderEx(waist, upper_chest, 0.195f * mass * scale,
+    DrawLitCylinderEx(waist, upper_chest, 0.195f * mass * scale,
                    0.25f * appearance.shoulder_scale * mass * scale, 10,
                    appearance.outer);
-    DrawCylinder(waist, 0.205f * mass * scale, 0.205f * mass * scale,
+    DrawLitCylinder(waist, 0.205f * mass * scale, 0.205f * mass * scale,
                  0.065f * scale, 10, appearance.leather);
     DrawNpcGarmentCut(&appearance, hip, chest, shoulder_l, yaw, scale);
-    DrawCylinderEx(shoulder_l, elbow_l, 0.077f * mass * scale,
+    DrawLitCylinderEx(shoulder_l, elbow_l, 0.077f * mass * scale,
                    0.063f * mass * scale, 8, appearance.outer);
-    DrawCylinderEx(elbow_l, hand_l, 0.063f * mass * scale,
+    DrawLitCylinderEx(elbow_l, hand_l, 0.063f * mass * scale,
                    0.050f * mass * scale, 8, appearance.underlayer);
-    DrawCylinderEx(shoulder_r, elbow_r, 0.077f * mass * scale,
+    DrawLitCylinderEx(shoulder_r, elbow_r, 0.077f * mass * scale,
                    0.063f * mass * scale, 8, appearance.outer);
-    DrawCylinderEx(elbow_r, hand_r, 0.063f * mass * scale,
+    DrawLitCylinderEx(elbow_r, hand_r, 0.063f * mass * scale,
                    0.050f * mass * scale, 8, appearance.underlayer);
     DrawSmallSphere(hand_l, 0.060f * scale, appearance.skin);
     DrawSmallSphere(hand_r, 0.060f * scale, appearance.skin);
@@ -1099,7 +1099,7 @@ static void DrawWayfarerHeroDetails(const CcHumanoidSkinPose *skin)
         Vector3 tab_end = Vector3Lerp(shoulder, upper_arm, 0.24f);
         shoulder = PhysicsAdd(shoulder, PhysicsScale(forward, 0.014f));
         tab_end = PhysicsAdd(tab_end, PhysicsScale(forward, 0.014f));
-        DrawCylinderEx(shoulder, tab_end, 0.108f, 0.084f, 6,
+        DrawLitCylinderEx(shoulder, tab_end, 0.108f, 0.084f, 6,
                        portrait_burgundy);
     }
 }
@@ -1748,19 +1748,19 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
     if (fallen_weight > 0.01f) {
         Vector3 fallen_back = PhysicsScale(
             (Vector3){sinf(upper_yaw), 0.0f, cosf(upper_yaw)}, -0.12f);
-        DrawCylinderEx(PhysicsAdd(chest, fallen_back),
+        DrawLitCylinderEx(PhysicsAdd(chest, fallen_back),
                        PhysicsAdd(pelvis, fallen_back),
                        0.17f, 0.25f, 5,
                        Fade((Color){73, 55, 91, 255}, fallen_weight));
         DrawCharacterSphere(pelvis, 0.18f * mass,
                             Fade(trousers, fallen_weight));
-        DrawCylinderEx(pelvis, spine,
+        DrawLitCylinderEx(pelvis, spine,
                        0.18f, 0.22f, 10,
                        Fade(appearance->underlayer, fallen_weight));
-        DrawCylinderEx(spine, chest,
+        DrawLitCylinderEx(spine, chest,
                        0.23f, 0.27f, 10,
                        Fade(tunic, fallen_weight));
-        DrawCylinderEx(chest, neck, 0.18f, 0.09f, 9,
+        DrawLitCylinderEx(chest, neck, 0.18f, 0.09f, 9,
                        Fade(tunic, fallen_weight));
     }
     if (upright_weight > 0.01f) {
@@ -1775,7 +1775,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
                         (Vector3){0.40f * mass, 0.18f, 0.27f * mass},
                         pelvis_yaw,
                         Fade(trousers, upright_weight));
-        DrawCylinderEx(spine, chest,
+        DrawLitCylinderEx(spine, chest,
                        0.27f * mass, 0.31f * appearance->shoulder_scale,
                        10,
                        Fade(tunic, upright_weight));
@@ -1809,9 +1809,9 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         Vector3 heel = FromLimbVector(pose->heel[leg]);
         Vector3 toe = FromLimbVector(skin.bones[foot_bones[leg]].tail);
         float thigh_radius = (0.084f + muscle * 0.018f) * mass;
-        DrawCylinderEx(hip, knee, thigh_radius, thigh_radius * 0.80f, 9,
+        DrawLitCylinderEx(hip, knee, thigh_radius, thigh_radius * 0.80f, 9,
                        trousers);
-        DrawCylinderEx(knee, ankle, thigh_radius * 0.78f,
+        DrawLitCylinderEx(knee, ankle, thigh_radius * 0.78f,
                        thigh_radius * 0.58f, 9, ShadeColor(trousers, 0.84f));
         DrawPitchedFoot(heel, toe, agent->facing_yaw, leather);
     }
@@ -1840,9 +1840,9 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         shoulder = PhysicsAdd(shoulder, posture_offset);
         elbow = PhysicsAdd(elbow, PhysicsScale(arm_offset, 0.72f));
         hand = PhysicsAdd(hand, arm_offset);
-        DrawCylinderEx(shoulder, elbow, 0.074f * mass, 0.061f * mass, 8,
+        DrawLitCylinderEx(shoulder, elbow, 0.074f * mass, 0.061f * mass, 8,
                        tunic);
-        DrawCylinderEx(elbow, hand, 0.061f * mass, 0.050f * mass, 8,
+        DrawLitCylinderEx(elbow, hand, 0.061f * mass, 0.050f * mass, 8,
                        appearance->underlayer);
         if ((appearance->equipment & CC_NPC_EQUIPMENT_ARMOR) != 0U) {
             DrawCharacterSphere(shoulder, 0.092f * mass,
@@ -1889,7 +1889,7 @@ static void DrawBiomechanicalBiped(const CcLocalAgent *agent)
         if (upright_weight > 0.01f) {
             DrawSmallSphere(Add3(physical_root, rig_offset), 0.052f,
                             Fade(WORLD_TEAL, upright_weight));
-            DrawCylinderEx(Add3(physical_root, rig_offset),
+            DrawLitCylinderEx(Add3(physical_root, rig_offset),
                            Add3(reaction_end, rig_offset), 0.014f, 0.008f, 6,
                            Fade(WORLD_TEAL, 0.82f * upright_weight));
         }
@@ -2106,12 +2106,12 @@ static void DrawRobotShell(const CcLocalAgent *agent)
             Vector3 a = FromLimbVector(limb->joints[segment]);
             Vector3 b = FromLimbVector(limb->joints[segment + 1]);
             float skin = segment == 0 ? 0.072f : 0.058f;
-            DrawCylinderEx(a, b, skin, skin * 0.82f, 8,
+            DrawLitCylinderEx(a, b, skin, skin * 0.82f, 8,
                            limb->state == CC_LIMB_DISABLED ?
                            (Color){67, 48, 51, 255} : CC_STYLE_ROBOT_LIMB_DARK);
             Vector3 rig_a = Add3(a, rig_offset);
             Vector3 rig_b = Add3(b, rig_offset);
-            DrawCylinderEx(rig_a, rig_b, 0.022f, 0.022f, 7, bone);
+            DrawLitCylinderEx(rig_a, rig_b, 0.022f, 0.022f, 7, bone);
             DrawSmallSphere(rig_a, 0.046f, bone);
         }
         Vector3 foot = FromLimbVector(limb->joints[spec->segment_count]);
@@ -2136,7 +2136,7 @@ static void DrawRobotShell(const CcLocalAgent *agent)
                                 foot_color);
             }
         } else {
-            DrawCylinder((Vector3){foot.x, foot.y - 0.02f, foot.z},
+            DrawLitCylinder((Vector3){foot.x, foot.y - 0.02f, foot.z},
                          0.11f, 0.09f, 0.04f, 8, foot_color);
         }
     }
@@ -2197,13 +2197,13 @@ static void DrawRobotShell(const CcLocalAgent *agent)
         DrawOrientedBox(body, (Vector3){0.0f, 0.39f, 0.165f + hero_lean * 0.55f},
                         (Vector3){0.34f, 0.29f, 0.045f}, upper_yaw,
                         CC_STYLE_ROBOT_CHASSIS_GOLD);
-        DrawCylinderEx(shoulder_l, elbow_l, 0.065f, 0.055f, 8,
+        DrawLitCylinderEx(shoulder_l, elbow_l, 0.065f, 0.055f, 8,
                        CC_STYLE_ROBOT_CHASSIS_TEAL);
-        DrawCylinderEx(elbow_l, hand_l, 0.055f, 0.045f, 8,
+        DrawLitCylinderEx(elbow_l, hand_l, 0.055f, 0.045f, 8,
                        CC_STYLE_ROBOT_LIMB_DARK);
-        DrawCylinderEx(shoulder_r, elbow_r, 0.065f, 0.055f, 8,
+        DrawLitCylinderEx(shoulder_r, elbow_r, 0.065f, 0.055f, 8,
                        CC_STYLE_ROBOT_CHASSIS_TEAL);
-        DrawCylinderEx(elbow_r, hand_r, 0.055f, 0.045f, 8,
+        DrawLitCylinderEx(elbow_r, hand_r, 0.055f, 0.045f, 8,
                        CC_STYLE_ROBOT_LIMB_DARK);
         DrawCharacterSphere(shoulder_l, 0.095f,
                             CC_STYLE_ROBOT_CHASSIS_GOLD);
@@ -2491,7 +2491,7 @@ static void DrawCarriageTargetMarker3D(float clock)
                                CC_LOCAL_CARRIAGE_APPROACH_Z) + 0.025f,
         CC_LOCAL_CARRIAGE_APPROACH_Z
     };
-    DrawCylinder(approach, 0.40f, 0.40f, 0.035f, 24,
+    DrawLitCylinder(approach, 0.40f, 0.40f, 0.035f, 24,
                  Fade(WORLD_TEAL, pulse));
     DrawGroundBrushStroke(
         approach,
@@ -3152,7 +3152,7 @@ static void DrawTreeCylinder(Vector3 start, Vector3 end,
                                     start_radius, end_radius, sides, color);
         return;
     }
-    DrawCylinderEx(start, end, start_radius, end_radius, sides, color);
+    DrawLitCylinderEx(start, end, start_radius, end_radius, sides, color);
 }
 
 static void DrawTreeRootFlare(Vector3 root, float turn, float radius,
@@ -3776,7 +3776,7 @@ static void DrawCombatImpact(const CcLocalAgent *agent)
         Vector3 slash_end = PhysicsAdd(
             PhysicsAdd(point, PhysicsScale(side, spark * 0.86f)),
             (Vector3){0.0f, pulse * 0.48f, 0.0f});
-        DrawCylinderEx(slash_start, slash_end, pulse * 0.12f,
+        DrawLitCylinderEx(slash_start, slash_end, pulse * 0.12f,
                        pulse * 0.025f, 5, Fade(WORLD_INK, 0.78f));
 
         static const Vector3 spark_directions[] = {
@@ -3787,7 +3787,7 @@ static void DrawCombatImpact(const CcLocalAgent *agent)
         for (int32_t i = 0; i < 3; ++i) {
             Vector3 spark_end = PhysicsAdd(
                 point, PhysicsScale(spark_directions[i], pulse * 1.22f));
-            DrawCylinderEx(point, spark_end, pulse * 0.050f,
+            DrawLitCylinderEx(point, spark_end, pulse * 0.050f,
                            pulse * 0.012f, 5,
                            i == 1 ? WHITE : WORLD_GOLD);
         }
@@ -3839,7 +3839,7 @@ static void DrawCombatFootprint(const CcLocalAgent *agent, Color color)
         agent->humanoid.ragdoll.active) return;
     Vector3 ground = {agent->position.x, agent->position.y + 0.012f,
                       agent->position.z};
-    DrawCylinder(ground, 0.31f, 0.31f, 0.012f, 20,
+    DrawLitCylinder(ground, 0.31f, 0.31f, 0.012f, 20,
                  Fade(WORLD_VOID, 0.38f));
     Vector3 facing = {sinf(agent->facing_yaw), 0.0f,
                       cosf(agent->facing_yaw)};
@@ -3895,12 +3895,12 @@ static void DrawCombatSword(const CcLocalAgent *agent)
                   quiet_player_blade ? (Color){118, 139, 139, 255} :
                   (Color){196, 211, 212, 255};
 
-    DrawCylinderEx(pommel, guard_center, 0.032f, 0.032f, 7, grip);
+    DrawLitCylinderEx(pommel, guard_center, 0.032f, 0.032f, 7, grip);
     DrawSmallSphere(pommel, 0.045f, guard_color);
-    DrawCylinderEx(PhysicsAdd(guard_center, PhysicsScale(right, -0.14f)),
+    DrawLitCylinderEx(PhysicsAdd(guard_center, PhysicsScale(right, -0.14f)),
                    PhysicsAdd(guard_center, PhysicsScale(right, 0.14f)),
                    0.032f, 0.026f, 7, guard_color);
-    DrawCylinderEx(blade_start, blade_tip,
+    DrawLitCylinderEx(blade_start, blade_tip,
                    quiet_player_blade ? 0.034f : 0.052f,
                    0.012f, 5, steel);
     DrawLine3D(blade_start, blade_tip,
@@ -3921,7 +3921,7 @@ static void DrawCombatSword(const CcLocalAgent *agent)
                 Fade(WORLD_GOLD, 0.72f) :
             agent->combat.active_skill == CC_COMBAT_SKILL_SUNDER ?
                 Fade(WORLD_VIOLET, 0.68f) : Fade(WORLD_TEAL, 0.58f);
-        DrawCylinderEx(previous_tip, blade_tip, 0.018f, 0.006f, 5, trail);
+        DrawLitCylinderEx(previous_tip, blade_tip, 0.018f, 0.006f, 5, trail);
         DrawLine3D(previous_tip, blade_tip, trail);
         DrawLine3D(PhysicsLerp(previous_tip, hand, 0.34f),
                    PhysicsLerp(blade_tip, hand, 0.34f), Fade(trail, 0.56f));
@@ -4818,7 +4818,7 @@ void CcLocalDrawAvatarPreview3D(const CcLocalAgent *agent,
     SetFaceRenderContext(camera, target.texture.width, target.texture.height);
     BeginMode3D(camera);
     BeginWorldLighting(camera, &INTERIOR_ART_COMPOSITION);
-    DrawCylinder((Vector3){agent->position.x, agent->position.y - 0.05f,
+    DrawLitCylinder((Vector3){agent->position.x, agent->position.y - 0.05f,
                            agent->position.z}, 0.65f, 0.70f, 0.08f, 24,
                  (Color){55, 66, 51, 255});
     DrawBiomechanicalBiped(agent);
@@ -4961,7 +4961,7 @@ static void DrawMovementGroundReticle(Vector3 point, bool accepted,
                   adjusted ? WORLD_VIOLET :
                   active ? WORLD_GOLD : WORLD_TEAL;
     point.y += active ? 0.090f : 0.150f;
-    DrawCylinder(point, radius, radius, 0.025f, 24,
+    DrawLitCylinder(point, radius, radius, 0.025f, 24,
                  Fade(color, active ? 0.32f : 0.22f));
     rlSetLineWidth(active ? 3.0f : 2.0f);
     DrawCircle3D(point, radius, (Vector3){1.0f, 0.0f, 0.0f}, 90.0f,
@@ -5064,7 +5064,7 @@ static void DrawObstacleCourse(Vector3 focus)
         Vector3 point = COURSE_WAYPOINTS[i];
         point.y = SurfaceHeightAt(CC_LOCAL_SCENE_STREET,
                                   point.x, point.z) + 0.035f;
-        DrawCylinder(point, 0.075f, 0.075f, 0.025f, 10,
+        DrawLitCylinder(point, 0.075f, 0.075f, 0.025f, 10,
                      Fade(WORLD_GOLD, (i & 1) != 0 ? 0.52f : 0.30f));
     }
     DrawBox((Vector3){9.32f, 0.76f, 1.08f}, (Vector3){0.08f, 1.52f, 0.08f},
@@ -5186,7 +5186,7 @@ static void DrawCourseRunners(const CcLocalCourse *course, Vector3 focus)
                                                                          0.58f;
             Vector3 spear_tip = PhysicsAdd(
                 hand, PhysicsScale(spear_direction, spear_length));
-            DrawCylinderEx(hand, spear_tip, 0.022f, 0.013f, 7,
+            DrawLitCylinderEx(hand, spear_tip, 0.022f, 0.013f, 7,
                            (Color){128, 92, 55, 255});
             DrawSmallSphere(spear_tip, 0.038f, WORLD_GOLD);
             Vector3 shield_hand = FromLimbVector(pose->hand[0]);

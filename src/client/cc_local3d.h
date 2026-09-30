@@ -771,6 +771,17 @@ Camera3D CcLocalSiteCamera(const CcSim *sim, const CcLocalAgent *agent,
                            CcLocalSiteKind site, bool travelling,
                            bool returning, float progress, float clock,
                            int32_t art_height);
+/* Seated passengers ride this high above the carriage base. The cabin roof is
+   2.19 units up, and a seated figure's head jewel reaches 1.11 above its seat. */
+#define CC_LOCAL_CARRIAGE_SEAT_HEIGHT 0.98f
+#define CC_LOCAL_CARRIAGE_ROOF_HEIGHT 2.19f
+#define CC_LOCAL_SEATED_FIGURE_HEIGHT 1.11f
+/* Underground mine tiles: the ceiling slab height, the closed bar's height,
+   and the wall height that input and drawing both use. Combat lowers the
+   walls so the raised fight camera can see the chamber. */
+#define CC_LOCAL_MINE_CEILING_Y 2.5f
+#define CC_LOCAL_MINE_BAR_HEIGHT 1.4f
+float CcLocalMineWallHeightInternal(bool combat);
 Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing);
 Camera3D CcLocalMineCombatCamera(const CcLocalAgent *agent,
                                 const CcLocalCourse *course,int32_t facing);

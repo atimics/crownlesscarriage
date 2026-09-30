@@ -75,14 +75,19 @@ static void DrawCrewLabels(Camera3D camera, Rectangle destination)
     DrawLabels(labels, crew_drawn_count, camera, destination);
 }
 /* A seated passenger rides the chassis, so the seat carries the carriage's
-   pitch, sway and assembly scale instead of a nominal offset. */
+   pitch, sway and assembly scale instead of a nominal offset. The cabin roof
+   of carriage_base_v01 tops out at 2.378 model units, 2.19 in the world at
+   CARRIAGE_ASSET_SCALE, and the seated hero's head jewel sits 1.11 above the
+   seat: a 1.15 seat pushed that jewel through the roof, so travel showed two
+   gold dots hovering over the wagon. The seat stays low enough to keep the
+   whole figure inside the cabin. */
 static void PrepareCrewPassenger(const CcLocalAgent *source, Vector3 carriage,
                                  float heading, float pitch, float sway,
                                  float vehicle_scale, CcLocalAgent *display)
 {
     Vector3 position = CarriageSocketPoint(carriage, heading, pitch, sway,
         (-1.6f + (float)(crew_seat % 4) * 0.85f) * vehicle_scale,
-        1.15f * vehicle_scale,
+        CC_LOCAL_CARRIAGE_SEAT_HEIGHT * vehicle_scale,
         (-0.65f + (float)(crew_seat / 4) * 1.25f) * vehicle_scale);
     PrepareHeroDisplayAt(source, position, source->scene, heading, display);
 }

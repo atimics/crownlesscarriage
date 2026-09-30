@@ -272,19 +272,19 @@ static void DrawTownHorizon(const CcSim *sim, const CcSettlement *place)
                 DrawCubeV(Vector3Add(pos,(Vector3){0,height*0.4f,0}),(Vector3){0.6f,height*0.8f,0.6f},shade);
                 DrawSphereEx(Vector3Add(pos,(Vector3){0,height,0}),height*0.42f,4,6,shade);
                 if (i%8==0) { DrawCubeV(Vector3Add(pos,(Vector3){6,2,0}),(Vector3){6,4,4},shade);
-                    DrawCylinder(Vector3Add(pos,(Vector3){6,4,0}),0,4,3,4,shade); }
+                    DrawLitCylinder(Vector3Add(pos,(Vector3){6,4,0}),0,4,3,4,shade); }
                 break;
             case 1: /* headframes and quarry markers; no invented production smoke */
                 if (i%3==0) {
-                    DrawCylinderEx(pos,Vector3Add(pos,(Vector3){-2,height,0}),0.4f,0.3f,4,shade);
-                    DrawCylinderEx(Vector3Add(pos,(Vector3){-5,0,0}),Vector3Add(pos,(Vector3){-2,height,0}),0.4f,0.3f,4,shade);
+                    DrawLitCylinderEx(pos,Vector3Add(pos,(Vector3){-2,height,0}),0.4f,0.3f,4,shade);
+                    DrawLitCylinderEx(Vector3Add(pos,(Vector3){-5,0,0}),Vector3Add(pos,(Vector3){-2,height,0}),0.4f,0.3f,4,shade);
                     DrawCubeV(Vector3Add(pos,(Vector3){-2,height,0}),(Vector3){8,1,2},shade);
-                    DrawCylinderEx(Vector3Add(pos,(Vector3){-2,height,0}),Vector3Add(pos,(Vector3){-2,2,0}),0.12f,0.12f,4,shade);
+                    DrawLitCylinderEx(Vector3Add(pos,(Vector3){-2,height,0}),Vector3Add(pos,(Vector3){-2,2,0}),0.12f,0.12f,4,shade);
                 } break;
             case 2: /* roofs and a sparse belfry rhythm */
                 height=i%7==0 ? height*1.5f : height*0.7f;
                 DrawCubeV(Vector3Add(pos,(Vector3){0,height*0.5f,0}),(Vector3){5,height,5},shade);
-                DrawCylinder(Vector3Add(pos,(Vector3){0,height,0}),0.1f,4,3,4,shade);
+                DrawLitCylinder(Vector3Add(pos,(Vector3){0,height,0}),0.1f,4,3,4,shade);
                 break;
             case 3: /* watch posts on the ridge, not a wall across the playable gorge */
                 if (i%4==0) {
@@ -297,8 +297,8 @@ static void DrawTownHorizon(const CcSim *sim, const CcSettlement *place)
                 DrawSphereEx(Vector3Add(pos,(Vector3){0,height*0.9f,0}),3.6f,5,8,shade);
                 break;
             default: /* broken piers and bare branches */
-                DrawCylinderEx(pos,Vector3Add(pos,(Vector3){1,height,0}),0.7f,0.12f,5,shade);
-                DrawCylinderEx(Vector3Add(pos,(Vector3){0,height*0.5f,0}),Vector3Add(pos,(Vector3){-3,height*0.8f,0}),0.3f,0.04f,4,shade);
+                DrawLitCylinderEx(pos,Vector3Add(pos,(Vector3){1,height,0}),0.7f,0.12f,5,shade);
+                DrawLitCylinderEx(Vector3Add(pos,(Vector3){0,height*0.5f,0}),Vector3Add(pos,(Vector3){-3,height*0.8f,0}),0.3f,0.04f,4,shade);
                 if(i%5==0) DrawCubeV(Vector3Add(pos,(Vector3){4,3,0}),(Vector3){2,6,3},shade);
                 break;
         }

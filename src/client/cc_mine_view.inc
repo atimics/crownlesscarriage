@@ -169,7 +169,8 @@ static float MineOccluderDistanceExcept(const CcSim *sim,Ray ray,float limit,
         return nearest;
     }
     if(sim->mine.phase!=CC_MINE_LEVEL) return nearest;
-    for(int32_t y=1;y<CC_MINE_HEIGHT-1;++y) for(int32_t x=1;x<CC_MINE_WIDTH-1;++x) {
+    float wall_height=CcLocalMineWallHeightInternal(sim->mine.contest_active);
+    for(int32_t y=0;y<CC_MINE_HEIGHT;++y) for(int32_t x=0;x<CC_MINE_WIDTH;++x) {
         if((x==skip_x&&y==skip_y)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y)) continue;
         bool edge=CcMineWalkable(sim,CC_MINE_LEVEL,x+1,y)||CcMineWalkable(sim,CC_MINE_LEVEL,x-1,y)||
             CcMineWalkable(sim,CC_MINE_LEVEL,x,y+1)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y-1);
@@ -177,7 +178,8 @@ static float MineOccluderDistanceExcept(const CcSim *sim,Ray ray,float limit,
         float distance=0.0f;
         bool hit=x==15&&y==10&&!sim->mine.bar_open?
             MineClosedBarDistance(ray,&distance):
-            MineRayBoxDistance(ray,MineBoxBounds((float)x,.7f,(float)y,1,1.4f,1),&distance);
+            MineRayBoxDistance(ray,MineBoxBounds((float)x,wall_height*.5f,(float)y,
+                                                 1,wall_height,1),&distance);
         if(hit && distance<nearest) nearest=distance;
     }
     return nearest;

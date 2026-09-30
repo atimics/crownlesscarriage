@@ -121,8 +121,8 @@ static void DrawThornfordArchitecture(const WorldBuilding *b, Color wall,
                     float n = a + PI / 4.0f;
                     Vector3 p = Vector3Add(hub, (Vector3){cosf(a), sinf(a), 0});
                     Vector3 q = Vector3Add(hub, (Vector3){cosf(n), sinf(n), 0});
-                    DrawCylinderEx(hub, p, 0.045f, 0.045f, 4, timber);
-                    DrawCylinderEx(p, q, 0.09f, 0.09f, 4, timber);
+                    DrawLitCylinderEx(hub, p, 0.045f, 0.045f, 4, timber);
+                    DrawLitCylinderEx(p, q, 0.09f, 0.09f, 4, timber);
                 }
             }
         }
@@ -158,10 +158,10 @@ static void DrawSilverwickArchitecture(const WorldBuilding *b, Color wall,
         DrawBox((Vector3){x + w * 0.5f, h + 0.15f, z + d - 1.2f},
                 (Vector3){w * 0.30f, 0.30f, 2.8f}, iron);
         Vector3 dial = {x + w * 0.5f, h * 0.84f, z + d + 0.04f};
-        DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0,0,0.1f}),
+        DrawLitCylinderEx(dial, Vector3Add(dial, (Vector3){0,0,0.1f}),
                         1.04f, 1.04f, 16, iron);
         dial.z += 0.11f;
-        DrawCylinderEx(dial, Vector3Add(dial, (Vector3){0,0,0.05f}),
+        DrawLitCylinderEx(dial, Vector3Add(dial, (Vector3){0,0,0.05f}),
                         0.87f, 0.87f, 16,
                         burnt ? masonry : CC_VISUAL_PALETTE.parchment.light);
         DrawBox(Vector3Add(dial, (Vector3){0,0.33f,0.09f}),
@@ -273,9 +273,9 @@ static void DrawGloamgateArchitecture(const WorldBuilding *b, Color wall,
         DrawPitchedRoof(x,z,w,d,eaves,wall,roof);
         rlPushMatrix();
         rlTranslatef(0,eaves,0);
-        DrawCylinder((Vector3){x + w * 0.5f,0,z + d * 0.40f},
+        DrawLitCylinder((Vector3){x + w * 0.5f,0,z + d * 0.40f},
                      w * 0.23f,w * 0.25f,h * 0.62f,8,wall);
-        DrawCylinder((Vector3){x + w * 0.5f,h * 0.62f,z + d * 0.40f},
+        DrawLitCylinder((Vector3){x + w * 0.5f,h * 0.62f,z + d * 0.40f},
                      w * 0.10f,w * 0.31f,1.05f,8,cloth);
         rlPopMatrix();
         DrawTownTimberFront(x,z + d,w,eaves,5,trim);
