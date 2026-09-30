@@ -38,6 +38,7 @@ def library():
             raise FileNotFoundError('libcrowdsim not found; build target crowdsim or set CROWDSIM_LIB')
         lib = ctypes.CDLL(str(path))
         c_u64, c_p, c_i = ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int
+        c_int = ctypes.c_int
         lib.cs_load.restype = c_p
         lib.cs_load.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
         lib.cs_clone.restype = c_p
@@ -65,6 +66,9 @@ def library():
         lib.cs_slots.argtypes = [c_p, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(c_i), ctypes.POINTER(c_i), ctypes.POINTER(ctypes.c_double), c_i]
         lib.cs_shape.argtypes = [c_p, ctypes.POINTER(ctypes.c_double)]
         lib.cs_set_person.argtypes = [c_p, c_i, c_i, c_i]
+        lib.cs_set_brain.argtypes = [c_i, ctypes.POINTER(ctypes.c_double), c_i, c_i]
+        lib.cs_set_kind_brains.argtypes = [ctypes.POINTER(c_int), c_i]
+        lib.cs_brain_stats.argtypes = [c_i, ctypes.POINTER(ctypes.c_long), c_i]
         lib.cs_run.restype = c_i
         lib.cs_run.argtypes = [c_p, c_i, ctypes.POINTER(ctypes.c_double)]
         lib.cs_promise.restype = c_i
@@ -252,3 +256,41 @@ def shape(world):
 def set_person(world, slot, death_in_days=0, adult=False):
     """Accelerated generations: when a slot's person dies, and whether they are seated as an adult."""
     library().cs_set_person(world.handle, int(slot), int(death_in_days), int(adult))
+
+
+MAX_BRAINS = 4
+KIND_NAMES = ('travel', 'meal', 'lodging', 'bandit', 'gossip', 'trade', 'raid_target', 'kingdom_relief',
+              'dragon_target', 'raid_launch')
+
+
+def set_brain(brain, theta, mask):
+    """Install weights for one brain (0 to 3) taking the decision kinds in `mask`; theta None removes it."""
+    lib = library()
+    if theta is None:
+        lib.cs_set_brain(int(brain), None, 0, 0)
+        return
+    array = (ctypes.c_double * len(theta))(*map(float, theta))
+    lib.cs_set_brain(int(brain), array, len(theta), int(mask))
+
+
+def set_kind_brains(assignment):
+    """Give decision kinds to brains: {kind name or index: brain id}. Unlisted kinds keep brain 0."""
+    ids = [0] * len(KIND_NAMES)
+    for kind, brain in assignment.items():
+        ids[KIND_NAMES.index(kind) if isinstance(kind, str) else int(kind)] = int(brain)
+    array = (ctypes.c_int * len(ids))(*ids)
+    library().cs_set_kind_brains(array, len(ids))
+
+
+def clear_brains():
+    for brain in range(MAX_BRAINS):
+        set_brain(brain, None, 0)
+    set_kind_brains({})
+
+
+def brain_stats(brain, reset=True):
+    """How often one brain was asked and how often it changed the rule's answer, per decision kind."""
+    out = (ctypes.c_long * (2 * len(KIND_NAMES)))()
+    library().cs_brain_stats(int(brain), out, int(reset))
+    n = len(KIND_NAMES)
+    return {name: {'offered': out[i], 'changed': out[n + i]} for i, name in enumerate(KIND_NAMES)}

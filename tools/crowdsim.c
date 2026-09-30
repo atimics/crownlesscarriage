@@ -379,11 +379,14 @@ static void OptionFeatures(const CcSim *sim, CcPolicyKind kind, CcId actor, cons
     }
 }
 
-/* Which brain decides for this actor. One brain for now; the routing (by role, slot, town or band) goes here. */
+/* Which brain decides: by decision kind (a role is a set of kinds), brain 0 unless told otherwise. Routing by
+ * character slot, town or band would go here too. */
+static int kind_brain[POLICY_KINDS];
+
 static int BrainFor(const CcSim *sim, CcPolicyKind kind, CcId actor)
 {
-    (void)sim; (void)kind; (void)actor;
-    return 0;
+    (void)sim; (void)actor;
+    return kind_brain[(int)kind];
 }
 
 static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId actor,
@@ -516,6 +519,14 @@ void cs_inject_theft(CrowdSim *w, int amount)
     w->sim.dragon.retaliation_target_id = 0U;
     w->sim.dragon.omen_days_remaining = 2;
     w->sim.dragon.theft_actor_id = w->sim.hoard_raiders.id;
+}
+
+/* Give each decision kind to a brain (ids below MAX_BRAINS); kinds not listed keep brain 0. */
+void cs_set_kind_brains(const int *ids, int count)
+{
+    for (int k = 0; k < POLICY_KINDS; ++k) kind_brain[k] = 0;
+    for (int k = 0; ids != NULL && k < count && k < POLICY_KINDS; ++k)
+        kind_brain[k] = ids[k] >= 0 && ids[k] < MAX_BRAINS ? ids[k] : 0;
 }
 
 void cs_set_brain(int id, const double *weights, int count, int mask)
