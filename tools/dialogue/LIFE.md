@@ -106,3 +106,16 @@ offers raid-or-hold and the choice of town at each end of the road.
   +0.042 +- 0.037 (z = 1.1): 5 more goods taken and 1 point of prosperity lost. No gain.
 - The rule already takes the town with the most stock, so raiders have no loot headroom.
 - Goblin raids (19 per world) are a separate code path and are not hooked.
+
+# L5: kingdoms (grain relief)
+
+Every 28 days a kingdom whose hungriest town is at hunger 38 or more, with 28 crowns in the
+treasury, sends the crowns to that town and gains 2 legitimacy (about 17 decisions per world in two
+years). The hook offers any hungry town of the kingdom, or holding the treasury.
+
+- The whole lever is small: with **no relief at all**, hunger rises by 0.63 (of 13.1), famine by 1.2 points
+  of town-days and legitimacy falls by 0.9.
+- A 60-generation search looked promising on 100 worlds (hunger -0.29, z = -1.3, welfare +0.004 +- 0.007).
+  On 400 fresh worlds it was slightly **worse**: welfare -0.007 +- 0.0035 (z = -2.0), legitimacy -0.35, treasury
+  +5.6 (it funds less). The earlier hint was noise, so the rule (fund the hungriest) stands.
+- War orders and succession could not be tested: WAR_DECLARED never fires in unattended worlds.

@@ -20,6 +20,9 @@ typedef enum CcPolicyKind {
                                      target = destination, value = the rule's score for it */
     CC_POLICY_RAID_TARGET,        /* which nearby town an idle bandit band scouts; target = town, value = the
                                      rule's score (stock minus twice the security) */
+    CC_POLICY_KINGDOM_RELIEF,     /* which hungry town of a kingdom gets 28 crowns of grain relief, or none:
+                                     one option per town with hunger >= 38 (target = town, value = its hunger), then
+                                     "hold" as the last option. The actor is the kingdom's id. */
     CC_POLICY_RAID_LAUNCH,        /* whether an eligible band raids the chosen town now: 0 = raid (target = town,
                                      value = its largest stock), 1 = hold. The actor is the band's id. */
     CC_POLICY_KIND_COUNT

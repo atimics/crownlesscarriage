@@ -16020,17 +16020,36 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
 
         if (sim->current_day % 28 == 0 && worst != NULL && worst->hunger >= 38 &&
             kingdom->treasury >= 28) {
-            kingdom->treasury -= 28;
-            worst->market_coins += 28;
-            kingdom->legitimacy = ClampI32(kingdom->legitimacy + 2, 0, 100);
-            char text[CC_EVENT_TEXT_CAPACITY];
-            (void)snprintf(text, sizeof(text),
-                           "%s moves 28 crowns into %s's market to buy real grain shipments.",
-                           kingdom->name, worst->name);
-            const CcEvent *shortage = LatestEvent(sim, CC_EVENT_SHORTAGE,
-                            worst->id, worst->id);
-            (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, worst->id,
-                            shortage != NULL ? shortage->id : 0U, 28, text);
+            /* The rule funds the hungriest town; a policy hook may fund another hungry one, or hold. */
+            CcSettlement *funded = worst;
+            CcSettlement *hungry[CC_MAX_SETTLEMENTS];
+            CcPolicyOption ways[CC_MAX_SETTLEMENTS + 1];
+            int32_t hungry_count = 0, rule_pick = 0;
+            for (int32_t s = 0; s < sim->settlement_count && hungry_count < CC_MAX_SETTLEMENTS; ++s) {
+                CcSettlement *place = &sim->settlements[s];
+                if (place->kingdom_id != kingdom->id || CcSettlementIsAbandoned(place) || place->hunger < 38) continue;
+                if (place == worst) rule_pick = hungry_count;
+                hungry[hungry_count] = place;
+                ways[hungry_count] = CC_POLICY_OPTION(place->id, place->hunger);
+                hungry_count += 1;
+            }
+            ways[hungry_count] = CC_POLICY_OPTION(worst->id, 0);   /* hold */
+            int32_t pick = CcSimPolicyChoose(sim, CC_POLICY_KINGDOM_RELIEF, kingdom->id, ways,
+                                             hungry_count + 1, rule_pick);
+            funded = pick >= hungry_count ? NULL : hungry[pick];
+            if (funded != NULL) {
+                kingdom->treasury -= 28;
+                funded->market_coins += 28;
+                kingdom->legitimacy = ClampI32(kingdom->legitimacy + 2, 0, 100);
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                               "%s moves 28 crowns into %s's market to buy real grain shipments.",
+                               kingdom->name, funded->name);
+                const CcEvent *shortage = LatestEvent(sim, CC_EVENT_SHORTAGE,
+                                funded->id, funded->id);
+                (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, funded->id,
+                                shortage != NULL ? shortage->id : 0U, 28, text);
+            }
         }
 
         if (sim->current_day % 28 == 0) {

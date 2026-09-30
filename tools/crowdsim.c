@@ -212,7 +212,7 @@ int cs_execute(CrowdSim *w, uint64_t agreement, uint64_t payer, char *buf, size_
 /* ---- daily-life policy: a small network scores each option, in C ---- */
 
 #define CC_MAX_CHARACTERS_HINT 512
-#define POLICY_KINDS 8
+#define POLICY_KINDS 9
 #define ACTOR_FEATURES 19
 #define OPTION_FEATURES 21
 #define POLICY_INPUTS (POLICY_KINDS + ACTOR_FEATURES + OPTION_FEATURES)
@@ -275,7 +275,17 @@ static void OptionFeatures(const CcSim *sim, CcPolicyKind kind, CcId actor, cons
 {
     memset(f, 0, OPTION_FEATURES * sizeof(double));
     const CcCharacter *p = CcSimCharacter(sim, actor);
-    if (kind == CC_POLICY_RAID_TARGET || kind == CC_POLICY_RAID_LAUNCH) {
+    if (kind == CC_POLICY_KINGDOM_RELIEF) {
+        const CcSettlement *town = CcSimSettlement(sim, o->target_id);
+        f[0] = is_last;                                   /* hold the treasury */
+        if (town != NULL && !is_last) {
+            f[13] = (double)town->hunger / 100.0;
+            f[14] = (double)town->prosperity / 100.0;
+            f[15] = (double)town->security / 100.0;
+            f[16] = Clip((double)town->population / 1000.0);
+            f[17] = Clip((double)town->market_coins / 200.0);
+        }
+    } else if (kind == CC_POLICY_RAID_TARGET || kind == CC_POLICY_RAID_LAUNCH) {
         f[0] = kind == CC_POLICY_RAID_LAUNCH ? is_last : 0.0;   /* hold */
         const CcSettlement *town = CcSimSettlement(sim, o->target_id);
         if (town != NULL) {
@@ -348,7 +358,7 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
     if (kind == CC_POLICY_GOSSIP_SHARE && gossip_floor >= 0 && ((policy_mask >> (int)kind) & 1))
         return options[0].value < gossip_floor ? 1 : 0;
     const CcCharacter *p = CcSimCharacter(sim, actor);
-    if ((p == NULL && kind != CC_POLICY_GOSSIP_SHARE && kind != CC_POLICY_TRADE_ROUTE && kind != CC_POLICY_RAID_TARGET && kind != CC_POLICY_RAID_LAUNCH) || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
+    if ((p == NULL && kind != CC_POLICY_GOSSIP_SHARE && kind != CC_POLICY_TRADE_ROUTE && kind != CC_POLICY_RAID_TARGET && kind != CC_POLICY_RAID_LAUNCH && kind != CC_POLICY_KINGDOM_RELIEF) || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
     /* Whether a traveller leaves is the role's business: keep the rule's decision to stay,
        and when it decides to go, choose only where (never "stay"). */
     if (kind == CC_POLICY_TRAVEL_DESTINATION && fallback == count - 1) return fallback;
@@ -424,11 +434,12 @@ CrowdSim *cs_new(uint32_t seed, int days)
  * 9 town changes by road-going people (a tracked invariant: a policy must not stop travelling),
  * 10 known (story, town) pairs, 11 their confidence total, 12 their retellings total, 13 story-days,
  * 14 town hunger summed over town-days, 15 town-days in famine (hunger >= 25), 16 town prosperity summed,
- * 17 town-days, 18 raids on towns, 19 goods taken in raids. */
+ * 17 town-days, 18 raids on towns, 19 goods taken in raids, 20 kingdom legitimacy summed,
+ * 21 kingdom treasury summed, 22 kingdom-days. */
 int cs_run(CrowdSim *w, int days, double *metrics)
 {
     static CcId where[CC_MAX_CHARACTERS_HINT];
-    memset(metrics, 0, 20 * sizeof(double));
+    memset(metrics, 0, 23 * sizeof(double));
     CcId seen_event = 0U;
     for (int32_t i = 0; i < w->sim.event_count; ++i) if (w->sim.events[i].id > seen_event) seen_event = w->sim.events[i].id;
     for (int32_t i = 0; i < w->sim.character_count && i < CC_MAX_CHARACTERS_HINT; ++i)
@@ -441,6 +452,11 @@ int cs_run(CrowdSim *w, int days, double *metrics)
             if (event->kind == CC_EVENT_SETTLEMENT_RAIDED) { metrics[18] += 1.0; metrics[19] += (double)event->magnitude; }
         }
         for (int32_t i = 0; i < w->sim.event_count; ++i) if (w->sim.events[i].id > seen_event) seen_event = w->sim.events[i].id;
+        for (int32_t k = 0; k < w->sim.kingdom_count; ++k) {
+            metrics[20] += (double)w->sim.kingdoms[k].legitimacy;
+            metrics[21] += (double)w->sim.kingdoms[k].treasury;
+            metrics[22] += 1.0;
+        }
         for (int32_t t = 0; t < w->sim.settlement_count; ++t) {
             const CcSettlement *town = &w->sim.settlements[t];
             if (CcSettlementIsAbandoned(town)) continue;

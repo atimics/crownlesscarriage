@@ -71,6 +71,19 @@ def raid_welfare(metrics):
     return r['loot'] / 100.0 + r['prosperity'] / 100.0
 
 
+def realm_rates(metrics):
+    """How stable the kingdoms are and how their towns fare."""
+    days = max(1.0, metrics['kingdom_days'])
+    towns = town_rates(metrics)
+    return {'legitimacy': metrics['kingdom_legitimacy'] / days, 'treasury': metrics['kingdom_treasury'] / days,
+            'hunger': towns['hunger'], 'famine': towns['famine']}
+
+
+def realm_welfare(metrics):
+    r = realm_rates(metrics)
+    return r['legitimacy'] / 100.0 - r['hunger'] / 100.0 - r['famine']
+
+
 # Each stage: which decisions the brain takes, when scoring starts, how long, and what is scored.
 STAGES = {
     'l1': {'mask': fastworld.LEARNED, 'start': START_DAY, 'days': SEASON, 'rates': rates, 'welfare': welfare,
@@ -78,6 +91,8 @@ STAGES = {
     'l2': {'mask': fastworld.GOSSIP, 'start': START_DAY, 'days': 365, 'rates': gossip_rates,
            'welfare': lambda m: gossip_rates(m)['informed'],
            'keys': ('informed', 'coverage', 'accuracy', 'retellings'), 'label': 'informed'},
+    'l5': {'mask': fastworld.KINGDOM_RELIEF, 'start': START_DAY, 'days': 730, 'rates': realm_rates,
+           'welfare': realm_welfare, 'keys': ('legitimacy', 'treasury', 'hunger', 'famine'), 'label': 'realm welfare'},
     'l4': {'mask': fastworld.RAID, 'start': START_DAY, 'days': 730, 'rates': raid_rates, 'welfare': raid_welfare,
            'keys': ('loot', 'raids', 'prosperity', 'famine'), 'label': 'raid balance'},
     'l3': {'mask': fastworld.TRADE, 'start': START_DAY, 'days': 730, 'rates': town_rates, 'welfare': town_welfare,
