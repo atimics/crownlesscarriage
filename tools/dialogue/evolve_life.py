@@ -65,10 +65,11 @@ def raid_rates(metrics):
             'famine': towns['famine']}
 
 
-def raid_welfare(metrics):
-    # One unit of loot and one point of prosperity count the same: a deliberately even split.
+def raid_welfare(metrics, weight=1.0):
+    # One unit of loot and `weight` points of prosperity count the same: weight 1 is an even split,
+    # 0 is a raider-only reward and large weights favour the towns. `l4:W` selects the weight.
     r = raid_rates(metrics)
-    return r['loot'] / 100.0 + r['prosperity'] / 100.0
+    return r['loot'] / 100.0 + weight * r['prosperity'] / 100.0
 
 
 def realm_rates(metrics):
@@ -100,9 +101,20 @@ STAGES = {
 }
 
 
+def stage_cfg(spec):
+    """A stage by name, or `l4:W` for the raid stage with prosperity weight W."""
+    name, _, param = spec.partition(':')
+    cfg = dict(STAGES[name])
+    if name == 'l4' and param:
+        weight = float(param)
+        cfg['welfare'] = lambda m: raid_welfare(m, weight)
+        cfg['label'] = f'raid balance (prosperity x {weight:g})'
+    return cfg
+
+
 def play(theta, seed, stage='l1'):
     """One world under a weight vector (None = the simulation's rule); returns its metrics."""
-    cfg = STAGES[stage]
+    cfg = stage_cfg(stage)
     fastworld.set_policy(theta, cfg['mask'])
     try:
         world = fastworld.FastWorld.new(seed, cfg['start'])
@@ -116,7 +128,8 @@ def play(theta, seed, stage='l1'):
 
 def _fitness(job):
     theta, seeds, stage = job
-    return float(np.mean([STAGES[stage]['welfare'](play(theta, s, stage)) for s in seeds]))
+    cfg = stage_cfg(stage)
+    return float(np.mean([cfg['welfare'](play(theta, s, stage)) for s in seeds]))
 
 
 def _metrics(job):
@@ -135,7 +148,7 @@ def chunks(items, pieces):
 
 def paired(rule, other, name, stage='l1'):
     """Differences other - rule per world for each rate, with standard errors."""
-    cfg = STAGES[stage]
+    cfg = stage_cfg(stage)
     lines = []
     for key in cfg['keys']:
         d = np.array([cfg['rates'](b)[key] - cfg['rates'](a)[key] for a, b in zip(rule, other)])
@@ -152,7 +165,7 @@ def paired(rule, other, name, stage='l1'):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--stage', choices=sorted(STAGES), default='l1')
+    parser.add_argument('--stage', default='l1', help='l1..l5, or l4:W for the raid stage with prosperity weight W')
     parser.add_argument('--generations', type=int, default=150)
     parser.add_argument('--pairs', type=int, default=32)
     parser.add_argument('--batch', type=int, default=24, help='worlds per generation')
@@ -160,6 +173,7 @@ def main():
     parser.add_argument('--lr', type=float, default=0.05)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--workers', type=int, default=10)
+    parser.add_argument('--fresh', type=int, default=0, help='also evaluate the best weights on this many fresh worlds (seeds 201+)')
     args = parser.parse_args()
     if args.output.exists():
         parser.error('use a fresh output directory')
@@ -202,11 +216,22 @@ def main():
         found = [r for c in pool.map(_metrics, [(best, c, args.stage) for c in chunks(test, args.workers)]) for r in c]
         # chunks() interleaves seeds, so both lists are in the same interleaved order and pair up
         for name, rows in (('rule', rule), ('evolved', found)):
-            cfg = STAGES[args.stage]
+            cfg = stage_cfg(args.stage)
             r = {k: np.mean([cfg['rates'](x)[k] for x in rows]) for k in cfg['keys']}
             print(name, json.dumps({k: round(float(x), 4) for k, x in r.items()}),
                   cfg['label'], round(float(np.mean([cfg['welfare'](x) for x in rows])), 4))
         print('\n'.join(paired(rule, found, 'evolved', args.stage)))
+        if args.fresh:
+            cfg = stage_cfg(args.stage)
+            fresh = list(range(201, 201 + args.fresh))
+            rule_f = [r for c in pool.map(_metrics, [(None, c, args.stage) for c in chunks(fresh, args.workers)]) for r in c]
+            found_f = [r for c in pool.map(_metrics, [(best, c, args.stage) for c in chunks(fresh, args.workers)]) for r in c]
+            print('FRESH', args.fresh)
+            print('\n'.join(paired(rule_f, found_f, 'evolved', args.stage)))
+            summary = {'stage': args.stage, 'worlds': len(fresh),
+                       'rule': {k: float(np.mean([cfg['rates'](x)[k] for x in rule_f])) for k in cfg['keys']},
+                       'evolved': {k: float(np.mean([cfg['rates'](x)[k] for x in found_f])) for k in cfg['keys']}}
+            (args.output / 'result.json').write_text(json.dumps(summary, indent=2))
 
 
 if __name__ == '__main__':
