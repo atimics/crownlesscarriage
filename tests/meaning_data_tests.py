@@ -6,7 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools' / 'dialogue'))
-from meaning_data import dataset
+from meaning_data import dataset, person
 
 
 class MeaningDataTests(unittest.TestCase):
@@ -41,7 +41,7 @@ class MeaningDataTests(unittest.TestCase):
         self.assertTrue(any(p['outcomes'] for p in persons))
 
     def test_bucketed_styles_keep_rows_and_stay_native_valid(self):
-        for style in ('buckets', 'afford'):
+        for style in ('buckets', 'afford', 'queue'):
             other = dataset(36, style)
             for name, rows in self.rows.items():
                 self.assertEqual([r['teacher_index'] for r in rows], [r['teacher_index'] for r in other[name]])
@@ -50,6 +50,12 @@ class MeaningDataTests(unittest.TestCase):
                     self.assertLessEqual(len(tokens), len(digits['prompt']['tokens']) + 8)
                     self.assertTrue(all(9 <= t < 4096 for t in tokens))
                     self.assertEqual((tokens[0], tokens[-1], tokens.count(1580)), (1280, 1281, 1))
+        from meaning import candidates, encode_input
+        p = person(3)
+        options = candidates(p, [])
+        quiet, busy = dict(p, waiting=0), dict(p, waiting=3)
+        self.assertNotEqual(encode_input(quiet, [], options, 'queue'), encode_input(busy, [], options, 'queue'))
+        self.assertEqual(encode_input(quiet, [], options, 'afford'), encode_input(busy, [], options, 'afford'))
         self.assertEqual(dataset(36)['test'][0]['prompt']['tokens'], self.rows['test'][0]['prompt']['tokens'])
         with self.assertRaises(ValueError):
             dataset(36, 'exact')

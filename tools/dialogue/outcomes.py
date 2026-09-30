@@ -274,60 +274,15 @@ def harvest_crowds(folder, food_probe, seeds=SEEDS, days=DAYS, per_world=2, most
     return found
 
 
-def converse(world, first, second, chooser, rng, limit=12):
-    """One exchange between two people; returns units bought and the turns used."""
-    snap = world.snapshot(first, second)
-    history, bought, turns = [], 0, 0
-    for turn in range(limit):
-        person = snap['participants'][turn % 2]
-        options = candidates(person, history)
-        act = options[chooser(person, history, options, rng)]
-        turns += 1
-        history.append({'speaker_id': act['actor'], 'act': copy.deepcopy(act)})
-        if act['intent'] == 'accept':
-            try:
-                world.execute(act['proposal'])
-                bought += act['proposal']['quantity']
-                snap = world.snapshot(first, second)
-            except (RuntimeError, ValueError):
-                break
-        if act['intent'] == 'end':
-            break
-    return bought, turns
-
-
-def play_crowd(scenario, policy, seed, food_probe, participant_probe):
+def play_crowd(scenario, policy, seed, food_probe, participant_probe, fast=None):
     """One helper meets each hungry person in turn; the store and purse carry over."""
-    rng = random.Random(seed)
-    with tempfile.TemporaryDirectory() as folder:
-        path = Path(folder) / 'world.ccsave'
-        shutil.copyfile(scenario['path'], path)
-        for suffix in ('-wal', '-shm'):
-            if Path(scenario['path'] + suffix).exists():
-                shutil.copyfile(scenario['path'] + suffix, str(path) + suffix)
-        world = World(path, food_probe, participant_probe)
-        chooser = native_model(policy) if policy.startswith('model:') else POLICIES[policy]
-        helper, crowd = scenario['helper'], list(scenario['hungry'])
-        rng.shuffle(crowd)
-        observed = world.call('--observe', helper, crowd[0])
-        start = {p['id']: p for p in world.call('--list')['people']}
-        bought = turns = 0
-        for person in crowd:
-            units, used = converse(world, person, helper, chooser, rng)
-            bought, turns = bought + units, turns + used
-        now = {p['id']: p for p in world.call('--list')['people']}
-        week = {p['id']: p for p in world.call('--days', HORIZON, '--list')['people']}
-        end = world.call('--observe', helper, crowd[0])
-    hungry_before = [start[str(p)]['hungry_days'] for p in crowd]
-    return {'people': len(crowd),
-            'relieved_now': sum(now[str(p)]['hungry_days'] == 0 for p in crowd),
-            'hungry_days_week': sum(week[str(p)]['hungry_days'] for p in crowd),
-            'helper_hungry_week': week[str(helper)]['hungry_days'],
-            'crowns_spent': start[str(helper)]['coins'] - now[str(helper)]['coins'],
-            'helper_coins_left': now[str(helper)]['coins'],
-            'units_bought': bought, 'stock_share_after': end['stock'] / max(1, end['reserve_target']),
-            'stock_before': observed['stock'], 'hungry_before': sum(hungry_before) / len(crowd),
-            'turns': turns}
+    from crowd import Crowd
+    chooser = native_model(policy) if policy.startswith('model:') else POLICIES[policy]
+    crowd = Crowd(scenario, food_probe, participant_probe, seed, fast=fast)
+    try:
+        return crowd.run(chooser, random.Random(seed))
+    finally:
+        crowd.close()
 
 
 def crowd_score(r):

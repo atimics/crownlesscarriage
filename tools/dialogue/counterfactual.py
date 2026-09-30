@@ -12,13 +12,11 @@ import copy
 import json
 from pathlib import Path
 import random
-import shutil
-import tempfile
 from concurrent.futures import ProcessPoolExecutor
 
 import outcomes
-from meaning import candidates, encode_input
-from world_dialogue import World
+from crowd import Crowd
+from meaning import encode_input
 
 EPSILON = 1e-6   # an option must beat the base choice by more than this to relabel
 
@@ -36,87 +34,6 @@ def train_label(row, refused=('decline', 'end')):
     if row['label'] != row['choice'] and row['intents'][row['label']] in refused:
         return row['choice']
     return row['label']
-
-
-class Crowd:
-    """One helper meeting each hungry person in turn, resumable and cloneable."""
-
-    def __init__(self, scenario, food_probe, participant_probe, seed, limit=12, _blank=False):
-        self.food_probe, self.participant_probe, self.limit = str(food_probe), str(participant_probe), limit
-        self.dir = Path(tempfile.mkdtemp(prefix='crowd-'))
-        if _blank:
-            return
-        src = Path(scenario['path'])
-        for suffix in ('', '-wal', '-shm'):
-            if Path(str(src) + suffix).exists():
-                shutil.copyfile(str(src) + suffix, str(self.dir / 'world.ccsave') + suffix)
-        self.world = World(self.dir / 'world.ccsave', food_probe, participant_probe)
-        self.helper = scenario['helper']
-        self.order = list(scenario['hungry'])
-        random.Random(seed).shuffle(self.order)
-        self.observed = self.world.call('--observe', self.helper, self.order[0])
-        self.start = {p['id']: p for p in self.world.call('--list')['people']}
-        self.idx, self.history, self.snap, self.turn, self.bought, self.turns = 0, [], None, 0, 0, 0
-
-    def clone(self):
-        other = Crowd(None, self.food_probe, self.participant_probe, 0, self.limit, _blank=True)
-        for suffix in ('', '-wal', '-shm'):
-            path = Path(str(self.dir / 'world.ccsave') + suffix)
-            if path.exists():
-                shutil.copyfile(path, str(other.dir / 'world.ccsave') + suffix)
-        other.world = World(other.dir / 'world.ccsave', self.food_probe, self.participant_probe)
-        for key in ('helper', 'order', 'observed', 'start', 'idx', 'history', 'snap', 'turn', 'bought', 'turns'):
-            setattr(other, key, copy.deepcopy(getattr(self, key)))
-        return other
-
-    def close(self):
-        shutil.rmtree(self.dir, ignore_errors=True)
-
-    def decision(self):
-        """The speaker's view and legal options, or None when every conversation is over."""
-        if self.idx >= len(self.order):
-            return None
-        if self.snap is None:
-            self.snap = self.world.snapshot(self.order[self.idx], self.helper)
-            self.history, self.turn = [], 0
-        person = self.snap['participants'][self.turn % 2]
-        return person, candidates(person, self.history)
-
-    def act(self, index):
-        person, options = self.decision()
-        act = options[index]
-        self.turns += 1
-        self.turn += 1
-        self.history.append({'speaker_id': act['actor'], 'act': copy.deepcopy(act)})
-        over = act['intent'] == 'end' or self.turn >= self.limit
-        if act['intent'] == 'accept':
-            try:
-                self.world.execute(act['proposal'])
-                self.bought += act['proposal']['quantity']
-                self.snap = self.world.snapshot(self.order[self.idx], self.helper)
-            except (RuntimeError, ValueError):
-                over = True
-        if over:
-            self.idx, self.snap, self.history, self.turn = self.idx + 1, None, [], 0
-
-    def run(self, chooser, rng):
-        while (d := self.decision()) is not None:
-            person, options = d
-            self.act(chooser(person, self.history, options, rng))
-        return self.result()
-
-    def result(self):
-        now = {p['id']: p for p in self.world.call('--list')['people']}
-        week = {p['id']: p for p in self.world.call('--days', outcomes.HORIZON, '--list')['people']}
-        end = self.world.call('--observe', self.helper, self.order[0])
-        crowd, helper = self.order, self.helper
-        return {'people': len(crowd),
-                'relieved_now': sum(now[str(p)]['hungry_days'] == 0 for p in crowd),
-                'hungry_days_week': sum(week[str(p)]['hungry_days'] for p in crowd),
-                'helper_hungry_week': week[str(helper)]['hungry_days'],
-                'crowns_spent': self.start[str(helper)]['coins'] - now[str(helper)]['coins'],
-                'units_bought': self.bought, 'turns': self.turns,
-                'stock_share_after': end['stock'] / max(1, end['reserve_target'])}
 
 
 def chooser_for(policy):
@@ -174,7 +91,7 @@ def main():
     parser.add_argument('--worlds', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--policy', default='teacher', help='base policy: a name or model:STYLE:MODEL:PROBE')
-    parser.add_argument('--style', default='afford', choices=('digits', 'buckets', 'afford'))
+    parser.add_argument('--style', default='afford', choices=('digits', 'buckets', 'afford', 'queue'))
     parser.add_argument('--offset', type=int, default=0)
     parser.add_argument('--limit', type=int, default=100)
     parser.add_argument('--seeds', type=int, default=399)
@@ -200,6 +117,9 @@ def main():
     with (args.output / 'rows.jsonl').open('w') as f:
         f.write(''.join(json.dumps(r) + '\n' for r in rows))
     # ctrain format: <pool> <target> <count> <tokens>; pool 1 = the simulation changed the label
+    with (args.output / 'train_refusals.txt').open('w') as f:   # every relabel, refusals included
+        for r in rows:
+            f.write(f"{int(r['label'] != r['choice'])} {r['label']} {len(r['tokens'])} {' '.join(map(str, r['tokens']))}\n")
     with (args.output / 'train.txt').open('w') as f:
         for r in rows:
             label = r['label'] if args.keep_refusals else train_label(r)

@@ -16,7 +16,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--worlds', type=int, default=256)
-    parser.add_argument('--style', choices=('digits', 'buckets', 'afford'), default='digits')
+    parser.add_argument('--style', choices=('digits', 'buckets', 'afford', 'queue'), default='digits')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     receipt = {'format': 'crownless-meaning-v3', 'worlds': args.worlds, 'style': args.style, 'splits': {}}
