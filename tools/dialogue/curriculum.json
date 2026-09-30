@@ -1,0 +1,600 @@
+{
+  "version": 1,
+  "census": "docs/npc-census.json",
+  "principles": [
+    "Order stages by how often the situation arises unattended, how clearly the decision is defined, how measurable the outcome is, and how small the interface change is.",
+    "Every stage keeps the current rule as the baseline and the fallback, and advances only on a paired gain on held-out seeds.",
+    "One shared network per role family; individuals differ through inputs.",
+    "The validator owns legality; the network only chooses among legal options."
+  ],
+  "stages": [
+    {
+      "id": "L0",
+      "name": "Food-relief exchange",
+      "status": "done",
+      "actors": [
+        "villager (hungry)",
+        "villager (helper)"
+      ],
+      "decision": "Ask, offer, counter, accept or decline food between two people who share a place.",
+      "observation": [
+        "own purse, hunger days, stress",
+        "trust toward the other person",
+        "store stock, reserve target, unit price",
+        "remembered outcomes",
+        "people still waiting (queue)"
+      ],
+      "options": [
+        "12 intents (request, offer, counter, accept, decline, condition, recall, thank, end) as at most 16 legal candidates"
+      ],
+      "outcome": [
+        "hunger relieved now and a week later",
+        "crowns spent",
+        "store share left",
+        "helper still fed"
+      ],
+      "interface": {
+        "state": "ready",
+        "note": "In-process crowd harness (crowdsim/fastworld/crowd); probes remain the reference."
+      },
+      "commands": [
+        "CC_COMMAND_FOOD_RELIEF_PROPOSE",
+        "CC_COMMAND_FOOD_RELIEF_ACCEPT",
+        "CC_COMMAND_FOOD_RELIEF_EXECUTE"
+      ],
+      "events": [
+        "SHORTAGE",
+        "CHARACTER_INTERACTION",
+        "RELATIONSHIP_CHANGED"
+      ],
+      "structs": [
+        "CcFoodAgreement",
+        "CcCharacter",
+        "CcSettlement"
+      ],
+      "size_hint": "5M policy; a 1,321-weight scorer already matches it",
+      "dependencies": [],
+      "first_experiment": "Done: hand-written rule, counterfactual labels and evolution all reach +0.032 over the teacher on held-out crowds.",
+      "gate": "Reached: paired gain over the teacher, better in 31 crowds and worse in 0. The ceiling for this view and objective.",
+      "risks": [
+        "Ceiling reached: more work here buys nothing without a richer view or objective."
+      ],
+      "evidence": [
+        "tools/dialogue/OUTCOMES.md"
+      ]
+    },
+    {
+      "id": "L1",
+      "name": "Villager daily life",
+      "status": "next",
+      "actors": [
+        "villager (any role)"
+      ],
+      "decision": "What to do today: work, seek aid, buy a meal, lodge, travel, hide, or join a bandit group.",
+      "observation": [
+        "role, occupation, goal, activity",
+        "purse, hunger days, unsheltered nights, stress",
+        "local prices, stock and services (inn)",
+        "known routes and their danger"
+      ],
+      "options": [
+        "activity: WORKING, SEEKING_AID, PREPARING, RECOVERING, HIDING, TRAVELLING",
+        "buy the cheapest meal, or go without",
+        "pay for a bed",
+        "accept casual work (6 crowns a day where the market can pay)"
+      ],
+      "outcome": [
+        "days hungry and days unsheltered",
+        "survival and purse over 90 days",
+        "recruitment into bandit groups (17.7 people per world are hiding)",
+        "stress"
+      ],
+      "interface": {
+        "state": "missing",
+        "note": "Read from source: AdvanceTravellerNeeds in cc_sim.c makes these choices by fixed rule each day for travellers and refugees; residents at home have hunger and shelter reset. Needs a daily-decision hook with a legal-option list."
+      },
+      "commands": [
+        "CC_COMMAND_PERSONAL_WANT",
+        "CC_COMMAND_CHARACTER_RESPONSE"
+      ],
+      "events": [
+        "SHORTAGE",
+        "BANDIT_PRESSURE",
+        "CHARACTER_INTERACTION"
+      ],
+      "structs": [
+        "CcCharacter",
+        "CcSettlement"
+      ],
+      "size_hint": "5M shared across all villagers, with role, occupation and goal as inputs",
+      "dependencies": [
+        "L0"
+      ],
+      "first_experiment": "Hook the traveller-needs step, offer meal/bed/work/seek-aid/wait as candidates, and evolve the shared scorer on 90-day welfare across 60 seeds; compare with the fixed rule on held-out seeds.",
+      "gate": "Paired welfare gain over the rule on held-out seeds (z >= 3), with no rise in bandit recruitment and money conserved.",
+      "risks": [
+        "Only travellers and refugees (about 34 people per world) face this choice; residents are reset to fed each day.",
+        "A shared brain can homogenise behaviour; add goal and trait inputs early."
+      ],
+      "evidence": [
+        "src/sim/cc_sim.c AdvanceTravellerNeeds",
+        "docs/npc-census.json activity_per_world"
+      ]
+    },
+    {
+      "id": "L2",
+      "name": "Gossip and requests",
+      "status": "planned",
+      "actors": [
+        "villager",
+        "scribe",
+        "courier"
+      ],
+      "decision": "What to tell, how to retell it, whom to believe, and which personal request to make or answer.",
+      "observation": [
+        "held accounts with source, certainty and age",
+        "relationship and trust",
+        "own occupation and needs (bread, wheat, iron, wood, repairs)",
+        "who is present"
+      ],
+      "options": [
+        "share, withhold or distort an account (retellings change counts, people, directions or motives)",
+        "report, keep confidence, pledge help or listen (four responses)",
+        "ask for or fulfil an item request"
+      ],
+      "outcome": [
+        "accuracy of what the town believes about real events",
+        "trust and relationship change",
+        "requests fulfilled",
+        "rumour reach"
+      ],
+      "interface": {
+        "state": "partial",
+        "note": "RUMOR_SHARED is the most frequent event (2,288 per world in two years); the exchange command exists but I have not read how unattended exchanges are generated."
+      },
+      "commands": [
+        "CC_COMMAND_EXCHANGE_GOSSIP",
+        "CC_COMMAND_HEARD_STORY",
+        "CC_COMMAND_CHARACTER_RESPONSE",
+        "CC_COMMAND_PERSONAL_WANT"
+      ],
+      "events": [
+        "RUMOR_SHARED",
+        "LORE_RECORDED",
+        "LORE_LOST",
+        "RELATIONSHIP_CHANGED",
+        "RELATIONSHIP_HISTORY"
+      ],
+      "structs": [
+        "CcCharacterKnowledge",
+        "CcCharacterMemory",
+        "CcRelationship"
+      ],
+      "size_hint": "5M; the typed fact-selection pilot already targets this",
+      "dependencies": [
+        "L0"
+      ],
+      "first_experiment": "Score belief accuracy against the event log after a season of gossip under the rule versus a learned share/withhold policy.",
+      "gate": "Higher belief accuracy at equal reach, and no fabricated facts (validator rejects any account not held).",
+      "risks": [
+        "Fluency is not truth: the validator must own what may be said.",
+        "Scoring accuracy needs a ground-truth event log per world."
+      ],
+      "evidence": [
+        "docs/npc-society.md",
+        "docs/personal-requests.md",
+        "tools/dialogue/FACT-SELECTION.md"
+      ]
+    },
+    {
+      "id": "L3",
+      "name": "Trade, shipments and production",
+      "status": "planned",
+      "actors": [
+        "settlement steward",
+        "royal carriage",
+        "shipper"
+      ],
+      "decision": "Which good to move, where, how much, and what to produce; how a carriage picks its next job.",
+      "observation": [
+        "stock, reserve target and price by settlement and good",
+        "route capacity, toll and danger",
+        "carriage mode and cargo",
+        "shortages elsewhere"
+      ],
+      "options": [
+        "ship, hold or fund grain supply",
+        "carriage mode: idle, repositioning, delivering, blocked, waiting for capacity, road repair",
+        "route choice (CcTradeFindPath)"
+      ],
+      "outcome": [
+        "shortage events avoided (19 per world)",
+        "shipments lost (17 per world) and delivered (127)",
+        "price stability",
+        "reserve kept above target"
+      ],
+      "interface": {
+        "state": "missing",
+        "note": "Shipments and carriages run by rule in the daily tick (158 departures per world). The trade commands are player-scoped; there is no steward-side option list yet."
+      },
+      "commands": [
+        "CC_COMMAND_TRADE",
+        "CC_COMMAND_TRADE_SUPPLY",
+        "CC_COMMAND_FUND_GRAIN_SUPPLY",
+        "CC_COMMAND_SUPPORT_BAKERY",
+        "CC_COMMAND_REPAIR_ROUTE",
+        "CC_COMMAND_SET_ROAD_LINE"
+      ],
+      "events": [
+        "SHIPMENT_DEPARTED",
+        "SHIPMENT_ARRIVED",
+        "SHIPMENT_LOST",
+        "ROYAL_CARRIAGE_REROUTED",
+        "ROYAL_CARRIAGE_BLOCKED",
+        "SHORTAGE",
+        "SMITH_PRODUCTION",
+        "PAPER_MILLED",
+        "WOODLOT_HARVEST",
+        "BAKERY_PRODUCTION",
+        "MASONRY_REPAIR",
+        "QUARRY_OUTPUT",
+        "IRON_LEDGER_LOAN",
+        "IRON_LEDGER_REPAID",
+        "HARVEST_FAILED",
+        "ROUTE_CLOSED",
+        "ROUTE_REPAIRED"
+      ],
+      "structs": [
+        "CcShipment",
+        "CcRoyalCarriage",
+        "CcSettlement",
+        "CcRoute"
+      ],
+      "size_hint": "1M to 5M; small state, many repeated decisions",
+      "dependencies": [
+        "L1"
+      ],
+      "first_experiment": "Expose the shipment planner as options (destination, good, quantity) for one settlement and score shortages and losses over two years.",
+      "gate": "Fewer shortage and lost-shipment events at held-out seeds, with treasury and stock conserved.",
+      "risks": [
+        "Economy tuning is delicate and player-facing; keep the rule as a fallback and shadow-test first."
+      ],
+      "evidence": [
+        "src/sim/cc_supply_trade.inc",
+        "src/sim/cc_trade_path.c",
+        "src/sim/cc_food_economy.c",
+        "docs/crown-carriage-roads.md"
+      ]
+    },
+    {
+      "id": "L4",
+      "name": "Raiders and monsters",
+      "status": "planned",
+      "actors": [
+        "bandit group",
+        "goblin faction",
+        "monster population"
+      ],
+      "decision": "Whether, when and where to raid; what to take; whether to pay or take tribute.",
+      "observation": [
+        "own members, supplies, coins, camp size",
+        "target settlement stock, guards and route danger",
+        "raid phase and days remaining",
+        "goblin motive: hunger, equipment or dragon tribute"
+      ],
+      "options": [
+        "bandit raid phases: idle, scouting, mustering, outbound, returning",
+        "raid target, good and quantity",
+        "goblin tribute phases: idle, outbound, returning, to dragon, preparing"
+      ],
+      "outcome": [
+        "raider survival and take",
+        "settlement harm and shortages caused",
+        "raids completed per year",
+        "balance: neither side collapses"
+      ],
+      "interface": {
+        "state": "missing",
+        "note": "Raids run by rule in the daily tick (12 bandit and 19 goblin raids per world); raid_target_id, raid_good and raid_quantity are already state fields, so an option list can be built."
+      },
+      "commands": [
+        "CC_COMMAND_GOBLIN_TRADE",
+        "CC_COMMAND_GOBLIN_WARN",
+        "CC_COMMAND_GOBLIN_INTERCEPT",
+        "CC_COMMAND_INTERCEPT_DRAGON_TRIBUTE"
+      ],
+      "events": [
+        "BANDIT_PRESSURE",
+        "BANDIT_RAID_DEPARTED",
+        "BANDIT_RAID_RETURNED",
+        "SETTLEMENT_RAIDED",
+        "MONSTER_PRESSURE",
+        "GOBLIN_RAID_PREPARED",
+        "GOBLIN_RAID_DEPARTED",
+        "GOBLIN_RAIDED",
+        "GOBLIN_RAID_RETURNED",
+        "GOBLIN_TRIBUTE_DEPARTED",
+        "GOBLIN_TRIBUTE_DELIVERED",
+        "GOBLIN_CULT_RALLIED",
+        "GOBLIN_HOARD_DEFENDED"
+      ],
+      "structs": [
+        "CcBanditGroup",
+        "CcGoblinFaction",
+        "CcGoblinSociety",
+        "CcMonsterPopulation"
+      ],
+      "size_hint": "5M; two-sided, so raiders and defenders co-evolve",
+      "dependencies": [
+        "L3"
+      ],
+      "first_experiment": "Give bandit groups a raid-target choice and evolve it against settlement defence, scoring both sides.",
+      "gate": "Raiders do better than the rule without collapsing the settlements they raid (both sides in band across seeds).",
+      "risks": [
+        "Adversarial: optimising raiders alone will strip the world; needs a two-sided or bounded objective.",
+        "Unattended raids are rare per seed (about one bandit group per world)."
+      ],
+      "evidence": [
+        "src/sim/cc_goblin_politics.inc StoreGoblinRaid AdvanceGoblinPolitics HuntGoblinFaction"
+      ]
+    },
+    {
+      "id": "L5",
+      "name": "Kingdoms and war",
+      "status": "planned",
+      "actors": [
+        "kingdom",
+        "faction",
+        "war-party commander"
+      ],
+      "decision": "What a kingdom does with its treasury and legitimacy, which factions to back, and how a war party is ordered.",
+      "observation": [
+        "treasury, iron-ledger debt, legitimacy, sanction",
+        "diplomatic state (peace, war, alliance) with each neighbour",
+        "war chest, supply and shortage",
+        "party members, casualties, order"
+      ],
+      "options": [
+        "war orders: hold, march, control route, withdraw, cease",
+        "fund the war chest, buy supply, back or shift a faction",
+        "succession and pretender responses"
+      ],
+      "outcome": [
+        "kingdom stability (legitimacy, treasury)",
+        "wars avoided or won at low cost",
+        "supply shortage days",
+        "succession without crisis"
+      ],
+      "interface": {
+        "state": "missing",
+        "note": "KINGDOM_ACTION (62 per world), FACTION_SHIFT (78) and WAR_CHEST_FUNDED (65) fire by rule. WAR_DECLARED never fired in 60 unattended worlds of two years, so war scenarios must be injected."
+      },
+      "commands": [],
+      "events": [
+        "KINGDOM_ACTION",
+        "FACTION_SHIFT",
+        "WAR_CHEST_FUNDED",
+        "WAR_SUPPLY_BOUGHT",
+        "WAR_SUPPLY_SHORTAGE",
+        "INEQUALITY_PRESSURE",
+        "ROYAL_SUCCESSION",
+        "KING_ANOINTED",
+        "PRETENDER_CRISIS",
+        "MONASTIC_SUCCESSION",
+        "PEACE_DECLARED",
+        "SITUATION_CREATED",
+        "SITUATION_FAILED",
+        "FRONT_CREATED",
+        "FRONT_FAILED"
+      ],
+      "structs": [
+        "CcKingdom",
+        "CcFaction",
+        "CcWarParty",
+        "CcSituation",
+        "CcFront"
+      ],
+      "size_hint": "5M to 10M; long horizons and sparse rewards",
+      "dependencies": [
+        "L3",
+        "L4"
+      ],
+      "first_experiment": "Learn the kingdom-action choice on the events that do fire, scored by legitimacy and treasury a year later; add war scenarios by seeding a border dispute.",
+      "gate": "Better stability than the rule on held-out seeds, and wars still occur at a similar rate (no pacifist collapse of the story).",
+      "risks": [
+        "Sparse and delayed reward; needs scenario injection to see enough wars.",
+        "Story-critical: authored beats must not be optimised away."
+      ],
+      "evidence": [
+        "src/sim/cc_war.c MarchToward ResolveBattles PartiesHostile",
+        "docs/npc-census.json"
+      ]
+    },
+    {
+      "id": "L6",
+      "name": "Dragons",
+      "status": "planned",
+      "actors": [
+        "dragon",
+        "dragon cult",
+        "dragon campaign"
+      ],
+      "decision": "Hunt, retaliate, brood or lie dormant; whom to retaliate against; when to campaign.",
+      "observation": [
+        "life stage, body condition, crown strength, memory integrity",
+        "territory stability, regional influence, hoard",
+        "stolen treasure and theft actor",
+        "kingdom pledges and alliances"
+      ],
+      "options": [
+        "activity: dormant, hunting, retaliating, brooding, aftermath",
+        "retaliation target",
+        "campaign phase: idle, outbound, returning"
+      ],
+      "outcome": [
+        "territory stability and crown continuity",
+        "hoard kept",
+        "lineage: brood survives",
+        "story pacing: an omen and a reckoning that make sense"
+      ],
+      "interface": {
+        "state": "missing",
+        "note": "One dragon per world; DRAGON_CROWNED fires about once and DRAGON_RETALIATION 0.4 times per two years, mostly after a player theft. Most dragon events never fire unattended (hunt, battle, brood, mustering), so scenarios must be injected."
+      },
+      "commands": [
+        "CC_COMMAND_STEAL_DRAGON_HOARD",
+        "CC_COMMAND_RETURN_DRAGON_TREASURE",
+        "CC_COMMAND_DELIVER_PROPHECY"
+      ],
+      "events": [
+        "DRAGON_CROWNED",
+        "DRAGON_OMEN",
+        "DRAGON_RETALIATION",
+        "DRAGON_HOARD_STOLEN",
+        "DRAGON_TREASURE_RETURNED",
+        "DRAGON_HUNT",
+        "DRAGON_BROOD",
+        "DRAGON_BATTLE",
+        "DRAGON_MUSTERED"
+      ],
+      "structs": [
+        "CcDragon",
+        "CcDragonCampaign",
+        "CcDragonCult"
+      ],
+      "size_hint": "Start at 5M; scale to 10M-50M only if the option space and reward become rich. The one measured 5M-to-50M comparison (byte language modelling) gained 11% for ten times the parameters.",
+      "dependencies": [
+        "L4",
+        "L5"
+      ],
+      "first_experiment": "Build accelerated scenarios (a theft, a rival campaign) and score territory stability and crown continuity over 20 years.",
+      "gate": "Dragon behaviour judged by paired scenario outcomes and authored-story review, not by agreement with the rule.",
+      "risks": [
+        "Rarity: little natural data, so scenario design carries the result.",
+        "Highest player impact; keep the validator gate and a safe default action."
+      ],
+      "evidence": [
+        "src/sim/cc_sim.h CcDragon, CcDragonCampaign",
+        "docs/npc-census.json silent_event_kinds"
+      ]
+    },
+    {
+      "id": "L7",
+      "name": "Lineages and open-ended evolution",
+      "status": "later",
+      "actors": [
+        "all villagers over generations"
+      ],
+      "decision": "How inherited traits bias the shared brain across generations.",
+      "observation": [
+        "the L1-L2 inputs plus a small inherited trait vector"
+      ],
+      "options": [
+        "the same options as the stage each individual acts in"
+      ],
+      "outcome": [
+        "lineage survival and prosperity",
+        "diversity of behaviour across the population",
+        "no collapse into one strategy"
+      ],
+      "interface": {
+        "state": "missing",
+        "note": "Births and deaths are rare (0.5 each per world in two years), so this needs centuries per seed; at about 8,000 simulated days per second a century takes a few seconds."
+      },
+      "commands": [],
+      "events": [
+        "CHARACTER_BORN",
+        "CHARACTER_DIED"
+      ],
+      "structs": [
+        "CcCharacter"
+      ],
+      "size_hint": "One shared brain plus a per-person trait vector",
+      "dependencies": [
+        "L1",
+        "L2"
+      ],
+      "first_experiment": "Add a mutating trait vector at birth and measure behaviour diversity and lineage outcomes over 300 simulated years.",
+      "gate": "Sustained diversity without loss of average welfare on held-out seeds.",
+      "risks": [
+        "Emergent exploits; the evolved population can drift away from the intended story."
+      ],
+      "evidence": [
+        "docs/npc-census.json"
+      ]
+    }
+  ],
+  "tracks": [
+    {
+      "id": "T1",
+      "name": "Policy hook",
+      "status": "partial",
+      "goal": "One interface for every stage: observation, legal options, apply, outcome, with the rule as the default.",
+      "have": [
+        "legal-candidate lists and validators for food relief",
+        "in-process food-relief worlds"
+      ],
+      "need": [
+        "a generic hook in the daily tick",
+        "the in-process world generalised beyond food relief"
+      ]
+    },
+    {
+      "id": "T2",
+      "name": "Evaluation",
+      "status": "partial",
+      "goal": "Judge on outcomes, on held-out seeds, paired against the current rule.",
+      "have": [
+        "outcome scorer",
+        "paired comparison with standard errors",
+        "held-out crowd slices"
+      ],
+      "need": [
+        "one-input sensitivity tests",
+        "held-out regions of state",
+        "per-stage invariants (conservation, legality)"
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "Determinism",
+      "status": "planned",
+      "goal": "Identical choices on arm64, x86-64 and WebAssembly.",
+      "have": [
+        "byte-exact native parity checks against the float path"
+      ],
+      "need": [
+        "an integer forward pass (RoPE, SiLU table, head_dim 32)",
+        "a cross-platform parity test"
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "Runtime and sizes",
+      "status": "partial",
+      "goal": "Load several small models by role.",
+      "have": [
+        "C trainer",
+        "native runtime for one 5M layout"
+      ],
+      "need": [
+        "role-keyed model loading",
+        "exporter limits above dim 256 and 16 layers for larger models"
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "Reward hygiene",
+      "status": "planned",
+      "goal": "Stop optimisers exploiting the score.",
+      "have": [
+        "paired comparisons",
+        "conservation checks"
+      ],
+      "need": [
+        "adversarial probes per stage",
+        "a KL anchor to the rule when learning from outcomes"
+      ]
+    }
+  ]
+}
