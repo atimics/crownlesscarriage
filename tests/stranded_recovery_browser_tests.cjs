@@ -53,22 +53,6 @@ async function main() {
         sequence: current.next_sequence, action_revision: current.action_revision,
         action, target, good: 0, amount: 0});
     }
-    async function holdMovingRoad() {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const current = await view(worlds.recover);
-        const journey = current.state.journey;
-        if (!journey.active || ![1, 3].includes(journey.phase)) return;
-        const hold = await api(`/api/worlds/${worlds.recover}/command`, {
-          protocol: 1, sequence: current.next_sequence,
-          action_revision: current.action_revision, action: 'stop_travel',
-          target: journey.route, good: 0, amount: 0
-        }, true);
-        if (hold.accepted) return;
-        assert.equal(hold.message,
-          'The road has changed. Review the current journey.');
-      }
-      assert.fail('The shared host holds a moving road after fresh state review');
-    }
     for (const [mode, world] of Object.entries(worlds)) {
       const worldPass = execFileSync(python, [
         'tools/coop/server.py', '--database', database, '--issue-world-pass'
@@ -156,46 +140,97 @@ async function main() {
       await fs.mkdir(output, {recursive: true});
       await page.screenshot({path: path.join(output, 'abandoned-town-care.png')});
     }
-    await page.goto(`${origin}/healthz`);
-
+    const browserActions = [];
+    page.on('response', response => {
+      if (!response.url().includes(`/api/worlds/${worlds.recover}/command`)) return;
+      browserActions.push({action: response.request().postDataJSON()?.action,
+        status: response.status()});
+    });
+    const roadReceipts = [];
     async function driveTo(destination) {
       const before = (await view(worlds.recover)).state;
       const route = before.travel.find(option => option.id === destination);
       assert(route && route.available, 'The next saved road is passable');
-      const started = await command(worlds.recover, 'travel', destination);
-      assert(started.accepted);
-      await holdMovingRoad();
-      for (let step = 0; step < 100; step++) {
-        const current = (await view(worlds.recover)).state;
-        const journey = current.journey;
-        if (!journey.active) break;
-        let action, target = '0';
-        if (journey.road_site) {
-          action = 'pass_road_site'; target = journey.road_site.id;
-        } else if (journey.phase === 4) {
-          const position = current.road_position;
-          const forward = position.next_legs.filter(leg =>
-            leg.direction === position.direction);
-          assert(forward.length, 'A forward road leg exists');
-          const leg = forward.find(option => option.kind === 1) || forward[0];
-          action = 'road_leg'; target = leg.token;
-        } else if (journey.phase === 3) {
-          action = journey.stop === 1 ? 'break' : 'camp';
-        } else {
-          assert.equal(journey.phase, 1);
-          action = 'skip_watch';
-        }
-        const result = await command(worlds.recover, action, target);
-        assert(result.accepted, `${action}: ${result.message}`);
-        await holdMovingRoad();
+      await loadWorld(worlds.recover);
+      const firstAction = browserActions.length;
+      const travelResponse = () => page.waitForResponse(response =>
+        response.url().includes(`/api/worlds/${worlds.recover}/command`) &&
+        response.request().postDataJSON()?.action === 'travel');
+      let pendingTravel;
+      if (await controls.button(/^Choose a road/).read()) {
+        pendingTravel = travelResponse();
+        await controls.button(/^Choose a road/).tap();
+      } else {
+        await controls.button(/^Board Crownless carriage/).tap();
+        await controls.button('Travel').waitFor();
+        await controls.button('Travel').tap();
+        await controls.button(route.name).waitFor();
+        pendingTravel = travelResponse();
+        await controls.button(route.name).tap();
       }
-      const arrived = (await view(worlds.recover)).state;
-      assert.equal(arrived.journey.active, false);
+      const travelReceipt = await (await pendingTravel).json();
+      assert(travelReceipt.accepted, travelReceipt.message);
+      let arrived = null;
+      const deadline = Date.now() + 240000;
+      let lastChoice = '';
+      while (Date.now() < deadline) {
+        const current = (await view(worlds.recover)).state;
+        if (!current.journey.active) { arrived = current; break; }
+        const buttons = await controls.buttons();
+        const visible = label => buttons.find(button => button.label === label && button.enabled);
+        let choice = null;
+        if (current.journey.road_site && visible('Travel on'))
+          choice = 'Travel on';
+        else if (current.journey.phase === 4) {
+          if (current.road_position.next_legs.some(leg => leg.destination === destination)) {
+            assert(await controls.pageTo(`Drive to ${route.name}`));
+            choice = `Drive to ${route.name}`;
+          } else {
+            const alternatives = (await controls.buttons()).filter(button =>
+              button.enabled && button.label.startsWith('Drive to ') &&
+              button.label !== `Drive to ${before.market.name}`);
+            choice = alternatives[0]?.label || null;
+          }
+          if (!choice) {
+            await page.waitForTimeout(250);
+            continue;
+          }
+        } else if (visible('Travel on'))
+          choice = 'Travel on';
+        else if (visible('Travel'))
+          choice = 'Travel';
+        if (choice) {
+          await controls.button(choice).tap();
+          lastChoice = choice;
+          if (current.journey.phase === 4) {
+            for (let attempt = 0; attempt < 20; ++attempt) {
+              const changed = (await view(worlds.recover)).state;
+              if (changed.road_position?.revision !== current.road_position?.revision ||
+                  changed.journey.phase !== current.journey.phase) break;
+              await page.waitForTimeout(200);
+            }
+          }
+        } else {
+          await page.waitForTimeout(500);
+        }
+      }
+      assert(arrived, `The visible road controls reach ${route.name}; last choice: ${lastChoice}`);
       assert.equal(arrived.company.location, destination);
       assert.equal(arrived.team.carriage_location, destination);
       assert.equal(arrived.company.cargo[6], 2);
       assert.equal(arrived.company.coins, before.company.coins);
       assert(arrived.day > before.day || arrived.minute > before.minute);
+      await page.waitForFunction(hash => document.body.dataset.companyHash === hash,
+        arrived.hash, {timeout: 30000});
+      await page.waitForTimeout(250);
+      const actions = browserActions.slice(firstAction);
+      assert.equal(actions[0]?.action, 'travel');
+      assert(actions.some(action => ['road_leg', 'pass_road_site'].includes(action.action)),
+        JSON.stringify(actions));
+      assert(actions.every(action => action.status === 200));
+      roadReceipts.push({destination: route.name, actions});
+      if (output) await page.screenshot({path: path.join(output,
+        `visible-arrival-${route.name.toLowerCase()}.png`)});
       return arrived;
     }
     const middle = await driveTo(start.travel[0].id);
@@ -246,6 +281,7 @@ async function main() {
       horseHealth: [arrived.team.horses[0].health, cared.team.horses[0].health],
       horseHunger: [arrived.team.horses[0].hunger, cared.team.horses[0].hunger],
       marketWheat: [arrived.market.stock[7], cared.market.stock[7]],
+      roadReceipts,
       receipt: cared.events.find(event => event.text.includes('Care at ')).text,
       savedHash: cared.hash}));
   } finally {
