@@ -77,10 +77,11 @@ int main(int argc, char **argv)
             printf("%s{\"id\":\"%" PRIu64 "\",\"name\":", i ? "," : "", person->id);
             JsonString(person->name);
             printf(",\"place_id\":\"%" PRIu64 "\",\"hungry_days\":%d,\"coins\":%" PRId64
-                   ",\"in_transit\":%s,\"alive\":%s}", person->current_settlement_id,
+                   ",\"in_transit\":%s,\"alive\":%s,\"stress\":%d,\"bandit\":%s}", person->current_settlement_id,
                 person->hungry_days, person->travel_coins,
                 person->travel_destination_id != 0U || person->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ? "true" : "false",
-                person->death_day > 0 && person->death_day <= sim.current_day ? "false" : "true");
+                person->death_day > 0 && person->death_day <= sim.current_day ? "false" : "true",
+                person->stress, person->bandit_group_id != 0U ? "true" : "false");
         }
         puts("]}");
         if (save != NULL && !CcSaveWrite(save, &sim, error, sizeof(error))) { fputs(error, stderr); return 1; }
