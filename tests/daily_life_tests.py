@@ -75,6 +75,15 @@ class DailyLifeTests(unittest.TestCase):
         for name, cfg in evolve_life.STAGES.items():
             self.assertTrue(cfg['mask'] > 0 and cfg['days'] > 0 and cfg['keys'], name)
 
+    def test_an_injected_theft_makes_the_dragon_retaliate_and_be_repaid(self):
+        world = fastworld.FastWorld.new(1, 60)
+        before = fastworld.run_days(world, 0)
+        fastworld.inject_theft(world, 300)
+        after = fastworld.run_days(world, 120)
+        world.close()
+        self.assertGreaterEqual(after['dragon_retaliations'] - before['dragon_retaliations'], 1)
+        self.assertGreater(after['dragon_hoard'], before['dragon_hoard'] + 250)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -56,6 +56,8 @@ def library():
         lib.cs_policy_stats.argtypes = [ctypes.POINTER(ctypes.c_long), c_i]
         lib.cs_set_gossip_floor.argtypes = [c_i]
         lib.cs_set_trade_bias.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, c_i]
+        lib.cs_set_dragon_force.argtypes = [c_i]
+        lib.cs_inject_theft.argtypes = [c_p, c_i]
         lib.cs_run.restype = c_i
         lib.cs_run.argtypes = [c_p, c_i, ctypes.POINTER(ctypes.c_double)]
         lib.cs_promise.restype = c_i
@@ -152,14 +154,15 @@ METRICS = ('road_days', 'road_hungry', 'road_unsheltered', 'road_bandit', 'road_
            'all_days', 'all_hungry', 'all_bandit', 'road_moves',
            'gossip_pairs', 'gossip_confidence', 'gossip_retellings', 'story_days',
            'town_hunger', 'town_famine', 'town_prosperity', 'town_days', 'raids', 'loot',
-           'kingdom_legitimacy', 'kingdom_treasury', 'kingdom_days')
+           'kingdom_legitimacy', 'kingdom_treasury', 'kingdom_days',
+           'dragon_hoard', 'dragon_memory', 'dragon_retaliations', 'population', 'town_prosperity_now', 'legitimacy_now')
 
 
 def policy_size():
     return library().cs_policy_size()
 
 
-TRAVEL, MEAL, LODGING, BANDIT_JOIN, GOSSIP, TRADE, RAID_TARGET, KINGDOM_RELIEF, RAID_LAUNCH = 1, 2, 4, 8, 16, 32, 64, 128, 256
+TRAVEL, MEAL, LODGING, BANDIT_JOIN, GOSSIP, TRADE, RAID_TARGET, KINGDOM_RELIEF, DRAGON_TARGET, RAID_LAUNCH = 1, 2, 4, 8, 16, 32, 64, 128, 256, 512
 RAID = RAID_TARGET | RAID_LAUNCH
 LEARNED = TRAVEL | MEAL | LODGING   # bandit recruitment stays with the rule (story-critical)
 
@@ -184,10 +187,10 @@ def run_days(world, days):
 
 def policy_stats(reset=True):
     """How often each decision kind was offered and how often the policy changed the rule's choice."""
-    out = (ctypes.c_long * 18)()
+    out = (ctypes.c_long * 20)()
     library().cs_policy_stats(out, int(reset))
-    names = ('travel', 'meal', 'lodging', 'bandit', 'gossip', 'trade', 'raid_target', 'kingdom_relief', 'raid_launch')
-    return {n: {'offered': out[i], 'changed': out[9 + i]} for i, n in enumerate(names)}
+    names = ('travel', 'meal', 'lodging', 'bandit', 'gossip', 'trade', 'raid_target', 'kingdom_relief', 'dragon_target', 'raid_launch')
+    return {n: {'offered': out[i], 'changed': out[10 + i]} for i, n in enumerate(names)}
 
 
 def set_gossip_floor(floor):
@@ -198,3 +201,13 @@ def set_gossip_floor(floor):
 def set_trade_bias(hunger=0.0, need=0.0, path_cost=0.0, on=True):
     """A hand-set probe: trade follows the rule's score plus these weights (on=False clears it)."""
     library().cs_set_trade_bias(hunger, need, path_cost, int(on))
+
+
+def set_dragon_force(k):
+    """A hand-set probe: the dragon always burns the k-th eligible town (None clears it)."""
+    library().cs_set_dragon_force(-1 if k is None else int(k))
+
+
+def inject_theft(world, amount=300):
+    """Give the dragon a theft to collect on, so a retaliation follows within days."""
+    library().cs_inject_theft(world.handle, int(amount))

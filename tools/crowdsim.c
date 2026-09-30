@@ -212,7 +212,7 @@ int cs_execute(CrowdSim *w, uint64_t agreement, uint64_t payer, char *buf, size_
 /* ---- daily-life policy: a small network scores each option, in C ---- */
 
 #define CC_MAX_CHARACTERS_HINT 512
-#define POLICY_KINDS 9
+#define POLICY_KINDS 10
 #define ACTOR_FEATURES 19
 #define OPTION_FEATURES 21
 #define POLICY_INPUTS (POLICY_KINDS + ACTOR_FEATURES + OPTION_FEATURES)
@@ -225,6 +225,7 @@ static int policy_active;
 static int policy_mask;
 static double trade_bias[3];   /* probe: rule score + a*destination hunger + b*need + c*path cost */
 static int trade_bias_on;
+static int dragon_force = -1;   /* probe: >= 0 always burns the k-th listed town */
 static int gossip_floor = -1;   /* >= 0: withhold any story carried below this confidence (a hand-set probe) */   /* bit k set: the network decides kind k; others follow the rule */
 
 int cs_policy_size(void) { return POLICY_WEIGHTS; }
@@ -275,7 +276,23 @@ static void OptionFeatures(const CcSim *sim, CcPolicyKind kind, CcId actor, cons
 {
     memset(f, 0, OPTION_FEATURES * sizeof(double));
     const CcCharacter *p = CcSimCharacter(sim, actor);
-    if (kind == CC_POLICY_KINGDOM_RELIEF) {
+    if (kind == CC_POLICY_DRAGON_TARGET) {
+        const CcSettlement *town = CcSimSettlement(sim, o->target_id);
+        if (town != NULL) {
+            int32_t services = CcSettlementServiceCount(town);
+            f[13] = (double)town->prosperity / 100.0;
+            f[14] = (double)town->hunger / 100.0;
+            f[15] = (double)town->security / 100.0;
+            f[16] = Clip((double)town->population / 1000.0);
+            f[17] = Clip((double)o->value / 500.0);       /* the rule's richness score */
+            f[18] = (double)services / 10.0;
+            for (int32_t k = 0; k < sim->kingdom_count; ++k)
+                if (sim->kingdoms[k].id == town->kingdom_id) {
+                    f[19] = Clip((double)sim->kingdoms[k].treasury / 1000.0);
+                    f[20] = (double)sim->kingdoms[k].legitimacy / 100.0;
+                }
+        }
+    } else if (kind == CC_POLICY_KINGDOM_RELIEF) {
         const CcSettlement *town = CcSimSettlement(sim, o->target_id);
         f[0] = is_last;                                   /* hold the treasury */
         if (town != NULL && !is_last) {
@@ -345,6 +362,8 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
                       const CcPolicyOption *options, int32_t count, int32_t fallback)
 {
     (void)user;
+    if (kind == CC_POLICY_DRAGON_TARGET && dragon_force >= 0 && ((policy_mask >> (int)kind) & 1))
+        return dragon_force < count ? dragon_force : fallback;
     if (kind == CC_POLICY_TRADE_ROUTE && trade_bias_on && ((policy_mask >> (int)kind) & 1)) {
         int32_t best = fallback; double top = -1e300;
         for (int32_t i = 0; i < count; ++i) {
@@ -358,7 +377,7 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
     if (kind == CC_POLICY_GOSSIP_SHARE && gossip_floor >= 0 && ((policy_mask >> (int)kind) & 1))
         return options[0].value < gossip_floor ? 1 : 0;
     const CcCharacter *p = CcSimCharacter(sim, actor);
-    if ((p == NULL && kind != CC_POLICY_GOSSIP_SHARE && kind != CC_POLICY_TRADE_ROUTE && kind != CC_POLICY_RAID_TARGET && kind != CC_POLICY_RAID_LAUNCH && kind != CC_POLICY_KINGDOM_RELIEF) || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
+    if ((p == NULL && kind != CC_POLICY_GOSSIP_SHARE && kind != CC_POLICY_TRADE_ROUTE && kind != CC_POLICY_RAID_TARGET && kind != CC_POLICY_RAID_LAUNCH && kind != CC_POLICY_KINGDOM_RELIEF && kind != CC_POLICY_DRAGON_TARGET) || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
     /* Whether a traveller leaves is the role's business: keep the rule's decision to stay,
        and when it decides to go, choose only where (never "stay"). */
     if (kind == CC_POLICY_TRAVEL_DESTINATION && fallback == count - 1) return fallback;
@@ -409,6 +428,19 @@ void cs_set_trade_bias(double a, double b, double c, int on)
 /* Probe: with a floor, gossip follows "withhold below this confidence" and ignores the network. */
 void cs_set_gossip_floor(int floor) { gossip_floor = floor; if (floor >= 0) { policy_mask |= 16; CcSimSetPolicy(Choose, NULL); } else if (!policy_active) CcSimSetPolicy(NULL, NULL); }
 
+/* Probe: the dragon always burns the k-th eligible town (-1 clears). */
+void cs_set_dragon_force(int k) { dragon_force = k; if (k >= 0) { policy_mask |= 256; CcSimSetPolicy(Choose, NULL); } else if (!policy_active && gossip_floor < 0 && !trade_bias_on) CcSimSetPolicy(NULL, NULL); }
+
+/* Give the dragon a theft to collect on: it retaliates after a short omen. */
+void cs_inject_theft(CrowdSim *w, int amount)
+{
+    w->sim.dragon.slain = false;
+    w->sim.dragon.stolen_outstanding = amount;
+    w->sim.dragon.retaliation_target_id = 0U;
+    w->sim.dragon.omen_days_remaining = 2;
+    w->sim.dragon.theft_actor_id = w->sim.hoard_raiders.id;
+}
+
 void cs_set_policy(const double *weights, int count, int mask)
 {
     policy_mask = mask;
@@ -435,11 +467,12 @@ CrowdSim *cs_new(uint32_t seed, int days)
  * 10 known (story, town) pairs, 11 their confidence total, 12 their retellings total, 13 story-days,
  * 14 town hunger summed over town-days, 15 town-days in famine (hunger >= 25), 16 town prosperity summed,
  * 17 town-days, 18 raids on towns, 19 goods taken in raids, 20 kingdom legitimacy summed,
- * 21 kingdom treasury summed, 22 kingdom-days. */
+ * 21 kingdom treasury summed, 22 kingdom-days, and at the end: 23 dragon hoard, 24 dragon memory integrity,
+ * 25 dragon retaliations, 26 population, 27 town prosperity summed, 28 kingdom legitimacy summed. */
 int cs_run(CrowdSim *w, int days, double *metrics)
 {
     static CcId where[CC_MAX_CHARACTERS_HINT];
-    memset(metrics, 0, 23 * sizeof(double));
+    memset(metrics, 0, 29 * sizeof(double));
     CcId seen_event = 0U;
     for (int32_t i = 0; i < w->sim.event_count; ++i) if (w->sim.events[i].id > seen_event) seen_event = w->sim.events[i].id;
     for (int32_t i = 0; i < w->sim.character_count && i < CC_MAX_CHARACTERS_HINT; ++i)
@@ -496,5 +529,11 @@ int cs_run(CrowdSim *w, int days, double *metrics)
         if (p->role == CC_CHARACTER_SCOUT || p->role == CC_CHARACTER_TRAVELLER ||
             p->role == CC_CHARACTER_REFUGEE || p->role == CC_CHARACTER_COURIER) metrics[5] += (double)p->travel_coins;
     }
+    metrics[23] = (double)w->sim.dragon.hoard; metrics[24] = (double)w->sim.dragon.memory_integrity;
+    metrics[25] = (double)w->sim.dragon.retaliations;
+    for (int32_t t = 0; t < w->sim.settlement_count; ++t) {
+        metrics[26] += (double)w->sim.settlements[t].population; metrics[27] += (double)w->sim.settlements[t].prosperity;
+    }
+    for (int32_t k = 0; k < w->sim.kingdom_count; ++k) metrics[28] += (double)w->sim.kingdoms[k].legitimacy;
     return w->sim.current_day;
 }

@@ -23,6 +23,8 @@ typedef enum CcPolicyKind {
     CC_POLICY_KINGDOM_RELIEF,     /* which hungry town of a kingdom gets 28 crowns of grain relief, or none:
                                      one option per town with hunger >= 38 (target = town, value = its hunger), then
                                      "hold" as the last option. The actor is the kingdom's id. */
+    CC_POLICY_DRAGON_TARGET,      /* which town the dragon burns for a theft it is owed for: one option per
+                                     town other than its lair (target = town, value = the rule's "richness" score) */
     CC_POLICY_RAID_LAUNCH,        /* whether an eligible band raids the chosen town now: 0 = raid (target = town,
                                      value = its largest stock), 1 = hold. The actor is the band's id. */
     CC_POLICY_KIND_COUNT

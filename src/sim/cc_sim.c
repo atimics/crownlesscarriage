@@ -9822,6 +9822,23 @@ static void AdvanceDragonRetaliation(CcSim *sim)
         sim, dragon->retaliation_target_id);
     if (target == NULL) target = RichestDragonTarget(sim);
     if (target == NULL) return;
+    {
+        /* The rule burns the recorded target or the richest town; a hook may pick another town. */
+        CcPolicyOption ways[CC_MAX_SETTLEMENTS];
+        CcSettlement *towns[CC_MAX_SETTLEMENTS];
+        int32_t count = 0, rule_pick = 0;
+        for (int32_t i = 0; i < sim->settlement_count && count < CC_MAX_SETTLEMENTS; ++i) {
+            CcSettlement *place = &sim->settlements[i];
+            if (CcSettlementIsAbandoned(place) || place->id == dragon->lair_settlement_id) continue;
+            const CcKingdom *owner = KingdomMutable(sim, place->kingdom_id);
+            if (place == target) rule_pick = count;
+            towns[count] = place;
+            ways[count] = CC_POLICY_OPTION(place->id, place->prosperity * 4 + CcSettlementServiceCount(place) * 8 +
+                                           (owner != NULL ? (int32_t)(owner->treasury / 20) : 0));
+            count += 1;
+        }
+        if (count > 1) target = towns[CcSimPolicyChoose(sim, CC_POLICY_DRAGON_TARGET, dragon->id, ways, count, rule_pick)];
+    }
 
     int32_t population_loss = MaximumI32(100, target->population / 10);
     target->population = MaximumI32(100, target->population - population_loss);

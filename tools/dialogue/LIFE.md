@@ -119,3 +119,30 @@ years). The hook offers any hungry town of the kingdom, or holding the treasury.
   On 400 fresh worlds it was slightly **worse**: welfare -0.007 +- 0.0035 (z = -2.0), legitimacy -0.35, treasury
   +5.6 (it funds less). The earlier hint was noise, so the rule (fund the hungriest) stands.
 - War orders and succession could not be tested: WAR_DECLARED never fires in unattended worlds.
+
+# L6: the dragon (which town to burn)
+
+A dragon owed a theft retaliates after an omen against the recorded target or, failing that, the
+"richest" town (4 x prosperity + 8 x services + treasury / 20). The hook offers every town except
+its lair. Unattended, a dragon retaliates only 0.4 times per world in two years, so
+`dragon_probe.py` injects a 300-crown theft and forces each candidate town in turn
+(100 worlds, 120 days):
+
+| Target | Restitution collected | People lost | Prosperity lost | Legitimacy lost |
+| --- | --- | --- | --- | --- |
+| rule (richest) | 349 | 305 | -8.6 | -5.8 |
+| town #0 | 349 | 123 | 11.9 | -5.9 |
+| town #1 | 349 | 191 | 13.5 | -5.8 |
+| town #2 | 349 | 136 | 4.9 | -2.8 |
+| town #3 | 348 | 217 | 23.5 | -5.0 |
+| town #4 | 349 | 307 | -8.6 | -5.8 |
+
+Negative prosperity or legitimacy "lost" means it rose over the 120 days.
+
+- The dragon collects the same restitution whichever town burns, so its own payoff gives no
+  reason to prefer any target. There is nothing here for optimisation to find on the dragon's side.
+- The rule's target is the most damaging one: 40-60% fewer people are lost at the same payoff
+  in the alternatives. Whether the dragon should be vengeful or restrained is an authorial
+  choice, which makes it a good personality trait for L7 rather than something to optimise.
+- Only target choice is hooked. Hunting, brooding and campaigns never fire unattended and are
+  not covered; the story-review half of the gate (does an omen and a reckoning still make sense?) is not done.
