@@ -217,8 +217,9 @@ def band(value):
 def encode_input(person, heard, choices=None, style='digits'):
     """Token prefix for one choice. `digits` keeps every exact value; `buckets`
     uses magnitude words and sign/level tokens; `afford` adds how many units the
-    purse buys at each store's price."""
-    if style not in ('digits', 'buckets', 'afford'): raise ValueError('unknown encoding style')
+    purse buys at each store's price; `queue` adds how many others are still
+    waiting to meet this person (person['waiting'], default 0)."""
+    if style not in ('digits', 'buckets', 'afford', 'queue'): raise ValueError('unknown encoding style')
     choices = candidates(person, heard) if choices is None else choices
     if choices != candidates(person, heard): raise ValueError('candidate list changed')
     known = facts(person); own = person['self']; other = person['listener']
@@ -239,12 +240,13 @@ def encode_input(person, heard, choices=None, style='digits'):
         number(own['coins']); number(own['hungry_days'])
         ids.append(2445 + (0 if own['stress'] < 30 else 1 if own['stress'] < 60 else 2))
         ids.append(2440 + (0 if trust < 0 else 1 if trust == 0 else 2))
+    if style == 'queue': ids.append(2470 + min(max(int(person.get('waiting', 0)), 0), 6))
     ids.append(1610+len(known))
     for f in known:
         ids += [1620+int(f['place_id'] == person['place']['id']), 1630+int(f['source']=='observed'),
                 1640+REASONS.index(severity(f))]
         for value in (f['stock'], f['target'], f['unit_price'], person['day']-f['day']): number(value)
-        if style == 'afford': ids.append(band(own['coins'] // f['unit_price']) + 50)
+        if style in ('afford', 'queue'): ids.append(band(own['coins'] // f['unit_price']) + 50)
     ids.append(1660+min(len(heard), 12))
     for event in heard[-3:]:
         a = event['act']; p = a['proposal']

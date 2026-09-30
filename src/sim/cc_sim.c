@@ -5,6 +5,7 @@
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_policy.h"
 #include "sim/cc_census.h"
 #include "sim/cc_return.h"
 #include "sim/cc_oven_court.h"
@@ -6732,6 +6733,10 @@ static void ExchangeGatheredGossip(CcSim *sim, CcId carrier_id, CcId place_id,
         if (story->event_id == 0U) continue;
         if ((carrier->stories & bit) != 0U &&
             (story->settlement_mask & town) == 0U) {
+            /* A town keeps the first version it hears, so a carrier may hold a stale one back. */
+            const CcPolicyOption ways[2] = {CC_POLICY_OPTION(story->event_id, carrier->versions[i].confidence),
+                                            CC_POLICY_OPTION(story->event_id, 0)};
+            if (CcSimPolicyChoose(sim, CC_POLICY_GOSSIP_SHARE, carrier_id, ways, 2, 0) != 0) continue;
             story->settlement_mask |= town;
             if (town_story_masks != NULL) town_story_masks[place] |= bit;
             story->local[place] = RetellGossip(sim, story, carrier->versions[i],
@@ -7885,6 +7890,8 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     };
     CcSettlement *target = NULL;
     int32_t best_score = INT_MIN;
+    CcSettlement *listed[2];
+    int32_t listed_scores[2], listed_count = 0, listed_best = 0;
     for (int32_t i = 0; i < 2; ++i) {
         CcSettlement *candidate = candidates[i];
         if (candidate == NULL || CcSettlementIsAbandoned(candidate)) continue;
@@ -7898,14 +7905,24 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             score += candidate->stock[good];
         }
+        listed[listed_count] = candidate;
+        listed_scores[listed_count] = score;
         if (target == NULL || score > best_score) {
             target = candidate;
             best_score = score;
+            listed_best = listed_count;
         }
+        listed_count += 1;
     }
     if (target == NULL) {
         SetError(error, error_capacity, "The camp has no reachable raid target.");
         return false;
+    }
+    if (listed_count > 1) {
+        /* The rule takes the higher score; a policy hook may pick the other end of the road. */
+        const CcPolicyOption ways[2] = {CC_POLICY_OPTION(listed[0]->id, listed_scores[0]),
+                                        CC_POLICY_OPTION(listed[1]->id, listed_scores[1])};
+        target = listed[CcSimPolicyChoose(sim, CC_POLICY_RAID_TARGET, bandits->id, ways, 2, listed_best)];
     }
     CcGood good = CC_GOOD_FOOD;
     for (int32_t candidate = 1; candidate < CC_GOOD_COUNT; ++candidate) {
@@ -7916,6 +7933,12 @@ bool CcSimLaunchBanditRaid(CcSim *sim, CcId bandit_id,
     if (target->stock[good] < 4) {
         SetError(error, error_capacity,
                  "The nearby settlements are too poor to raid.");
+        return false;
+    }
+    if (CcSimPolicyChoose(sim, CC_POLICY_RAID_LAUNCH, bandits->id,
+                          (const CcPolicyOption[2]){CC_POLICY_OPTION(target->id, target->stock[good]),
+                                                    CC_POLICY_OPTION(target->id, 0)}, 2, 0) != 0) {
+        SetError(error, error_capacity, "The band holds back for now.");
         return false;
     }
     bandits->raid_phase = CC_BANDIT_RAID_SCOUTING;
@@ -9799,6 +9822,23 @@ static void AdvanceDragonRetaliation(CcSim *sim)
         sim, dragon->retaliation_target_id);
     if (target == NULL) target = RichestDragonTarget(sim);
     if (target == NULL) return;
+    {
+        /* The rule burns the recorded target or the richest town; a hook may pick another town. */
+        CcPolicyOption ways[CC_MAX_SETTLEMENTS];
+        CcSettlement *towns[CC_MAX_SETTLEMENTS];
+        int32_t count = 0, rule_pick = 0;
+        for (int32_t i = 0; i < sim->settlement_count && count < CC_MAX_SETTLEMENTS; ++i) {
+            CcSettlement *place = &sim->settlements[i];
+            if (CcSettlementIsAbandoned(place) || place->id == dragon->lair_settlement_id) continue;
+            const CcKingdom *owner = KingdomMutable(sim, place->kingdom_id);
+            if (place == target) rule_pick = count;
+            towns[count] = place;
+            ways[count] = CC_POLICY_OPTION(place->id, place->prosperity * 4 + CcSettlementServiceCount(place) * 8 +
+                                           (owner != NULL ? (int32_t)(owner->treasury / 20) : 0));
+            count += 1;
+        }
+        if (count > 1) target = towns[CcSimPolicyChoose(sim, CC_POLICY_DRAGON_TARGET, dragon->id, ways, count, rule_pick)];
+    }
 
     int32_t population_loss = MaximumI32(100, target->population / 10);
     target->population = MaximumI32(100, target->population - population_loss);
@@ -11653,6 +11693,13 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
         int32_t best_minimum_cargo_slots = 1;
         CcId best_hop = 0U;
         CcGood best_good = CC_GOOD_FOOD;
+        /* Every legal trade the rule scored above zero, kept so a policy hook can choose among them. */
+        struct TradeCandidate {
+            int32_t source, destination, route, path_capacity, minimum_cargo_slots, need, surplus, urgent, path_cost, score;
+            CcId hop;
+            CcGood good;
+        } candidates[256];
+        int32_t candidate_count = 0, best_candidate = -1;
         for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
             int32_t minimum_load = CcGoodDefinitionFor(
                 (CcGood)good)->minimum_trade_units;
@@ -11731,6 +11778,12 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
                     int32_t score = RoyalTradeScore(
                         sim, &archive_chain, to, (CcGood)good,
                         need, surplus, path_cost, reposition_cost);
+                    if (score > 0 && candidate_count < 256) {
+                        candidates[candidate_count++] = (struct TradeCandidate){
+                            source, destination, route_slot, path_capacity,
+                            urgent ? 1 : minimum_cargo_slots, need, surplus, urgent, path_cost, score,
+                            next_hop, (CcGood)good};
+                    }
                     if (score > best_score) {
                         best_score = score;
                         best_source = source;
@@ -11741,8 +11794,27 @@ static void PlanTrade(CcSim *sim, CcRoadProductionAccounting *site_accounting)
                             1 : minimum_cargo_slots;
                         best_hop = next_hop;
                         best_good = (CcGood)good;
+                        best_candidate = candidate_count > 0 && candidates[candidate_count - 1].score == score ?
+                            candidate_count - 1 : best_candidate;
                     }
                 }
+            }
+        }
+        if (candidate_count > 1 && best_candidate >= 0) {
+            CcPolicyOption ways[256];
+            for (int32_t k = 0; k < candidate_count; ++k) {
+                const struct TradeCandidate *t = &candidates[k];
+                ways[k] = (CcPolicyOption){sim->settlements[t->destination].id, t->score,
+                                           sim->settlements[t->source].id, (int32_t)t->good, t->need,
+                                           t->surplus, t->urgent, t->path_cost};
+            }
+            int32_t pick = CcSimPolicyChoose(sim, CC_POLICY_TRADE_ROUTE, carriage->id, ways,
+                                             candidate_count, best_candidate);
+            if (pick != best_candidate) {
+                const struct TradeCandidate *t = &candidates[pick];
+                best_score = t->score; best_source = t->source; best_destination = t->destination;
+                best_route = t->route; best_path_capacity = t->path_capacity;
+                best_minimum_cargo_slots = t->minimum_cargo_slots; best_hop = t->hop; best_good = t->good;
             }
         }
         if (best_source < 0 || best_destination < 0 || best_route < 0) {
@@ -15193,6 +15265,8 @@ static void UpdateThreats(CcSim *sim)
             (sim->world_seed ^ (uint32_t)sim->current_day) % 4U == 0U) {
             CcSettlement *target = NULL;
             int32_t best_score = INT32_MIN;
+            CcSettlement *raid_places[16];
+            int32_t raid_scores[16], raid_count = 0, raid_best = -1;
             for (int32_t route_index = 0;
                  route_index < sim->route_count; ++route_index) {
                 const CcRoute *candidate = &sim->routes[route_index];
@@ -15213,11 +15287,26 @@ static void UpdateThreats(CcSim *sim)
                     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
                         score += place->stock[good];
                     }
+                    bool listed = false;
+                    for (int32_t k = 0; k < raid_count; ++k) listed = listed || raid_places[k] == place;
+                    if (!listed && raid_count < 16) {
+                        raid_places[raid_count] = place;
+                        raid_scores[raid_count++] = score;
+                    }
                     if (score > best_score) {
                         target = place;
                         best_score = score;
                     }
                 }
+            }
+            /* The rule takes the highest score; a policy hook may pick another town on these roads. */
+            for (int32_t k = 0; k < raid_count; ++k) if (raid_places[k] == target) { raid_best = k; break; }
+            if (raid_count > 1 && raid_best >= 0) {
+                CcPolicyOption ways[16];
+                for (int32_t k = 0; k < raid_count; ++k)
+                    ways[k] = CC_POLICY_OPTION(raid_places[k]->id, raid_scores[k]);
+                int32_t pick = CcSimPolicyChoose(sim, CC_POLICY_RAID_TARGET, bandits->id, ways, raid_count, raid_best);
+                target = raid_places[pick];
             }
             if (target != NULL) {
                 CcGood good = CC_GOOD_FOOD;
@@ -15227,7 +15316,10 @@ static void UpdateThreats(CcSim *sim)
                         good = (CcGood)candidate;
                     }
                 }
-                if (target->stock[good] >= 4) {
+                if (target->stock[good] >= 4 &&
+                    CcSimPolicyChoose(sim, CC_POLICY_RAID_LAUNCH, bandits->id,
+                                      (const CcPolicyOption[2]){CC_POLICY_OPTION(target->id, target->stock[good]),
+                                                                CC_POLICY_OPTION(target->id, 0)}, 2, 0) == 0) {
                     bandits->raid_phase = CC_BANDIT_RAID_SCOUTING;
                     bandits->raid_target_id = target->id;
                     bandits->raid_good = good;
@@ -15945,17 +16037,36 @@ static void UpdateRoutesAndGovernments(CcSim *sim)
 
         if (sim->current_day % 28 == 0 && worst != NULL && worst->hunger >= 38 &&
             kingdom->treasury >= 28) {
-            kingdom->treasury -= 28;
-            worst->market_coins += 28;
-            kingdom->legitimacy = ClampI32(kingdom->legitimacy + 2, 0, 100);
-            char text[CC_EVENT_TEXT_CAPACITY];
-            (void)snprintf(text, sizeof(text),
-                           "%s moves 28 crowns into %s's market to buy real grain shipments.",
-                           kingdom->name, worst->name);
-            const CcEvent *shortage = LatestEvent(sim, CC_EVENT_SHORTAGE,
-                            worst->id, worst->id);
-            (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, worst->id,
-                            shortage != NULL ? shortage->id : 0U, 28, text);
+            /* The rule funds the hungriest town; a policy hook may fund another hungry one, or hold. */
+            CcSettlement *funded = worst;
+            CcSettlement *hungry[CC_MAX_SETTLEMENTS];
+            CcPolicyOption ways[CC_MAX_SETTLEMENTS + 1];
+            int32_t hungry_count = 0, rule_pick = 0;
+            for (int32_t s = 0; s < sim->settlement_count && hungry_count < CC_MAX_SETTLEMENTS; ++s) {
+                CcSettlement *place = &sim->settlements[s];
+                if (place->kingdom_id != kingdom->id || CcSettlementIsAbandoned(place) || place->hunger < 38) continue;
+                if (place == worst) rule_pick = hungry_count;
+                hungry[hungry_count] = place;
+                ways[hungry_count] = CC_POLICY_OPTION(place->id, place->hunger);
+                hungry_count += 1;
+            }
+            ways[hungry_count] = CC_POLICY_OPTION(worst->id, 0);   /* hold */
+            int32_t pick = CcSimPolicyChoose(sim, CC_POLICY_KINGDOM_RELIEF, kingdom->id, ways,
+                                             hungry_count + 1, rule_pick);
+            funded = pick >= hungry_count ? NULL : hungry[pick];
+            if (funded != NULL) {
+                kingdom->treasury -= 28;
+                funded->market_coins += 28;
+                kingdom->legitimacy = ClampI32(kingdom->legitimacy + 2, 0, 100);
+                char text[CC_EVENT_TEXT_CAPACITY];
+                (void)snprintf(text, sizeof(text),
+                               "%s moves 28 crowns into %s's market to buy real grain shipments.",
+                               kingdom->name, funded->name);
+                const CcEvent *shortage = LatestEvent(sim, CC_EVENT_SHORTAGE,
+                                funded->id, funded->id);
+                (void)PushEvent(sim, CC_EVENT_KINGDOM_ACTION, kingdom->id, funded->id,
+                                shortage != NULL ? shortage->id : 0U, 28, text);
+            }
         }
 
         if (sim->current_day % 28 == 0) {
@@ -16603,8 +16714,19 @@ static void AdvanceCharacterTravel(CcSim *sim)
         }
         if (chosen < 0) {
             /* Settled people mostly stay put; those already on the road move on. */
-            if (TravelRoll(sim, person, 1U) % 100U >= (away ? 60U : 25U)) continue;
-            chosen = (int32_t)(TravelRoll(sim, person, 2U) % (uint32_t)option_count);
+            if (TravelRoll(sim, person, 1U) % 100U >= (away ? 60U : 25U)) chosen = option_count;
+            else chosen = (int32_t)(TravelRoll(sim, person, 2U) % (uint32_t)option_count);
+        }
+        {
+            /* The rule's choice is the default; a policy hook may pick another legal option. */
+            CcPolicyOption legal[CC_MAX_ROUTES + 1];
+            for (int32_t o = 0; o < option_count; ++o) {
+                legal[o] = CC_POLICY_OPTION(options[o], travel_days[o]);
+            }
+            legal[option_count] = CC_POLICY_OPTION(here->id, 0);   /* stay */
+            chosen = CcSimPolicyChoose(sim, CC_POLICY_TRAVEL_DESTINATION, person->id, legal,
+                                       option_count + 1, chosen);
+            if (chosen >= option_count) continue;
         }
 
         person->travel_destination_id = options[chosen];
@@ -16659,8 +16781,14 @@ static void AdvanceTravellerNeeds(CcSim *sim)
                 meal = (CcGood)good; units = needed; cheapest = cost;
             }
         }
-        if (meal != CC_GOOD_COUNT && person->travel_coins >= cheapest &&
-            place->market_coins <= CC_SIM_MAX_MONEY - cheapest) {
+        bool buy_meal = meal != CC_GOOD_COUNT && person->travel_coins >= cheapest &&
+            place->market_coins <= CC_SIM_MAX_MONEY - cheapest;
+        if (buy_meal) {
+            const CcPolicyOption ways[2] = {CC_POLICY_OPTION(place->id, (int32_t)cheapest),
+                                            CC_POLICY_OPTION(place->id, 0)};
+            buy_meal = CcSimPolicyChoose(sim, CC_POLICY_MEAL, person->id, ways, 2, 0) == 0;
+        }
+        if (buy_meal) {
             person->travel_coins -= cheapest;
             place->market_coins += cheapest;
             place->stock[meal] -= units;
@@ -16673,7 +16801,9 @@ static void AdvanceTravellerNeeds(CcSim *sim)
         if (at_home) {
             person->unsheltered_nights = 0;
         } else if (inhabited && CcSettlementHasService(place, CC_SERVICE_INN) &&
-                   person->travel_coins >= 2 && place->market_coins <= CC_SIM_MAX_MONEY - 2) {
+                   person->travel_coins >= 2 && place->market_coins <= CC_SIM_MAX_MONEY - 2 &&
+                   CcSimPolicyChoose(sim, CC_POLICY_LODGING, person->id,
+                                     (const CcPolicyOption[2]){CC_POLICY_OPTION(place->id, 2), CC_POLICY_OPTION(place->id, 0)}, 2, 0) == 0) {
             person->travel_coins -= 2;
             place->market_coins += 2;
             person->unsheltered_nights = 0;
@@ -16693,6 +16823,9 @@ static void AdvanceTravellerNeeds(CcSim *sim)
             if (road == NULL || camp->members >= 120 ||
                 (road->from_id != place->id && road->to_id != place->id &&
                  camp->camp_settlement_id != place->id)) continue;
+            if (CcSimPolicyChoose(sim, CC_POLICY_BANDIT_JOIN, person->id,
+                                  (const CcPolicyOption[2]){CC_POLICY_OPTION(camp->id, camp->members), CC_POLICY_OPTION(camp->id, 0)}, 2, 0) != 0)
+                break;
             camp->members += 1;
             person->bandit_group_id = camp->id;
             person->activity = CC_CHARACTER_ACTIVITY_HIDING;

@@ -125,6 +125,7 @@ add_library(crownless_sim
     src/sim/cc_scriven.c
     src/sim/cc_scriven_codec.c
     src/sim/cc_sim.c
+    src/sim/cc_policy.c
     src/sim/cc_census.c
     src/sim/cc_return.c
     src/sim/cc_road_news.c
@@ -313,6 +314,14 @@ cc_strict_warnings(crownless_participant_probe)
 add_executable(crownless_food_relief_probe tools/food_relief_probe.c)
 target_link_libraries(crownless_food_relief_probe PRIVATE crownless_persistence)
 cc_strict_warnings(crownless_food_relief_probe)
+
+if(NOT EMSCRIPTEN)
+    # In-process food-relief worlds for policy search (tools/dialogue/fastworld.py).
+    set_target_properties(crownless_story PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    add_library(crowdsim SHARED tools/crowdsim.c)
+    target_link_libraries(crowdsim PRIVATE crownless_story crownless_persistence)
+    cc_strict_warnings(crowdsim)
+endif()
 
 add_executable(core_model_probe tools/core_model_probe.c)
 target_link_libraries(core_model_probe PRIVATE crownless_story)

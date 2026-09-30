@@ -29,13 +29,15 @@ def render(curriculum, census):
            f"{len(census['silent_event_kinds'])} of the event kinds never fire without a player.", '',
            '## Principles', '']
     out += [f'- {p}' for p in curriculum['principles']]
-    out += ['', '## Stages', '', '| Stage | Name | Status | Interface | Depends on | Model |', '| --- | --- | --- | --- | --- | --- |']
+    if curriculum.get('findings'):
+        out += ['', '## What the runs found', ''] + [f'- {x}' for x in curriculum['findings']]
+    out += ['', '## Stages', '', '| Stage | Name | Status | Verdict | Interface | Depends on | Model |', '| --- | --- | --- | --- | --- | --- | --- |']
     for s in curriculum['stages']:
-        out.append(f"| {s['id']} | {s['name']} | {s['status']} | {s['interface']['state']} | "
+        out.append(f"| {s['id']} | {s['name']} | {s['status']} | {s.get('verdict', '-')} | {s['interface']['state']} | "
                    f"{', '.join(s['dependencies']) or '-'} | {s['size_hint'].split(';')[0]} |")
     for s in curriculum['stages']:
         out += ['', f"## {s['id']}. {s['name']}", '',
-                f"**Status:** {s['status']}. **Actors:** {', '.join(s['actors'])}.", '',
+                f"**Status:** {s['status']}{'; verdict: ' + s['verdict'] if s.get('verdict') else ''}. **Actors:** {', '.join(s['actors'])}.", '',
                 f"**Decision.** {s['decision']}", '', '**Sees:**']
         out += [f'- {x}' for x in s['observation']]
         out += ['', '**Chooses among:**'] + [f'- {x}' for x in s['options']]
