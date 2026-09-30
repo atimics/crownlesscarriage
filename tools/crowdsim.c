@@ -78,11 +78,13 @@ int cs_list(const CrowdSim *w, char *buf, size_t cap)
         Put(&o, "%s{\"id\":\"%" PRIu64 "\",\"name\":", i ? "," : "", p->id);
         PutString(&o, p->name);
         Put(&o, ",\"place_id\":\"%" PRIu64 "\",\"hungry_days\":%d,\"coins\":%" PRId64
-                ",\"in_transit\":%s,\"alive\":%s,\"stress\":%d,\"bandit\":%s}",
+                ",\"in_transit\":%s,\"alive\":%s,\"stress\":%d,\"bandit\":%s,\"age\":%d,\"role\":%d,"
+                "\"activity\":%d,\"home_id\":\"%" PRIu64 "\",\"generation\":%d}",
             p->current_settlement_id, p->hungry_days, p->travel_coins,
             p->travel_destination_id != 0U || p->activity == CC_CHARACTER_ACTIVITY_TRAVELLING ? "true" : "false",
             p->death_day > 0 && p->death_day <= sim->current_day ? "false" : "true",
-            p->stress, p->bandit_group_id != 0U ? "true" : "false");
+            p->stress, p->bandit_group_id != 0U ? "true" : "false", CcCharacterAgeYears(sim, p), (int)p->role,
+            (int)p->activity, p->home_settlement_id, (int)p->generation);
     }
     Put(&o, "]}");
     return Finish(&o);
@@ -225,6 +227,11 @@ static int policy_active;
 static int policy_mask;
 static double trade_bias[3];   /* probe: rule score + a*destination hunger + b*need + c*path cost */
 static int trade_bias_on;
+#define TRAIT_SLOTS 512
+#define TRAITS 4
+static double slot_traits[TRAIT_SLOTS][TRAITS];   /* per-person heritable preferences, by character slot */
+static int traits_on;
+static double slot_hungry[TRAIT_SLOTS];            /* hungry days lived, per slot, since the last reset */
 static int dragon_force = -1;   /* probe: >= 0 always burns the k-th listed town */
 static int gossip_floor = -1;   /* >= 0: withhold any story carried below this confidence (a hand-set probe) */   /* bit k set: the network decides kind k; others follow the rule */
 
@@ -408,6 +415,12 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
             for (int j = 0; j < POLICY_INPUTS; ++j) z += x[j] * w1[j * POLICY_HIDDEN + h];
             total += tanh(z) * w2[h];
         }
+        if (traits_on && kind == CC_POLICY_TRAVEL_DESTINATION && p != NULL) {
+            /* A person's traits shift the brain's score: options f = [.., days/7 at 1, meal cost at 3, prosperity at 5, home at 6] */
+            const double *g = x + POLICY_KINDS + ACTOR_FEATURES;
+            const double *t = slot_traits[(p - sim->characters) % TRAIT_SLOTS];
+            total += t[0] * g[5] - t[1] * g[3] - t[2] * g[1] + t[3] * g[6];   /* rich, cheap, near, home */
+        }
         score[i] = total;
         if (total > best) { best = total; argmax = i; }
     }
@@ -427,6 +440,48 @@ void cs_set_trade_bias(double a, double b, double c, int on)
 
 /* Probe: with a floor, gossip follows "withhold below this confidence" and ignores the network. */
 void cs_set_gossip_floor(int floor) { gossip_floor = floor; if (floor >= 0) { policy_mask |= 16; CcSimSetPolicy(Choose, NULL); } else if (!policy_active) CcSimSetPolicy(NULL, NULL); }
+
+/* Heritable traits: one row of four preferences per character slot (rich, cheap, near, home towns). */
+void cs_set_traits(const double *traits, int slots)
+{
+    if (traits == NULL || slots <= 0) { traits_on = 0; return; }
+    if (slots > TRAIT_SLOTS) slots = TRAIT_SLOTS;
+    memcpy(slot_traits, traits, (size_t)slots * TRAITS * sizeof(double));
+    traits_on = 1;
+}
+
+/* Who occupies each slot: id, generation, role, and hungry days lived in it since the last reset. */
+int cs_slots(CrowdSim *w, uint64_t *ids, int *generation, int *role, double *hungry_lived, int reset)
+{
+    int n = w->sim.character_count < TRAIT_SLOTS ? w->sim.character_count : TRAIT_SLOTS;
+    for (int i = 0; i < n; ++i) {
+        ids[i] = w->sim.characters[i].id; generation[i] = w->sim.characters[i].generation;
+        role[i] = (int)w->sim.characters[i].role; hungry_lived[i] = slot_hungry[i];
+        if (reset) slot_hungry[i] = 0.0;
+    }
+    return n;
+}
+
+/* Accelerated generations: set when a person dies (days from now) and, if `adult`, make them
+ * a working adult now (successors are born as children, who cannot travel for 16 years). */
+void cs_set_person(CrowdSim *w, int slot, int death_in_days, int adult)
+{
+    if (slot < 0 || slot >= w->sim.character_count) return;
+    CcCharacter *p = &w->sim.characters[slot];
+    if (death_in_days > 0) p->death_day = w->sim.current_day + death_in_days;
+    if (adult) p->birth_day = w->sim.current_day - 22 * 365;
+}
+
+/* World shape: 0 towns not abandoned, 1 routes open, 2 population, 3 routes in all. */
+void cs_shape(const CrowdSim *w, double *out)
+{
+    memset(out, 0, 4 * sizeof(double));
+    for (int32_t t = 0; t < w->sim.settlement_count; ++t) {
+        if (!CcSettlementIsAbandoned(&w->sim.settlements[t])) out[0] += 1.0;
+        out[2] += (double)w->sim.settlements[t].population;
+    }
+    for (int32_t r = 0; r < w->sim.route_count; ++r) { out[3] += 1.0; out[1] += !w->sim.routes[r].closed; }
+}
 
 /* Probe: the dragon always burns the k-th eligible town (-1 clears). */
 void cs_set_dragon_force(int k) { dragon_force = k; if (k >= 0) { policy_mask |= 256; CcSimSetPolicy(Choose, NULL); } else if (!policy_active && gossip_floor < 0 && !trade_bias_on) CcSimSetPolicy(NULL, NULL); }
@@ -509,6 +564,7 @@ int cs_run(CrowdSim *w, int days, double *metrics)
         }
         for (int32_t i = 0; i < w->sim.character_count; ++i) {
             const CcCharacter *p = &w->sim.characters[i];
+            if (i < TRAIT_SLOTS) slot_hungry[i] += p->hungry_days > 0;
             if (i < CC_MAX_CHARACTERS_HINT) {
                 if (where[i] != p->current_settlement_id && where[i] != 0U &&
                     (p->role == CC_CHARACTER_SCOUT || p->role == CC_CHARACTER_TRAVELLER ||

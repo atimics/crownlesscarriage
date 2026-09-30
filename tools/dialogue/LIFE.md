@@ -146,3 +146,48 @@ Negative prosperity or legitimacy "lost" means it rose over the 120 days.
   choice, which makes it a good personality trait for L7 rather than something to optimise.
 - Only target choice is hooked. Hunting, brooding and campaigns never fire unattended and are
   not covered; the story-review half of the gate (does an omen and a reckoning still make sense?) is not done.
+
+# L7: lineages and heritable traits
+
+`lineage.py` gives every person four inherited preferences (a taste for rich, cheap, near and home
+towns) that shift the shared brain's travel scores, passes them to the successor at each succession
+with mutation, and runs three conditions on the same worlds: `none` (the brain alone), `drift`
+(inherited and mutated, no selection) and `selection` (with probability 0.5 a successor copies the
+traits of the best of three road-going people by their own hunger).
+
+In this sim a "birth" is a **succession**: when someone dies of age, a successor takes the same slot
+with the same role, occupation and home, at generation + 1, age 0. Death is scheduled by age, not
+caused by hunger, so nothing selects on traits inside the sim; selection here is added by the harness.
+
+## What long runs showed about the simulation
+
+- Long unattended runs freeze. **Every road closes within about 20 years** (open routes fall from 7 or 8
+  of 8 to 0 of 8 in the three worlds checked), after which nobody travels; by year 100 two of six
+  towns are abandoned. Town hunger also peaks around year 10 (57 under the rule).
+- Successors are born as children, and the road population shifts toward under-16s who cannot travel.
+- A 1,000-year run with the natural lifespan had about 13 generations but no travel after year 50, so
+  traits could not matter and all conditions were identical (z about 0). That run is a null, not evidence.
+
+## Accelerated generations
+
+To get generations inside the window in which roads are open, the harness sets lifespans to 1.5-3
+years and seats each successor as an adult. 12 years, 32 worlds, about 4.7 generations:
+
+| | Road hunger (last 2 years) | Trait spread, start to end |
+| --- | --- | --- |
+| brain alone | 0.2994 | - |
+| drift | 0.3066 (+0.007 +- 0.005 vs brain alone, z = 1.4) | 0.494 to 0.582 |
+| selection | 0.2972 (-0.002 +- 0.006, z = -0.4) | 0.493 to 0.565 |
+
+- Selection versus drift: -0.0094 +- 0.0053 (z = -1.8), marginally better.
+- Diversity is sustained: trait spread rises slightly under both, and selection is only a little lower
+  than drift. Nothing collapses to one strategy.
+- Average trait values barely move under selection (all within noise), so there is no directional
+  evolution to report. The traits have a small effect on outcomes, and 4-5 generations is few.
+- The gate (diversity sustained without loss of welfare) holds in the weak sense: no collapse and no
+  measurable loss. It does not show that selection helps.
+
+```sh
+python3 tools/dialogue/lineage.py --brain /tmp/life/theta_best_validation.npy --output /tmp/lineage.json \
+  --years 12 --seeds 32 --lifespan 1.5 3 --cultural 0.5
+```

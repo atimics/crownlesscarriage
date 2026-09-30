@@ -84,6 +84,37 @@ class DailyLifeTests(unittest.TestCase):
         self.assertGreaterEqual(after['dragon_retaliations'] - before['dragon_retaliations'], 1)
         self.assertGreater(after['dragon_hoard'], before['dragon_hoard'] + 250)
 
+    def test_traits_change_travel_and_slots_report_successions(self):
+        theta = np.random.default_rng(3).normal(0, 0.3, fastworld.policy_size())
+        fastworld.set_policy(theta, fastworld.LEARNED)
+        try:
+            base = fastworld.FastWorld.new(2, 30)
+            fastworld.run_days(base, 90)
+            plain = base.hash()
+            base.close()
+            fastworld.set_traits(np.full((512, fastworld.TRAITS), 2.0))
+            biased = fastworld.FastWorld.new(2, 30)
+            fastworld.run_days(biased, 90)
+            traited = biased.hash()
+            ids, generations, roles, hungry = fastworld.slots(biased)
+            biased.close()
+        finally:
+            fastworld.set_traits(None)
+            fastworld.set_policy(None)
+        self.assertNotEqual(plain, traited)
+        self.assertEqual(len(ids), len(generations))
+        self.assertGreater(len(ids), 50)
+
+    def test_accelerated_generations_replace_the_person_in_the_slot(self):
+        world = fastworld.FastWorld.new(1, 30)
+        before, *_ = fastworld.slots(world)
+        fastworld.set_person(world, 0, death_in_days=10)
+        fastworld.run_days(world, 20)
+        after, gens, *_ = fastworld.slots(world)
+        world.close()
+        self.assertNotEqual(before[0], after[0])
+        self.assertGreaterEqual(gens[0], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

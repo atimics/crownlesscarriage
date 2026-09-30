@@ -7,6 +7,8 @@ world in memory. Set CROWDSIM_LIB to the shared library, or it is searched for i
 import ctypes
 import json
 import os
+
+import numpy as np
 from pathlib import Path
 
 BUFFER = 1 << 20
@@ -58,6 +60,11 @@ def library():
         lib.cs_set_trade_bias.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_double, c_i]
         lib.cs_set_dragon_force.argtypes = [c_i]
         lib.cs_inject_theft.argtypes = [c_p, c_i]
+        lib.cs_set_traits.argtypes = [ctypes.POINTER(ctypes.c_double), c_i]
+        lib.cs_slots.restype = c_i
+        lib.cs_slots.argtypes = [c_p, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(c_i), ctypes.POINTER(c_i), ctypes.POINTER(ctypes.c_double), c_i]
+        lib.cs_shape.argtypes = [c_p, ctypes.POINTER(ctypes.c_double)]
+        lib.cs_set_person.argtypes = [c_p, c_i, c_i, c_i]
         lib.cs_run.restype = c_i
         lib.cs_run.argtypes = [c_p, c_i, ctypes.POINTER(ctypes.c_double)]
         lib.cs_promise.restype = c_i
@@ -211,3 +218,37 @@ def set_dragon_force(k):
 def inject_theft(world, amount=300):
     """Give the dragon a theft to collect on, so a retaliation follows within days."""
     library().cs_inject_theft(world.handle, int(amount))
+
+
+TRAITS = 4   # preferences for rich, cheap, near and home towns
+
+
+def set_traits(traits):
+    """Per-person heritable preferences, one row of four per character slot (None clears them)."""
+    if traits is None:
+        library().cs_set_traits(None, 0)
+        return
+    flat = np.ascontiguousarray(traits, dtype=np.float64)
+    library().cs_set_traits(flat.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), len(flat))
+
+
+def slots(world, reset=False):
+    """Who occupies each character slot: (ids, generations, roles, hungry days lived since the last reset)."""
+    n = 512
+    ids, gens, roles = (ctypes.c_uint64 * n)(), (ctypes.c_int * n)(), (ctypes.c_int * n)()
+    hungry = (ctypes.c_double * n)()
+    count = library().cs_slots(world.handle, ids, gens, roles, hungry, int(reset))
+    return (np.array(ids[:count], dtype=np.uint64), np.array(gens[:count]), np.array(roles[:count]),
+            np.array(hungry[:count]))
+
+
+def shape(world):
+    """Towns standing, routes open, population and routes in all."""
+    out = (ctypes.c_double * 4)()
+    library().cs_shape(world.handle, out)
+    return {'towns': out[0], 'routes_open': out[1], 'population': out[2], 'routes': out[3]}
+
+
+def set_person(world, slot, death_in_days=0, adult=False):
+    """Accelerated generations: when a slot's person dies, and whether they are seated as an adult."""
+    library().cs_set_person(world.handle, int(slot), int(death_in_days), int(adult))
