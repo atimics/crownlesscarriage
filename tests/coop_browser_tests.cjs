@@ -31,6 +31,33 @@ async function main() {
     const a = await browser.newContext(), b = await browser.newContext({
       viewport: {width: 390, height: 844}, hasTouch: true, isMobile: true});
     owner = await a.newPage(); crew = await b.newPage();
+    const requestStarts = new WeakMap(), requestTimings = [];
+    function watchRequests(page, actor) {
+      page.on('request', request => {
+        const pathname = new URL(request.url()).pathname;
+        if (/\/api\/worlds\/[0-9a-f]{32}\/(state|command)$/.test(pathname))
+          requestStarts.set(request, Date.now());
+      });
+      page.on('requestfinished', async request => {
+        if (!requestStarts.has(request)) return;
+        const response = await request.response();
+        const endpoint = new URL(request.url()).pathname.split('/').at(-1);
+        requestTimings.push({actor, endpoint,
+          action:endpoint === 'command' ? request.postDataJSON()?.action : undefined,
+          duration_ms:Date.now() - requestStarts.get(request),
+          status:response?.status()});
+      });
+      page.on('requestfailed', request => {
+        if (!requestStarts.has(request)) return;
+        requestTimings.push({actor, endpoint:new URL(request.url()).pathname.split('/').at(-1),
+          duration_ms:Date.now() - requestStarts.get(request),
+          failure:request.failure() || 'request failed'});
+      });
+    }
+    if (deployed) {
+      watchRequests(owner, 'owner-browser');
+      watchRequests(crew, 'crew-browser');
+    }
     const ownerControls = gameControls(owner);
     let crewControls = gameControls(crew, true);
     /* The host hands the invitation link to the share sheet. Headless Chromium has none, so record it. */
@@ -92,6 +119,18 @@ async function main() {
     await owner.waitForFunction(() => Module.crownlessTouchFrame.buttons.some(button => button.label.includes('Bren')));
     await owner.screenshot({path:'browser-results/in-game-company.png'});
     const token = await crew.evaluate(() => localStorage.getItem('cc-coop-token'));
+    if (deployed) {
+      for (let sample = 0; sample < 20; ++sample) {
+        await Promise.all([owner, crew].map(page => page.evaluate(async id => {
+          const token = localStorage.getItem('cc-coop-token');
+          const response = await fetch(`/api/worlds/${id}/state?campaign=1`,
+            {headers:{Authorization:`Bearer ${token}`}});
+          if (!response.ok) throw new Error(`Roster sample returned ${response.status}`);
+          await response.arrayBuffer();
+        }, worldId)));
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
     async function state() {
       const response = await fetch(`${origin}/api/worlds/${worldId}/state?campaign=1`, {headers:{Authorization:`Bearer ${token}`}});
       assert(response.ok, `Shared state returned ${response.status}`);
@@ -473,6 +512,7 @@ async function main() {
     await game.close();
     game = await b.newPage();
     crew = game;
+    if (deployed) watchRequests(game, 'crew-reconnected');
     crewControls = gameControls(game, true);
     game.on('pageerror', error => errors.push(error.message));
     await game.goto(crewUrl);
@@ -654,8 +694,43 @@ async function main() {
     }, worldId);
     assert.equal(deleted.deleted, true);
     receipt.cleanup = {deleted:true};
+    if (deployed) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const summarize = samples => {
+        const successful = samples.filter(sample => !sample.failure && sample.status < 400);
+        const sorted = successful.map(sample => sample.duration_ms).sort((a,b) => a-b);
+        return {count:sorted.length, median_ms:sorted[Math.floor(sorted.length / 2)],
+          p95_ms:sorted[Math.ceil(sorted.length * 0.95) - 1],
+          max_ms:sorted.at(-1), failures:samples.filter(sample => sample.status >= 400),
+          canceled:samples.filter(sample => sample.failure)};
+      };
+      receipt.request_timing = {
+        owner_state:summarize(requestTimings.filter(sample =>
+          sample.actor === 'owner-browser' && sample.endpoint === 'state')),
+        crew_state:summarize(requestTimings.filter(sample =>
+          sample.actor.startsWith('crew') && sample.endpoint === 'state')),
+        commands:summarize(requestTimings.filter(sample => sample.endpoint === 'command')),
+        command_samples:requestTimings.filter(sample => sample.endpoint === 'command')
+      };
+    }
     await fs.writeFile('browser-results/shared-road-receipt.json',
       JSON.stringify(receipt, null, 2));
+    if (deployed) {
+      assert(receipt.request_timing.owner_state.count >= 20);
+      assert(receipt.request_timing.crew_state.count >= 20);
+      assert(receipt.request_timing.commands.count >= 10);
+      assert.equal(receipt.request_timing.owner_state.failures.length, 0);
+      assert.equal(receipt.request_timing.crew_state.failures.length, 0);
+      assert.equal(receipt.request_timing.commands.failures.length, 0);
+      assert.equal(receipt.request_timing.commands.canceled.length, 0);
+      assert(receipt.request_timing.owner_state.canceled.every(sample =>
+        sample.duration_ms < 12000));
+      assert(receipt.request_timing.crew_state.canceled.every(sample =>
+        sample.duration_ms < 12000));
+      assert(receipt.request_timing.owner_state.max_ms < 12000);
+      assert(receipt.request_timing.crew_state.max_ms < 12000);
+      assert(receipt.request_timing.commands.max_ms < 10000);
+    }
     assert.deepEqual(errors, []);
     console.log('Desktop and phone players draw each other with their chosen appearance and moving poses; touch walking, leaving, rejoining, reload, continuous shared travel, optional stops, and the twenty-year party death jump pass.');
   } catch (error) {
