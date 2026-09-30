@@ -55,7 +55,7 @@ python3 tools/dialogue/evolve_life.py --output /tmp/life --generations 150 --wor
 The same hook now covers three more decision families, each with the rule's own
 choice as the default and zero weights reproducing it. `evolve_life.py --stage l2|l3|l4`
 runs the search; each stage names the decisions the brain takes, the horizon and what is scored.
-All three came out as nulls. They are reported as such.
+L2 and L4 came out as nulls; L3 gave a small gain once searched properly. Each is reported as found.
 
 ## L2: gossip (share or withhold)
 
@@ -90,10 +90,20 @@ Adding weights to the rule's own score, paired over 100 worlds:
 | + need bonus 5 / 20 | +0.48 / +0.91 (worse) | +0.006 / +0.016 | -0.4 / -1.1 |
 | prefer far routes | +1.65 (worse) | +0.027 | -2.3 |
 
-A 40-generation search gave -0.003 +- 0.009 (z = -0.3) on 100 held-out worlds. The rule looks
-locally optimal and famine seems driven by production and consumption more than allocation.
-Caveats: the search was short and ran on a loaded machine, outcomes vary by 8 hunger points
-between worlds, and I have not searched longer or with a bigger population.
+A short 40-generation search on a loaded machine was level with the rule (-0.003 +- 0.009). A proper one
+(120 generations, 64 candidates, 48 worlds per generation) looked marginal on 100 held-out worlds
+(+0.008 +- 0.009, z = 0.8), so I tested the same weights on 400 fresh worlds, as at L5:
+
+| Evolved versus the rule, 400 fresh worlds | Difference | z |
+| --- | --- | --- |
+| town welfare | +0.0167 +- 0.0046 | 3.6 |
+| town hunger | -0.52 +- 0.18 | -2.9 |
+| famine (share of town-days at hunger 25 or more) | -0.0106 +- 0.0026 (20.5% to about 19.4%) | -4.1 |
+| prosperity | +0.42 +- 0.19 | 2.2 |
+
+Better in 239 of 400 worlds. It is a small gain (about 4% of hunger), real on disjoint worlds, and it comes from
+a combination of features that the one-parameter probes above could not see. Famine still covers about a fifth of town-days,
+so allocation is not the main driver. One search, one seed.
 
 ## L4: raiders (whether and where to raid)
 

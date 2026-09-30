@@ -13,9 +13,9 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 
 ## What the runs found
 
-- Only L1 shows a gain over the rule. L2 to L5 are nulls, L6 is a design axis and L7 holds only weakly. The hand-written rules are close to a local optimum for the objectives measured, except where they choose at random (travel destination).
+- L1 shows a clear gain over the rule and L3 a small one. L2, L4 and L5 are nulls, L6 is a design axis and L7 holds only weakly. The hand-written rules are close to a local optimum for the objectives measured, except where they choose at random (travel destination).
 - A reward hack appeared at once: an unconstrained daily-life brain stopped travelling (residents at home are reset to fed) and refused every bandit camp. Fixing the rule's decision to go, leaving story-critical choices with the rule, and tracking movement as an invariant closed it.
-- Small effects need many worlds. A 100-world result at L5 reversed on 400 fresh worlds, and town outcomes vary by 8 hunger points between worlds.
+- Small effects need many worlds, in both directions. A 100-world hint at L5 reversed on 400 fresh worlds, while a marginal 100-world result at L3 became significant on 400. Town outcomes vary by 8 hunger points between worlds.
 - The unattended sim decays: every road closes within about 20 years, two of six towns are abandoned by year 100, and successors are born as age-0 children. Long-horizon experiments are only valid for the first 10 to 15 simulated years.
 
 ## Stages
@@ -25,7 +25,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 | L0 | Food-relief exchange | done | - | ready | - | 5M policy |
 | L1 | Villager daily life | done | gain | ready | L0 | A shared 833-weight scorer in C (zero weights reproduce the rule) |
 | L2 | Gossip and requests | done | null | ready | L0 | 5M |
-| L3 | Trade, shipments and production | done | null | ready | L1 | 1M to 5M |
+| L3 | Trade, shipments and production | done | small gain | ready | L1 | 1M to 5M |
 | L4 | Raiders and monsters | done | null | ready | L3 | 5M |
 | L5 | Kingdoms and war | done | null | ready | L3, L4 | 5M to 10M |
 | L6 | Dragons | done | design axis | partial | L4, L5 | Start at 5M |
@@ -162,7 +162,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 
 ## L3. Trade, shipments and production
 
-**Status:** done; verdict: null. **Actors:** settlement steward, royal carriage, shipper.
+**Status:** done; verdict: small gain. **Actors:** settlement steward, royal carriage, shipper.
 
 **Decision.** Which good to move, where, how much, and what to produce; how a carriage picks its next job.
 
@@ -195,7 +195,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 
 **First experiment.** Done: hook, town hunger and famine metrics, a bias sweep and evolution runs.
 
-**Gate to advance.** Not reached: no gain in held-out worlds. Town outcomes vary by 8 hunger points between worlds, so small effects are hard to see.
+**Gate to advance.** Reached, modestly: a paired gain on 400 held-out worlds (z = 3.6) with the rule's legality unchanged. One search, one seed; outcomes vary by 8 hunger points between worlds.
 
 **Risks:**
 - Economy tuning is delicate and player-facing; keep the rule as a fallback and shadow-test first.
