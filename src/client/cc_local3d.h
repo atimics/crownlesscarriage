@@ -782,6 +782,10 @@ Camera3D CcLocalSiteCamera(const CcSim *sim, const CcLocalAgent *agent,
 #define CC_LOCAL_MINE_CEILING_Y 2.5f
 #define CC_LOCAL_MINE_BAR_HEIGHT 1.4f
 float CcLocalMineWallHeightInternal(bool combat);
+/* The vertical span of the rock box on tile (x, y), or false when the tile has
+   none. Drawing and click occluders both use it, so they cannot drift apart. */
+bool CcLocalMineWallSpanInternal(const CcSim *sim, int32_t x, int32_t y,
+                                 bool combat, float *base, float *top);
 Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing);
 Camera3D CcLocalMineCombatCamera(const CcLocalAgent *agent,
                                 const CcLocalCourse *course,int32_t facing);

@@ -188,12 +188,7 @@ static EconomicCargoAsset economic_cargo_assets[CC_GOOD_COUNT] = {
     [CC_GOOD_STONE] = {
         .path = "assets/exports/glb/economy_cargo_stone_v01.glb",
         .label = "stone cargo"},
-    /* Raw stone has no export of its own yet; it rides as dressed stone
-       so the rack never shows an empty slot and the graphics checks that
-       require a model for every good keep running. */
-    [CC_GOOD_RAW_STONE] = {
-        .path = "assets/exports/glb/economy_cargo_stone_v01.glb",
-        .label = "raw stone cargo"},
+    [CC_GOOD_RAW_STONE] = {.label = "raw stone cargo"},
     [CC_GOOD_PAPER] = {
         .path = "assets/exports/glb/economy_cargo_paper_v01.glb",
         .label = "paper cargo"},

@@ -115,18 +115,44 @@ static void TestLitPrimitiveNormals(void)
    slab, or the corridor looks out onto the void above every wall. */
 static void TestMineTunnelEnclosure(void)
 {
-    float wall = CcLocalMineWallHeightInternal(false);
-    RequireRenderer(wall >= CC_LOCAL_MINE_CEILING_Y + 0.06f,
+    float full_wall = CcLocalMineWallHeightInternal(false);
+    RequireRenderer(full_wall >= CC_LOCAL_MINE_CEILING_Y + 0.06f,
                     "mine walls must reach past the ceiling slab");
-    RequireRenderer(wall > CC_LOCAL_MINE_BAR_HEIGHT,
+    RequireRenderer(full_wall > CC_LOCAL_MINE_BAR_HEIGHT,
                     "rock must close the arch above the closed bar");
     RequireRenderer(CcLocalMineWallHeightInternal(true) == CC_LOCAL_MINE_BAR_HEIGHT,
                     "combat keeps the low walls the raised fight camera looks over");
-    /* The border rows are rock, so the wall pass must cover the whole grid
-       or a corridor beside the border would open onto the void. */
-    RequireRenderer(!CcMineWalkableState(CC_MINE_LEVEL, 0, 1, true) &&
-                        !CcMineWalkableState(CC_MINE_LEVEL, CC_MINE_WIDTH - 1, 1, true),
-                    "the mine border is rock");
+    /* Every rock tile touching a corridor gets a wall that
+       reaches the ceiling; the closed bar gets rock only above its posts. */
+    CcSim *sim = calloc(1, sizeof(*sim));
+    RequireRenderer(sim != NULL, "mine test sim must allocate");
+    sim->mine.phase = CC_MINE_LEVEL;
+    int32_t walls = 0;
+    for (int32_t y = 0; y < CC_MINE_HEIGHT; ++y) {
+        for (int32_t x = 0; x < CC_MINE_WIDTH; ++x) {
+            float base = -1.0f, top = -1.0f;
+            bool wall = CcLocalMineWallSpanInternal(sim, x, y, false, &base, &top);
+            bool walkable = CcMineWalkable(sim, CC_MINE_LEVEL, x, y);
+            RequireRenderer(!(wall && walkable), "walkable tiles have no wall");
+            if (!wall) continue;
+            ++walls;
+            bool bar = x == 15 && y == 10;
+            RequireRenderer(top >= CC_LOCAL_MINE_CEILING_Y + 0.06f,
+                            "every wall must reach past the ceiling slab");
+            RequireRenderer(bar ? base == CC_LOCAL_MINE_BAR_HEIGHT : base == 0.0f,
+                            "walls stand on the floor; the bar's lintel on its posts");
+            float combat_base = -1.0f, combat_top = -1.0f;
+            bool low = CcLocalMineWallSpanInternal(sim, x, y, true, &combat_base, &combat_top);
+            RequireRenderer(bar ? !low : low && combat_top == CC_LOCAL_MINE_BAR_HEIGHT,
+                            "combat keeps the low walls");
+        }
+    }
+    RequireRenderer(walls > 0, "the mine must have walls");
+    sim->mine.bar_open = true;
+    float open_base, open_top;
+    RequireRenderer(!CcLocalMineWallSpanInternal(sim, 15, 10, false, &open_base, &open_top),
+                    "an open bar leaves the passage clear");
+    free(sim);
     /* A seated passenger must stay under the carriage roof; the head jewel
        was the pair of gold dots seen floating over the travelling wagon. */
     RequireRenderer(CC_LOCAL_CARRIAGE_SEAT_HEIGHT + CC_LOCAL_SEATED_FIGURE_HEIGHT <

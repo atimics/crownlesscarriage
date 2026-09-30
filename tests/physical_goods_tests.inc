@@ -71,6 +71,7 @@ static Image RenderCargoQuantity(RenderTexture2D target, int32_t quantity)
 static void TestPhysicalGoodsGraphics(const char *path)
 {
     for (int32_t good = 0; good < CC_GOOD_COUNT; ++good) {
+        if (EconomicCargoDrawnProcedurally((CcGood)good)) continue;
         EconomicCargoAsset *asset = &economic_cargo_assets[good];
         RequireRenderer(asset->ready && asset->bounds.max.x > asset->bounds.min.x &&
             asset->bounds.max.y > asset->bounds.min.y && asset->bounds.max.z > asset->bounds.min.z,

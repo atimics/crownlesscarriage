@@ -2326,11 +2326,17 @@ static Color CargoBoxBandColor(CcGood good)
     return WORLD_INK;
 }
 
+/* Goods drawn from boxes in DrawEconomicCargoUnit have no cargo model. */
+static bool EconomicCargoDrawnProcedurally(CcGood good)
+{
+    return good == CC_GOOD_RAW_STONE;
+}
+
 /* Each model fits a real rack cell, including tall weapon and tool bundles. */
 static void DrawEconomicCargoUnit(CcGood good, Vector3 base, Vector3 floor,
                                   Vector3 cell, float yaw)
 {
-    if (good == CC_GOOD_RAW_STONE) {
+    if (EconomicCargoDrawnProcedurally(good)) {
         for (int32_t rock = 0; rock < 3; ++rock) {
             float side = (float)(rock - 1);
             DrawOrientedBox(base,

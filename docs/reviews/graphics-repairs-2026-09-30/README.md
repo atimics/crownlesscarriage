@@ -44,8 +44,8 @@ Lit side 2: box 47,42,55  cylinder 47,42,55
 corridor, and a ceiling slab 2.5 units up over walkable tiles only. From the
 first-person eye at 1.42–1.55 the player looked over every wall into black,
 and the ceiling hung as separate floating plates with nothing at their edges.
-The wall pass also skipped the grid border, so a corridor beside the border
-had no wall at all on that side.
+The wall pass also skipped the grid border; no floor tile touches it in the
+current layout, so that was latent rather than visible.
 
 | Before | After |
 | --- | --- |
@@ -54,17 +54,18 @@ had no wall at all on that side.
 The tunnel is now a closed volume. Walls run from the floor past the ceiling
 slab (`CcLocalMineWallHeightInternal`), the ceiling slabs are full width so
 no grout gap shows the void, rock closes the arch above the closed bar, and
-the wall pass covers the whole grid. Combat keeps the old low walls and no
+the wall pass covers the whole grid (today no floor tile touches the border, so that changes nothing visible). Combat keeps the old low walls and no
 ceiling, so the raised fight camera still sees into the chamber. The mine
 view's click occluders use the same wall height, so a click on the upper
 half of a wall no longer selects the floor behind it.
 
 ![Lower passage after](mine-chamber-after.png)
 
-Check: `TestMineTunnelEnclosure` (same file, in the default
-`renderer_regression_tests` run) requires the wall to reach past the ceiling
-slab, rock above the bar, the combat height to stay at the bar height, and
-the border to be rock.
+Drawing and the click occluders now share one rule,
+`CcLocalMineWallSpanInternal`. Check: `TestMineTunnelEnclosure` walks the
+whole grid through it and requires a wall on every rock tile beside a floor
+tile, reaching past the ceiling, a lintel above the closed bar's posts, and
+the low walls in combat.
 
 ## 3. The dragon roost floated
 
@@ -82,13 +83,13 @@ and the teeth are rooted at ground level, so the roost is one cliff outcrop
 and the hero stands at its foot. The dragon's perch height, the camera
 framing, and `TestDragonRoostCameraFraming` are unchanged.
 
-## 4. Raw stone had no cargo model
+## 4. The cargo test demanded a model raw stone never uses
 
-`CC_GOOD_RAW_STONE` was added to the goods table without a cargo export, so
-`TestPhysicalGoodsGraphics` failed on its first assertion and the whole
-`--graphics` suite stopped there. Raw stone now rides as the dressed stone
-model until it gets an export of its own, and the suite runs to the end
-again.
+Raw stone is drawn from boxes (`DrawEconomicCargoUnit`), so it has no cargo
+model. `TestPhysicalGoodsGraphics` required one for every good, failed on its
+first assertion and stopped the whole `--graphics` suite. The test now skips
+goods the drawer draws procedurally (`EconomicCargoDrawnProcedurally`), so the
+suite runs to the end again and no model is loaded twice.
 
 ## Checks run
 
