@@ -234,7 +234,7 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
         float scale = settlement->size == CC_SETTLEMENT_CAPITAL_SIZE ? 1.25f :
                       settlement->size == CC_SETTLEMENT_TOWN ? 1.05f : 0.88f;
         Vector3 center = {place->center.x, ground, place->center.z};
-        DrawCylinder((Vector3){center.x, center.y + 0.06f, center.z},
+        DrawLitCylinder((Vector3){center.x, center.y + 0.06f, center.z},
                      7.8f * scale, 7.8f * scale, 0.12f, 24,
                      Fade(WORLD_EARTH_LIGHT, 0.92f));
         DrawCylinderWires((Vector3){center.x, center.y + 0.14f, center.z},
@@ -349,10 +349,10 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
         if (structure->kind == CC_LOCAL_COMPOUND_TOWER ||
             structure->kind == CC_LOCAL_COMPOUND_SILO) {
             float radius = fminf(structure->width, structure->depth) * 0.5f;
-            DrawCylinder((Vector3){center_x, 0.0f, center_z},
+            DrawLitCylinder((Vector3){center_x, 0.0f, center_z},
                          radius * 0.92f, radius,
                          structure->height, 12, stone);
-            DrawCylinder((Vector3){center_x, structure->height, center_z},
+            DrawLitCylinder((Vector3){center_x, structure->height, center_z},
                          0.08f, radius * 1.12f,
                          fmaxf(0.35f, structure->height * 0.12f),
                          12, BuildingRoofColor(1, kingdom, profile));
@@ -706,7 +706,7 @@ static void DrawOpenWorldRoadSiteBlocker(
             center, Vector3Scale(across, 3.2f));
         first.y += 0.42f;
         second.y += 0.42f;
-        DrawCylinderEx(first, second, 0.46f, 0.34f, 8,
+        DrawLitCylinderEx(first, second, 0.46f, 0.34f, 8,
                        WORLD_WOOD_SHADOW);
         Vector3 crown = Vector3Add(
             second, Vector3Scale(across, 0.40f));
@@ -1657,7 +1657,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                              CcLocalCarriageRenderDistance(carriage) / carriage_scale);
         if (kingdom_view) {
             float marker_radius = fmaxf(2.8f, kingdom_span * 0.0055f);
-            DrawCylinder((Vector3){carriage_base.x,
+            DrawLitCylinder((Vector3){carriage_base.x,
                                    carriage_base.y + 0.04f,
                                    carriage_base.z},
                          marker_radius, marker_radius, 0.10f, 24,

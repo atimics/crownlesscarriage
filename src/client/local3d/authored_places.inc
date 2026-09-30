@@ -678,9 +678,9 @@ static void DrawRoundTower(float center_x, float center_z, float radius,
                            float height, Color wall, Color roof, bool door)
 {
     Color trim = ShadeColor(wall, 0.62f);
-    DrawCylinder((Vector3){center_x, 0.0f, center_z},
+    DrawLitCylinder((Vector3){center_x, 0.0f, center_z},
                  radius, radius * 1.03f, height, 12, wall);
-    DrawCylinder((Vector3){center_x, height, center_z},
+    DrawLitCylinder((Vector3){center_x, height, center_z},
                  0.10f, radius * 1.22f, radius * 1.12f, 12, roof);
     DrawBox((Vector3){center_x, height * 0.58f,
                       center_z + radius + 0.025f},
@@ -846,9 +846,9 @@ static void DrawStreetLantern(float x, float z,
             break;
     }
     float lantern_y = post_height - 0.16f;
-    DrawCylinder((Vector3){x, 0.05f, z}, 0.23f, 0.28f, 0.10f, 8,
+    DrawLitCylinder((Vector3){x, 0.05f, z}, 0.23f, 0.28f, 0.10f, 8,
                  ShadeColor(metal, 0.72f));
-    DrawCylinder((Vector3){x, post_height * 0.50f, z},
+    DrawLitCylinder((Vector3){x, post_height * 0.50f, z},
                  0.055f, 0.075f, post_height, 8, metal);
     DrawBox((Vector3){x, post_height + 0.04f, z},
             (Vector3){0.42f, 0.08f, 0.42f}, metal);
@@ -901,8 +901,8 @@ static void DrawCroftScarecrow(float hunger)
     Vector3 post_top = {x + 0.13f, 1.97f, z + 0.02f};
     Vector3 arm_left = {x - 0.77f, 1.47f, z - 0.02f};
     Vector3 arm_right = {x + 0.70f, 1.35f, z + 0.03f};
-    DrawCylinderEx(post_base, post_top, 0.060f, 0.045f, 7, wood);
-    DrawCylinderEx(arm_left, arm_right, 0.052f, 0.045f, 7, wood);
+    DrawLitCylinderEx(post_base, post_top, 0.060f, 0.045f, 7, wood);
+    DrawLitCylinderEx(arm_left, arm_right, 0.052f, 0.045f, 7, wood);
 
 
     DrawTiltedBox((Vector3){x - 0.18f, 1.17f, z - 0.01f},
@@ -912,19 +912,19 @@ static void DrawCroftScarecrow(float hunger)
                   (Vector3){0.24f, 0.48f, 0.08f},
                   (Vector3){0.0f, 0.0f, 1.0f}, -14.0f,
                   ShadeColor(cloth, 0.78f));
-    DrawCylinderEx(arm_left,
+    DrawLitCylinderEx(arm_left,
                    (Vector3){x - 0.58f, 1.19f, z - 0.01f},
                    0.020f, 0.012f, 5, straw);
-    DrawCylinderEx(arm_right,
+    DrawLitCylinderEx(arm_right,
                    (Vector3){x + 0.58f, 1.08f, z + 0.04f},
                    0.020f, 0.012f, 5, straw);
     for (int32_t tuft = -1; tuft <= 1; ++tuft) {
         float spread = (float)tuft * 0.07f;
-        DrawCylinderEx(arm_left,
+        DrawLitCylinderEx(arm_left,
                        (Vector3){arm_left.x - 0.17f,
                                  arm_left.y + spread, arm_left.z + spread},
                        0.014f, 0.004f, 5, straw);
-        DrawCylinderEx(arm_right,
+        DrawLitCylinderEx(arm_right,
                        (Vector3){arm_right.x + 0.17f,
                                  arm_right.y + spread, arm_right.z - spread},
                        0.014f, 0.004f, 5, straw);
@@ -1017,7 +1017,7 @@ static void DrawWorkshopForge(Color kingdom,
     DrawBox((Vector3){x - 1.45f, 0.30f, z + 0.05f},
             (Vector3){0.14f, 0.60f, 1.28f}, timber);
     for (int32_t billet = 0; billet < 3; ++billet) {
-        DrawCylinderEx((Vector3){x - 1.72f, 0.16f + (float)billet * 0.15f,
+        DrawLitCylinderEx((Vector3){x - 1.72f, 0.16f + (float)billet * 0.15f,
                                  z - 0.40f},
                        (Vector3){x - 1.18f, 0.16f + (float)billet * 0.15f,
                                  z + 0.48f},
@@ -1098,9 +1098,9 @@ static void DrawTownSquareFocus(Color kingdom,
     Color stone = WORLD_STONE_LIGHT;
     Color accent = PlaceIdentityAccent(profile, kingdom);
 
-    DrawCylinder((Vector3){x, 0.015f, z}, 2.65f, 2.65f, 0.045f, 20,
+    DrawLitCylinder((Vector3){x, 0.015f, z}, 2.65f, 2.65f, 0.045f, 20,
                  ShadeColor(stone, 0.78f));
-    DrawCylinder((Vector3){x, 0.052f, z}, 2.22f, 2.22f, 0.035f, 20,
+    DrawLitCylinder((Vector3){x, 0.052f, z}, 2.22f, 2.22f, 0.035f, 20,
                  stone);
     if (profile != NULL && profile->function == CC_SETTLEMENT_FARMING) {
         for (int32_t row = -1; row <= 1; ++row) {
@@ -1201,19 +1201,19 @@ static void DrawCoachHitch(const CcSettlement *place)
     DrawBox((Vector3){36.75f, 2.82f, z - 0.02f},
             (Vector3){3.08f, 0.12f, 1.44f},
             canopy);
-    DrawCylinder((Vector3){36.75f, 2.03f, z + 0.13f},
+    DrawLitCylinder((Vector3){36.75f, 2.03f, z + 0.13f},
                  0.19f, 0.19f, 0.08f, 10, seal);
     int32_t barrels = place != NULL ? place->stock[CC_GOOD_MATERIAL] / 24 : 1;
     if (barrels < 1) barrels = 1;
     if (barrels > 3) barrels = 3;
     for (int32_t i = 0; i < barrels; ++i) {
-        DrawCylinder((Vector3){35.65f + (float)i * 0.58f, 0.05f, z + 0.42f},
+        DrawLitCylinder((Vector3){35.65f + (float)i * 0.58f, 0.05f, z + 0.42f},
                      0.25f, 0.25f, 0.58f, 10,
                      WORLD_WOOD_LIGHT);
     }
     for (int32_t wheel = 0; wheel < 2; ++wheel) {
         float wheel_z = z - 0.28f + (float)wheel * 0.58f;
-        DrawCylinderEx((Vector3){38.50f, 0.62f, wheel_z},
+        DrawLitCylinderEx((Vector3){38.50f, 0.62f, wheel_z},
                        (Vector3){38.58f, 0.62f, wheel_z},
                        0.48f, 0.48f, 12, ShadeColor(wood, 1.08f));
     }
@@ -1227,12 +1227,12 @@ static void DrawEastRoomFocus(float hunger, Color kingdom,
     Color timber = WORLD_WOOD_LIGHT;
     if (profile != NULL && profile->function == CC_SETTLEMENT_CAPITAL) {
 
-        DrawCylinder((Vector3){x, 0.07f, z}, 0.90f, 0.90f, 0.14f, 14,
+        DrawLitCylinder((Vector3){x, 0.07f, z}, 0.90f, 0.90f, 0.14f, 14,
                      WORLD_STONE_LIGHT);
         for (int32_t corner = 0; corner < 4; ++corner) {
             float column_x = x + ((corner & 1) == 0 ? -0.68f : 0.68f);
             float column_z = z + ((corner & 2) == 0 ? -0.68f : 0.68f);
-            DrawCylinder((Vector3){column_x, 0.16f, column_z},
+            DrawLitCylinder((Vector3){column_x, 0.16f, column_z},
                          0.12f, 0.16f, 2.35f, 8, WORLD_STONE_LIGHT);
             DrawSmallSphere((Vector3){column_x, 1.55f, column_z},
                             0.30f, BlendColor(kingdom, WORLD_FOLIAGE, 0.62f));
@@ -1291,8 +1291,8 @@ static void DrawEastRoomFocus(float hunger, Color kingdom,
     }
     Color plaster = BlendColor(WORLD_STONE_LIGHT,
                                WORLD_ROAD, hunger * 0.60f);
-    DrawCylinder((Vector3){x, 0.08f, z}, 0.90f, 0.96f, 2.36f, 12, plaster);
-    DrawCylinder((Vector3){x, 2.43f, z}, 0.10f, 1.10f, 0.88f, 12, timber);
+    DrawLitCylinder((Vector3){x, 0.08f, z}, 0.90f, 0.96f, 2.36f, 12, plaster);
+    DrawLitCylinder((Vector3){x, 2.43f, z}, 0.10f, 1.10f, 0.88f, 12, timber);
     DrawBox((Vector3){x, 0.75f, z + 0.93f},
             (Vector3){0.58f, 1.20f, 0.08f}, timber);
     DrawBox((Vector3){x, 1.45f, z + 0.98f},
@@ -1321,9 +1321,9 @@ static void DrawEastWindmill(Color kingdom, float hunger, float burn)
            stocks left hanging. */
         tower = BlendColor(tower, TOWN_CHAR, 0.35f + 0.45f * burn);
         float stump = 3.45f * (1.0f - 0.35f * burn);
-        DrawCylinder((Vector3){x, 0.05f, z}, 0.74f + 0.34f * 0.35f * burn,
+        DrawLitCylinder((Vector3){x, 0.05f, z}, 0.74f + 0.34f * 0.35f * burn,
                      1.08f, stump, 12, tower);
-        DrawCylinder((Vector3){x, 0.05f + stump - 1.0f, z},
+        DrawLitCylinder((Vector3){x, 0.05f + stump - 1.0f, z},
                      0.76f + 0.34f * 0.35f * burn, 0.80f, 1.02f, 12, TOWN_CHAR);
         for (int32_t blade = 0; blade < 2; ++blade) {
             rlPushMatrix();
@@ -1335,9 +1335,9 @@ static void DrawEastWindmill(Color kingdom, float hunger, float burn)
         }
         return;
     }
-    DrawCylinder((Vector3){x, 0.05f, z}, 0.74f, 1.08f, 3.45f, 12, tower);
-    DrawCylinder((Vector3){x, 3.50f, z}, 0.08f, 0.92f, 0.82f, 12, timber);
-    DrawCylinderEx((Vector3){x, 3.28f, z + 0.36f},
+    DrawLitCylinder((Vector3){x, 0.05f, z}, 0.74f, 1.08f, 3.45f, 12, tower);
+    DrawLitCylinder((Vector3){x, 3.50f, z}, 0.08f, 0.92f, 0.82f, 12, timber);
+    DrawLitCylinderEx((Vector3){x, 3.28f, z + 0.36f},
                    (Vector3){x, 3.28f, z + 0.92f},
                    0.14f, 0.14f, 10, ShadeColor(timber, 0.72f));
     for (int32_t blade = 0; blade < 4; ++blade) {
@@ -1412,9 +1412,9 @@ static void DrawPlaceLandmark(const CcLocalPlaceLandmark *landmark,
                            (silo == 0 ? 0.31f : 0.69f);
             float radius = fminf(landmark->width * 0.19f,
                                  landmark->depth * 0.34f);
-            DrawCylinder((Vector3){silo_x, height * 0.20f, center_z},
+            DrawLitCylinder((Vector3){silo_x, height * 0.20f, center_z},
                          radius * 0.88f, radius, height * 0.62f, 12, wall);
-            DrawCylinder((Vector3){silo_x, height * 0.82f, center_z},
+            DrawLitCylinder((Vector3){silo_x, height * 0.82f, center_z},
                          0.04f, radius * 1.06f, height * 0.18f, 12, roof);
         }
         return;
@@ -1458,7 +1458,7 @@ static void DrawPlaceLandmark(const CcLocalPlaceLandmark *landmark,
         for (int32_t stack = 0; stack < stacks; ++stack) {
             float stack_x = landmark->x + landmark->width *
                 ((float)(stack + 1) / (float)(stacks + 1));
-            DrawCylinder((Vector3){stack_x, body_height * 0.82f,
+            DrawLitCylinder((Vector3){stack_x, body_height * 0.82f,
                                    landmark->z + landmark->depth * 0.68f},
                          0.18f, 0.24f, height * 0.28f, 8,
                          WORLD_METAL_SHADOW);
@@ -3074,7 +3074,7 @@ static void DrawThornfordMill(const CcSettlement *place, float clock)
     Vector3 hub = {87.0f, base + 2.2f, 28.85f};
     float phase = CcSettlementHasService(place, CC_SERVICE_MILL) &&
                   place->fire_damage < 45 ? clock * 0.32f : 0.0f;
-    DrawCylinderEx(Vector3Add(hub, (Vector3){0.0f, 0.0f, -0.75f}),
+    DrawLitCylinderEx(Vector3Add(hub, (Vector3){0.0f, 0.0f, -0.75f}),
                     Vector3Add(hub, (Vector3){0.0f, 0.0f, 0.25f}),
                     0.18f, 0.18f, 8, WORLD_WOOD_SHADOW);
     DrawBox((Vector3){87.0f, base + 0.08f, 28.85f},
@@ -3088,8 +3088,8 @@ static void DrawThornfordMill(const CcSettlement *place, float clock)
             (Vector3){cosf(angle) * 1.8f, sinf(angle) * 1.8f, 0.0f});
         Vector3 rim_next = Vector3Add(hub,
             (Vector3){cosf(next) * 1.8f, sinf(next) * 1.8f, 0.0f});
-        DrawCylinderEx(rim, rim_next, 0.12f, 0.12f, 5, WORLD_WOOD_SHADOW);
-        DrawCylinderEx(hub, rim, 0.075f, 0.075f, 5, WORLD_WOOD);
+        DrawLitCylinderEx(rim, rim_next, 0.12f, 0.12f, 5, WORLD_WOOD_SHADOW);
+        DrawLitCylinderEx(hub, rim, 0.075f, 0.075f, 5, WORLD_WOOD);
         DrawTiltedBox(rim, (Vector3){0.16f, 0.54f, 0.62f},
                       (Vector3){0.0f, 0.0f, 1.0f}, angle * RAD2DEG,
                       WORLD_WOOD);
@@ -3262,7 +3262,7 @@ static void DrawFarmTerrainStage(const CcSettlement *place,
             float x = 49.0f + (float)(sack % 4) * 0.7f;
             float z = 27.4f + (float)(sack / 4) * 0.62f;
             float ground = CcLocalTerrainHeightAt(x, z);
-            DrawCylinder((Vector3){x, ground, z}, 0.23f, 0.30f, 0.62f, 7,
+            DrawLitCylinder((Vector3){x, ground, z}, 0.23f, 0.30f, 0.62f, 7,
                          BlendColor(WORLD_CROP_LIGHT, WORLD_WOOD, 0.20f));
         }
     }
@@ -3326,14 +3326,14 @@ static void DrawGloamgateFountain(float ground)
     /* The level civic court joins all five lanes around the basin. */
     for (int32_t ring = 0; ring < 4; ++ring) {
         float radius = 13.4f - (float)ring * 3.2f;
-        DrawCylinder((Vector3){x, ground + 0.012f + (float)ring * 0.012f, z},
+        DrawLitCylinder((Vector3){x, ground + 0.012f + (float)ring * 0.012f, z},
                      radius, radius, 0.012f, 40,
                      BlendColor(WORLD_STONE, WORLD_ROAD_LIGHT,
                                 ring % 2 == 0 ? 0.30f : 0.52f));
     }
-    DrawCylinder((Vector3){x, ground + 0.06f, z},
+    DrawLitCylinder((Vector3){x, ground + 0.06f, z},
                  1.35f, 1.35f, 0.30f, 16, WORLD_STONE);
-    DrawCylinder((Vector3){x, ground + 0.37f, z},
+    DrawLitCylinder((Vector3){x, ground + 0.37f, z},
                  1.17f, 1.17f, 0.025f, 16, BlendColor(WORLD_TEAL, CC_STYLE_TEAL_SHADOW, 0.18f));
     for (int32_t stone = 0; stone < 16; ++stone) {
         float angle = (float)stone * 2.0f * PI / 16.0f;
@@ -3342,9 +3342,9 @@ static void DrawGloamgateFountain(float ground)
                       (Vector3){0.30f, 0.30f, 0.49f},
                       (Vector3){0,1,0}, -angle * RAD2DEG, WORLD_STONE_LIGHT);
     }
-    DrawCylinder((Vector3){x, ground + 0.38f, z},
+    DrawLitCylinder((Vector3){x, ground + 0.38f, z},
                  0.40f, 0.48f, 0.46f, 8, WORLD_STONE_LIGHT);
-    DrawCylinder((Vector3){x, ground + 0.84f, z},
+    DrawLitCylinder((Vector3){x, ground + 0.84f, z},
                  0.24f, 0.44f, 1.02f, 8, WORLD_STONE_LIGHT);
     DrawBox((Vector3){x, ground + 2.03f, z},
             (Vector3){0.54f, 0.38f, 0.34f}, WORLD_STONE_LIGHT);
@@ -3354,9 +3354,9 @@ static void DrawGloamgateFountain(float ground)
                       (Vector3){0,0,1}, (float)side * 12.0f, WORLD_STONE);
     }
     /* A wooden bowl rests on the queen's broken shoulders. */
-    DrawCylinder((Vector3){x, ground + 2.22f, z},
+    DrawLitCylinder((Vector3){x, ground + 2.22f, z},
                  0.45f, 0.25f, 0.26f, 12, WORLD_WOOD);
-    DrawCylinder((Vector3){x, ground + 2.485f, z},
+    DrawLitCylinder((Vector3){x, ground + 2.485f, z},
                  0.35f, 0.35f, 0.008f, 12, WORLD_WOOD_SHADOW);
     DrawBox((Vector3){x, ground + 0.64f, z + 0.455f},
             (Vector3){0.20f, 0.025f, 0.015f}, WORLD_WOOD_SHADOW);
@@ -3454,9 +3454,9 @@ static void DrawDungeonTerrainStage(Vector3 focus)
 {
     if (SceneryPointVisible(48.5f, 35.5f, focus)) {
         float ground = CcLocalTerrainHeightAt(48.5f, 35.5f);
-        DrawCylinder((Vector3){48.5f, ground + 0.025f, 35.5f},
+        DrawLitCylinder((Vector3){48.5f, ground + 0.025f, 35.5f},
                      3.75f, 3.75f, 0.05f, 22, WORLD_INK);
-        DrawCylinder((Vector3){48.5f, ground + 0.065f, 35.5f},
+        DrawLitCylinder((Vector3){48.5f, ground + 0.065f, 35.5f},
                      3.20f, 3.20f, 0.04f, 22,
                      BlendColor(WORLD_VIOLET, WORLD_INK, 0.72f));
         for (int32_t post = 0; post < 10; ++post) {
@@ -3489,7 +3489,7 @@ static void DrawBackdropMass(float x, float base_y, float z,
     rlPushMatrix();
     rlTranslatef(x, base_y, z);
     rlScalef(radius_x, 1.0f, radius_z);
-    DrawCylinder((Vector3){0.0f, 0.0f, 0.0f}, upper_ratio, 1.0f,
+    DrawLitCylinder((Vector3){0.0f, 0.0f, 0.0f}, upper_ratio, 1.0f,
                  height, sides, color);
     rlPopMatrix();
 }
@@ -3772,7 +3772,7 @@ static void DrawThornfordStores(const CcSettlement *place,
         for (int32_t sack = 0; sack < sacks; ++sack) {
             float x = pad.x + 0.6f + (float)(sack % 2) * 0.58f;
             float z = pad.y + pad.height * 0.56f + (float)(sack / 2) * 0.64f;
-            DrawCylinder((Vector3){x, 0.52f, z}, 0.24f, 0.31f, 0.68f, 7,
+            DrawLitCylinder((Vector3){x, 0.52f, z}, 0.24f, 0.31f, 0.68f, 7,
                          BlendColor(WORLD_CROP_LIGHT, CC_VISUAL_PALETTE.parchment.light, 0.42f));
             DrawBox((Vector3){x, 1.16f, z}, (Vector3){0.18f, 0.09f, 0.18f}, WORLD_WOOD);
         }
@@ -3931,7 +3931,7 @@ static void DrawGloamgateShopLife(const CcSettlement *place,
         if (good == CC_GOOD_BREAD) {
             DrawScenerySphere((Vector3){x, 0.28f, z}, 0.24f, WORLD_CROP_LIGHT);
         } else if (good == CC_GOOD_WHEAT) {
-            DrawCylinder((Vector3){x, 0.08f, z}, 0.22f, 0.27f, 0.65f, 7,
+            DrawLitCylinder((Vector3){x, 0.08f, z}, 0.22f, 0.27f, 0.65f, 7,
                          CC_VISUAL_PALETTE.parchment.light);
         } else {
             DrawBox((Vector3){x, 0.36f, z}, (Vector3){0.48f, 0.60f, 0.38f}, WORLD_WOOD);
@@ -4785,7 +4785,7 @@ static void DrawReturnGateCrowd(const CcReturnSceneCues *cues, Vector3 focus,
         CcReturnStagePoint at = cues->crowd[i];
         Vector3 ground = TerrainWorldPoint(at.x + sinf(at.yaw) * 0.45f,
                                            at.z + cosf(at.yaw) * 0.45f);
-        DrawCylinder((Vector3){ground.x, ground.y + 0.01f, ground.z},
+        DrawLitCylinder((Vector3){ground.x, ground.y + 0.01f, ground.z},
                      0.17f, 0.12f, 0.09f, 8, WORLD_WOOD_SHADOW);
     }
 }
@@ -4845,7 +4845,7 @@ static void DrawReturnStallFrame(Color cloth_a, Color cloth_b, bool boarded,
     if (!bare) return;
     /* A bare table: nothing on it but an upturned basket, and an empty
        crate knocked over in the dirt in front. */
-    DrawCylinder((Vector3){-0.55f, table + 0.05f, -0.1f}, 0.22f, 0.28f, 0.20f,
+    DrawLitCylinder((Vector3){-0.55f, table + 0.05f, -0.1f}, 0.22f, 0.28f, 0.20f,
                  8, dark);
     DrawTiltedBox((Vector3){0.95f, 0.22f, depth * 0.5f + 0.45f},
                   (Vector3){0.55f, 0.40f, 0.45f}, (Vector3){0.0f, 0.0f, 1.0f},
@@ -5258,9 +5258,9 @@ static void DrawConstructedCompoundStructure(
 
     if (structure->kind == CC_LOCAL_COMPOUND_SILO) {
         float radius = fminf(footprint.width, footprint.height) * 0.43f;
-        DrawCylinder((Vector3){center_x, 0.0f, center_z},
+        DrawLitCylinder((Vector3){center_x, 0.0f, center_z},
                      radius, radius * 1.05f, height, 12, stone);
-        DrawCylinder((Vector3){center_x, height, center_z},
+        DrawLitCylinder((Vector3){center_x, height, center_z},
                      0.08f, radius * 1.18f, radius * 0.90f, 12,
                      BuildingRoofColor(1, kingdom, profile));
         DrawBox((Vector3){center_x, height * 0.54f,

@@ -115,6 +115,126 @@ static bool RoadUsesAuthoredCheckpoint(void);
 static void OpenWorldRenderCacheClear(void);
 static void TreeSceneryBatchClear(void);
 static void DrawBox(Vector3 center, Vector3 size, Color color);
+
+/* raylib's DrawCylinder and DrawCylinderEx emit no vertex normals, so under
+   the world lighting shader every cylinder took whatever normal the previous
+   draw left in the batch: the Gloamgate fountain court, drawn after a box,
+   read as a wall in shadow. These two mirror raylib's vertex order exactly
+   and add a normal per face: caps straight along the axis, sides radial and
+   leaning with the taper. Every cylinder in the renderer goes through them. */
+static void DrawLitCylinder(Vector3 position, float radius_top,
+                            float radius_bottom, float height, int sides,
+                            Color color)
+{
+    if (sides < 3) sides = 3;
+    const float step = 2.0f * PI / (float)sides;
+    float taper = radius_bottom - radius_top;
+    float side_length = sqrtf(height * height + taper * taper);
+    float radial = side_length > 0.0f ? height / side_length : 1.0f;
+    float up = side_length > 0.0f ? taper / side_length : 0.0f;
+    (void)rlCheckRenderBatchLimit(sides * 12);
+    rlPushMatrix();
+    rlTranslatef(position.x, position.y, position.z);
+    rlBegin(RL_TRIANGLES);
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    for (int i = 0; i < sides; ++i) {
+        float a0 = step * (float)i;
+        float a1 = step * (float)(i + 1);
+        float s0 = sinf(a0), c0 = cosf(a0), s1 = sinf(a1), c1 = cosf(a1);
+        if (radius_top > 0.0f) {
+            rlNormal3f(s0 * radial, up, c0 * radial);
+            rlVertex3f(s0 * radius_bottom, 0.0f, c0 * radius_bottom);
+            rlNormal3f(s1 * radial, up, c1 * radial);
+            rlVertex3f(s1 * radius_bottom, 0.0f, c1 * radius_bottom);
+            rlVertex3f(s1 * radius_top, height, c1 * radius_top);
+
+            rlNormal3f(s0 * radial, up, c0 * radial);
+            rlVertex3f(s0 * radius_top, height, c0 * radius_top);
+            rlVertex3f(s0 * radius_bottom, 0.0f, c0 * radius_bottom);
+            rlNormal3f(s1 * radial, up, c1 * radial);
+            rlVertex3f(s1 * radius_top, height, c1 * radius_top);
+
+            rlNormal3f(0.0f, 1.0f, 0.0f);
+            rlVertex3f(0.0f, height, 0.0f);
+            rlVertex3f(s0 * radius_top, height, c0 * radius_top);
+            rlVertex3f(s1 * radius_top, height, c1 * radius_top);
+        } else {
+            float mid = (a0 + a1) * 0.5f;
+            rlNormal3f(sinf(mid) * radial, up, cosf(mid) * radial);
+            rlVertex3f(0.0f, height, 0.0f);
+            rlNormal3f(s0 * radial, up, c0 * radial);
+            rlVertex3f(s0 * radius_bottom, 0.0f, c0 * radius_bottom);
+            rlNormal3f(s1 * radial, up, c1 * radial);
+            rlVertex3f(s1 * radius_bottom, 0.0f, c1 * radius_bottom);
+        }
+        rlNormal3f(0.0f, -1.0f, 0.0f);
+        rlVertex3f(0.0f, 0.0f, 0.0f);
+        rlVertex3f(s1 * radius_bottom, 0.0f, c1 * radius_bottom);
+        rlVertex3f(s0 * radius_bottom, 0.0f, c0 * radius_bottom);
+    }
+    rlEnd();
+    rlPopMatrix();
+}
+
+static void DrawLitCylinderEx(Vector3 start, Vector3 end, float start_radius,
+                              float end_radius, int sides, Color color)
+{
+    if (sides < 3) sides = 3;
+    Vector3 direction = Vector3Subtract(end, start);
+    float length = Vector3Length(direction);
+    if (!(length > 0.0f)) return;
+    Vector3 axis = Vector3Scale(direction, 1.0f / length);
+    Vector3 b1 = Vector3Normalize(Vector3Perpendicular(direction));
+    Vector3 b2 = Vector3Normalize(Vector3CrossProduct(b1, direction));
+    float taper = start_radius - end_radius;
+    float side_length = sqrtf(length * length + taper * taper);
+    float radial = length / side_length;
+    float along = taper / side_length;
+    const float step = 2.0f * PI / (float)sides;
+    (void)rlCheckRenderBatchLimit(sides * 12);
+    rlBegin(RL_TRIANGLES);
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    for (int i = 0; i < sides; ++i) {
+        float s1 = sinf(step * (float)i), c1 = cosf(step * (float)i);
+        float s2 = sinf(step * (float)(i + 1)), c2 = cosf(step * (float)(i + 1));
+        Vector3 r1 = {s1 * b1.x + c1 * b2.x, s1 * b1.y + c1 * b2.y,
+                      s1 * b1.z + c1 * b2.z};
+        Vector3 r2 = {s2 * b1.x + c2 * b2.x, s2 * b1.y + c2 * b2.y,
+                      s2 * b1.z + c2 * b2.z};
+        Vector3 w1 = Vector3Add(start, Vector3Scale(r1, start_radius));
+        Vector3 w2 = Vector3Add(start, Vector3Scale(r2, start_radius));
+        Vector3 w3 = Vector3Add(end, Vector3Scale(r1, end_radius));
+        Vector3 w4 = Vector3Add(end, Vector3Scale(r2, end_radius));
+        Vector3 n1 = Vector3Add(Vector3Scale(r1, radial), Vector3Scale(axis, along));
+        Vector3 n2 = Vector3Add(Vector3Scale(r2, radial), Vector3Scale(axis, along));
+        if (start_radius > 0.0f) {
+            rlNormal3f(-axis.x, -axis.y, -axis.z);
+            rlVertex3f(start.x, start.y, start.z);
+            rlVertex3f(w2.x, w2.y, w2.z);
+            rlVertex3f(w1.x, w1.y, w1.z);
+        }
+        rlNormal3f(n1.x, n1.y, n1.z);
+        rlVertex3f(w1.x, w1.y, w1.z);
+        rlNormal3f(n2.x, n2.y, n2.z);
+        rlVertex3f(w2.x, w2.y, w2.z);
+        rlNormal3f(n1.x, n1.y, n1.z);
+        rlVertex3f(w3.x, w3.y, w3.z);
+
+        rlNormal3f(n2.x, n2.y, n2.z);
+        rlVertex3f(w2.x, w2.y, w2.z);
+        rlVertex3f(w4.x, w4.y, w4.z);
+        rlNormal3f(n1.x, n1.y, n1.z);
+        rlVertex3f(w3.x, w3.y, w3.z);
+        if (end_radius > 0.0f) {
+            rlNormal3f(axis.x, axis.y, axis.z);
+            rlVertex3f(end.x, end.y, end.z);
+            rlVertex3f(w3.x, w3.y, w3.z);
+            rlVertex3f(w4.x, w4.y, w4.z);
+        }
+    }
+    rlEnd();
+}
+
 static void DrawCharacterSphere(Vector3 center, float radius, Color color);
 static void DrawCharacterEllipsoid(Vector3 center, Vector3 radius, Color color);
 static Vector3 LocalPoint(Vector3 base, float x, float y, float z, float yaw);

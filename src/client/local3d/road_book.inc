@@ -108,9 +108,9 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw, float rig_scale)
         Vector3 shoulder = RoadPonySkinPoint(
             base, yaw, (Vector3){(float)side * 0.47f, 1.15f, 0.08f},
             CC_QUADRUPED_CHEST, rig_scale);
-        DrawCylinderEx(collar_top, collar_side, 0.034f * strap,
+        DrawLitCylinderEx(collar_top, collar_side, 0.034f * strap,
                        0.030f * strap, 6, leather_edge);
-        DrawCylinderEx(collar_side, shoulder, 0.026f * strap, 0.022f * strap, 6,
+        DrawLitCylinderEx(collar_side, shoulder, 0.026f * strap, 0.022f * strap, 6,
                        leather);
         Vector3 cheek = RoadPonySkinPoint(
             base, yaw, (Vector3){(float)side * 0.30f, 1.65f, 1.07f},
@@ -118,7 +118,7 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw, float rig_scale)
         Vector3 bit_end = RoadPonySkinPoint(
             base, yaw, (Vector3){(float)side * 0.26f, 1.27f, 1.39f},
             CC_QUADRUPED_HEAD, rig_scale);
-        DrawCylinderEx(cheek, bit_end, 0.020f * strap, 0.017f * strap, 6,
+        DrawLitCylinderEx(cheek, bit_end, 0.020f * strap, 0.017f * strap, 6,
                        leather);
         DrawCharacterSphere(bit_end, 0.027f * strap, buckle);
         brow_ends[side < 0 ? 0 : 1] = cheek;
@@ -131,9 +131,9 @@ static void DrawRoadHorseHarness(Vector3 base, float yaw, float rig_scale)
         base, yaw, (Vector3){0.0f, 1.29f, 1.56f}, CC_QUADRUPED_HEAD,
         rig_scale);
     for (int32_t side = 0; side < 2; ++side) {
-        DrawCylinderEx(brow_ends[side], brow_front, 0.018f * strap,
+        DrawLitCylinderEx(brow_ends[side], brow_front, 0.018f * strap,
                        0.018f * strap, 6, leather);
-        DrawCylinderEx(nose_ends[side], nose_front, 0.016f * strap,
+        DrawLitCylinderEx(nose_ends[side], nose_front, 0.016f * strap,
                        0.016f * strap, 6, leather);
     }
 }
@@ -316,7 +316,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base,
         Vector3 trace_end = RoadPonySkinPoint(horse_base, yaw,
             (Vector3){(float)horse * 0.47f, 1.15f, 0.08f},
             CC_QUADRUPED_CHEST, rig_scale);
-        DrawCylinderEx(trace_start, trace_end, 0.020f * vehicle_scale,
+        DrawLitCylinderEx(trace_start, trace_end, 0.020f * vehicle_scale,
                        0.016f * vehicle_scale, 6, WORLD_WOOD_SHADOW);
         DrawOrientedBox(horse_base,
                         (Vector3){0.0f, 1.02f * vehicle_scale,
@@ -469,9 +469,9 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
         Vector3 pole_right_end = LocalPoint(base, 0.48f * vehicle_scale,
                                             0.72f * vehicle_scale,
                                             4.10f * vehicle_scale, yaw);
-        DrawCylinderEx(pole_left, pole_left_end, 0.045f * vehicle_scale,
+        DrawLitCylinderEx(pole_left, pole_left_end, 0.045f * vehicle_scale,
                        0.035f * vehicle_scale, 7, WORLD_WOOD);
-        DrawCylinderEx(pole_right, pole_right_end, 0.045f * vehicle_scale,
+        DrawLitCylinderEx(pole_right, pole_right_end, 0.045f * vehicle_scale,
                        0.035f * vehicle_scale, 7, WORLD_WOOD);
     }
     DrawCarriedCargoBoxes(player, base, yaw, vehicle_scale);
@@ -635,12 +635,12 @@ static void DrawForkRouteState(const CcRoute *route, Vector3 from,
         Vector3 right = Vector3Add(center, Vector3Scale(side, 2.8f));
         left.y = 0.72f;
         right.y = 0.72f;
-        DrawCylinderEx(left, right, 0.13f, 0.13f, 7,
+        DrawLitCylinderEx(left, right, 0.13f, 0.13f, 7,
                        (Color){108, 69, 43, 255});
-        DrawCylinder((Vector3){left.x, 0.0f, left.z},
+        DrawLitCylinder((Vector3){left.x, 0.0f, left.z},
                      0.12f, 0.09f, 1.25f, 7,
                      (Color){86, 59, 42, 255});
-        DrawCylinder((Vector3){right.x, 0.0f, right.z},
+        DrawLitCylinder((Vector3){right.x, 0.0f, right.z},
                      0.12f, 0.09f, 1.25f, 7,
                      (Color){86, 59, 42, 255});
     }
@@ -650,7 +650,7 @@ static void DrawForkRouteState(const CcRoute *route, Vector3 from,
             from, Vector3Scale(forward, 7.0f + (float)scar * 5.0f));
         center = Vector3Add(
             center, Vector3Scale(side, (scar & 1) != 0 ? 0.9f : -0.7f));
-        DrawCylinder((Vector3){center.x, 0.08f, center.z},
+        DrawLitCylinder((Vector3){center.x, 0.08f, center.z},
                      0.34f, 0.48f, 0.025f, 12,
                      (Color){49, 39, 32, 255});
     }
@@ -660,7 +660,7 @@ static void DrawForkSignpost(Vector3 junction, Vector3 branch_end,
                              bool hidden)
 {
     Vector3 base = Vector3Lerp(junction, branch_end, 0.32f);
-    DrawCylinder(base, 0.17f, 0.13f, 3.25f, 8,
+    DrawLitCylinder(base, 0.17f, 0.13f, 3.25f, 8,
                  (Color){91, 61, 42, 255});
     float yaw = atan2f(branch_end.x - base.x, branch_end.z - base.z);
     DrawOrientedBox(base, (Vector3){0.0f, 1.58f, 0.72f},
@@ -900,13 +900,13 @@ static void DrawRoadBarricade(const CcRoute *route)
                         36.95f};
         Vector3 to = {x + 0.18f, 0.66f + (float)(rail + 1) * 0.18f,
                       43.05f};
-        DrawCylinderEx(from, to, 0.10f, 0.10f, 8, timber);
+        DrawLitCylinderEx(from, to, 0.10f, 0.10f, 8, timber);
     }
     for (int32_t post = 0; post < 3; ++post) {
         float z = 37.25f + (float)post * 2.75f;
-        DrawCylinder((Vector3){x, 0.0f, z}, 0.12f, 0.09f, 1.35f, 7,
+        DrawLitCylinder((Vector3){x, 0.0f, z}, 0.12f, 0.09f, 1.35f, 7,
                      timber);
-        DrawCylinderEx((Vector3){x, 0.74f, z},
+        DrawLitCylinderEx((Vector3){x, 0.74f, z},
                        (Vector3){x - 0.72f, 0.10f, z - 0.35f},
                        0.065f, 0.025f, 6, (Color){75, 61, 51, 255});
     }
@@ -1003,7 +1003,7 @@ static void DrawRoadTerrain(uint32_t world_seed, const CcRoute *route,
             x < ROAD_BARRICADE_X + 4.40f) continue;
         float z = 39.10f + (float)(scar & 1) * 1.65f;
         if (!SceneryPointVisible(x, z, focus)) continue;
-        DrawCylinder((Vector3){x, -0.025f, z}, 0.28f, 0.42f,
+        DrawLitCylinder((Vector3){x, -0.025f, z}, 0.28f, 0.42f,
                      0.035f, 12, WORLD_EARTH_SHADOW);
     }
     Color leaves = route != NULL && route->smuggler_route ?
@@ -1616,7 +1616,7 @@ static void DrawGoblinCaveStream(void)
     Color channel = BlendColor(WORLD_EARTH_SHADOW, WORLD_INK, 0.42f);
     Color water = BlendColor(WORLD_TEAL, (Color){38, 74, 88, 255}, 0.46f);
     Color glint = BlendColor(WORLD_TEAL, WORLD_STONE, 0.20f);
-    DrawCylinder((Vector3){68.2f, 0.045f, 40.45f},
+    DrawLitCylinder((Vector3){68.2f, 0.045f, 40.45f},
                  2.05f, 1.55f, 0.07f, 12, water);
     int32_t count = (int32_t)(sizeof(STREAM) / sizeof(STREAM[0]));
     for (int32_t segment = 0; segment < count - 1; ++segment) {
@@ -1788,16 +1788,29 @@ static void DrawDragonCliffRoost(const CcSim *sim)
             ShadeColor(rock, 0.76f + (float)(slab + 2) * 0.045f));
     }
 
+    /* The ledges used to hang five units up with nothing under them, so
+       the roost read as a table on stubby legs. Each shelf now stands on
+       a rock foot that runs down to the ground, and the teeth are rooted
+       at ground level, so the whole thing reads as one cliff outcrop. */
+    DrawBox((Vector3){x - 4.4f, 2.62f, z - 0.2f},
+            (Vector3){6.9f, 5.30f, 7.2f}, deep_rock);
     DrawTiltedBox((Vector3){x - 4.4f, 5.92f, z - 0.2f},
                   (Vector3){7.6f, 1.45f, 7.9f},
                   (Vector3){0.0f, 0.0f, 1.0f}, -2.6f, ledge);
+    DrawBox((Vector3){x - 10.8f, 2.42f, z + 0.35f},
+            (Vector3){6.0f, 4.90f, 7.8f}, ShadeColor(deep_rock, 0.92f));
     DrawTiltedBox((Vector3){x - 10.8f, 5.58f, z + 0.35f},
                   (Vector3){6.7f, 1.68f, 8.5f},
                   (Vector3){0.0f, 0.0f, 1.0f}, 2.2f,
                   ShadeColor(ledge, 0.86f));
+    DrawBox((Vector3){x - 17.1f, 2.20f, z - 0.55f},
+            (Vector3){6.5f, 4.45f, 6.1f}, ShadeColor(deep_rock, 0.84f));
     DrawTiltedBox((Vector3){x - 17.1f, 5.18f, z - 0.55f},
                   (Vector3){7.2f, 1.86f, 6.8f},
                   (Vector3){0.0f, 0.0f, 1.0f}, -3.4f, deep_rock);
+    DrawBox((Vector3){x - 1.5f - perch_width * 0.5f, 2.70f, z + 4.35f},
+            (Vector3){perch_width - 0.6f, 5.45f, 3.5f},
+            ShadeColor(rock, 0.88f));
     DrawTiltedBox((Vector3){x - 1.5f - perch_width * 0.5f,
                             5.88f, z + 4.35f},
                   (Vector3){perch_width, 1.30f, 4.1f},
@@ -1805,8 +1818,9 @@ static void DrawDragonCliffRoost(const CcSim *sim)
                   ShadeColor(rock, 1.05f));
     for (int32_t tooth = 0; tooth < 6; ++tooth) {
         float tooth_x = x - 20.0f + (float)tooth * 3.7f;
-        DrawTiltedBox((Vector3){tooth_x, 4.65f, z + 4.3f},
-                      (Vector3){1.4f, 3.4f + (float)(tooth % 2), 1.2f},
+        float tooth_top = 6.35f + (float)(tooth % 2);
+        DrawTiltedBox((Vector3){tooth_x, tooth_top * 0.5f, z + 4.3f},
+                      (Vector3){1.4f, tooth_top, 1.2f},
                       (Vector3){0.0f, 0.0f, 1.0f},
                       tooth % 2 == 0 ? 12.0f : -9.0f,
                       ShadeColor(deep_rock, tooth % 3 == 0 ? 0.72f : 0.92f));
@@ -2134,7 +2148,7 @@ static void DrawJourneyAftermath3D(const CcSim *sim,
         DrawBox((Vector3){x + 0.62f, 0.20f, z + 0.48f},
                 (Vector3){0.92f, 0.40f, 0.42f},
                 (Color){108, 73, 48, 255});
-        DrawCylinderEx((Vector3){x + 0.12f, 0.16f, z + 0.78f},
+        DrawLitCylinderEx((Vector3){x + 0.12f, 0.16f, z + 0.78f},
                        (Vector3){x + 1.28f, 0.22f, z + 0.92f},
                        0.075f, 0.065f, 7, (Color){91, 61, 43, 255});
     } else {

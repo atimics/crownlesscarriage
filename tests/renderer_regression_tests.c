@@ -138,6 +138,7 @@ static void WriteViewportFixture(const char *path)
 #include "physical_goods_tests.inc"
 #include "building_cutaway_tests.inc"
 #include "box_batch_tests.inc"
+#include "lit_primitive_tests.inc"
 #include "character_material_captures.inc"
 #include "hero_face_captures.inc"
 #include "humanoid_animation_captures.inc"
@@ -211,6 +212,7 @@ int main(int argc, char **argv)
     TestHumanoidPresentationSchedules();
     TestCharacterPerformance();
     TestPonyHarnessAttachment();
+    TestMineTunnelEnclosure();
     if (argc == 3 && (strcmp(argv[1], "--sky-captures") == 0 ||
                       strcmp(argv[1], "--sky-graphics") == 0 ||
                       strcmp(argv[1], "--graphics") == 0 ||
@@ -241,6 +243,7 @@ int main(int argc, char **argv)
             TestConvoyDrawReadOnly();
         } else if (strcmp(argv[1], "--graphics") == 0) {
             TestBodyText();
+            TestLitPrimitiveNormals();
             TestTravelForestCameraTurn();
             TestTravelLeafShimmer();
             TestRaisedBuildingCutaway(argv[2]);

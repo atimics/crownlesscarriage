@@ -17,6 +17,28 @@ static Camera3D MineCombatBaseCamera(Vector3 position,int32_t facing)
     return PerspectiveCameraComposed(focus,offset,62.0f);
 }
 
+float CcLocalMineWallHeightInternal(bool combat)
+{
+    /* Out of combat the wall runs past the ceiling slab (2.44-2.56) so the
+       two never leave a seam. Combat lowers it to the bar height. */
+    return combat ? CC_LOCAL_MINE_BAR_HEIGHT : CC_LOCAL_MINE_CEILING_Y+.12f;
+}
+bool CcLocalMineWallSpanInternal(const CcSim *sim,int32_t x,int32_t y,
+                                 bool combat,float *base,float *top)
+{
+    if(sim==NULL||x<0||y<0||x>=CC_MINE_WIDTH||y>=CC_MINE_HEIGHT) return false;
+    if(CcMineWalkable(sim,CC_MINE_LEVEL,x,y)) return false;
+    bool edge=CcMineWalkable(sim,CC_MINE_LEVEL,x+1,y)||CcMineWalkable(sim,CC_MINE_LEVEL,x-1,y)||
+        CcMineWalkable(sim,CC_MINE_LEVEL,x,y+1)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y-1);
+    if(!edge) return false;
+    float height=CcLocalMineWallHeightInternal(combat);
+    if(x==15&&y==10&&!sim->mine.bar_open) {
+        /* Rock closes the arch above the closed bar's own posts. */
+        if(height<=CC_LOCAL_MINE_BAR_HEIGHT) return false;
+        *base=CC_LOCAL_MINE_BAR_HEIGHT;*top=height;return true;
+    }
+    *base=0;*top=height;return true;
+}
 Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing)
 {
     if(sim->mine.phase!=CC_MINE_LEVEL)
@@ -83,18 +105,25 @@ void CcLocalDrawMine3D(const CcSim *sim,const CcLocalAgent *agent,
     BeginMode3D(camera);
     BeginWorldLighting(camera,&art);
     if (underground) {
-        for (int y=1;y<CC_MINE_HEIGHT-1;++y) for(int x=1;x<CC_MINE_WIDTH-1;++x) {
-            bool walk=CcMineWalkable(sim,CC_MINE_LEVEL,x,y);
-            if(walk) {
+        /* The tunnel is a closed volume. Every walkable tile gets a floor
+           slab and a ceiling slab, and every rock tile that touches one gets
+           a wall from the floor to the ceiling, so nothing looks out into
+           the void. Combat keeps the old low walls and no ceiling, so the
+           raised fight camera can see into the chamber. The pass covers the
+           whole grid so a future chamber beside the border is closed too. */
+        for (int y=0;y<CC_MINE_HEIGHT;++y) for(int x=0;x<CC_MINE_WIDTH;++x) {
+            if(CcMineWalkable(sim,CC_MINE_LEVEL,x,y)) {
                 Color tint=((x+y)%2)?floor:(Color){179,171,145,255};
                 MineBox((float)x,-.08f,(float)y,.98f,.12f,.98f,tint);
-                if(!combat) MineBox((float)x,2.5f,(float)y,1,.12f,1,
-                                    (Color){59,61,61,255});
-            } else if(!(x==15&&y==10&&!sim->mine.bar_open)) {
-                bool edge=CcMineWalkable(sim,CC_MINE_LEVEL,x+1,y)||CcMineWalkable(sim,CC_MINE_LEVEL,x-1,y)||
-                    CcMineWalkable(sim,CC_MINE_LEVEL,x,y+1)||CcMineWalkable(sim,CC_MINE_LEVEL,x,y-1);
-                if(edge) MineBox((float)x,.7f,(float)y,1,1.4f,1,stone);
+                /* Full-width slabs: a grout gap here would show the void. */
+                if(!combat) MineBox((float)x,CC_LOCAL_MINE_CEILING_Y,(float)y,
+                                    1,.12f,1,(Color){66,73,74,255});
+                continue;
             }
+            float wall_base=0,wall_top=0;
+            if(CcLocalMineWallSpanInternal(sim,x,y,combat,&wall_base,&wall_top))
+                MineBox((float)x,(wall_base+wall_top)*.5f,(float)y,1,
+                        wall_top-wall_base,1,stone);
         }
         DrawStreetLantern(13,3,CC_LOCAL_ROAD_INDUSTRIAL);
         DrawStreetLantern(18,17,CC_LOCAL_ROAD_INDUSTRIAL);
