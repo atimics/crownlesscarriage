@@ -176,12 +176,23 @@ backstops per role, because extinction in a small population is absorbing.
 - The cause log may be costly. Mitigation: fixed-size records and a measured budget.
 - The ecology may not stabilise. Mitigation: the baseline test comes first and gates the rest.
 
-## First build steps, if approved
+## Build order (each stage must keep the earlier baselines alive)
 
-1. Core: arena, pools, event queue, RNG, hash, clone, with cross-platform hash in CI.
-2. Locations, entities, verbs and a rule decider on the fixed map: food, prices, famine.
-3. Add the mint, carriages and emergent bandits and guards. Run the baseline.
-4. Add goblins, tunnels and the hoard. Re-run the baseline.
-5. Add the dragon. Then the survival experiments.
+1. **Animals only.** Core (arena, pools, event queue, causal log, RNG, hash, clone, cross-platform
+   hash in CI) plus prey, predators and plants on the fixed map. Gate: the ecology survives 1000
+   seeds, every birth and death has a cause, and speed is measured. The training loop is tested
+   here first: imitate the rule decider, then evolve a small delta on survival (animal brain, about 1M).
+2. **Goblins, with the dragon as a fixed rule.** Camps, tunnels, caravans and tribute. The dragon's
+   culling of the tribes that paid least is the selection pressure, so the dragon rule is needed
+   now. Treasure is seeded from a fixed source (Silverwick ingots and a few relics) because
+   nothing produces it yet.
+3. **Villagers.** Economy, capital mint, prices, famine, emergent bandits and guards. Scribes and
+   promises come after the crown-only baseline holds.
+4. **The dragon's brain.** Larger memory of tribute history and grievances. Size is a per-species
+   config; targets are dragon 50M, villager 5M, goblin 3M, animal 1M, and start smaller until
+   measured speed says otherwise.
+
+Brain sizes are chosen from measured decisions per second, not fixed in advance. Frequent deciders
+(villagers) use a compact vector observation; rare deciders can afford more.
 
 Research notes with sources and unverified items are in `docs/sim2/research/`.
