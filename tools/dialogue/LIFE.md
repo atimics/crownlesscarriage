@@ -211,3 +211,26 @@ years and seats each successor as an adult. 12 years, 32 worlds, about 4.7 gener
 python3 tools/dialogue/lineage.py --brain /tmp/life/theta_best_validation.npy --output /tmp/lineage.json \
   --years 12 --seeds 32 --lifespan 1.5 3 --cultural 0.5
 ```
+
+# Co-evolution: who should the raider and the town train against?
+
+Raiders and towns take turns. Each phase evolves one side against archived brains of the other
+(`coevolve.py`), for 12 phases (6 per side), on a Graviton instance. Three ways of choosing opponents:
+`generalist` (newest plus a fixed sample, and a held-out filter on candidates), `latest` (only the
+newest opponent), `uniform` (a fresh uniform sample of the whole archive every generation).
+Yardstick = score against the rule, minus the rule's own score. One run per arm, no error bars.
+
+| Arm | Raider, last 3 phases | Town, last 3 phases |
+| --- | --- | --- |
+| generalist | +0.019, +0.019, +0.019 | -0.020, -0.033, -0.023 |
+| latest | 0.000, +0.006, +0.005 | -0.008, -0.001, +0.005 |
+| uniform | +0.070, +0.051, +0.062 | -0.001, -0.024, +0.002 |
+
+- Raiders: uniform sampling is clearly best (about +0.06). Generalist stalls at +0.019; latest stays near zero.
+- Towns: no arm beats the rule. Differences of 0.01-0.02 are inside the noise measured earlier.
+- Generalist's later snapshots are identical to each other (the held-out filter rejected every change), so
+  its archive stopped growing. Latest has snapshots that fell back to the starting brain.
+- Uniform's cross-generation matrices have distinct rows and no collapse. Raider gains come with a small
+  town cost (about 0.31 against 0.33), the same trade-off as L4.
+- Town scores barely depend on which town brain the raider faces (0.29-0.34), so the town side has little
+  to learn from its opponents here.

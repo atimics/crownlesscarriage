@@ -115,6 +115,46 @@ class DailyLifeTests(unittest.TestCase):
         self.assertNotEqual(before[0], after[0])
         self.assertGreaterEqual(gens[0], 1)
 
+    def test_separate_brains_take_their_own_decisions_and_do_not_leak(self):
+        n, h = fastworld.policy_size(), 16
+        inputs = len(fastworld.KIND_NAMES) + 19 + 21
+        hold = np.zeros(n)
+        hold[(len(fastworld.KIND_NAMES) + 19) * h] = 6.0     # the 'hold' feature wins: never launch a raid
+        hold[inputs * h + h] = 1.0
+        towns = np.random.default_rng(3).normal(0, 0.4, n)
+
+        def run(setup):
+            fastworld.clear_brains()
+            setup()
+            world = fastworld.FastWorld.new(2, 30)
+            metrics = fastworld.run_days(world, 600)
+            digest, raider, town = world.hash(), fastworld.brain_stats(1), fastworld.brain_stats(0)
+            world.close()
+            fastworld.clear_brains()
+            return digest, metrics, raider, town
+
+        def towns_only():
+            fastworld.set_brain(0, towns, fastworld.LEARNED)
+
+        def zero_raider():
+            towns_only()
+            fastworld.set_brain(1, np.zeros(n), fastworld.RAID_LAUNCH)
+            fastworld.set_kind_brains({'raid_launch': 1})
+
+        def never_raid():
+            towns_only()
+            fastworld.set_brain(1, hold, fastworld.RAID_LAUNCH)
+            fastworld.set_kind_brains({'raid_launch': 1})
+
+        base, zero, held = run(towns_only), run(zero_raider), run(never_raid)
+        self.assertEqual(base[0], zero[0])                        # a raider brain that follows the rule changes nothing
+        self.assertGreater(base[1]['raids'], 0)
+        self.assertEqual(held[1]['raids'], 0)                     # a raider brain that never launches ends the raids
+        self.assertEqual(held[2]['raid_launch']['changed'], held[2]['raid_launch']['offered'])
+        self.assertGreater(held[2]['raid_launch']['offered'], 0)
+        self.assertEqual(held[3]['raid_launch']['offered'], 0)    # the town brain was never asked about raids
+        self.assertEqual(held[2]['travel']['offered'], 0)         # and the raider brain never about travel
+
 
 if __name__ == '__main__':
     unittest.main()

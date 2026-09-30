@@ -221,10 +221,16 @@ int cs_execute(CrowdSim *w, uint64_t agreement, uint64_t payer, char *buf, size_
 #define POLICY_HIDDEN 16
 #define POLICY_WEIGHTS (POLICY_INPUTS * POLICY_HIDDEN + POLICY_HIDDEN + POLICY_HIDDEN + 1)
 
-static double policy_weights[POLICY_WEIGHTS];
-static long policy_offered[POLICY_KINDS], policy_changed[POLICY_KINDS];
-static int policy_active;
-static int policy_mask;
+/* A brain: one weight vector, the decision kinds it takes (bit k = kind k; the rest follow the rule), and how
+ * often it was asked and how often it changed the rule's answer. Brain 0 is the only one used so far; other brains
+ * will take other roles in the same world (see BrainFor). */
+#define MAX_BRAINS 4
+typedef struct Brain {
+    double weights[POLICY_WEIGHTS];
+    long offered[POLICY_KINDS], changed[POLICY_KINDS];
+    int mask, active;
+} Brain;
+static Brain brains[MAX_BRAINS];
 static double trade_bias[3];   /* probe: rule score + a*destination hunger + b*need + c*path cost */
 static int trade_bias_on;
 #define TRAIT_SLOTS 512
@@ -237,11 +243,19 @@ static int gossip_floor = -1;   /* >= 0: withhold any story carried below this c
 
 int cs_policy_size(void) { return POLICY_WEIGHTS; }
 
+/* Decisions offered and changed from the rule's, per kind (offered first), for one brain. */
+void cs_brain_stats(int id, long *out, int reset)
+{
+    if (id < 0 || id >= MAX_BRAINS) return;
+    for (int k = 0; k < POLICY_KINDS; ++k) { out[k] = brains[id].offered[k]; out[POLICY_KINDS + k] = brains[id].changed[k]; }
+    if (reset) { memset(brains[id].offered, 0, sizeof(brains[id].offered)); memset(brains[id].changed, 0, sizeof(brains[id].changed)); }
+}
+
 /* Decisions offered and decisions changed from the rule's, per kind (offered first). */
 void cs_policy_stats(long *out, int reset)
 {
-    for (int k = 0; k < POLICY_KINDS; ++k) { out[k] = policy_offered[k]; out[POLICY_KINDS + k] = policy_changed[k]; }
-    if (reset) { memset(policy_offered, 0, sizeof(policy_offered)); memset(policy_changed, 0, sizeof(policy_changed)); }
+    for (int k = 0; k < POLICY_KINDS; ++k) { out[k] = brains[0].offered[k]; out[POLICY_KINDS + k] = brains[0].changed[k]; }
+    if (reset) { memset(brains[0].offered, 0, sizeof(brains[0].offered)); memset(brains[0].changed, 0, sizeof(brains[0].changed)); }
 }
 
 static double Clip(double v) { return v < 0.0 ? 0.0 : v > 3.0 ? 3.0 : v; }
@@ -365,13 +379,24 @@ static void OptionFeatures(const CcSim *sim, CcPolicyKind kind, CcId actor, cons
     }
 }
 
+/* Which brain decides: by decision kind (a role is a set of kinds), brain 0 unless told otherwise. Routing by
+ * character slot, town or band would go here too. */
+static int kind_brain[POLICY_KINDS];
+
+static int BrainFor(const CcSim *sim, CcPolicyKind kind, CcId actor)
+{
+    (void)sim; (void)actor;
+    return kind_brain[(int)kind];
+}
+
 static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId actor,
                       const CcPolicyOption *options, int32_t count, int32_t fallback)
 {
     (void)user;
-    if (kind == CC_POLICY_DRAGON_TARGET && dragon_force >= 0 && ((policy_mask >> (int)kind) & 1))
+    Brain *brain = &brains[BrainFor(sim, kind, actor)];
+    if (kind == CC_POLICY_DRAGON_TARGET && dragon_force >= 0 && ((brain->mask >> (int)kind) & 1))
         return dragon_force < count ? dragon_force : fallback;
-    if (kind == CC_POLICY_TRADE_ROUTE && trade_bias_on && ((policy_mask >> (int)kind) & 1)) {
+    if (kind == CC_POLICY_TRADE_ROUTE && trade_bias_on && ((brain->mask >> (int)kind) & 1)) {
         int32_t best = fallback; double top = -1e300;
         for (int32_t i = 0; i < count; ++i) {
             const CcSettlement *to = CcSimSettlement(sim, options[i].target_id);
@@ -381,10 +406,10 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
         }
         return best;
     }
-    if (kind == CC_POLICY_GOSSIP_SHARE && gossip_floor >= 0 && ((policy_mask >> (int)kind) & 1))
+    if (kind == CC_POLICY_GOSSIP_SHARE && gossip_floor >= 0 && ((brain->mask >> (int)kind) & 1))
         return options[0].value < gossip_floor ? 1 : 0;
     const CcCharacter *p = CcSimCharacter(sim, actor);
-    if ((p == NULL && kind != CC_POLICY_GOSSIP_SHARE && kind != CC_POLICY_TRADE_ROUTE && kind != CC_POLICY_RAID_TARGET && kind != CC_POLICY_RAID_LAUNCH && kind != CC_POLICY_KINGDOM_RELIEF && kind != CC_POLICY_DRAGON_TARGET) || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
+    if ((p == NULL && kind != CC_POLICY_GOSSIP_SHARE && kind != CC_POLICY_TRADE_ROUTE && kind != CC_POLICY_RAID_TARGET && kind != CC_POLICY_RAID_LAUNCH && kind != CC_POLICY_KINGDOM_RELIEF && kind != CC_POLICY_DRAGON_TARGET) || count > 64 || !((brain->mask >> (int)kind) & 1)) return fallback;
     /* Whether a traveller leaves is the role's business: keep the rule's decision to stay,
        and when it decides to go, choose only where (never "stay"). */
     if (kind == CC_POLICY_TRAVEL_DESTINATION && fallback == count - 1) return fallback;
@@ -407,7 +432,7 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
         x[(int)kind] = 1.0;
         memcpy(x + POLICY_KINDS, a, sizeof(a));
         OptionFeatures(sim, kind, actor, &options[i], i == count - 1, x + POLICY_KINDS + ACTOR_FEATURES);
-        const double *w1 = policy_weights, *b1 = w1 + POLICY_INPUTS * POLICY_HIDDEN,
+        const double *w1 = brain->weights, *b1 = w1 + POLICY_INPUTS * POLICY_HIDDEN,
                      *w2 = b1 + POLICY_HIDDEN, b2 = w2[POLICY_HIDDEN];
         double total = b2;
         for (int h = 0; h < POLICY_HIDDEN; ++h) {
@@ -426,8 +451,8 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
     }
     /* The rule's option wins ties, so zero weights reproduce the rule exactly. */
     int32_t pick = score[fallback] >= best - 1e-9 ? fallback : argmax;
-    policy_offered[(int)kind] += 1;
-    policy_changed[(int)kind] += pick != fallback;
+    brain->offered[(int)kind] += 1;
+    brain->changed[(int)kind] += pick != fallback;
     return pick;
 }
 
@@ -435,11 +460,11 @@ static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId acto
 void cs_set_trade_bias(double a, double b, double c, int on)
 {
     trade_bias[0] = a; trade_bias[1] = b; trade_bias[2] = c; trade_bias_on = on;
-    if (on) { policy_mask |= 32; CcSimSetPolicy(Choose, NULL); } else if (!policy_active && gossip_floor < 0) CcSimSetPolicy(NULL, NULL);
+    if (on) { brains[0].mask |= 32; CcSimSetPolicy(Choose, NULL); } else if (!brains[0].active && gossip_floor < 0) CcSimSetPolicy(NULL, NULL);
 }
 
 /* Probe: with a floor, gossip follows "withhold below this confidence" and ignores the network. */
-void cs_set_gossip_floor(int floor) { gossip_floor = floor; if (floor >= 0) { policy_mask |= 16; CcSimSetPolicy(Choose, NULL); } else if (!policy_active) CcSimSetPolicy(NULL, NULL); }
+void cs_set_gossip_floor(int floor) { gossip_floor = floor; if (floor >= 0) { brains[0].mask |= 16; CcSimSetPolicy(Choose, NULL); } else if (!brains[0].active) CcSimSetPolicy(NULL, NULL); }
 
 /* Heritable traits: one row of four preferences per character slot (rich, cheap, near, home towns). */
 void cs_set_traits(const double *traits, int slots)
@@ -484,7 +509,7 @@ void cs_shape(const CrowdSim *w, double *out)
 }
 
 /* Probe: the dragon always burns the k-th eligible town (-1 clears). */
-void cs_set_dragon_force(int k) { dragon_force = k; if (k >= 0) { policy_mask |= 256; CcSimSetPolicy(Choose, NULL); } else if (!policy_active && gossip_floor < 0 && !trade_bias_on) CcSimSetPolicy(NULL, NULL); }
+void cs_set_dragon_force(int k) { dragon_force = k; if (k >= 0) { brains[0].mask |= 256; CcSimSetPolicy(Choose, NULL); } else if (!brains[0].active && gossip_floor < 0 && !trade_bias_on) CcSimSetPolicy(NULL, NULL); }
 
 /* Give the dragon a theft to collect on: it retaliates after a short omen. */
 void cs_inject_theft(CrowdSim *w, int amount)
@@ -496,12 +521,31 @@ void cs_inject_theft(CrowdSim *w, int amount)
     w->sim.dragon.theft_actor_id = w->sim.hoard_raiders.id;
 }
 
+/* Give each decision kind to a brain (ids below MAX_BRAINS); kinds not listed keep brain 0. */
+void cs_set_kind_brains(const int *ids, int count)
+{
+    for (int k = 0; k < POLICY_KINDS; ++k) kind_brain[k] = 0;
+    for (int k = 0; ids != NULL && k < count && k < POLICY_KINDS; ++k)
+        kind_brain[k] = ids[k] >= 0 && ids[k] < MAX_BRAINS ? ids[k] : 0;
+}
+
+void cs_set_brain(int id, const double *weights, int count, int mask)
+{
+    if (id < 0 || id >= MAX_BRAINS) return;
+    brains[id].mask = mask;
+    if (weights == NULL || count != POLICY_WEIGHTS) brains[id].active = 0;
+    else { memcpy(brains[id].weights, weights, sizeof(brains[id].weights)); brains[id].active = 1; }
+    int any = 0;
+    for (int b = 0; b < MAX_BRAINS; ++b) any = any || brains[b].active;
+    if (any) CcSimSetPolicy(Choose, NULL); else CcSimSetPolicy(NULL, NULL);
+}
+
 void cs_set_policy(const double *weights, int count, int mask)
 {
-    policy_mask = mask;
-    if (weights == NULL || count != POLICY_WEIGHTS) { policy_active = 0; CcSimSetPolicy(NULL, NULL); return; }
-    memcpy(policy_weights, weights, sizeof(policy_weights));
-    policy_active = 1;
+    brains[0].mask = mask;
+    if (weights == NULL || count != POLICY_WEIGHTS) { brains[0].active = 0; CcSimSetPolicy(NULL, NULL); return; }
+    memcpy(brains[0].weights, weights, sizeof(brains[0].weights));
+    brains[0].active = 1;
     CcSimSetPolicy(Choose, NULL);
 }
 
@@ -523,11 +567,12 @@ CrowdSim *cs_new(uint32_t seed, int days)
  * 14 town hunger summed over town-days, 15 town-days in famine (hunger >= 25), 16 town prosperity summed,
  * 17 town-days, 18 raids on towns, 19 goods taken in raids, 20 kingdom legitimacy summed,
  * 21 kingdom treasury summed, 22 kingdom-days, and at the end: 23 dragon hoard, 24 dragon memory integrity,
- * 25 dragon retaliations, 26 population, 27 town prosperity summed, 28 kingdom legitimacy summed. */
+ * 25 dragon retaliations, 26 population, 27 town prosperity summed, 28 kingdom legitimacy summed, 29 bandit members,
+ * 30 bandit supplies, 31 bandit influence. */
 int cs_run(CrowdSim *w, int days, double *metrics)
 {
     static CcId where[CC_MAX_CHARACTERS_HINT];
-    memset(metrics, 0, 29 * sizeof(double));
+    memset(metrics, 0, 32 * sizeof(double));
     CcId seen_event = 0U;
     for (int32_t i = 0; i < w->sim.event_count; ++i) if (w->sim.events[i].id > seen_event) seen_event = w->sim.events[i].id;
     for (int32_t i = 0; i < w->sim.character_count && i < CC_MAX_CHARACTERS_HINT; ++i)
@@ -591,5 +636,9 @@ int cs_run(CrowdSim *w, int days, double *metrics)
         metrics[26] += (double)w->sim.settlements[t].population; metrics[27] += (double)w->sim.settlements[t].prosperity;
     }
     for (int32_t k = 0; k < w->sim.kingdom_count; ++k) metrics[28] += (double)w->sim.kingdoms[k].legitimacy;
+    for (int32_t b = 0; b < w->sim.bandit_count; ++b) {
+        metrics[29] += (double)w->sim.bandits[b].members; metrics[30] += (double)w->sim.bandits[b].supplies;
+        metrics[31] += (double)w->sim.bandits[b].influence;
+    }
     return w->sim.current_day;
 }
