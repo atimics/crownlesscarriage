@@ -125,6 +125,7 @@ add_library(crownless_sim
     src/sim/cc_scriven.c
     src/sim/cc_scriven_codec.c
     src/sim/cc_sim.c
+    src/sim/cc_policy.c
     src/sim/cc_census.c
     src/sim/cc_return.c
     src/sim/cc_road_news.c

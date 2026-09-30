@@ -5,6 +5,7 @@
 #include "sim/cc_prophecy.h"
 #include "sim/cc_archive_relocation.h"
 #include "sim/cc_sim.h"
+#include "sim/cc_policy.h"
 #include "sim/cc_census.h"
 #include "sim/cc_return.h"
 #include "sim/cc_oven_court.h"
@@ -16603,8 +16604,21 @@ static void AdvanceCharacterTravel(CcSim *sim)
         }
         if (chosen < 0) {
             /* Settled people mostly stay put; those already on the road move on. */
-            if (TravelRoll(sim, person, 1U) % 100U >= (away ? 60U : 25U)) continue;
-            chosen = (int32_t)(TravelRoll(sim, person, 2U) % (uint32_t)option_count);
+            if (TravelRoll(sim, person, 1U) % 100U >= (away ? 60U : 25U)) chosen = option_count;
+            else chosen = (int32_t)(TravelRoll(sim, person, 2U) % (uint32_t)option_count);
+        }
+        {
+            /* The rule's choice is the default; a policy hook may pick another legal option. */
+            CcPolicyOption legal[CC_MAX_ROUTES + 1];
+            for (int32_t o = 0; o < option_count; ++o) {
+                legal[o].target_id = options[o];
+                legal[o].value = travel_days[o];
+            }
+            legal[option_count].target_id = here->id;   /* stay */
+            legal[option_count].value = 0;
+            chosen = CcSimPolicyChoose(sim, CC_POLICY_TRAVEL_DESTINATION, person->id, legal,
+                                       option_count + 1, chosen);
+            if (chosen >= option_count) continue;
         }
 
         person->travel_destination_id = options[chosen];
@@ -16659,8 +16673,13 @@ static void AdvanceTravellerNeeds(CcSim *sim)
                 meal = (CcGood)good; units = needed; cheapest = cost;
             }
         }
-        if (meal != CC_GOOD_COUNT && person->travel_coins >= cheapest &&
-            place->market_coins <= CC_SIM_MAX_MONEY - cheapest) {
+        bool buy_meal = meal != CC_GOOD_COUNT && person->travel_coins >= cheapest &&
+            place->market_coins <= CC_SIM_MAX_MONEY - cheapest;
+        if (buy_meal) {
+            const CcPolicyOption ways[2] = {{place->id, (int32_t)cheapest}, {place->id, 0}};
+            buy_meal = CcSimPolicyChoose(sim, CC_POLICY_MEAL, person->id, ways, 2, 0) == 0;
+        }
+        if (buy_meal) {
             person->travel_coins -= cheapest;
             place->market_coins += cheapest;
             place->stock[meal] -= units;
@@ -16673,7 +16692,9 @@ static void AdvanceTravellerNeeds(CcSim *sim)
         if (at_home) {
             person->unsheltered_nights = 0;
         } else if (inhabited && CcSettlementHasService(place, CC_SERVICE_INN) &&
-                   person->travel_coins >= 2 && place->market_coins <= CC_SIM_MAX_MONEY - 2) {
+                   person->travel_coins >= 2 && place->market_coins <= CC_SIM_MAX_MONEY - 2 &&
+                   CcSimPolicyChoose(sim, CC_POLICY_LODGING, person->id,
+                                     (const CcPolicyOption[2]){{place->id, 2}, {place->id, 0}}, 2, 0) == 0) {
             person->travel_coins -= 2;
             place->market_coins += 2;
             person->unsheltered_nights = 0;
@@ -16693,6 +16714,9 @@ static void AdvanceTravellerNeeds(CcSim *sim)
             if (road == NULL || camp->members >= 120 ||
                 (road->from_id != place->id && road->to_id != place->id &&
                  camp->camp_settlement_id != place->id)) continue;
+            if (CcSimPolicyChoose(sim, CC_POLICY_BANDIT_JOIN, person->id,
+                                  (const CcPolicyOption[2]){{camp->id, camp->members}, {camp->id, 0}}, 2, 0) != 0)
+                break;
             camp->members += 1;
             person->bandit_group_id = camp->id;
             person->activity = CC_CHARACTER_ACTIVITY_HIDING;

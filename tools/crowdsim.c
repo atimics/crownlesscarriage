@@ -10,8 +10,10 @@
 #include "story/cc_core_participant.h"
 #include "persistence/cc_save.h"
 #include "sim/cc_food_relief.h"
+#include "sim/cc_policy.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -205,4 +207,179 @@ int cs_accept(CrowdSim *w, uint64_t agreement, uint64_t beneficiary, char *buf, 
 int cs_execute(CrowdSim *w, uint64_t agreement, uint64_t payer, char *buf, size_t cap)
 {
     return Step(w, 0, agreement, payer, buf, cap);
+}
+
+/* ---- daily-life policy: a small network scores each option, in C ---- */
+
+#define CC_MAX_CHARACTERS_HINT 512
+#define POLICY_KINDS 4
+#define ACTOR_FEATURES 19
+#define OPTION_FEATURES 8
+#define POLICY_INPUTS (POLICY_KINDS + ACTOR_FEATURES + OPTION_FEATURES)
+#define POLICY_HIDDEN 16
+#define POLICY_WEIGHTS (POLICY_INPUTS * POLICY_HIDDEN + POLICY_HIDDEN + POLICY_HIDDEN + 1)
+
+static double policy_weights[POLICY_WEIGHTS];
+static long policy_offered[POLICY_KINDS], policy_changed[POLICY_KINDS];
+static int policy_active;
+static int policy_mask;   /* bit k set: the network decides kind k; others follow the rule */
+
+int cs_policy_size(void) { return POLICY_WEIGHTS; }
+
+/* Decisions offered and decisions changed from the rule's, per kind (offered first). */
+void cs_policy_stats(long *out, int reset)
+{
+    for (int k = 0; k < POLICY_KINDS; ++k) { out[k] = policy_offered[k]; out[POLICY_KINDS + k] = policy_changed[k]; }
+    if (reset) { memset(policy_offered, 0, sizeof(policy_offered)); memset(policy_changed, 0, sizeof(policy_changed)); }
+}
+
+static double Clip(double v) { return v < 0.0 ? 0.0 : v > 3.0 ? 3.0 : v; }
+
+/* Cost of the cheapest meal at a settlement, or 0 when it has none in stock. */
+static double MealCost(const CcSettlement *place)
+{
+    double cheapest = 0.0;
+    for (int good = 0; place != NULL && good < CC_GOOD_COUNT; ++good) {
+        int32_t nutrition = CcGoodNutritionValue((CcGood)good, CC_NUTRITION_CIVILIAN);
+        if (nutrition <= 0) continue;
+        int32_t needed = (CC_NUTRITION_PER_RATION + nutrition - 1) / nutrition;
+        double cost = (double)(place->price[good] > 1 ? place->price[good] : 1) * needed;
+        if (place->stock[good] >= needed && (cheapest == 0.0 || cost < cheapest)) cheapest = cost;
+    }
+    return cheapest;
+}
+
+static void ActorFeatures(const CcSim *sim, const CcCharacter *p, double *f)
+{
+    const CcSettlement *here = CcSimSettlement(sim, p->current_settlement_id);
+    memset(f, 0, ACTOR_FEATURES * sizeof(double));
+    f[0] = Clip((double)p->travel_coins / 30.0);
+    f[1] = (double)p->hungry_days / 7.0;
+    f[2] = (double)p->unsheltered_nights / 7.0;
+    f[3] = (double)p->stress / 100.0;
+    f[4] = p->current_settlement_id != p->home_settlement_id;
+    f[5] = p->bandit_group_id != 0U;
+    if ((int)p->role >= 1 && (int)p->role <= 6) f[5 + (int)p->role] = 1.0;   /* six roles */
+    if ((int)p->goal >= 0 && (int)p->goal < 4) f[11 + (int)p->goal] = 1.0;
+    f[15] = Clip(MealCost(here) / 20.0);
+    f[16] = here != NULL && CcSettlementHasService(here, CC_SERVICE_INN);
+    f[17] = here != NULL ? (double)here->prosperity / 100.0 : 0.0;
+    f[18] = (double)CcCharacterAgeYears(sim, p) / 60.0;
+}
+
+static void OptionFeatures(const CcSim *sim, CcPolicyKind kind, CcId actor, const CcPolicyOption *o, int is_last,
+                           double *f)
+{
+    memset(f, 0, OPTION_FEATURES * sizeof(double));
+    const CcCharacter *p = CcSimCharacter(sim, actor);
+    if (kind == CC_POLICY_TRAVEL_DESTINATION) {
+        const CcSettlement *far = CcSimSettlement(sim, o->target_id);
+        f[0] = is_last;                                   /* stay */
+        f[1] = (double)o->value / 7.0;                    /* travel days */
+        if (!is_last && far != NULL) {
+            f[3] = Clip(MealCost(far) / 20.0);
+            f[4] = CcSettlementHasService(far, CC_SERVICE_INN);
+            f[5] = (double)far->prosperity / 100.0;
+            f[6] = p != NULL && far->id == p->home_settlement_id;
+        }
+    } else if (kind == CC_POLICY_MEAL || kind == CC_POLICY_LODGING) {
+        f[0] = is_last;                                   /* go without / sleep rough */
+        f[2] = Clip((double)o->value / 20.0);
+    } else {
+        f[0] = is_last;                                   /* hold out */
+        f[7] = Clip((double)o->value / 50.0);
+    }
+}
+
+static int32_t Choose(void *user, const CcSim *sim, CcPolicyKind kind, CcId actor,
+                      const CcPolicyOption *options, int32_t count, int32_t fallback)
+{
+    (void)user;
+    const CcCharacter *p = CcSimCharacter(sim, actor);
+    if (p == NULL || count > 64 || !((policy_mask >> (int)kind) & 1)) return fallback;
+    /* Whether a traveller leaves is the role's business: keep the rule's decision to stay,
+       and when it decides to go, choose only where (never "stay"). */
+    if (kind == CC_POLICY_TRAVEL_DESTINATION && fallback == count - 1) return fallback;
+    int32_t choices = kind == CC_POLICY_TRAVEL_DESTINATION ? count - 1 : count;
+    double x[POLICY_INPUTS], a[ACTOR_FEATURES];
+    ActorFeatures(sim, p, a);
+    double score[64], best = -1e300;
+    int32_t argmax = 0;
+    for (int32_t i = 0; i < choices; ++i) {
+        memset(x, 0, sizeof(x));
+        x[(int)kind] = 1.0;
+        memcpy(x + POLICY_KINDS, a, sizeof(a));
+        OptionFeatures(sim, kind, actor, &options[i], i == count - 1, x + POLICY_KINDS + ACTOR_FEATURES);
+        const double *w1 = policy_weights, *b1 = w1 + POLICY_INPUTS * POLICY_HIDDEN,
+                     *w2 = b1 + POLICY_HIDDEN, b2 = w2[POLICY_HIDDEN];
+        double total = b2;
+        for (int h = 0; h < POLICY_HIDDEN; ++h) {
+            double z = b1[h];
+            for (int j = 0; j < POLICY_INPUTS; ++j) z += x[j] * w1[j * POLICY_HIDDEN + h];
+            total += tanh(z) * w2[h];
+        }
+        score[i] = total;
+        if (total > best) { best = total; argmax = i; }
+    }
+    /* The rule's option wins ties, so zero weights reproduce the rule exactly. */
+    int32_t pick = score[fallback] >= best - 1e-9 ? fallback : argmax;
+    policy_offered[(int)kind] += 1;
+    policy_changed[(int)kind] += pick != fallback;
+    return pick;
+}
+
+void cs_set_policy(const double *weights, int count, int mask)
+{
+    policy_mask = mask;
+    if (weights == NULL || count != POLICY_WEIGHTS) { policy_active = 0; CcSimSetPolicy(NULL, NULL); return; }
+    memcpy(policy_weights, weights, sizeof(policy_weights));
+    policy_active = 1;
+    CcSimSetPolicy(Choose, NULL);
+}
+
+CrowdSim *cs_new(uint32_t seed, int days)
+{
+    CrowdSim *w = calloc(1U, sizeof(*w));
+    if (w == NULL) return NULL;
+    CcSimInit(&w->sim, seed);
+    if (days > 0) CcSimAdvanceDays(&w->sim, days);
+    return w;
+}
+
+/* Advance day by day and total who is hungry, unsheltered or outlawed. Road-going roles
+ * (scout, traveller, refugee, courier) are the people whose choices the hook changes.
+ * metrics: 0 road person-days, 1 road hungry days, 2 road unsheltered, 3 road bandit,
+ * 4 road stress, 5 road coins at the end, 6 all person-days, 7 all hungry days, 8 all bandit,
+ * 9 town changes by road-going people (a tracked invariant: a policy must not stop travelling). */
+int cs_run(CrowdSim *w, int days, double *metrics)
+{
+    static CcId where[CC_MAX_CHARACTERS_HINT];
+    memset(metrics, 0, 10 * sizeof(double));
+    for (int32_t i = 0; i < w->sim.character_count && i < CC_MAX_CHARACTERS_HINT; ++i)
+        where[i] = w->sim.characters[i].current_settlement_id;
+    for (int d = 0; d < days; ++d) {
+        CcSimAdvanceDays(&w->sim, 1);
+        for (int32_t i = 0; i < w->sim.character_count; ++i) {
+            const CcCharacter *p = &w->sim.characters[i];
+            if (i < CC_MAX_CHARACTERS_HINT) {
+                if (where[i] != p->current_settlement_id && where[i] != 0U &&
+                    (p->role == CC_CHARACTER_SCOUT || p->role == CC_CHARACTER_TRAVELLER ||
+                     p->role == CC_CHARACTER_REFUGEE || p->role == CC_CHARACTER_COURIER)) metrics[9] += 1.0;
+                where[i] = p->current_settlement_id;
+            }
+            if (p->death_day > 0 && p->death_day <= w->sim.current_day) continue;
+            int road = p->role == CC_CHARACTER_SCOUT || p->role == CC_CHARACTER_TRAVELLER ||
+                       p->role == CC_CHARACTER_REFUGEE || p->role == CC_CHARACTER_COURIER;
+            metrics[6] += 1.0; metrics[7] += p->hungry_days > 0; metrics[8] += p->bandit_group_id != 0U;
+            if (!road) continue;
+            metrics[0] += 1.0; metrics[1] += p->hungry_days > 0; metrics[2] += p->unsheltered_nights > 0;
+            metrics[3] += p->bandit_group_id != 0U; metrics[4] += p->stress;
+        }
+    }
+    for (int32_t i = 0; i < w->sim.character_count; ++i) {
+        const CcCharacter *p = &w->sim.characters[i];
+        if (p->role == CC_CHARACTER_SCOUT || p->role == CC_CHARACTER_TRAVELLER ||
+            p->role == CC_CHARACTER_REFUGEE || p->role == CC_CHARACTER_COURIER) metrics[5] += (double)p->travel_coins;
+    }
+    return w->sim.current_day;
 }

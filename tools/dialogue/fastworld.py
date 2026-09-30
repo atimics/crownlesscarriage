@@ -49,6 +49,13 @@ def library():
             fn = getattr(lib, name)
             fn.restype = c_i
             fn.argtypes = [c_p] + args + [ctypes.c_char_p, ctypes.c_size_t]
+        lib.cs_new.restype = c_p
+        lib.cs_new.argtypes = [ctypes.c_uint32, c_i]
+        lib.cs_policy_size.restype = c_i
+        lib.cs_set_policy.argtypes = [ctypes.POINTER(ctypes.c_double), c_i, c_i]
+        lib.cs_policy_stats.argtypes = [ctypes.POINTER(ctypes.c_long), c_i]
+        lib.cs_run.restype = c_i
+        lib.cs_run.argtypes = [c_p, c_i, ctypes.POINTER(ctypes.c_double)]
         lib.cs_promise.restype = c_i
         lib.cs_promise.argtypes = [c_p, c_u64, c_u64, c_i, c_i, ctypes.c_char_p, ctypes.c_size_t]
         _lib = lib
@@ -68,6 +75,14 @@ class FastWorld:
         handle = lib.cs_load(str(path).encode(), error, len(error))
         if not handle:
             raise RuntimeError(error.value.decode() or 'could not load world')
+        return cls(handle)
+
+    @classmethod
+    def new(cls, seed, days=0):
+        """A fresh world from a seed, advanced `days` days."""
+        handle = library().cs_new(int(seed), int(days))
+        if not handle:
+            raise RuntimeError('could not create world')
         return cls(handle)
 
     def clone(self):
@@ -129,3 +144,41 @@ class FastWorld:
         accepted = self._json(self.lib.cs_accept, int(promised['agreement_id']), int(terms['beneficiary_id']))
         result = self._json(self.lib.cs_execute, int(promised['agreement_id']), int(terms['payer_id']))
         return {'promise': promised, 'accepted': accepted, 'result': result}
+
+
+METRICS = ('road_days', 'road_hungry', 'road_unsheltered', 'road_bandit', 'road_stress', 'road_coins',
+           'all_days', 'all_hungry', 'all_bandit', 'road_moves')
+
+
+def policy_size():
+    return library().cs_policy_size()
+
+
+TRAVEL, MEAL, LODGING, BANDIT_JOIN = 1, 2, 4, 8
+LEARNED = TRAVEL | MEAL | LODGING   # bandit recruitment stays with the rule (story-critical)
+
+
+def set_policy(theta, mask=LEARNED):
+    """Install the daily-life scorer (weights of length policy_size()) for the decisions in
+    `mask`, or None for the simulation's own rule."""
+    lib = library()
+    if theta is None:
+        lib.cs_set_policy(None, 0, 0)
+        return
+    array = (ctypes.c_double * len(theta))(*map(float, theta))
+    lib.cs_set_policy(array, len(theta), mask)
+
+
+def run_days(world, days):
+    """Advance day by day under the installed policy; returns totals by name."""
+    out = (ctypes.c_double * len(METRICS))()
+    library().cs_run(world.handle, int(days), out)
+    return dict(zip(METRICS, out))
+
+
+def policy_stats(reset=True):
+    """How often each decision kind was offered and how often the policy changed the rule's choice."""
+    out = (ctypes.c_long * 8)()
+    library().cs_policy_stats(out, int(reset))
+    names = ('travel', 'meal', 'lodging', 'bandit')
+    return {n: {'offered': out[i], 'changed': out[4 + i]} for i, n in enumerate(names)}

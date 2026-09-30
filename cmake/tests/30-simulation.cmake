@@ -50,6 +50,12 @@ add_test(NAME authored_story_beats COMMAND story_tests)
 
 add_executable(gossip_language_tests tests/gossip_language_tests.c)
 add_executable(core_account_probe tools/core_account_probe.c)
+# The decision hook must leave the simulation unchanged unless it chooses differently.
+add_executable(policy_hook_tests tests/policy_hook_tests.c)
+target_link_libraries(policy_hook_tests PRIVATE crownless_sim)
+cc_strict_warnings(policy_hook_tests)
+add_test(NAME policy_hook COMMAND policy_hook_tests)
+
 add_executable(core_semantic_tests tests/core_semantic_tests.c)
 target_link_libraries(core_semantic_tests PRIVATE crownless_story)
 cc_strict_warnings(core_semantic_tests)
