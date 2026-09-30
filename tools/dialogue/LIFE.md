@@ -14,8 +14,9 @@ one that returns the default, behaviour and the state hash are unchanged
 | lodging (daily) | pay for the inn, or sleep rough | pay when affordable |
 | bandit join (weekly, after 3 hungry or homeless days) | join a camp, or hold out | join |
 
-`tools/crowdsim.c` runs the world in process and holds a 529-weight scoring network
-(31 inputs, 16 hidden units) in C; zero weights reproduce the rule exactly.
+`tools/crowdsim.c` runs the world in process and holds a scoring network in C
+(833 weights: 48 inputs, 16 hidden units, sized for every decision kind; L1 was first run
+with an earlier 529-weight layout and reproduced on this one). Zero weights reproduce the rule exactly.
 `cs_run` totals hunger, shelter, outlawry, stress and movement per day.
 `evolve_life.py` evolves the weights with evolution strategies against welfare
 (hungry, plus half of unsheltered, plus outlawed, per road person-day) over a season,

@@ -66,7 +66,7 @@
     {
       "id": "L1",
       "name": "Villager daily life",
-      "status": "next",
+      "status": "done",
       "actors": [
         "villager (any role)"
       ],
@@ -78,10 +78,10 @@
         "known routes and their danger"
       ],
       "options": [
-        "activity: WORKING, SEEKING_AID, PREPARING, RECOVERING, HIDING, TRAVELLING",
-        "buy the cheapest meal, or go without",
-        "pay for a bed",
-        "accept casual work (6 crowns a day where the market can pay)"
+        "travel destination among neighbouring towns (only when the rule decides to go)",
+        "buy the cheapest meal or go without",
+        "pay for a bed or sleep rough",
+        "join a bandit camp or hold out (left with the rule: story-critical)"
       ],
       "outcome": [
         "days hungry and days unsheltered",
@@ -90,8 +90,8 @@
         "stress"
       ],
       "interface": {
-        "state": "missing",
-        "note": "Read from source: AdvanceTravellerNeeds in cc_sim.c makes these choices by fixed rule each day for travellers and refugees; residents at home have hunger and shelter reset. Needs a daily-decision hook with a legal-option list."
+        "state": "ready",
+        "note": "CcSimSetPolicy (src/sim/cc_policy.h): the rule computes its legal options and its own choice, then an optional process-wide hook may pick another legal option. Sites: weekly travel destination, meal, lodging, bandit join. With no hook, or one returning the default, the state hash is unchanged (tests/policy_hook_tests.c)."
       },
       "commands": [
         "CC_COMMAND_PERSONAL_WANT",
@@ -106,25 +106,30 @@
         "CcCharacter",
         "CcSettlement"
       ],
-      "size_hint": "5M shared across all villagers, with role, occupation and goal as inputs",
+      "size_hint": "A shared 833-weight scorer in C (zero weights reproduce the rule); 5M is not needed",
       "dependencies": [
         "L0"
       ],
-      "first_experiment": "Hook the traveller-needs step, offer meal/bed/work/seek-aid/wait as candidates, and evolve the shared scorer on 90-day welfare across 60 seeds; compare with the fixed rule on held-out seeds.",
-      "gate": "Paired welfare gain over the rule on held-out seeds (z >= 3), with no rise in bandit recruitment and money conserved.",
+      "first_experiment": "Done: evolved a shared scorer against a season of welfare in 60 worlds; three seeds, then again on the final layout, tested on 100 held-out worlds.",
+      "gate": "Reached: paired welfare gain over the rule on held-out seeds (z >= 3), bandit membership down, money conserved by construction. Watch stress.",
       "risks": [
-        "Only travellers and refugees (about 34 people per world) face this choice; residents are reset to fed each day.",
-        "A shared brain can homogenise behaviour; add goal and trait inputs early."
+        "Reward hacking: an unconstrained brain stopped travelling (residents at home are reset to fed) and refused every bandit camp. Travel frequency now stays with the rule and movement is a tracked invariant.",
+        "Bandit recruitment is story-critical and stays with the rule; the brain lowers it indirectly by lowering hunger.",
+        "Only about 60 road-going people per world face these choices."
       ],
       "evidence": [
-        "src/sim/cc_sim.c AdvanceTravellerNeeds",
-        "docs/npc-census.json activity_per_world"
-      ]
+        "tools/dialogue/LIFE.md",
+        "src/sim/cc_policy.h",
+        "tests/policy_hook_tests.c",
+        "tests/daily_life_tests.py"
+      ],
+      "verdict": "gain",
+      "result": "Welfare +0.14 to +0.16 over the rule (z 29 to 33), better in 100 of 100 held-out worlds every time. Road-going people are hungry 5 points less (21.7% to about 16.7%) and outlawed 9 points less (14.1% to about 5%). The gain comes only from where travellers go (30% of destination picks change); meals and beds never change. Stress rises about 1 point (z up to 6). Movement rises 12 to 17%."
     },
     {
       "id": "L2",
       "name": "Gossip and requests",
-      "status": "planned",
+      "status": "done",
       "actors": [
         "villager",
         "scribe",
@@ -149,8 +154,8 @@
         "rumour reach"
       ],
       "interface": {
-        "state": "partial",
-        "note": "RUMOR_SHARED is the most frequent event (2,288 per world in two years); the exchange command exists but I have not read how unattended exchanges are generated."
+        "state": "ready",
+        "note": "Hook at the point a carrier shares a story with a town (share or withhold). Carriers include couriers and carriages, not only characters."
       },
       "commands": [
         "CC_COMMAND_EXCHANGE_GOSSIP",
@@ -174,22 +179,22 @@
       "dependencies": [
         "L0"
       ],
-      "first_experiment": "Score belief accuracy against the event log after a season of gossip under the rule versus a learned share/withhold policy.",
-      "gate": "Higher belief accuracy at equal reach, and no fabricated facts (validator rejects any account not held).",
+      "first_experiment": "Done: hook, informedness metric (coverage times accuracy), a threshold sweep and an evolution run.",
+      "gate": "Not reached: no policy raises accuracy at equal reach. The rule sits on the frontier. Personal requests and the player-facing responses are not covered.",
       "risks": [
         "Fluency is not truth: the validator must own what may be said.",
         "Scoring accuracy needs a ground-truth event log per world."
       ],
       "evidence": [
-        "docs/npc-society.md",
-        "docs/personal-requests.md",
-        "tools/dialogue/FACT-SELECTION.md"
-      ]
+        "tools/dialogue/LIFE.md"
+      ],
+      "verdict": "null",
+      "result": "No gain. Withholding shaky stories raises accuracy (77.5% to 87.1% at a floor of 80) but coverage falls faster (67.7% to 50.6%); the combined score is flat at best. 150 generations of evolution found nothing better than \"always share\". The trade-off is real, so gossip reliability is a candidate personality trait rather than something to optimise."
     },
     {
       "id": "L3",
       "name": "Trade, shipments and production",
-      "status": "planned",
+      "status": "done",
       "actors": [
         "settlement steward",
         "royal carriage",
@@ -214,8 +219,8 @@
         "reserve kept above target"
       ],
       "interface": {
-        "state": "missing",
-        "note": "Shipments and carriages run by rule in the daily tick (158 departures per world). The trade commands are player-scoped; there is no steward-side option list yet."
+        "state": "ready",
+        "note": "Hook at the royal carriage trade planner: it offers every legal (good, source, destination) the rule scored above zero, defaulting to the rule's argmax."
       },
       "commands": [
         "CC_COMMAND_TRADE",
@@ -254,22 +259,21 @@
       "dependencies": [
         "L1"
       ],
-      "first_experiment": "Expose the shipment planner as options (destination, good, quantity) for one settlement and score shortages and losses over two years.",
-      "gate": "Fewer shortage and lost-shipment events at held-out seeds, with treasury and stock conserved.",
+      "first_experiment": "Done: hook, town hunger and famine metrics, a bias sweep and evolution runs.",
+      "gate": "Not reached: no gain in held-out worlds. Town outcomes vary by 8 hunger points between worlds, so small effects are hard to see.",
       "risks": [
         "Economy tuning is delicate and player-facing; keep the rule as a fallback and shadow-test first."
       ],
       "evidence": [
-        "src/sim/cc_supply_trade.inc",
-        "src/sim/cc_trade_path.c",
-        "src/sim/cc_food_economy.c",
-        "docs/crown-carriage-roads.md"
-      ]
+        "tools/dialogue/LIFE.md"
+      ],
+      "verdict": "null",
+      "result": "Probable null. Adding weights to the rule's own score (hungry destinations, need, distance) is neutral or worse over 100 worlds, and a search is level with the rule. Famine (hunger 25 or more) covers 20.5% of town-days under the rule and looks driven by production and consumption more than allocation."
     },
     {
       "id": "L4",
       "name": "Raiders and monsters",
-      "status": "planned",
+      "status": "done",
       "actors": [
         "bandit group",
         "goblin faction",
@@ -294,8 +298,8 @@
         "balance: neither side collapses"
       ],
       "interface": {
-        "state": "missing",
-        "note": "Raids run by rule in the daily tick (12 bandit and 19 goblin raids per world); raid_target_id, raid_good and raid_quantity are already state fields, so an option list can be built."
+        "state": "ready",
+        "note": "Hooks in the bandit raid launcher (raid or hold) and its choice of town. Goblin raids are a separate path and are not hooked."
       },
       "commands": [
         "CC_COMMAND_GOBLIN_TRADE",
@@ -328,20 +332,22 @@
       "dependencies": [
         "L3"
       ],
-      "first_experiment": "Give bandit groups a raid-target choice and evolve it against settlement defence, scoring both sides.",
-      "gate": "Raiders do better than the rule without collapsing the settlements they raid (both sides in band across seeds).",
+      "first_experiment": "Done: hooks, a never-raid bound and an evolution run.",
+      "gate": "Not reached: no gain. The two-sided worry (raiders stripping towns) does not arise in this sim.",
       "risks": [
         "Adversarial: optimising raiders alone will strip the world; needs a two-sided or bounded objective.",
         "Unattended raids are rare per seed (about one bandit group per world)."
       ],
       "evidence": [
-        "src/sim/cc_goblin_politics.inc StoreGoblinRaid AdvanceGoblinPolitics HuntGoblinFaction"
-      ]
+        "tools/dialogue/LIFE.md"
+      ],
+      "verdict": "null",
+      "result": "Null. Raids barely touch the towns: with no raids at all, hunger changes by -0.03 and prosperity rises by 0.9 of 66. Under an even balance of loot and prosperity a search gave +0.04 +- 0.04 (z = 1.1). The rule already takes the town with the most stock."
     },
     {
       "id": "L5",
       "name": "Kingdoms and war",
-      "status": "planned",
+      "status": "done",
       "actors": [
         "kingdom",
         "faction",
@@ -366,8 +372,8 @@
         "succession without crisis"
       ],
       "interface": {
-        "state": "missing",
-        "note": "KINGDOM_ACTION (62 per world), FACTION_SHIFT (78) and WAR_CHEST_FUNDED (65) fire by rule. WAR_DECLARED never fired in 60 unattended worlds of two years, so war scenarios must be injected."
+        "state": "ready",
+        "note": "Hook at the kingdom's grain relief: any hungry town of the kingdom, or hold the treasury. War orders and succession are not hooked."
       },
       "commands": [],
       "events": [
@@ -399,21 +405,22 @@
         "L3",
         "L4"
       ],
-      "first_experiment": "Learn the kingdom-action choice on the events that do fire, scored by legitimacy and treasury a year later; add war scenarios by seeding a border dispute.",
-      "gate": "Better stability than the rule on held-out seeds, and wars still occur at a similar rate (no pacifist collapse of the story).",
+      "first_experiment": "Done: hook, realm metrics (legitimacy, treasury, hunger, famine) and a two-stage evaluation.",
+      "gate": "Not reached. War orders are untested and need an injected scenario.",
       "risks": [
         "Sparse and delayed reward; needs scenario injection to see enough wars.",
         "Story-critical: authored beats must not be optimised away."
       ],
       "evidence": [
-        "src/sim/cc_war.c MarchToward ResolveBattles PartiesHostile",
-        "docs/npc-census.json"
-      ]
+        "tools/dialogue/LIFE.md"
+      ],
+      "verdict": "null",
+      "result": "Null. Relief spending is a small lever (never spending raises hunger by 0.63 of 13.1). A search that looked promising on 100 worlds was slightly worse on 400 fresh ones (welfare -0.007, z = -2.0), so the rule (fund the hungriest) stands. War could not be tested: WAR_DECLARED never fires unattended."
     },
     {
       "id": "L6",
       "name": "Dragons",
-      "status": "planned",
+      "status": "done",
       "actors": [
         "dragon",
         "dragon cult",
@@ -438,8 +445,8 @@
         "story pacing: an omen and a reckoning that make sense"
       ],
       "interface": {
-        "state": "missing",
-        "note": "One dragon per world; DRAGON_CROWNED fires about once and DRAGON_RETALIATION 0.4 times per two years. The hoard is stolen unattended at 0.5 per world, the same rate as goblin hoard heists, so I expect retaliation to follow them (trigger code not read). Most dragon events never fire unattended (hunt, battle, brood, mustering), so scenarios must be injected."
+        "state": "partial",
+        "note": "Hook at the dragon's choice of town to burn, plus an injected-theft harness (dragons retaliate only 0.4 times per world unattended). Hunting, brooding and campaigns are not hooked."
       },
       "commands": [
         "CC_COMMAND_STEAL_DRAGON_HOARD",
@@ -467,21 +474,23 @@
         "L4",
         "L5"
       ],
-      "first_experiment": "Build accelerated scenarios (a theft, a rival campaign) and score territory stability and crown continuity over 20 years.",
-      "gate": "Dragon behaviour judged by paired scenario outcomes and authored-story review, not by agreement with the rule.",
+      "first_experiment": "Done: injected 300-crown thefts and forced each candidate town over 100 worlds.",
+      "gate": "Half reached: paired scenario outcomes are measured; the authored-story review (does an omen and a reckoning still make sense?) is not done.",
       "risks": [
         "Rarity: little natural data, so scenario design carries the result.",
         "Highest player impact; keep the validator gate and a safe default action."
       ],
       "evidence": [
-        "src/sim/cc_sim.h CcDragon, CcDragonCampaign",
-        "docs/npc-census.json silent_event_kinds"
-      ]
+        "tools/dialogue/LIFE.md",
+        "tools/dialogue/dragon_probe.py"
+      ],
+      "verdict": "design axis",
+      "result": "The dragon collects the same restitution (about 349 crowns) whichever town burns, so its own payoff gives no reason to prefer a target. The rule's target (the richest town) is the most damaging: 40 to 60% fewer people are lost in the alternatives at the same payoff. Vengeful or restrained is an authorial choice, so it is a personality axis for L7, not an optimisation target."
     },
     {
       "id": "L7",
       "name": "Lineages and open-ended evolution",
-      "status": "later",
+      "status": "done",
       "actors": [
         "all villagers over generations"
       ],
@@ -498,8 +507,8 @@
         "no collapse into one strategy"
       ],
       "interface": {
-        "state": "missing",
-        "note": "Births and deaths are rare (0.5 each per world in two years), so this needs centuries per seed; at about 8,000 simulated days per second a century takes a few seconds."
+        "state": "partial",
+        "note": "Per-person trait rows (rich, cheap, near, home towns) bias the shared brain's travel scores; successors inherit with mutation. Successions in this sim are replacements in the same slot, born as age-0 children, and nothing in the sim selects on traits, so selection is added by the harness."
       },
       "commands": [],
       "events": [
@@ -514,14 +523,19 @@
         "L1",
         "L2"
       ],
-      "first_experiment": "Add a mutating trait vector at birth and measure behaviour diversity and lineage outcomes over 300 simulated years.",
-      "gate": "Sustained diversity without loss of average welfare on held-out seeds.",
+      "first_experiment": "Done: lineage.py with three conditions (none, drift, selection) over 12 accelerated years and, for comparison, 300 and 1000 natural years.",
+      "gate": "Weakly reached: diversity sustained without loss of welfare. It does not show that selection helps.",
       "risks": [
-        "Emergent exploits; the evolved population can drift away from the intended story."
+        "Unattended worlds lose every road within about 20 years, so anything about travel is only meaningful for the first 10 to 15 years; a 1,000-year run had 13 generations but no travel after year 50, and so no selection.",
+        "Successors are born as children who cannot travel for 16 years; accelerated generations seat them as adults.",
+        "Traits have a small effect on outcomes; a richer fitness (scarcity, competition) is needed for open-ended evolution."
       ],
       "evidence": [
-        "docs/npc-census.json"
-      ]
+        "tools/dialogue/LIFE.md",
+        "tools/dialogue/lineage.py"
+      ],
+      "verdict": "weak",
+      "result": "With generations accelerated (lifespans 1.5 to 3 years, successors seated as adults; about 4.7 generations in 12 years, 32 worlds) diversity is sustained (trait spread 0.49 to 0.56) and welfare is not lost (selection versus brain alone -0.002 +- 0.006). Selection is only marginally better than neutral drift (-0.009 +- 0.005, z = -1.8) and trait means barely move, so there is no directional evolution to report."
     }
   ],
   "tracks": [
@@ -531,12 +545,13 @@
       "status": "partial",
       "goal": "One interface for every stage: observation, legal options, apply, outcome, with the rule as the default.",
       "have": [
-        "legal-candidate lists and validators for food relief",
-        "in-process food-relief worlds"
+        "CcSimSetPolicy decision hook at 10 sites with a hash-invariance test",
+        "in-process food-relief and daily-life worlds (about 28,000 simulated days per second)",
+        "zero weights reproduce the rule"
       ],
       "need": [
-        "a generic hook in the daily tick",
-        "the in-process world generalised beyond food relief"
+        "the hook is process-wide and single-threaded",
+        "goblin raids, war orders, hunting, brooding, personal requests"
       ]
     },
     {
@@ -545,14 +560,15 @@
       "status": "partial",
       "goal": "Judge on outcomes, on held-out seeds, paired against the current rule.",
       "have": [
-        "outcome scorer",
-        "paired comparison with standard errors",
-        "held-out crowd slices"
+        "paired comparisons with standard errors",
+        "held-out worlds",
+        "a movement invariant that caught a reward hack",
+        "nulls reported as nulls"
       ],
       "need": [
         "one-input sensitivity tests",
         "held-out regions of state",
-        "per-stage invariants (conservation, legality)"
+        "story review for dragons and kingdoms"
       ]
     },
     {
@@ -585,16 +601,23 @@
     {
       "id": "T5",
       "name": "Reward hygiene",
-      "status": "planned",
+      "status": "partial",
       "goal": "Stop optimisers exploiting the score.",
       "have": [
         "paired comparisons",
-        "conservation checks"
+        "conservation by construction (only legal options)",
+        "the movement invariant"
       ],
       "need": [
         "adversarial probes per stage",
         "a KL anchor to the rule when learning from outcomes"
       ]
     }
+  ],
+  "findings": [
+    "Only L1 shows a gain over the rule. L2 to L5 are nulls, L6 is a design axis and L7 holds only weakly. The hand-written rules are close to a local optimum for the objectives measured, except where they choose at random (travel destination).",
+    "A reward hack appeared at once: an unconstrained daily-life brain stopped travelling (residents at home are reset to fed) and refused every bandit camp. Fixing the rule's decision to go, leaving story-critical choices with the rule, and tracking movement as an invariant closed it.",
+    "Small effects need many worlds. A 100-world result at L5 reversed on 400 fresh worlds, and town outcomes vary by 8 hunger points between worlds.",
+    "The unattended sim decays: every road closes within about 20 years, two of six towns are abandoned by year 100, and successors are born as age-0 children. Long-horizon experiments are only valid for the first 10 to 15 simulated years."
   ]
 }
