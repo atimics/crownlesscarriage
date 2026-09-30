@@ -439,7 +439,7 @@
       ],
       "interface": {
         "state": "missing",
-        "note": "One dragon per world; DRAGON_CROWNED fires about once and DRAGON_RETALIATION 0.4 times per two years, mostly after a player theft. Most dragon events never fire unattended (hunt, battle, brood, mustering), so scenarios must be injected."
+        "note": "One dragon per world; DRAGON_CROWNED fires about once and DRAGON_RETALIATION 0.4 times per two years. The hoard is stolen unattended at 0.5 per world, the same rate as goblin hoard heists, so I expect retaliation to follow them (trigger code not read). Most dragon events never fire unattended (hunt, battle, brood, mustering), so scenarios must be injected."
       },
       "commands": [
         "CC_COMMAND_STEAL_DRAGON_HOARD",
@@ -462,7 +462,7 @@
         "CcDragonCampaign",
         "CcDragonCult"
       ],
-      "size_hint": "Start at 5M; scale to 10M-50M only if the option space and reward become rich. The one measured 5M-to-50M comparison (byte language modelling) gained 11% for ten times the parameters.",
+      "size_hint": "Start at 5M; scale to 10M-50M only if the option space and reward become rich. The one measured 5M-to-50M comparison (byte language modelling) gained 11% for ten times the parameters",
       "dependencies": [
         "L4",
         "L5"

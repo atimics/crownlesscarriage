@@ -301,7 +301,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 - lineage: brood survives
 - story pacing: an omen and a reckoning that make sense
 
-**Interface (missing).** One dragon per world; DRAGON_CROWNED fires about once and DRAGON_RETALIATION 0.4 times per two years, mostly after a player theft. Most dragon events never fire unattended (hunt, battle, brood, mustering), so scenarios must be injected.
+**Interface (missing).** One dragon per world; DRAGON_CROWNED fires about once and DRAGON_RETALIATION 0.4 times per two years. The hoard is stolen unattended at 0.5 per world, the same rate as goblin hoard heists, so I expect retaliation to follow them (trigger code not read). Most dragon events never fire unattended (hunt, battle, brood, mustering), so scenarios must be injected.
 
 **Unattended, per world:** DRAGON_CROWNED 1.0; DRAGON_OMEN 0.5; DRAGON_RETALIATION 0.4; DRAGON_HOARD_STOLEN 0.5; DRAGON_TREASURE_RETURNED 0.4; DRAGON_HUNT (never fires unattended); DRAGON_BROOD (never fires unattended); DRAGON_BATTLE (never fires unattended); DRAGON_MUSTERED (never fires unattended).
 
@@ -309,7 +309,7 @@ Census: 60 unattended worlds of 730 days each (`tools/sim_census.c`, `tools/dial
 
 **Structures:** `CcDragon`, `CcDragonCampaign`, `CcDragonCult`.
 
-**Model size.** Start at 5M; scale to 10M-50M only if the option space and reward become rich. The one measured 5M-to-50M comparison (byte language modelling) gained 11% for ten times the parameters..
+**Model size.** Start at 5M; scale to 10M-50M only if the option space and reward become rich. The one measured 5M-to-50M comparison (byte language modelling) gained 11% for ten times the parameters.
 
 **First experiment.** Build accelerated scenarios (a theft, a rival campaign) and score territory stability and crown continuity over 20 years.
 
