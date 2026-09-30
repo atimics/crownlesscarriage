@@ -17,22 +17,42 @@ later, or never.
 
 ## Scope (hard stop)
 
-Actors: townsfolk by trade (baker, butcher, candlestick maker), town guards, bandits, carriages and
-caravans, three goblin factions, dragons. Places: towns, roads, goblin camps, tunnels, the hoard.
-Goods: food, tools, wax, crowns, treasures, tomes.
+The world is **entities and locations**, with deciding abstracted away. There are no role types.
+An entity is a person, goblin, dragon, carriage or caravan: a bundle of needs, inventory, traits,
+a location and an affiliation. A location is a town, camp, road, tunnel, mine, the capital or the
+hoard. **The map is fixed** (the real Crownless map, exported as data from the current sim), so
+geography decides how factions arise.
+
+Everything an entity can do is a **verb** with legal-option rules and a deterministic outcome:
+move, take, trade, make, fight, dig, join, leave, pay tribute, lend, repay. The rules list which
+verbs are legal for an entity right now. The **decider** picks one. A "baker" is just an entity
+that keeps choosing to make bread, and a "bandit" is one that keeps choosing to ambush carriages.
+Roles are labels we put on the log afterwards, not types in the code.
 
 Not in scope: rendering, dialogue text, the royal court, kingdoms, the full event catalogue of
-the current sim. sim2 does not try to match the old sim line by line. It has to reproduce the
-same kinds of behaviour at a similar size: ambushes, smuggling chains, famine, a dragon that
-burns towns.
+the current sim. sim2 does not try to match the old sim line by line. It has to reproduce the same
+kinds of behaviour at a similar size: ambushes, smuggling chains, famine, a dragon that burns towns.
 
 ## Rules of the world
 
-- **Bandits waylay carriages, not towns.** They are recruited from hungry townsfolk.
-- **Goblins** buy, beg, borrow or steal crowns, treasures and tomes, move them camp to camp in
-  caravans, and dig tunnels toward the dragon hoard. Three factions.
-- **The dragon hoard is a sink** sized to the money supply. A dragon with no food raids.
-- **Guards** are opposed to bandits and paid from a tax on trade.
+- **Bandits emerge.** A hungry, poor entity can choose to join a band and waylay carriages. Towns
+  are not raided.
+- **Goblins** (three factions) buy, beg, borrow or steal crowns, treasures and tomes, move them
+  camp to camp in caravans, and dig tunnels toward the dragon hoard.
+- **Tribute selects goblin tribes.** The dragon kills the goblin tribes that brought it the least
+  tribute. This is a fixed rule, not a decision, and it is the world's own selection pressure:
+  it culls the worst, not at random.
+- **Money.** Crowns are minted only in the capital, from silver ingots that come from Silverwick.
+  Ingots are the faucet. The hoard is the sink. Money supply is therefore bounded by the mine and
+  the road between Silverwick and the capital.
+- **Credit.** Some towns have scribes who trade paper and promises recorded in tomes. A promise is
+  an entity (issuer, holder, amount, due tick) that can be traded or defaulted on. Scribes come in a
+  later phase, after the crown-only baseline is stable.
+- **Guards** oppose bandits and are paid from a tax on trade. A guard is an entity that chose to
+  stand watch.
+- **Births and deaths are emergent.** An entity dies when its energy reaches 0. It reproduces when
+  energy is above a threshold and a legal partner or site is present, splitting energy with the
+  child. The child inherits traits with small mutations.
 
 ## Architecture
 
@@ -76,11 +96,28 @@ mutated from a small authored table. Crowds get coarse knowledge, not per-fact s
 
 ## Decisions and brains
 
-One interface: `decide(role, observation, options) -> index` over a fixed-size masked option list.
-A rule and a net answer the same slots (`research/04`). A decision is requested only when a goal
-ends, is invalidated, or a need crosses a threshold. Observations are a needs vector weighted by
-personality plus beliefs. One brain per role, never shared across roles. Brains can be batched per
-role per tick for net inference.
+One interface: `decide(species, observation, options) -> index` over a fixed-size masked option
+list. A rule and a net answer the same slots (`research/04`). A decision is requested only when a
+goal ends, is invalidated, or a need crosses a threshold.
+
+**One decider per species** (human, goblin, dragon), not per role. Within a species, behaviour
+differs only through the observation: needs, inventory, location, affiliation, inherited traits and
+beliefs. This is the Neural MMO setup, and it is the "one brain with everyone's different contexts"
+idea from earlier. It also removes the L4 problem of one model serving conflicting objectives
+(raider against villager): all entities share one fitness, survival and reproduction, and the
+conflict lives in the world.
+
+Two timescales of evolution:
+1. **Across worlds:** net weights are trained by evolution strategies against survival and
+   reproduction read from the log.
+2. **Within a world:** a small inherited trait vector (personality) mutates at birth, so lineages
+   can drift and be selected. It feeds the observation.
+
+The dragon starts as a structured rule. It can become a decider later.
+
+The research warned against one net shared across fixed roles, since roles had conflicting
+objectives. Roles are no longer fixed, so that warning applies differently. We will watch for one
+net failing to serve very different entities, and split by species if needed.
 
 ## Economy and ecology (starting values, to be tuned; see `research/05`)
 
@@ -92,7 +129,8 @@ role per tick for net inference.
 - Bandit join: hunger minus risk-aversion x P(caught) above a threshold, with
   P(caught) = 1 - exp(-k x guards / bandits). Attack if P(win) x loot covers the expected loss.
   Do not respawn killed bandits instantly. Scale recruitment by recent losses.
-- Hoard intake is proportional to (circulating money - target).
+- Crowns enter only from the capital mint (silver ingots from Silverwick). Hoard intake is
+  proportional to (circulating money - target), so the faucet and the sink stay in balance.
 
 ## Keeping the ecology alive while training (`research/04`)
 
@@ -110,17 +148,27 @@ backstops per role, because extinction in a small population is absorbing.
 5. **Only then:** swap in one role's brain and ask whether the world survives, and whether the
    brain's lineage does.
 
-## Open decisions (need an answer before code)
+## Decided
 
-1. Tick length and trade-cycle length. Suggestion: one tick = one hour, ticks per day = 24,
-   trade cycle = a few days.
-2. Who mints crowns? Suggestion: a mint at each town, tied to the tax, plus the hoard as the sink.
-3. Can bandits return to town life? Suggestion: yes, after a quiet period. Otherwise the
-   bandit pool only grows.
-4. Do prices spread only through caravans? Suggestion: yes. It makes caravans and ambushes matter.
-5. Scripted fraction per role. No source gives a number, so we measure it in the baseline.
-6. Reproduction: mating, or copy-with-mutation of a brain? Suggestion: start with copy-with-mutation.
-7. Fitness of an extinct role: suggestion is that extinction scores the worst and the run ends.
+- Crowns are minted only in the capital from Silverwick silver ingots. Some towns have scribes who
+  trade paper and promises.
+- The map is fixed. Factions arise from geography. The dragon kills the goblin tribes that paid the
+  least tribute.
+- Human and goblin behaviour and reproduction are emergent. No role types. Deciding is abstracted
+  into one interface, with structured rules around it.
+
+## Open decisions
+
+1. Tick length and trade-cycle length. Suggestion: one tick = one hour, 24 a day, a trade cycle of a
+   few days.
+2. One decider per species (human, goblin, dragon), or one for all? Suggestion: per species. The
+   action sets differ.
+3. Can an entity leave a band? Suggestion: yes, after a quiet period, or the bandit pool only grows.
+4. Do prices spread only through caravans? Suggestion: yes.
+5. Promises: model as tradable debt entities, added after the crown-only baseline. Agree?
+6. What stays scripted as a backstop? Suggestion: the dragon's tribute rule and a founder floor per
+   species. We measure the rest in the baseline.
+7. Fitness of an extinct species: suggestion is that extinction scores worst and the run ends.
 
 ## Risks
 
@@ -131,8 +179,8 @@ backstops per role, because extinction in a small population is absorbing.
 ## First build steps, if approved
 
 1. Core: arena, pools, event queue, RNG, hash, clone, with cross-platform hash in CI.
-2. Town economy only, rule brains: baker, butcher, candlestick maker, prices, famine.
-3. Add bandits, guards and carriages. Run the baseline.
+2. Locations, entities, verbs and a rule decider on the fixed map: food, prices, famine.
+3. Add the mint, carriages and emergent bandits and guards. Run the baseline.
 4. Add goblins, tunnels and the hoard. Re-run the baseline.
 5. Add the dragon. Then the survival experiments.
 
