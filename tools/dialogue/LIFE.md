@@ -129,6 +129,10 @@ years). The hook offers any hungry town of the kingdom, or holding the treasury.
 - A 60-generation search looked promising on 100 worlds (hunger -0.29, z = -1.3, welfare +0.004 +- 0.007).
   On 400 fresh worlds it was slightly **worse**: welfare -0.007 +- 0.0035 (z = -2.0), legitimacy -0.35, treasury
   +5.6 (it funds less). The earlier hint was noise, so the rule (fund the hungriest) stands.
+- A full search (120 generations, 64 candidates, 48 worlds per generation) gave +0.009 +- 0.007 on 100 held-out worlds
+  and, on 400 fresh ones, welfare -0.0009 +- 0.0038 (z = -0.2, better in 185 and worse in 185), hunger +0.07 (z = 0.5),
+  legitimacy +0.05 (z = 0.3). Its treasury ends 3.9 crowns higher (z = 2.7): a slightly thriftier kingdom, not a better one.
+  The null now rests on a full search and a 400-world test, like L3's gain.
 - War orders and succession could not be tested: WAR_DECLARED never fires in unattended worlds.
 
 # L6: the dragon (which town to burn)

@@ -415,7 +415,7 @@
         "tools/dialogue/LIFE.md"
       ],
       "verdict": "null",
-      "result": "Null. Relief spending is a small lever (never spending raises hunger by 0.63 of 13.1). A search that looked promising on 100 worlds was slightly worse on 400 fresh ones (welfare -0.007, z = -2.0), so the rule (fund the hungriest) stands. War could not be tested: WAR_DECLARED never fires unattended."
+      "result": "Null, confirmed by a full search. Relief spending is a small lever (never spending raises hunger by 0.63 of 13.1). A first 60-generation search looked promising on 100 worlds and was slightly worse on 400 fresh ones (z = -2.0); a full search (120 generations) gave welfare -0.0009 +- 0.0038 on 400 fresh worlds (z = -0.2, 185 better and 185 worse), with treasury 3.9 crowns higher (z = 2.7) and no change in hunger or legitimacy. The rule (fund the hungriest) stands. War could not be tested: WAR_DECLARED never fires unattended."
     },
     {
       "id": "L6",
