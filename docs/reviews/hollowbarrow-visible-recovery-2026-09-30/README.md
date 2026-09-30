@@ -7,7 +7,7 @@ This review uses synthetic saved worlds with the same abandoned-town road and ca
 - Thornford had zero residents, visitors, services, and food rations. The company still held two Wood. The town showed a road choice and an unavailable care action.
 - A mare near foaling blocked a separate road. The visible button gave the saved reason: “A mare near foaling must remain at the stable.”
 - The player used **Choose a road** and four visible road legs to reach Gloamgate. Its care action explained that it had no staffed stable.
-- The player used **Board Crownless carriage → Travel → Alderwatch**. Three **Travel on** actions, with stops and resumes, reached the staffed town.
+- The player used **Board Crownless carriage → Travel → Alderwatch**. Three **Travel on** actions reached the staffed town.
 - Alderwatch offered care for five crowns, one market Wheat, and one day. The player tapped the care button. Company crowns went from 42 to 37; horse health went from 65 to 72; hunger went from 1 to 0. The saved care receipt survived a browser reload with hash `17092a618ccdc688`.
 - Both road arrivals kept the company, carriage, and two Wood together. Each leg advanced the saved clock. Every recorded browser command returned HTTP 200.
 

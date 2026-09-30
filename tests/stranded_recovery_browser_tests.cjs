@@ -200,7 +200,10 @@ async function main() {
         else if (visible('Travel'))
           choice = 'Travel';
         if (choice) {
-          await controls.button(choice).tap();
+          if (!await controls.button(choice).clickIfVisible()) {
+            await page.waitForTimeout(250);
+            continue;
+          }
           lastChoice = choice;
           if (current.journey.phase === 4) {
             for (let attempt = 0; attempt < 20; ++attempt) {
