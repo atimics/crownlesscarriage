@@ -166,7 +166,8 @@ METRICS = ('road_days', 'road_hungry', 'road_unsheltered', 'road_bandit', 'road_
            'gossip_pairs', 'gossip_confidence', 'gossip_retellings', 'story_days',
            'town_hunger', 'town_famine', 'town_prosperity', 'town_days', 'raids', 'loot',
            'kingdom_legitimacy', 'kingdom_treasury', 'kingdom_days',
-           'dragon_hoard', 'dragon_memory', 'dragon_retaliations', 'population', 'town_prosperity_now', 'legitimacy_now')
+           'dragon_hoard', 'dragon_memory', 'dragon_retaliations', 'population', 'town_prosperity_now', 'legitimacy_now',
+           'band_members', 'band_supplies', 'band_influence')
 
 
 def policy_size():

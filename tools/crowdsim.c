@@ -567,11 +567,12 @@ CrowdSim *cs_new(uint32_t seed, int days)
  * 14 town hunger summed over town-days, 15 town-days in famine (hunger >= 25), 16 town prosperity summed,
  * 17 town-days, 18 raids on towns, 19 goods taken in raids, 20 kingdom legitimacy summed,
  * 21 kingdom treasury summed, 22 kingdom-days, and at the end: 23 dragon hoard, 24 dragon memory integrity,
- * 25 dragon retaliations, 26 population, 27 town prosperity summed, 28 kingdom legitimacy summed. */
+ * 25 dragon retaliations, 26 population, 27 town prosperity summed, 28 kingdom legitimacy summed, 29 bandit members,
+ * 30 bandit supplies, 31 bandit influence. */
 int cs_run(CrowdSim *w, int days, double *metrics)
 {
     static CcId where[CC_MAX_CHARACTERS_HINT];
-    memset(metrics, 0, 29 * sizeof(double));
+    memset(metrics, 0, 32 * sizeof(double));
     CcId seen_event = 0U;
     for (int32_t i = 0; i < w->sim.event_count; ++i) if (w->sim.events[i].id > seen_event) seen_event = w->sim.events[i].id;
     for (int32_t i = 0; i < w->sim.character_count && i < CC_MAX_CHARACTERS_HINT; ++i)
@@ -635,5 +636,9 @@ int cs_run(CrowdSim *w, int days, double *metrics)
         metrics[26] += (double)w->sim.settlements[t].population; metrics[27] += (double)w->sim.settlements[t].prosperity;
     }
     for (int32_t k = 0; k < w->sim.kingdom_count; ++k) metrics[28] += (double)w->sim.kingdoms[k].legitimacy;
+    for (int32_t b = 0; b < w->sim.bandit_count; ++b) {
+        metrics[29] += (double)w->sim.bandits[b].members; metrics[30] += (double)w->sim.bandits[b].supplies;
+        metrics[31] += (double)w->sim.bandits[b].influence;
+    }
     return w->sim.current_day;
 }
