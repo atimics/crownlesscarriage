@@ -3115,6 +3115,31 @@ static bool UpdateRoadChoiceApproach(LocalState *local, float delta_time)
     return update == CONVOY_UPDATE_OPEN_ROAD_BOOK;
 }
 
+/* The town-street departure and the remote-site drive return from input
+   before the general world update, so nothing else steps their hitched team.
+   Without this the rigs stood frozen mid-stride where they were last stepped
+   and were dragged a reset at a time behind the carriage. The open world
+   steps its own team in the main loop, so it is left alone here. It also
+   runs while stopped, so a halted team settles instead of holding a hoof in
+   the air. */
+static void StepLocalRoadTeam(const CcSim *sim, LocalState *local,
+                              float delta_time)
+{
+    if (local == NULL || local->open_world) return;
+    CcLocalCreatureGaitsAdvanceInternal(CcLocalWorldUpdateNoGaits(
+        &local->course, NULL, sim, delta_time, false, false));
+}
+
+/* One input frame of the drive from the stable to the town gate. True when
+   the carriage reaches the gate and the road book should open. */
+static bool UpdateTownDepartureFrame(const CcSim *sim, LocalState *local,
+                                     float delta_time)
+{
+    StepLocalRoadTeam(sim, local, delta_time);
+    if (local->carriage_stopped) return false;
+    return UpdateRoadChoiceApproach(local, delta_time);
+}
+
 static void BeginTownArrivalState(LocalState *local)
 {
     float pace = local->convoy.pace;
@@ -8697,6 +8722,50 @@ static int RunTownDepartureRegression(void)
         return 1;
     }
 
+    /* Drive the whole street departure the way input does, publishing the
+       team's targets between frames as the main loop does. The team has to
+       keep up with the carriage instead of standing where it was last
+       stepped and being re-seated a jump at a time. */
+    BeginRoadChoiceApproachState(&local, true);
+    float worst_lag = 0.0f;
+    float total_lag = 0.0f;
+    int32_t lag_samples = 0;
+    float team_clock = 0.0f;
+    for (int32_t frame = 0; frame < 2400 &&
+         local.departure.phase == CC_CLIENT_DEPARTURE_TOWN; ++frame) {
+        const float cadence[] = {1.0f / 60.0f, 1.0f / 144.0f, 1.0f / 30.0f};
+        float dt = cadence[frame % 3];
+        team_clock += dt;
+        local.carriage_stopped = frame >= 300 && frame < 360;
+        (void)UpdateTownDepartureFrame(&sim, &local, dt);
+        CcLocalRoadConvoyHorseTargetsInternal(&sim, &local.convoy,
+                                              team_clock);
+        if (frame < 2) continue;
+        float lag = CcLocalRoadConvoyTeamLagInternal(&sim, &local.convoy);
+        if (lag < 0.0f || lag > 2.5f) {
+            (void)fprintf(stderr,
+                          "Town departure team fell behind the carriage at "
+                          "frame %d (lag %.2f, progress %.2f).\n",
+                          (int)frame, (double)lag,
+                          (double)local.departure.town_progress);
+            return 1;
+        }
+        worst_lag = fmaxf(worst_lag, lag);
+        total_lag += lag;
+        lag_samples += 1;
+    }
+    if (lag_samples > 0 && total_lag / (float)lag_samples > 0.5f) {
+        (void)fprintf(stderr,
+                      "Town departure team trailed the carriage by %.2f on "
+                      "average.\n", (double)(total_lag / (float)lag_samples));
+        return 1;
+    }
+    if (local.departure.phase != CC_CLIENT_DEPARTURE_ROAD_BOOK) {
+        (void)fprintf(stderr, "Town departure drive never reached the gate.\n");
+        return 1;
+    }
+    local.carriage_stopped = false;
+
     BeginRoadChoiceApproachState(&local, true);
     local.convoy.pace = 1.0f;
     local.departure.town_progress = 0.99f;
@@ -8783,7 +8852,9 @@ static int RunTownDepartureRegression(void)
         fprintf(stderr, "Departure did not publish its displayed heading and distance.\n");
         return 1;
     }
-    (void)puts("Town departure regression passed");
+    (void)printf("Town departure regression passed (team lag at most %.2f, "
+                 "mean %.2f)\n", (double)worst_lag,
+                 (double)(total_lag / (float)(lag_samples > 0 ? lag_samples : 1)));
     return 0;
 }
 
@@ -10993,6 +11064,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->site_travel_active) {
+            StepLocalRoadTeam(sim, local, delta_time);
             if (local->carriage_stopped) return;
             SiteTravelResult result = UpdateSiteTravelState(
                 local, delta_time);
@@ -11007,8 +11079,7 @@ static void HandleInput(CcJournal **journal, CcSim *sim, int32_t *selected,
             return;
         }
         if (local->road_choice_active) {
-            if (local->carriage_stopped) return;
-            if (UpdateRoadChoiceApproach(local, delta_time)) {
+            if (UpdateTownDepartureFrame(sim, local, delta_time)) {
                 const CcRoute *route = SelectedOutgoingRoute(
                     sim, *selected);
                 if (route != NULL && EnterRoadBookFromTownGate(

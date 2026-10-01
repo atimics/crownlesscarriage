@@ -474,7 +474,10 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
         DrawLitCylinderEx(pole_right, pole_right_end, 0.045f * vehicle_scale,
                        0.035f * vehicle_scale, 7, WORLD_WOOD);
     }
-    DrawCarriedCargoBoxes(player, base, yaw, vehicle_scale);
+    /* The roof rack is laid out in the carriage asset's frame (long axis on
+       x), so it turns with the asset, not with the road heading. */
+    DrawCarriedCargoBoxes(player, base, asset_yaw_degrees * DEG2RAD,
+                          vehicle_scale);
     if (follow_ground) rlPopMatrix();
     if (horses_hitched) {
         DrawRoadHorseTeam(sim, base, pace, travelled, yaw,
@@ -2282,6 +2285,33 @@ void CcLocalRoadConvoyHorseTargetsInternal(const CcSim *sim,
     PublishRoadPonyOnRoadTarget(sim, convoy->town_position,
                                convoy->town_heading_yaw, convoy->pace, false,
                                CC_LOCAL_SCENE_STREET, clock);
+}
+
+/* How far the convoy team's gait controllers stand from where the team is
+   drawn, the larger of the two; negative when the draw would not get a
+   stepped pose. A controller that is never stepped is left behind until it
+   is re-seated, so a growing gap is the pony skipping along the street. */
+float CcLocalRoadConvoyTeamLagInternal(const CcSim *sim,
+                                       const CcLocalConvoyState *convoy)
+{
+    if (sim == NULL || convoy == NULL) return -1.0f;
+    RoadHorsePlacement placements[2];
+    int32_t count = RoadHorsePlacements(sim, convoy->town_position,
+                                        convoy->town_heading_yaw, false,
+                                        CC_LOCAL_SCENE_STREET, 1.0f,
+                                        placements);
+    float lag = 0.0f;
+    for (int32_t i = 0; i < count; ++i) {
+        CcCreatureRigPose pose;
+        if (!CcLocalCreatureGaitPoseInternal(placements[i].slot,
+                placements[i].base, convoy->town_heading_yaw, &pose)) {
+            return -1.0f;
+        }
+        const CreatureGaitCache *cache = &creature_gaits[placements[i].slot];
+        lag = fmaxf(lag, Vector3Distance(placements[i].base,
+            FromLimbVector(cache->controller.ground_position)));
+    }
+    return lag;
 }
 
 void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
