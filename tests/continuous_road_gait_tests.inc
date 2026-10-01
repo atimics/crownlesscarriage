@@ -30,9 +30,9 @@ static void TestContinuousRoadGait(void)
             carriage.heading_yaw = yaw + (leg % 2 != 0 ? PI : 0.0f);
             carriage.pace = .72f;
             CcLocalOpenWorldCarriageTargetsInternal(&sim, &carriage, (float)f/60, 1.0f/60);
-            ground = FromLimbVector(creature_gaits[CREATURE_GAIT_ROAD_HORSE_RIGHT].command.ground_position);
+            ground = FromLimbVector(creature_gaits[CREATURE_GAIT_ROAD_HORSE_LEFT].command.ground_position);
             CcLocalCreatureGaitsAdvanceInternal(1);
-            CreatureGaitCache *cache = &creature_gaits[CREATURE_GAIT_ROAD_HORSE_RIGHT];
+            CreatureGaitCache *cache = &creature_gaits[CREATURE_GAIT_ROAD_HORSE_LEFT];
             if (f > 0 && !rebase && cache->previous_valid) RequireRenderer(fabsf(cache->previous_ground.x - previous.x) < .01f,
                 "compressed translation discarded the preceding visual sample");
             RequireRenderer(Vector3Distance(FromLimbVector(cache->controller.ground_position), ground) < .1f,
@@ -51,7 +51,7 @@ static void TestContinuousRoadGait(void)
             CcLocalOpenWorldCarriageTargetsInternal(&sim, &carriage, 6, 1.0f/60);
             CcLocalCreatureGaitsAdvanceInternal(1);
         }
-        const CreatureGaitCache *stopped = &creature_gaits[CREATURE_GAIT_ROAD_HORSE_RIGHT];
+        const CreatureGaitCache *stopped = &creature_gaits[CREATURE_GAIT_ROAD_HORSE_LEFT];
         float phase = stopped->pose.phase;
         RequireRenderer(stopped->pose.swinging_count == 0, "stopped pony keeps walking");
         for (int f = 0; f < 60; ++f) {
@@ -61,7 +61,7 @@ static void TestContinuousRoadGait(void)
         RequireRenderer(fabsf(stopped->pose.phase-phase)<.0001f, "stopped stride phase advanced");
         /* A new route is an explicit discontinuity, not swept animation. */
         ground.x += 200;
-        (void)CreatureTravelTarget(CREATURE_GAIT_ROAD_HORSE_RIGHT,
+        (void)CreatureTravelTarget(CREATURE_GAIT_ROAD_HORSE_LEFT,
             CC_CREATURE_RIG_GAIT_WALK, 0, ground, 0, .96f, 88, 0, 1.0f/60);
         RequireRenderer(!stopped->previous_valid, "route change retained stale pose interval");
     }

@@ -500,16 +500,16 @@ static bool CcCapturePrepareDeparture(const CcCaptureRequest *request, CcCapture
 
 /* The arrival progress at which the carriage has rolled `distance` world
    units in from the gate along this town's own carriage path. */
-static float CcCaptureArrivalProgressAt(float distance)
+/* The arrival progress at which the carriage is this far along the lane in
+   from the gate. */
+static float ConvoyArrivalProgressAt(float distance)
 {
-    Vector2 points[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
-    int32_t count = CcLocalTownCarriagePath(
-        true, points, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
-    float length = 0.0f;
-    for (int32_t i = 0; i + 1 < count; ++i) {
-        length += hypotf(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
-    }
-    return length > distance ? distance / length : 0.30f;
+    Vector2 path[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t count = ConvoyTownPath(true, path);
+    ConvoyYardTurn turn = ConvoyYardTurnFor(path, count, true,
+        CcLocalRoadHorseLongitudinalOffsetInternal());
+    float total = turn.length + turn.lane - turn.creep;
+    return total > distance ? distance / total : 0.30f;
 }
 
 static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScene *scene)
@@ -544,9 +544,9 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
         scene->local->convoy.phase_progress =
             request->capture_town_arrival_progress >= 0.0f ?
                 request->capture_town_arrival_progress :
-                CcCaptureArrivalProgressAt(
+                ConvoyArrivalProgressAt(
                     CcLocalTownEstablishingSubjectDistance());
-        SetConvoyTownPose(&scene->local->convoy, 0.0f);
+        SetConvoyTownPose(&scene->local->convoy);
         /* Stage the town the way the game does as the carriage rolls in. */
         CcReturnDigest digest;
         if (CcReturnDigestBuild(scene->sim, scene->sim->player.location_id,
@@ -562,9 +562,9 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
            the gate the company is still walking through, not deeper in
            the coach court the default arrival progress settles into. */
         BeginTownArrivalState(scene->local);
-        scene->local->convoy.phase_progress = CcCaptureArrivalProgressAt(
+        scene->local->convoy.phase_progress = ConvoyArrivalProgressAt(
             CcLocalTownEstablishingSubjectDistance());
-        SetConvoyTownPose(&scene->local->convoy, 0.0f);
+        SetConvoyTownPose(&scene->local->convoy);
         CcReturnDigest digest;
         if (CcReturnDigestBuild(scene->sim, scene->sim->player.location_id, &digest)) {
             CcReturnSceneCuesBuild(&digest, &scene->local->return_scene);
@@ -876,9 +876,9 @@ static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScen
            reaches the resident waiting at the staging's speaker spot. A
            town without a staged spot in reach hears it after parking. */
         BeginTownArrivalState(scene->local);
-        scene->local->convoy.phase_progress = CcCaptureArrivalProgressAt(
+        scene->local->convoy.phase_progress = ConvoyArrivalProgressAt(
             CcLocalTownEstablishingSubjectDistance());
-        SetConvoyTownPose(&scene->local->convoy, 0.0f);
+        SetConvoyTownPose(&scene->local->convoy);
         StageReturnScene(scene->sim, scene->local);
         scene->local->gate_voice_offered_at_gate = false;
         if (!OfferGateVoiceAtGate(NULL, scene->sim, scene->local, false)) {

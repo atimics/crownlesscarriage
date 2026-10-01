@@ -64,7 +64,7 @@ static void TestTownPonies(void)
         sim.player.location_id = sim.settlements[town].id;
         CcLocalBindPlace(&sim);
         for (int32_t horse = 0; horse < 2; ++horse) {
-            Vector3 base = CcLocalStablePonyPositionInternal(horse);
+            Vector3 base = CcLocalStablePonyPositionInternal(horse, 2);
             Require(hypotf(base.x - CC_LOCAL_CARRIAGE_X,
                            base.z - CC_LOCAL_CARRIAGE_Z) < 6.0f,
                     "parked pony stays beside the carriage");
