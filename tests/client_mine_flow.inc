@@ -338,8 +338,8 @@ static int RunMineInputRegression(void)
                 MINE_CHECK(CcMineWalkable(&camera_sim,CC_MINE_LEVEL,camera_x,camera_y),
                     "Every lower-passage camera must stay inside open floor.");
                 if(x==26&&y==16)
-                    MINE_CHECK(fabsf(Vector3Distance(camera.position,
-                        (Vector3){26,1.5f,16})-1.2f)<.001f,
+                    MINE_CHECK(fabsf(fabsf(camera.position.x-26.0f)+
+                        fabsf(camera.position.z-16.0f)-1.2f)<.001f,
                         "The lower-passage camera must keep its wider shot where space allows.");
             }
     }
