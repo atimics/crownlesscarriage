@@ -202,6 +202,16 @@ static int RunMineInputRegression(void)
         MINE_CHECK(MineClosedBarDistance(bar_ray,&slab_distance) &&
             fabsf(MineOccluderDistanceExcept(&picked,bar_ray,100.0f,-1,-1)-slab_distance)<.001f,
             "The visible bar beams must use the same occlusion distance as picking.");
+        picked.mine.contest_active=true;
+        MINE_CHECK(fabsf(MineOccluderDistanceExcept(&picked,bar_ray,100.0f,-1,-1)-slab_distance)<.001f,
+            "Combat visibility must stop at the closed bar beams.");
+        MINE_CHECK(MineOccluderDistanceExcept(&picked,bar_ray,2.0f,15,10)==2.0f,
+            "The named bar target may skip its own beams.");
+        picked.mine.bar_open=true;
+        MINE_CHECK(MineOccluderDistanceExcept(&picked,bar_ray,2.0f,-1,-1)==2.0f,
+            "Opening the bar must clear visibility through its tile.");
+        picked.mine.bar_open=false;
+        picked.mine.contest_active=false;
         MINE_CHECK(MineLabelPosition(surface,&picked,&pick_local,(Vector3){15,1,10},15,10,
                                       &label_x,&label_y) &&
             label_x>=80 && label_x<=550 && label_y>=12 && label_y<=300,
@@ -315,6 +325,23 @@ static int RunMineInputRegression(void)
             camera.target.y<camera.position.y &&
             camera.fovy>=60.0f && camera.fovy<=75.0f,
             "The tunnel camera must frame an authored first-person chamber view.");
+    }
+    {
+        CcSim camera_sim=sim;
+        camera_sim.mine.phase=CC_MINE_LEVEL;
+        for(int32_t y=13;y<19;++y) for(int32_t x=24;x<29;++x)
+            for(int32_t facing=0;facing<4;++facing) {
+                camera_sim.mine.x=x;camera_sim.mine.y=y;
+                Camera3D camera=CcLocalMineCamera(&camera_sim,facing);
+                int32_t camera_x=(int32_t)floorf(camera.position.x+.5f);
+                int32_t camera_y=(int32_t)floorf(camera.position.z+.5f);
+                MINE_CHECK(CcMineWalkable(&camera_sim,CC_MINE_LEVEL,camera_x,camera_y),
+                    "Every lower-passage camera must stay inside open floor.");
+                if(x==26&&y==16)
+                    MINE_CHECK(fabsf(Vector3Distance(camera.position,
+                        (Vector3){26,1.5f,16})-1.2f)<.001f,
+                        "The lower-passage camera must keep its wider shot where space allows.");
+            }
     }
     static LocalState repeated;
     repeated=local;
