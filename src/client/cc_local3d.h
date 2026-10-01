@@ -649,6 +649,8 @@ void CcLocalRoadSiteHorseTargetsInternal(const CcSim *sim,
     float clock);
 void CcLocalRoadConvoyHorseTargetsInternal(const CcSim *sim,
     const CcLocalConvoyState *convoy, float clock);
+float CcLocalRoadConvoyTeamLagInternal(const CcSim *sim,
+    const CcLocalConvoyState *convoy);
 /* Fraction of a fixed step remaining in the local accumulator: the subframe
    alpha for presentation interpolation. */
 float CcLocalCourseAlpha(const CcLocalCourse *course);
