@@ -1195,42 +1195,59 @@ static float WrapLocalAngle(float angle)
     return angle;
 }
 
-static void SampleConvoyPath(const Vector2 *points, int32_t count,
-                             float progress, Vector2 *position,
-                             float *heading, float *travelled)
+static float ConvoyPathLength(const Vector2 *points, int32_t count)
 {
-    if (points == NULL || count < 2 || position == NULL || heading == NULL) {
-        return;
-    }
     float length = 0.0f;
     for (int32_t i = 0; i + 1 < count; ++i) {
-        float x = points[i + 1].x - points[i].x;
-        float y = points[i + 1].y - points[i].y;
-        length += sqrtf(x * x + y * y);
+        length += hypotf(points[i + 1].x - points[i].x,
+                         points[i + 1].y - points[i].y);
     }
-    float remaining = ClampUnit(progress) * length;
-    /* The path is walked by arc length, so this is the ground the wheels have
-       rolled over and the team has stepped through. */
-    if (travelled != NULL) *travelled = remaining;
-    for (int32_t i = 0; i + 1 < count; ++i) {
-        Vector2 delta = {points[i + 1].x - points[i].x,
-                         points[i + 1].y - points[i].y};
-        float segment = sqrtf(delta.x * delta.x + delta.y * delta.y);
-        if (remaining <= segment || i + 2 == count) {
-            float amount = segment > 0.0001f ? remaining / segment : 0.0f;
-            amount = ClampUnit(amount);
-            *position = (Vector2){
-                points[i].x + delta.x * amount,
-                points[i].y + delta.y * amount
-            };
-            *heading = atan2f(delta.x, delta.y);
-            return;
-        }
-        remaining -= segment;
-    }
+    return length;
 }
 
-static void SetConvoyTownPose(CcLocalConvoyState *convoy, float delta_time)
+/* A point an arc length along the path. Past either end it carries on along
+   the end segment, so a point a hitch-length ahead of the gate still has
+   somewhere to be. */
+static Vector2 ConvoyPathPoint(const Vector2 *points, int32_t count,
+                               float distance)
+{
+    int32_t segment_index = 0;
+    float remaining = distance;
+    while (segment_index + 2 < count) {
+        float segment = hypotf(points[segment_index + 1].x - points[segment_index].x,
+                               points[segment_index + 1].y - points[segment_index].y);
+        if (remaining <= segment) break;
+        remaining -= segment;
+        segment_index += 1;
+    }
+    Vector2 from = points[segment_index];
+    Vector2 delta = {points[segment_index + 1].x - from.x,
+                     points[segment_index + 1].y - from.y};
+    float segment = hypotf(delta.x, delta.y);
+    float amount = segment > 0.0001f ? remaining / segment : 0.0f;
+    return (Vector2){from.x + delta.x * amount, from.y + delta.y * amount};
+}
+
+/* The carriage faces the point a hitch-length ahead on the path: where the
+   team is. The team then walks the path itself and corners round it, instead
+   of the carriage pivoting at a kink and swinging its team sideways. */
+static float ConvoyPathHeading(const Vector2 *points, int32_t count,
+                               float distance, float hitch)
+{
+    Vector2 at = ConvoyPathPoint(points, count, distance);
+    Vector2 ahead = ConvoyPathPoint(points, count, distance + hitch);
+    return atan2f(ahead.x - at.x, ahead.y - at.y);
+}
+
+/* The carriage parks facing +z with its team standing hitched in front of it
+   at the stable rail, but every town lane leaves the yard sideways. The team
+   swings the carriage round between the two: the carriage creeps this far
+   along the lane while the team walks an arc about it. */
+#define CONVOY_YARD_TURN_CREEP 2.0f
+#define CONVOY_PARKED_HEADING 0.0f
+
+/* The fallback paths serve a place without authored carriage lanes. */
+static int32_t ConvoyTownPath(bool arriving, Vector2 *points)
 {
     static const Vector2 departure_path[] = {
         {CC_LOCAL_CARRIAGE_X, CC_LOCAL_CARRIAGE_Z},
@@ -1246,32 +1263,95 @@ static void SetConvoyTownPose(CcLocalConvoyState *convoy, float delta_time)
     };
     _Static_assert(sizeof(departure_path) == sizeof(arrival_path),
                    "Convoy town paths must have the same point count.");
-    const Vector2 *path = convoy->phase == CC_LOCAL_CONVOY_ARRIVING ?
-        arrival_path : departure_path;
-    int32_t count = (int32_t)(sizeof(departure_path) /
-                              sizeof(departure_path[0]));
-    Vector2 town_path[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
-    int32_t town_count = CcLocalTownCarriagePath(
-        convoy->phase == CC_LOCAL_CONVOY_ARRIVING, town_path,
-        CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
-    if (town_count >= 2) {
-        path = town_path;
-        count = town_count;
+    int32_t count = CcLocalTownCarriagePath(
+        arriving, points, CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY);
+    if (count >= 2) return count;
+    count = (int32_t)(sizeof(departure_path) / sizeof(departure_path[0]));
+    memcpy(points, arriving ? arrival_path : departure_path,
+           sizeof(departure_path));
+    return count;
+}
+
+/* Where the yard turn meets the lane, and how far the team walks round it. */
+typedef struct ConvoyYardTurn {
+    float lane;
+    float creep;
+    float join;
+    float join_heading;
+    float sweep;
+    float length;
+} ConvoyYardTurn;
+
+static ConvoyYardTurn ConvoyYardTurnFor(const Vector2 *path, int32_t count,
+                                        bool arriving, float hitch)
+{
+    ConvoyYardTurn turn = {.lane = ConvoyPathLength(path, count)};
+    turn.creep = fminf(CONVOY_YARD_TURN_CREEP, turn.lane * 0.5f);
+    turn.join = arriving ? turn.lane - turn.creep : turn.creep;
+    turn.join_heading = ConvoyPathHeading(path, count, turn.join, hitch);
+    turn.sweep = arriving ?
+        WrapLocalAngle(CONVOY_PARKED_HEADING - turn.join_heading) :
+        WrapLocalAngle(turn.join_heading - CONVOY_PARKED_HEADING);
+    turn.length = hitch * fabsf(turn.sweep);
+    return turn;
+}
+
+static void SetConvoyTownPose(CcLocalConvoyState *convoy)
+{
+    bool arriving = convoy->phase == CC_LOCAL_CONVOY_ARRIVING;
+    Vector2 path[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t count = ConvoyTownPath(arriving, path);
+    float hitch = CcLocalRoadHorseLongitudinalOffsetInternal();
+    ConvoyYardTurn turn = ConvoyYardTurnFor(path, count, arriving, hitch);
+    float lane_drive = turn.lane - turn.creep;
+    float driven = ClampUnit(convoy->phase_progress) *
+        (turn.length + lane_drive);
+    float in_lane = arriving ? driven : driven - turn.length;
+    float along = 0.0f;
+    float heading = 0.0f;
+    convoy->team_turn_yaw = 0.0f;
+    if (in_lane >= 0.0f && in_lane <= lane_drive) {
+        along = arriving ? in_lane : turn.creep + in_lane;
+        heading = ConvoyPathHeading(path, count, along, hitch);
+    } else {
+        float amount = turn.length > 0.0001f ?
+            ClampUnit(arriving ? (driven - lane_drive) / turn.length :
+                                 driven / turn.length) : 1.0f;
+        along = arriving ? turn.join + turn.creep * amount :
+                           turn.creep * amount;
+        heading = arriving ? turn.join_heading + turn.sweep * amount :
+                             CONVOY_PARKED_HEADING + turn.sweep * amount;
+        /* The pole pivots with the carriage, so the team end of it moves
+           sideways; the ponies turn to walk that arc and turn back to the
+           pole as it straightens out. */
+        float into = ClampUnit(amount / 0.15f);
+        float out_of = ClampUnit((1.0f - amount) / 0.15f);
+        convoy->team_turn_yaw = copysignf(0.5f * PI, turn.sweep) *
+            into * into * (3.0f - 2.0f * into) *
+            out_of * out_of * (3.0f - 2.0f * out_of);
     }
-    Vector2 position = {0};
-    float heading = convoy->town_heading_yaw;
-    SampleConvoyPath(path, count, convoy->phase_progress,
-                     &position, &heading, &convoy->travelled);
-    float turn = WrapLocalAngle(heading - convoy->town_heading_yaw);
-    float turn_weight = delta_time > 0.0f ?
-        ClampUnit(delta_time * 4.5f) : 1.0f;
-    convoy->town_heading_yaw = WrapLocalAngle(
-        convoy->town_heading_yaw + turn * turn_weight);
+    Vector2 position = ConvoyPathPoint(path, count, along);
+    /* Lane arc length, so this is the ground the wheels have rolled over;
+       through the yard turn the wheels barely roll. */
+    convoy->travelled = along;
+    convoy->town_heading_yaw = WrapLocalAngle(heading);
     position.x += cosf(convoy->town_heading_yaw) * convoy->lateral_offset;
     position.y -= sinf(convoy->town_heading_yaw) * convoy->lateral_offset;
     convoy->town_position = (Vector3){
         position.x, CcLocalTerrainHeightAt(position.x, position.y), position.y
     };
+}
+
+/* The arrival progress at which the carriage is this far along the lane in
+   from the gate. */
+static float ConvoyArrivalProgressAt(float distance)
+{
+    Vector2 path[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t count = ConvoyTownPath(true, path);
+    ConvoyYardTurn turn = ConvoyYardTurnFor(path, count, true,
+        CcLocalRoadHorseLongitudinalOffsetInternal());
+    float total = turn.length + turn.lane - turn.creep;
+    return total > distance ? distance / total : 0.30f;
 }
 
 typedef enum ConvoyUpdateResult {
@@ -1324,7 +1404,7 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
         CcClientDepartureAdvance(
             &local->departure, convoy->pace, delta_time);
         convoy->phase_progress = local->departure.town_progress;
-        SetConvoyTownPose(convoy, delta_time);
+        SetConvoyTownPose(convoy);
         if (local->departure.phase == CC_CLIENT_DEPARTURE_ROAD_BOOK) {
             convoy->lateral_offset = 0.0f;
             return CONVOY_UPDATE_OPEN_ROAD_BOOK;
@@ -1335,7 +1415,7 @@ static ConvoyUpdateResult UpdateDrivenConvoy(LocalState *local,
         CcClientArrivalAdvance(
             &local->arrival, convoy->pace, delta_time);
         convoy->phase_progress = local->arrival.town_progress;
-        SetConvoyTownPose(convoy, delta_time);
+        SetConvoyTownPose(convoy);
         return local->arrival.phase == CC_CLIENT_ARRIVAL_PARKED ?
             CONVOY_UPDATE_PARKED : CONVOY_UPDATE_NONE;
     }
@@ -3094,7 +3174,8 @@ static void BeginRoadChoiceApproachState(LocalState *local, bool from_town)
     local->course.alarm_countdown = 1000.0f;
     if (from_town) {
         CcClientDepartureBegin(&local->departure);
-        SetConvoyTownPose(&local->convoy, 0.0f);
+        SetConvoyTownPose(&local->convoy);
+        CcLocalCarriageTeamHandOverInternal(true);
     } else {
         local->departure = (CcClientDepartureTransition){
             .phase = CC_CLIENT_DEPARTURE_READY,
@@ -3156,7 +3237,7 @@ static void BeginTownArrivalState(LocalState *local)
     local->convoy.phase = CC_LOCAL_CONVOY_ARRIVING;
     local->convoy.pace = pace > 0.05f ? pace : 0.48f;
     local->convoy.phase_progress = arrival.town_progress;
-    SetConvoyTownPose(&local->convoy, 0.0f);
+    SetConvoyTownPose(&local->convoy);
     local->course.alarm_countdown = 1000.0f;
     local->journey_travel_active = true;
 }
@@ -7949,6 +8030,7 @@ static void FinishTownArrivalState(const CcSim *sim, LocalState *local,
     *selected = FirstOutgoingRouteIndex(sim);
     LeaveOpenWorld(local);
     ResetLocalStatePreservingAthletics(local);
+    CcLocalCarriageTeamHandOverInternal(false);
     StageReturnScene(sim, local);
     (void)snprintf(message, message_capacity,
                    "The carriage is parked in town.");
@@ -8726,6 +8808,74 @@ static int RunTownDepartureRegression(void)
        team's targets between frames as the main loop does. The team has to
        keep up with the carriage instead of standing where it was last
        stepped and being re-seated a jump at a time. */
+    /* The yard turn: both ends of the town drive meet the parked carriage
+       (facing +z, team at the stable rail) without a cut, and the carriage
+       never snaps round at a corner of the lane. */
+    CcId home_id = sim.player.location_id;
+    for (int32_t check = 0; check < 2 * sim.settlement_count; ++check) {
+        int32_t pass = check % 2;
+        sim.player.location_id = sim.settlements[check / 2].id;
+        CcLocalBindPlace(&sim);
+        float crab_total = 0.0f;
+        float crab_distance = 0.0f;
+        CcLocalConvoyState yard = {.phase = pass == 0 ?
+            CC_LOCAL_CONVOY_DEPARTING : CC_LOCAL_CONVOY_ARRIVING};
+        float hitch = CcLocalRoadHorseLongitudinalOffsetInternal();
+        Vector2 team_before = {0};
+        float heading_before = 0.0f;
+        for (int32_t step = 0; step <= 2000; ++step) {
+            yard.phase_progress = (float)step / 2000.0f;
+            SetConvoyTownPose(&yard);
+            Vector2 team = {
+                yard.town_position.x + sinf(yard.town_heading_yaw) * hitch,
+                yard.town_position.z + cosf(yard.town_heading_yaw) * hitch};
+            bool parked_end = pass == 0 ? step == 0 : step == 2000;
+            if (parked_end &&
+                (fabsf(yard.town_position.x - CC_LOCAL_CARRIAGE_X) > 0.001f ||
+                 fabsf(yard.town_position.z - CC_LOCAL_CARRIAGE_Z) > 0.001f ||
+                 fabsf(WrapLocalAngle(yard.town_heading_yaw)) > 0.001f)) {
+                (void)fprintf(stderr, "%s %s does not meet the parked "
+                              "carriage pose.\n",
+                              sim.settlements[check / 2].name,
+                              pass == 0 ? "departure" : "arrival");
+                return 1;
+            }
+            if (step > 0 &&
+                (fabsf(WrapLocalAngle(yard.town_heading_yaw - heading_before)) >
+                     0.03f ||
+                 hypotf(team.x - team_before.x, team.y - team_before.y) >
+                     0.25f)) {
+                (void)fprintf(stderr, "%s %s turns the carriage in a jump "
+                              "at progress %.3f.\n",
+                              sim.settlements[check / 2].name,
+                              pass == 0 ? "departure" : "arrival",
+                              (double)yard.phase_progress);
+                return 1;
+            }
+            float moved = hypotf(team.x - team_before.x, team.y - team_before.y);
+            if (step > 0 && moved > 0.001f && yard.team_turn_yaw != 0.0f) {
+                float facing = yard.town_heading_yaw + yard.team_turn_yaw;
+                float walk = atan2f(team.x - team_before.x, team.y - team_before.y);
+                crab_total += fabsf(WrapLocalAngle(walk - facing)) * moved;
+                crab_distance += moved;
+            }
+            team_before = team;
+            heading_before = yard.town_heading_yaw;
+        }
+        /* Through the yard turn the ponies walk where they face, not
+           sideways round the arc the pivoting pole sweeps. */
+        if (crab_distance > 0.0f && crab_total / crab_distance > 0.45f) {
+            (void)fprintf(stderr, "%s %s team walks %.2f rad off its "
+                          "facing through the yard turn.\n",
+                          sim.settlements[check / 2].name,
+                          pass == 0 ? "departure" : "arrival",
+                          (double)(crab_total / crab_distance));
+            return 1;
+        }
+    }
+    sim.player.location_id = home_id;
+    CcLocalBindPlace(NULL);
+
     BeginRoadChoiceApproachState(&local, true);
     float worst_lag = 0.0f;
     float total_lag = 0.0f;

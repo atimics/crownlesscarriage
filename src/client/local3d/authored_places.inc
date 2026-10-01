@@ -1189,7 +1189,9 @@ static void DrawCoachHitch(const CcSettlement *place)
     float z = 55.36f;
     DrawBox((Vector3){35.30f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
     DrawBox((Vector3){38.20f, 0.62f, z}, (Vector3){0.18f, 1.24f, 0.18f}, wood);
-    DrawBox((Vector3){36.75f, 0.92f, z}, (Vector3){3.08f, 0.16f, 0.18f}, wood);
+    /* Low enough that the team's traces clear it when the carriage is
+       hitched facing the post. */
+    DrawBox((Vector3){36.75f, 0.58f, z}, (Vector3){3.08f, 0.16f, 0.18f}, wood);
     DrawBox((Vector3){36.75f, 1.62f, z},
             (Vector3){0.14f, 1.40f, 0.14f}, wood);
     DrawBox((Vector3){36.75f, 2.18f, z + 0.05f},

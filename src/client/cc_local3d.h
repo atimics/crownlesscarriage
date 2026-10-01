@@ -132,6 +132,10 @@ typedef struct CcLocalConvoyState {
     /* Ground covered along the town lane, in world units. The renderer rolls
        the wheels and steps the team from this and nothing else. */
     float travelled;
+    /* How far the team is turned from the carriage heading while it walks
+       the carriage round in the yard: the ponies face where they walk, not
+       along a pole that is pivoting under them. Zero on the lane. */
+    float team_turn_yaw;
 } CcLocalConvoyState;
 
 typedef struct CcLocalWorldCarriageState {
@@ -186,6 +190,7 @@ void CcLocalOpenWorldCarriageTargetsInternal(const CcSim *sim,
     const CcLocalWorldCarriageState *carriage, float clock, float delta_time);
 void CcLocalCarriageGaitInterpolateInternal(float alpha);
 void CcLocalCarriageResetGaitsInternal(void);
+void CcLocalCarriageTeamHandOverInternal(bool to_harness);
 
 typedef enum CcLocalAtmospherePreset {
     CC_LOCAL_ATMOSPHERE_CLEAR_DAY = 0,

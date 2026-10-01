@@ -29,7 +29,7 @@ typedef struct CcLocalTerrainMeshStatsInternal {
 
 void CcLocalAgentFixedStepInternal(CcLocalAgent *agent, float delta_time,
                                    bool market_interior);
-Vector3 CcLocalStablePonyPositionInternal(int32_t horse);
+Vector3 CcLocalStablePonyPositionInternal(int32_t horse, int32_t team_count);
 void CcLocalCreatureGaitsFixedStepInternal(float delta_time);
 bool CcLocalCreatureGaitTargetInternal(int32_t slot,
     CcCreatureRigProfile profile, CcCreatureRigGait gait, float clock,

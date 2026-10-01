@@ -142,9 +142,14 @@ typedef struct RoadHorsePlacement {
     int32_t horse;
     int32_t slot;
     Vector3 base;
+    float yaw;
     float initial_phase;
     float rig_scale;
 } RoadHorsePlacement;
+
+/* The yard turn's team facing offset (CcLocalConvoyState::team_turn_yaw).
+   Only the town-street convoy sets it, around its own publish and draw. */
+static float road_team_turn_yaw = 0.0f;
 
 /* Where each hitched pony stands for the road carriage. The draw and the
    update both call this, so the target the controller walks toward is the same
@@ -180,9 +185,10 @@ static int32_t RoadHorsePlacements(const CcSim *sim, Vector3 base, float yaw,
         }
         out[count++] = (RoadHorsePlacement){
             .horse = horse,
-            .slot = (int32_t)(horse < 0 ? CREATURE_GAIT_ROAD_HORSE_LEFT
-                                        : CREATURE_GAIT_ROAD_HORSE_RIGHT),
+            .slot = (int32_t)(horse > 0 ? CREATURE_GAIT_ROAD_HORSE_RIGHT
+                                        : CREATURE_GAIT_ROAD_HORSE_LEFT),
             .base = horse_base,
+            .yaw = yaw + road_team_turn_yaw,
             .initial_phase = horse < 0 ? 0.0f : 0.5f,
             .rig_scale = 0.96f * vehicle_scale};
     }
@@ -200,13 +206,12 @@ static CcCreatureRigGait RoadHorseRigGait(float pace)
 
 static void PublishRoadHorseTargets(const RoadHorsePlacement *placements,
                                     int32_t count, CcCreatureRigGait rig_gait,
-                                    float clock, float yaw,
-                                    CcLocalSceneKind scene)
+                                    float clock, CcLocalSceneKind scene)
 {
     for (int32_t i = 0; i < count; ++i) {
         (void)CcLocalCreatureGaitTargetInternal(placements[i].slot,
             CC_CREATURE_RIG_HORSE, rig_gait, clock,
-            placements[i].initial_phase, placements[i].base, yaw,
+            placements[i].initial_phase, placements[i].base, placements[i].yaw,
             placements[i].rig_scale, scene);
     }
 }
@@ -296,24 +301,25 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base,
         int32_t horse = placements[i].horse;
         Vector3 horse_base = placements[i].base;
         float rig_scale = placements[i].rig_scale;
+        float pony_yaw = placements[i].yaw;
         int32_t seat = CcSimTeamPony(sim, horse > 0 ? 1 : 0);
         Color coat = PONY_COLORS[seat >= 0 ? seat : 0][0];
         CcCreaturePose pose = horse < 0 ? left_pose : right_pose;
         float gait_phase = stride_phase + (horse < 0 ? 0.0f : PI);
         CcCreatureRigPose controlled_pose;
         bool controlled = CcLocalCreatureGaitPoseInternal(
-            placements[i].slot, horse_base, yaw, &controlled_pose);
+            placements[i].slot, horse_base, pony_yaw, &controlled_pose);
         (void)DrawCreatureGait3D(
             CC_CREATURE_HORSE, pose, horse_base,
-            yaw, rig_scale, coat, gait_phase, moving,
+            pony_yaw, rig_scale, coat, gait_phase, moving,
             controlled ? &controlled_pose : NULL);
-        DrawRoadHorseHarness(horse_base, yaw, rig_scale);
+        DrawRoadHorseHarness(horse_base, pony_yaw, rig_scale);
         Vector3 trace_start = CcLocalRoadCarriageSocketInternal(
             base, yaw, pitch, sway, (float)horse * 0.42f * vehicle_scale,
             0.77f * vehicle_scale, 3.05f * vehicle_scale);
         /* The far end rides the pony's own collar socket, so a moving neck or
            head carries the trace instead of a fixed nominal point. */
-        Vector3 trace_end = RoadPonySkinPoint(horse_base, yaw,
+        Vector3 trace_end = RoadPonySkinPoint(horse_base, pony_yaw,
             (Vector3){(float)horse * 0.47f, 1.15f, 0.08f},
             CC_QUADRUPED_CHEST, rig_scale);
         DrawLitCylinderEx(trace_start, trace_end, 0.020f * vehicle_scale,
@@ -323,7 +329,7 @@ static void DrawRoadHorseTeam(const CcSim *sim, Vector3 base,
                                   0.18f * vehicle_scale},
                         (Vector3){0.66f * vehicle_scale,
                                   0.055f * vehicle_scale,
-                                  0.055f * vehicle_scale}, yaw,
+                                  0.055f * vehicle_scale}, pony_yaw,
                         WORLD_WOOD_SHADOW);
     }
 }
@@ -506,10 +512,36 @@ static void DrawRoadCarriage(Vector3 base, const CcSim *sim,
     }
 }
 
-Vector3 CcLocalStablePonyPositionInternal(int32_t horse)
+/* The parked team stands exactly where it is hitched in front of the parked
+   carriage (which faces +z), so leaving and parking hand the same ponies
+   over in place instead of cutting between two spots. */
+Vector3 CcLocalStablePonyPositionInternal(int32_t horse, int32_t team_count)
 {
-    return TerrainWorldPoint(CC_LOCAL_CARRIAGE_X - 2.0f + (float)horse * 2.8f,
-                             CC_LOCAL_CARRIAGE_Z + 5.3f);
+    float lateral = team_count > 1 ?
+        (horse == 0 ? -1.0f : 1.0f) *
+            CcLocalRoadHorseLateralSpacingInternal(false) : 0.0f;
+    return TerrainWorldPoint(CC_LOCAL_CARRIAGE_X + lateral,
+        CC_LOCAL_CARRIAGE_Z + CcLocalRoadHorseLongitudinalOffsetInternal());
+}
+
+/* Move the team's gait controllers between the stable and the harness, so a
+   pony keeps its stance and phase across the switch. Hitched slot for the
+   first pony is the left one, as is its stable slot. */
+void CcLocalCarriageTeamHandOverInternal(bool to_harness)
+{
+    const int32_t stable[2] = {CREATURE_GAIT_STABLE_LEFT,
+                               CREATURE_GAIT_STABLE_RIGHT};
+    const int32_t harness[2] = {CREATURE_GAIT_ROAD_HORSE_LEFT,
+                                CREATURE_GAIT_ROAD_HORSE_RIGHT};
+    for (int32_t horse = 0; horse < 2; ++horse) {
+        const CreatureGaitCache *from =
+            &creature_gaits[to_harness ? stable[horse] : harness[horse]];
+        CreatureGaitCache *to =
+            &creature_gaits[to_harness ? harness[horse] : stable[horse]];
+        if (!from->ready || from->scene != CC_LOCAL_SCENE_STREET) continue;
+        *to = *from;
+        to->travel_route = 0U;
+    }
 }
 
 static void DrawStableHorseTeam(const CcSim *sim, float clock)
@@ -540,7 +572,8 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
             break;
     }
     for (int32_t horse = 0; horse < CcSimHorseTeamCount(sim); ++horse) {
-        Vector3 base = CcLocalStablePonyPositionInternal(horse);
+        Vector3 base = CcLocalStablePonyPositionInternal(
+            horse, CcSimHorseTeamCount(sim));
         int32_t seat = CcSimTeamPony(sim, horse);
         Color coat = PONY_COLORS[seat >= 0 ? seat : 0][0];
         CcCreaturePose pose = CcCreatureSteppedPose(
@@ -559,10 +592,12 @@ static void DrawStableHorseTeam(const CcSim *sim, float clock)
             clock * 0.35f + (float)horse * PI, false,
             controlled ? &controlled_pose : NULL);
     }
-    Vector3 first = CcLocalStablePonyPositionInternal(0);
+    int32_t team = CcSimHorseTeamCount(sim);
+    Vector3 first = CcLocalStablePonyPositionInternal(0, team);
+    Vector3 last = CcLocalStablePonyPositionInternal(team - 1, team);
     float rail_z = first.z + 1.5f;
     float start_x = first.x - 1.1f;
-    float end_x = first.x + (float)(CcSimHorseTeamCount(sim) - 1) * 2.8f + 1.1f;
+    float end_x = last.x + 1.1f;
     float rail_y = CcLocalTerrainHeightAt((start_x + end_x) * 0.5f, rail_z);
     for (int32_t post = 0; post < 2; ++post) {
         float x = post == 0 ? start_x : end_x;
@@ -748,7 +783,7 @@ void CcLocalRoadForkHorseTargetsInternal(const CcSim *sim,
                                         false, CC_LOCAL_SCENE_ROAD, 1.0f,
                                         placements);
     PublishRoadHorseTargets(placements, count, RoadHorseRigGait(pace), clock,
-                            carriage_heading, CC_LOCAL_SCENE_ROAD);
+                            CC_LOCAL_SCENE_ROAD);
     PublishRoadPonyOnRoadTarget(sim, carriage, carriage_heading, pace, false,
                                CC_LOCAL_SCENE_ROAD, clock);
 }
@@ -1243,7 +1278,7 @@ void CcLocalRoadEncounterHorseTargetsInternal(const CcSim *sim, float clock)
     int32_t count = RoadHorsePlacements(sim, base, yaw, bridge_checkpoint,
                                         CC_LOCAL_SCENE_ROAD, 1.0f, placements);
     PublishRoadHorseTargets(placements, count, RoadHorseRigGait(0.0f), clock,
-                            yaw, CC_LOCAL_SCENE_ROAD);
+                            CC_LOCAL_SCENE_ROAD);
     PublishRoadPonyOnRoadTarget(sim, base, yaw, 0.0f, bridge_checkpoint,
                                CC_LOCAL_SCENE_ROAD, clock);
 }
@@ -2029,7 +2064,7 @@ void CcLocalRoadSiteHorseTargetsInternal(const CcSim *sim,
     int32_t count = RoadHorsePlacements(sim, base, yaw, false,
                                         CC_LOCAL_SCENE_ROAD, 1.0f, placements);
     PublishRoadHorseTargets(placements, count, RoadHorseRigGait(pace), clock,
-                            yaw, CC_LOCAL_SCENE_ROAD);
+                            CC_LOCAL_SCENE_ROAD);
     PublishRoadPonyOnRoadTarget(sim, base, yaw, pace, false,
                                CC_LOCAL_SCENE_ROAD, clock);
 }
@@ -2275,13 +2310,14 @@ void CcLocalRoadConvoyHorseTargetsInternal(const CcSim *sim,
         return;
     }
     RoadHorsePlacement placements[2];
+    road_team_turn_yaw = convoy->team_turn_yaw;
     int32_t count = RoadHorsePlacements(sim, convoy->town_position,
                                         convoy->town_heading_yaw, false,
                                         CC_LOCAL_SCENE_STREET, 1.0f,
                                         placements);
+    road_team_turn_yaw = 0.0f;
     PublishRoadHorseTargets(placements, count, RoadHorseRigGait(convoy->pace),
-                            clock, convoy->town_heading_yaw,
-                            CC_LOCAL_SCENE_STREET);
+                            clock, CC_LOCAL_SCENE_STREET);
     PublishRoadPonyOnRoadTarget(sim, convoy->town_position,
                                convoy->town_heading_yaw, convoy->pace, false,
                                CC_LOCAL_SCENE_STREET, clock);
@@ -2296,15 +2332,17 @@ float CcLocalRoadConvoyTeamLagInternal(const CcSim *sim,
 {
     if (sim == NULL || convoy == NULL) return -1.0f;
     RoadHorsePlacement placements[2];
+    road_team_turn_yaw = convoy->team_turn_yaw;
     int32_t count = RoadHorsePlacements(sim, convoy->town_position,
                                         convoy->town_heading_yaw, false,
                                         CC_LOCAL_SCENE_STREET, 1.0f,
                                         placements);
+    road_team_turn_yaw = 0.0f;
     float lag = 0.0f;
     for (int32_t i = 0; i < count; ++i) {
         CcCreatureRigPose pose;
         if (!CcLocalCreatureGaitPoseInternal(placements[i].slot,
-                placements[i].base, convoy->town_heading_yaw, &pose)) {
+                placements[i].base, placements[i].yaw, &pose)) {
             return -1.0f;
         }
         const CreatureGaitCache *cache = &creature_gaits[placements[i].slot];
@@ -2492,10 +2530,12 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
         }
     }
     if (convoy_visible) {
+        road_team_turn_yaw = convoy->team_turn_yaw;
         DrawRoadCarriage(convoy->town_position, sim, clock,
                          convoy->pace, convoy->travelled,
                          convoy->town_heading_yaw, true, false,
                          CC_LOCAL_SCENE_STREET, 1.0f, convoy->travelled);
+        road_team_turn_yaw = 0.0f;
         if (agent != NULL) DrawRobotShell(&convoy_hero);
     }
     if (SceneryPointVisible(CC_LOCAL_NOTICE_X, CC_LOCAL_NOTICE_Z,
