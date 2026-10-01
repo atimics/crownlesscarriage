@@ -500,6 +500,18 @@ static bool CcCapturePrepareDeparture(const CcCaptureRequest *request, CcCapture
 
 /* The arrival progress at which the carriage has rolled `distance` world
    units in from the gate along this town's own carriage path. */
+/* The arrival progress at which the carriage is this far along the lane in
+   from the gate. */
+static float ConvoyArrivalProgressAt(float distance)
+{
+    Vector2 path[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
+    int32_t count = ConvoyTownPath(true, path);
+    ConvoyYardTurn turn = ConvoyYardTurnFor(path, count, true,
+        CcLocalRoadHorseLongitudinalOffsetInternal());
+    float total = turn.length + turn.lane - turn.creep;
+    return total > distance ? distance / total : 0.30f;
+}
+
 static bool CcCapturePrepareLocal(const CcCaptureRequest *request, CcCaptureScene *scene)
 {
     uint32_t walk_cycle_mask = 0;

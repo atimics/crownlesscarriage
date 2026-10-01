@@ -1342,17 +1342,6 @@ static void SetConvoyTownPose(CcLocalConvoyState *convoy)
     };
 }
 
-/* The arrival progress at which the carriage is this far along the lane in
-   from the gate. */
-static float ConvoyArrivalProgressAt(float distance)
-{
-    Vector2 path[CC_LOCAL_CARRIAGE_PATH_POINT_CAPACITY];
-    int32_t count = ConvoyTownPath(true, path);
-    ConvoyYardTurn turn = ConvoyYardTurnFor(path, count, true,
-        CcLocalRoadHorseLongitudinalOffsetInternal());
-    float total = turn.length + turn.lane - turn.creep;
-    return total > distance ? distance / total : 0.30f;
-}
 
 typedef enum ConvoyUpdateResult {
     CONVOY_UPDATE_NONE = 0,
