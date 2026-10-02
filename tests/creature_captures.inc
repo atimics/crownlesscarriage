@@ -265,7 +265,7 @@ static void CapturePonyGait(const char *directory)
         int32_t placement_count = RoadHorsePlacements(&sim, base, 0.0f, false,
             CC_LOCAL_SCENE_ROAD, 1.0f, placements);
         PublishRoadHorseTargets(placements, placement_count,
-            RoadHorseRigGait(0.72f), clock, 0.0f, CC_LOCAL_SCENE_ROAD);
+            RoadHorseRigGait(0.72f), clock, CC_LOCAL_SCENE_ROAD);
         CcLocalCreatureGaitsFixedStepInternal(1.0f / 60.0f);
         BeginTextureMode(target);
         ClearBackground((Color){24,28,34,255});
