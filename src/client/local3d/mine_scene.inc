@@ -58,6 +58,14 @@ Camera3D CcLocalMineCamera(const CcSim *sim, int32_t facing)
     float back=chamber>=0?shots[chamber].back:0.0f;
     const int32_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
     facing=((facing%4)+4)%4;
+    /* Keep the chamber's wider shot inside the connected open floor. */
+    for(int32_t step=1;(float)step-.5f<=back;++step) {
+        if(!CcMineWalkable(sim,CC_MINE_LEVEL,
+            sim->mine.x-dx[facing]*step,sim->mine.y-dy[facing]*step)) {
+            back=(float)step-.55f;
+            break;
+        }
+    }
     Vector3 position={(float)sim->mine.x-(float)dx[facing]*back,eye,
                       (float)sim->mine.y-(float)dy[facing]*back};
     return (Camera3D){.position=position,
