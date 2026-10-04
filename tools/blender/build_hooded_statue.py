@@ -26,6 +26,7 @@ def args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("/private/tmp/hooded-statue"))
     parser.add_argument("--samples", type=int, default=32)
+    parser.add_argument("--preview", action="store_true", help="Render a small front view for sculpt review")
     return parser.parse_args(tail)
 
 
@@ -53,7 +54,7 @@ def stone_material(name, color, delicate=False):
     mat.use_nodes = True
     nodes, links = mat.node_tree.nodes, mat.node_tree.links
     bsdf = nodes.get("Principled BSDF")
-    bsdf.inputs["Roughness"].default_value = 0.77 if delicate else 0.85
+    bsdf.inputs["Roughness"].default_value = 0.62 if delicate else 0.82
     position = nodes.new("ShaderNodeNewGeometry")
     tex = nodes.new("ShaderNodeTexNoise")
     tex.inputs["Scale"].default_value = 2.6
@@ -67,21 +68,69 @@ def stone_material(name, color, delicate=False):
     links.new(position.outputs["Position"], tex.inputs["Vector"])
     links.new(tex.outputs["Fac"], ramp.inputs[0])
     links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+
+    # Shallow recesses keep more grain and faint diagonal chisel traces.
+    recess = nodes.new("ShaderNodeValToRGB")
+    recess.name = "Stone fold recesses"
+    recess.color_ramp.elements[0].position = 0.465
+    recess.color_ramp.elements[0].color = (0, 0, 0, 1)
+    recess.color_ramp.elements[1].position = 0.505
+    recess.color_ramp.elements[1].color = (1, 1, 1, 1)
+    links.new(position.outputs["Pointiness"], recess.inputs[0])
+    inverse = nodes.new("ShaderNodeMath")
+    inverse.operation = "SUBTRACT"
+    inverse.inputs[0].default_value = 1
+    links.new(recess.outputs["Color"], inverse.inputs[1])
+
+    edge = nodes.new("ShaderNodeValToRGB")
+    edge.name = "Soft wear on exposed stone"
+    edge.color_ramp.elements[0].position = 0.505
+    edge.color_ramp.elements[0].color = (0, 0, 0, 1)
+    edge.color_ramp.elements[1].position = 0.565
+    edge.color_ramp.elements[1].color = (0.16, 0.16, 0.16, 1)
+    links.new(position.outputs["Pointiness"], edge.inputs[0])
+    worn_color = nodes.new("ShaderNodeMixRGB")
+    worn_color.blend_type = "SCREEN"
+    worn_color.inputs[2].default_value = (0.22, 0.20, 0.16, 1)
+    links.new(edge.outputs["Color"], worn_color.inputs[0])
+    links.new(ramp.outputs["Color"], worn_color.inputs[1])
+    links.new(worn_color.outputs["Color"], bsdf.inputs["Base Color"])
+
     grain = nodes.new("ShaderNodeTexNoise")
-    grain.inputs["Scale"].default_value = 180
+    grain.inputs["Scale"].default_value = 165
     grain.inputs["Detail"].default_value = 3
     bump = nodes.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 0.12 if delicate else 0.22
-    bump.inputs["Distance"].default_value = 0.007 if delicate else 0.018
+    bump.inputs["Strength"].default_value = 0.07 if delicate else 0.15
+    bump.inputs["Distance"].default_value = 0.004 if delicate else 0.009
     links.new(position.outputs["Position"], grain.inputs["Vector"])
     links.new(grain.outputs["Fac"], bump.inputs["Height"])
-    links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    marks = nodes.new("ShaderNodeTexWave")
+    marks.name = "Small chisel cuts within folds"
+    marks.wave_type = "BANDS"
+    marks.bands_direction = "DIAGONAL"
+    marks.wave_profile = "SAW"
+    marks.inputs["Scale"].default_value = 65
+    marks.inputs["Distortion"].default_value = 4
+    marks.inputs["Detail Scale"].default_value = 1.8
+    links.new(position.outputs["Position"], marks.inputs["Vector"])
+    cut_height = nodes.new("ShaderNodeMath")
+    cut_height.operation = "MULTIPLY"
+    links.new(marks.outputs["Fac"], cut_height.inputs[0])
+    links.new(inverse.outputs[0], cut_height.inputs[1])
+    cut_bump = nodes.new("ShaderNodeBump")
+    cut_bump.invert = True
+    cut_bump.inputs["Strength"].default_value = 0.035 if delicate else 0.18
+    cut_bump.inputs["Distance"].default_value = 0.004 if delicate else 0.014
+    links.new(cut_height.outputs[0], cut_bump.inputs["Height"])
+    links.new(bump.outputs["Normal"], cut_bump.inputs["Normal"])
+    links.new(cut_bump.outputs["Normal"], bsdf.inputs["Normal"])
+    mat["Stone finish"] = "Smooth face and hands; fine grain and chisel traces in folds; worn exposed edges"
     return mat
 
 
-stone = stone_material("Warm limestone | cloak", (0.60, 0.535, 0.438))
-skin = stone_material("Warm limestone | face and hands", (0.62, 0.552, 0.463), delicate=True)
-inner = stone_material("Warm limestone | inner robe", (0.565, 0.510, 0.435))
+stone = stone_material("Warm limestone | cloak", (0.53, 0.467, 0.385))
+skin = stone_material("Warm limestone | face and hands", (0.55, 0.49, 0.415), delicate=True)
+inner = stone_material("Warm limestone | inner robe", (0.50, 0.447, 0.375))
 
 
 def finish(obj, mat, subdiv=0, thickness=0, weather=0):
@@ -215,8 +264,8 @@ def area(name, location, energy, size, color):
     track(obj, (0, 0, 3.7))
 
 
-area("Large soft key", (-3.8, -5.0, 8.4), 720, 3.4, (1, 0.91, 0.79))
-area("Soft front fill", (4, -5, 5.2), 230, 4.5, (0.89, 0.92, 1))
+area("Large soft key", (-3.8, -5.0, 8.4), 720, 2.8, (1, 0.94, 0.86))
+area("Soft front fill", (4, -5, 5.2), 175, 4.5, (0.89, 0.92, 1))
 area("Mantle edge light", (1.5, 3.5, 7.8), 850, 3.5, (1, 0.94, 0.84))
 bpy.ops.mesh.primitive_plane_add(size=200, location=(0, 0, 0.025))
 floor = place(bpy.context.object, studio)
@@ -253,10 +302,10 @@ scene["Reference"] = "User supplied photo of a hooded stone figure with bowed he
 scene["Study notes"] = "Front view follows the photo. Back, hem and base are an artistic extension."
 scene["Build"] = "Separate editable veil, robe, face, sleeves and hands. Stone nodes and studio are included."
 readme = bpy.data.texts.new("READ ME | hooded stone study")
-readme.write("HOODED STONE FIGURE\n\nAn organic study with a soft gathered veil, sweeping folds and gentle prayer hands.\n"
+readme.write("HOODED STONE FIGURE\n\nA bowed stone figure with a thin resting veil, weighted folds and gently gathered hands.\n"
              "The back, full hem and base are inferred.\n\n"
              "STATUE contains the editable mesh pieces. STUDIO contains the camera, floor and lights.\n"
-             "The warm limestone materials include mottling and fine grain.\n"
+             "The warm limestone has smooth face and hands, grain and chisel marks in folds, and worn exposed edges.\n"
              "The robe modifiers control thickness and soft wear.\n")
 
 bpy.ops.object.select_all(action="DESELECT")
@@ -273,12 +322,19 @@ for screen in bpy.data.screens:
             space_area.spaces.active.overlay.show_overlays = False
 
 blend_path = opt.output / "hooded_stone_statue.blend"
+if opt.preview:
+    scene.render.resolution_x = 650
+    scene.render.resolution_y = 900
 bpy.ops.wm.save_as_mainfile(filepath=str(blend_path), compress=True)
 # A portable mesh copy keeps the sculpture separate from the render studio.
-bpy.ops.wm.obj_export(filepath=str(opt.output / "hooded_stone_statue.obj"),
-                      export_selected_objects=True, apply_modifiers=True)
+if not opt.preview:
+    bpy.ops.wm.obj_export(filepath=str(opt.output / "hooded_stone_statue.obj"),
+                          export_selected_objects=True, apply_modifiers=True)
 scene.render.filepath = str(opt.output / "hooded_stone_statue.png")
 bpy.ops.render.render(write_still=True)
+if opt.preview:
+    print("STATUE_PREVIEW_READY", blend_path, flush=True)
+    sys.exit(0)
 
 # Two closer views make the anatomy and fabric easy to inspect.
 portrait_state = (cam.location.copy(), cam.rotation_euler.copy(), cam_data.ortho_scale,
