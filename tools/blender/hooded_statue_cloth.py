@@ -8,6 +8,11 @@ def _bell(value, center, width):
     return math.exp(-((value - center) / width) ** 2)
 
 
+def _angle_bell(value, center, width):
+    delta = math.atan2(math.sin(value - center), math.cos(value - center))
+    return math.exp(-(delta / width) ** 2)
+
+
 def _smooth(value):
     value = max(0.0, min(1.0, value))
     return value * value * (3.0 - 2.0 * value)
@@ -25,6 +30,7 @@ def _head_space(x, y, z):
 
 def _veil_point(th, t):
     """Follow the skull, with a free edge from the brow to each temple."""
+    th = math.atan2(math.sin(th), math.cos(th))
     front = max(0.0, -math.cos(th))
     lower_z = -0.10 + 0.57 * _smooth((front - 0.20) / 0.52)
     z = lower_z + (0.674 - lower_z) * t
@@ -32,19 +38,19 @@ def _veil_point(th, t):
     rx = 0.441 * dome
     ry = (0.394 if math.cos(th) < 0 else 0.440) * dome
     # One temple holds the cloth. The other has a deeper loose fold.
-    left = _bell(th, -2.13 + 0.11 * t, 0.19)
-    right = _bell(th, 2.12 - 0.06 * t, 0.24)
+    left = _angle_bell(th, -2.13 + 0.11 * t, 0.19)
+    right = _angle_bell(th, 2.12 - 0.06 * t, 0.24)
     fold = (0.050 * left - 0.007 * right) * (1 - t) ** 1.5
-    fold -= 0.011 * _bell(th, -1.86 + 0.10 * t, 0.085) * (1 - t) ** 1.8
+    fold -= 0.011 * _angle_bell(th, -1.86 + 0.10 * t, 0.085) * (1 - t) ** 1.8
     # A small brow gather flattens as it crosses the crown.
-    gather = _bell(th, 2.78, 0.27) * _bell(t, 0.14, 0.18)
+    gather = _angle_bell(th, 2.78, 0.27) * _bell(t, 0.14, 0.18)
     fold += 0.018 * gather
-    fold -= 0.007 * _bell(th, 2.48, 0.11) * _bell(t, 0.12, 0.18)
+    fold -= 0.007 * _angle_bell(th, 2.48, 0.11) * _bell(t, 0.12, 0.18)
     fold += 0.010 * math.sin(3 * th + 1.3 * t) * math.sin(math.pi * t)
     # A loose diagonal gather runs from the forehead toward the supported crown.
     sweep = -2.70 + 1.55 * t
-    fold += 0.023 * _bell(th, sweep, 0.18) * math.sin(math.pi * (0.18 + 0.70 * t))
-    fold -= 0.005 * _bell(th, sweep + 0.25, 0.10) * math.sin(math.pi * t)
+    fold += 0.023 * _angle_bell(th, sweep, 0.18) * math.sin(math.pi * (0.18 + 0.70 * t))
+    fold -= 0.005 * _angle_bell(th, sweep + 0.25, 0.10) * math.sin(math.pi * t)
     fold += 0.008 * front ** 3 * _bell(t, 0.040, 0.025)
     x = (rx + fold) * math.sin(th)
     y = (ry + fold * 0.65) * math.cos(th)
@@ -58,18 +64,19 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
     top_limit = 2.16
     verts = []
     for i in range(rows):
-        z = 0.27 + 5.13 * i / (rows - 1)
+        level = 0.27 + 5.13 * i / (rows - 1)
+        z = min(level, 4.60)
         rx = interp([(0.27, 1.44), (0.70, 1.47), (1.55, 1.40), (2.55, 1.34),
                      (3.26, 1.40), (3.83, 1.23), (4.27, 1.02), (4.60, 0.73),
                      (5.40, 0.43)], z)
         ry = interp([(0.27, 0.68), (1.50, 0.67), (2.80, 0.70), (3.60, 0.67),
                      (4.23, 0.55), (4.60, 0.48), (5.40, 0.39)], z)
         limit = interp([(0.27, 2.43), (1.65, 2.43), (2.60, 2.47),
-                        (3.35, 2.31), (4.15, 2.25), (4.70, top_limit),
+                        (3.35, 2.31), (4.15, 2.25), (4.60, top_limit),
                         (5.40, top_limit)], z)
         falling = _smooth((4.75 - z) / 1.08)
         shoulder = _bell(z, 4.03, 0.43)
-        fit = _smooth((z - 4.60) / 0.80)
+        fit = max(0.0, (level - 4.60) / 0.80)
         for j in range(cols):
             th = -limit + 2 * limit * j / (cols - 1)
             edge = (abs(th) / limit) ** 12
@@ -104,7 +111,15 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
             x -= 0.035 * cheek
             y -= 0.047 * cheek
             p = Vector((x, y, zz))
-            p = p.lerp(_veil_point(th, 0.0), fit)
+            if fit > 0.0:
+                end = _veil_point(th, 0.0)
+                crown_tangent = (_veil_point(th, 0.025) - end) / 0.025
+                delta = end - p
+                first = p + Vector((delta.x * 0.24, delta.y * 0.24, 0.25))
+                second = end - crown_tangent * 0.50
+                # A shared slope gives the temple edge one smooth cloth path.
+                p = ((1 - fit) ** 3 * p + 3 * (1 - fit) ** 2 * fit * first
+                     + 3 * (1 - fit) * fit ** 2 * second + fit ** 3 * end)
             verts.append(p)
     faces = grid_faces(rows, cols)
     # The crown uses full rings. The brow edge stays open and follows an arch.
