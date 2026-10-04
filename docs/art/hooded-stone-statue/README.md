@@ -1,6 +1,6 @@
 # Hooded stone figure
 
-A Blender sculpture study from the supplied front-view photo. The figure has an adult face with closed eyes, soft cheekbones, a natural nose, and a slight smile. Full palms, curved fingers, and rounded thumbs meet in a gentle prayer pose. The hood, shoulder drape, gown, sleeves, collar, and cuffs have soft folds with varied weight. The stone has a fine grain and subtle wear.
+A Blender sculpture study from the supplied front-view photo. The figure has an adult face with closed eyes, soft cheekbones, a natural nose, and a slight smile. Full palms, curved fingers, and rounded thumbs meet in a gentle prayer pose. Deep curved folds sweep through the cloak and skirt. The front edges fall unevenly, the hem opens outward, and the gown follows a gentle sway. The shoulders, collar, sleeves, and cuffs have soft joins and rounded edges. The stone has a fine grain and subtle wear.
 
 The back, full hem, and base are artistic extensions of the visible shape. The prayer pose and calm expression follow the user's later request.
 

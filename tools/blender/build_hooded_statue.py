@@ -195,8 +195,8 @@ for z, radius in base_profile:
     for j in range(128):
         th = j * 2 * math.pi / 128
         wear = 0.005 * math.sin(7 * th + z * 3) + 0.003 * math.cos(13 * th)
-        verts.append(((1.39 * radius + wear) * math.sin(th),
-                      (0.91 * radius + wear) * math.cos(th), z + 0.002 * math.sin(5 * th)))
+        verts.append(((1.63 * radius + wear) * math.sin(th),
+                      (1.01 * radius + wear) * math.cos(th), z + 0.002 * math.sin(5 * th)))
 faces = grid_faces(len(base_profile), 128, True)
 faces.extend([tuple(reversed(range(128))), tuple((len(base_profile) - 1) * 128 + j for j in range(128))])
 base = mesh("10 | softly worn oval stone base", verts, faces, subdiv=1, weather=0.005)
@@ -253,7 +253,7 @@ scene["Reference"] = "User supplied photo of a hooded stone figure with bowed he
 scene["Study notes"] = "Front view follows the photo. Back, hem and base are an artistic extension."
 scene["Build"] = "Separate editable hood, robe, face, sleeves and hands. Stone nodes and studio are included."
 readme = bpy.data.texts.new("READ ME | hooded stone study")
-readme.write("HOODED STONE FIGURE\n\nAn organic study with a serene face, gentle prayer hands and weighted cloth.\n"
+readme.write("HOODED STONE FIGURE\n\nAn organic study with sweeping folds, a serene face and gentle prayer hands.\n"
              "The back, full hem and base are inferred.\n\n"
              "STATUE contains the editable mesh pieces. STUDIO contains the camera, floor and lights.\n"
              "The warm limestone materials include mottling and fine grain.\n"

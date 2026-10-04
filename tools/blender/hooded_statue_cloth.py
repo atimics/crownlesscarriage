@@ -23,8 +23,8 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
     verts = []
     for i in range(rows):
         z = 0.27 + 6.35 * i / (rows - 1)
-        rx = interp([(0.27, 1.30), (0.70, 1.34), (1.55, 1.34), (2.55, 1.41),
-                     (3.26, 1.48), (3.83, 1.35), (4.27, 1.10), (4.66, 0.88),
+        rx = interp([(0.27, 1.44), (0.70, 1.47), (1.55, 1.40), (2.55, 1.34),
+                     (3.26, 1.47), (3.83, 1.33), (4.27, 1.10), (4.66, 0.88),
                      (5.30, 0.87), (5.91, 0.875), (6.62, 0.0)], z)
         ry = interp([(0.27, 0.68), (1.50, 0.67), (2.80, 0.70), (3.60, 0.70),
                      (4.23, 0.59), (4.80, 0.575), (5.91, 0.66), (6.62, 0.0)], z)
@@ -48,45 +48,48 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
         for j in range(cols):
             th = -limit + 2 * limit * j / (cols - 1)
             edge = (abs(th) / limit) ** 12
-            phase = th + 0.085 * math.sin(z * 1.05 + 2 * th)
-            # Broad ridges widen toward the hem and bend over the shoulders.
-            fold = falling * (0.064 * math.cos(7 * phase + 0.25 * z)
-                              + 0.031 * math.cos(11 * phase - 0.19 * z)
-                              + 0.013 * math.sin(17 * phase + z * 0.30))
-            fold += shoulder * 0.040 * math.cos(5 * th - 2.2 * z)
+            phase = th + 0.20 * math.sin(z * 0.85 + 1.4 * th)
+            phase += 0.075 * math.sin(z * 1.6 - 0.9 * th)
+            # Deep uneven folds sweep around the hips and open toward the hem.
+            fold = falling * (0.115 * math.cos(5 * phase + 0.30 * z)
+                              + 0.046 * math.cos(9 * phase - 0.28 * z)
+                              + 0.018 * math.sin(14 * phase + z * 0.30))
+            fold += shoulder * 0.065 * math.cos(4 * th - 1.7 * z)
             fold += 0.012 * crown * math.cos(5 * th + z * 0.83)
-            fold += edge * (0.035 + 0.020 * math.sin(2.0 * z + th)) * falling
+            fold += edge * (0.060 + 0.045 * math.sin(1.55 * z + th)) * falling
             # The front edges turn out softly where the cloth crosses the arms.
-            curl = edge * (0.045 * _bell(z, 3.23, 0.63)
-                           + 0.018 * math.sin(2.2 * z + th))
+            curl = edge * (0.090 * _bell(z, 3.23, 0.80)
+                           + 0.075 * falling * math.sin(1.45 * z + th))
             x = (rx + fold) * math.sin(th)
-            x += 0.024 * falling * math.sin(1.45 * z + 0.6 * th)
+            x += 0.070 * falling * math.sin(1.20 * z + 0.6 * th)
+            x += edge * falling * 0.155 * math.sin(1.45 * z + 0.75 * th)
             y = center_y + (ry + fold * 0.90) * math.cos(th) - curl
-            y += 0.022 * falling * math.sin(z * 1.15 + 3 * th)
+            y += 0.050 * falling * math.sin(z * 1.15 + 2 * th)
             back = max(0.0, math.cos(th)) ** 4
             drop = _smooth((4.48 - z) / 1.65)
             # Long uneven back folds begin under the shoulder drape.
-            drift = 0.035 * math.sin(1.3 * z)
+            drift = 0.075 * math.sin(1.3 * z)
             y += back * drop * (
-                -0.057 * _bell(x, -0.10 + drift, 0.115)
-                + 0.079 * _bell(x, 0.37 + drift, 0.145)
-                - 0.047 * _bell(x, 0.58 + drift, 0.105)
-                + 0.065 * _bell(x, -0.46 - drift, 0.17)
-                - 0.039 * _bell(x, -0.73 - drift, 0.11))
-            zz = z + 0.017 * falling * math.sin(5 * th + 0.7 * z)
+                -0.075 * _bell(x, -0.10 + drift, 0.115)
+                + 0.105 * _bell(x, 0.37 + drift, 0.145)
+                - 0.070 * _bell(x, 0.58 + drift, 0.105)
+                + 0.095 * _bell(x, -0.46 - drift, 0.17)
+                - 0.065 * _bell(x, -0.73 - drift, 0.11))
+            zz = z + 0.028 * falling * math.sin(5 * th + 0.7 * z)
+            zz += 0.035 * _smooth((0.65 - z) / 0.38) * math.cos(3 * th + 0.6)
             # Cloth bridges the shoulders with shallow diagonal gathers.
             zz += shoulder * 0.026 * math.cos(4 * th - 1.8)
             verts.append((x, y, zz))
     mantle = mesh("01 | soft hood and weighted mantle", verts,
                   grid_faces(rows, cols), mat=stone, subdiv=1,
                   thickness=0.090, weather=0.014)
-    mantle["Cloth form"] = "Soft brow arch, shoulder gathers and varied hanging folds"
+    mantle["Cloth form"] = "Deep sweeping folds, uneven front drape and a softly flared hem"
 
     rows, cols = 138, 160
     verts = []
     for i in range(rows):
         z = 0.29 + 4.22 * i / (rows - 1)
-        rx = interp([(0.29, 1.04), (0.80, 1.03), (1.70, 0.91), (2.52, 0.79),
+        rx = interp([(0.29, 1.10), (0.80, 1.07), (1.70, 0.94), (2.52, 0.79),
                      (3.35, 0.79), (3.94, 0.87), (4.15, 0.86), (4.51, 0.33)], z)
         ry = interp([(0.29, 0.62), (1.60, 0.59), (2.55, 0.53),
                      (3.43, 0.53), (4.06, 0.49), (4.51, 0.27)], z)
@@ -95,28 +98,37 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
         chest = _bell(z, 3.96, 0.49)
         for j in range(cols):
             th = 2 * math.pi * j / cols
-            phase = th + 0.066 * math.sin(1.12 * z + 2 * th) + 0.028 * z
-            fold = depth * (0.82 + 0.18 * math.cos(3 * th + z * 0.77)) * (
-                math.cos(8 * phase + 0.20 * z)
-                + 0.33 * math.cos(13 * phase - 0.23 * z))
-            x = (rx + fold) * math.sin(th) + 0.020 * math.sin(z * 1.05)
+            phase = th + 0.15 * math.sin(1.12 * z + 2 * th) + 0.045 * z
+            fold = depth * (0.76 + 0.24 * math.cos(3 * th + z * 0.77)) * (
+                0.62 * math.cos(7 * phase + 0.20 * z)
+                + 0.28 * math.cos(11 * phase - 0.23 * z))
+            x = (rx + fold) * math.sin(th) + 0.070 * math.sin(z * 1.05) * _smooth((4.1 - z) / 1.3)
             y = (ry + fold * 0.92) * math.cos(th) - 0.04
             front = max(0.0, -math.cos(th)) ** 5
+            fall = _smooth((3.65 - z) / 0.95)
+            # Curved ridges run from the gathered waist into the loose skirt.
+            for center, amplitude, width, offset in (
+                    (-0.72, 0.135, 0.105, 0.2), (-0.34, 0.170, 0.115, 1.3),
+                    (0.13, 0.165, 0.120, 2.2), (0.56, 0.135, 0.105, 3.4)):
+                taper = 0.64 + 0.36 * _smooth((2.8 - z) / 2.5)
+                line = center * taper + 0.115 * math.sin(1.25 * z + offset)
+                y -= amplitude * fall * front * _bell(x, line, width)
+                y += amplitude * 0.44 * fall * front * _bell(x, line + width * 1.45, width * 0.72)
             # Wide gathers flow from the neckline to the raised hands.
             distance = abs(x) - (0.20 + 0.48 * (4.46 - z))
-            gathers = (0.036 * _bell(distance, 0.0, 0.065)
-                       - 0.025 * _bell(distance, 0.105, 0.090)
-                       + 0.016 * _bell(distance, 0.235, 0.066))
+            gathers = (0.062 * _bell(distance, 0.0, 0.065)
+                       - 0.039 * _bell(distance, 0.105, 0.090)
+                       + 0.028 * _bell(distance, 0.235, 0.066))
             y += gathers * chest * front
             y -= 0.022 * _bell(z, 3.64, 0.24) * front * math.cos(x * 5)
             hem = _smooth((0.62 - z) / 0.33)
-            zz = z + 0.017 * hem * math.sin(5 * th + 0.2)
+            zz = z + 0.035 * hem * math.sin(5 * th + 0.2)
             zz += 0.009 * chest * front * math.cos(3 * th)
             verts.append((x, y, zz))
     gown = mesh("02 | flowing gown and neckline gathers", verts,
                 grid_faces(rows, cols, True), mat=inner, subdiv=1,
                 thickness=0.075, weather=0.010)
-    gown["Cloth form"] = "Long broad folds and gentle chest gathers"
+    gown["Cloth form"] = "Curved skirt folds, gentle body sway and deep neckline gathers"
 
     sphere("03 | neck", (0.005, -0.065, 4.72), (0.265, 0.255, 0.435), mat=skin)
     rows, cols = 36, 104
@@ -126,14 +138,14 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
         for j in range(cols):
             a = 2 * math.pi * j / cols
             front = max(0.0, -math.cos(a))
-            r = 0.273 + 0.115 * (1 - t) ** 1.6
-            r += 0.011 * math.sin(10 * t + 1.6 * math.sin(a)) * math.sin(math.pi * t)
+            r = 0.273 + (0.115 + 0.055 * front) * (1 - t) ** 1.6
+            r += 0.018 * math.sin(11 * t + 2.2 * math.sin(a)) * math.sin(math.pi * t)
             r += 0.008 * math.sin(5 * a + 2.3 * t) * (1 - t)
-            z = 4.305 + 0.315 * t - 0.095 * front * t
+            z = 4.305 + 0.315 * t - 0.095 * front * t - 0.065 * front * (1 - t)
             z += 0.018 * math.sin(a + 0.40) + 0.010 * math.sin(3 * a + 7 * t)
             verts.append((r * math.sin(a), r * math.cos(a) - 0.075, z))
     collar = mesh("03b | soft folded collar", verts, grid_faces(rows, cols, True),
-                  mat=inner, subdiv=1, thickness=0.034, weather=0.004)
+                  mat=inner, subdiv=1, thickness=0.050, weather=0.004)
     collar["Cloth form"] = "Rounded neck wrap with a softly dipped front"
     return mantle, gown, collar
 
@@ -141,7 +153,7 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
 def build_sleeves(mesh, interp, grid_faces, bezier, inner):
     """Build raised sleeves with lower cloth weight and rounded open cuffs."""
     def sleeve(name, side, lift):
-        points = bezier((side * 0.68, 0.045, 4.12),
+        points = bezier((side * 0.57, 0.09, 4.13),
                         (side * 1.36, -0.28, 2.51),
                         (side * 0.82, -0.73, 2.94),
                         (side * 0.26, -0.94, 3.44 + lift), 91)
@@ -168,16 +180,16 @@ def build_sleeves(mesh, interp, grid_faces, bezier, inner):
                 down = max(0.0, direction.dot(gravity))
                 up = max(0.0, -direction.dot(gravity))
                 front = max(0.0, -direction.y)
-                rr = radius + 0.105 * slack * down ** 2
+                rr = radius + 0.080 * slack * down ** 2
                 # Broad folds fall along the lower sleeve, with small creases above.
-                rr += 0.027 * slack * math.cos(4 * th + 1.3 * t) * (0.28 + 0.72 * down)
+                rr += 0.050 * slack * math.cos(4 * th + 3.5 * t + side * 0.7) * (0.28 + 0.72 * down)
                 rr += 0.008 * math.sin(7 * th - 2.4 * t) * slack
-                for center, strength in ((0.43, 0.031), (0.58, 0.038), (0.74, 0.030)):
+                for center, strength in ((0.43, 0.045), (0.58, 0.055), (0.74, 0.038)):
                     at = t + 0.057 * math.sin(th + 0.8)
                     rr -= strength * _bell(at, center, 0.032) * (0.18 + 0.30 * up + 0.65 * front)
                     rr += strength * 0.70 * _bell(at, center + 0.050, 0.038) * (0.30 + 0.70 * front)
                 # The cuff opens gently around the narrow wrist.
-                rr += 0.004 * math.cos(5 * th + side) * _smooth((t - 0.84) / 0.16)
+                rr += (0.012 * math.sin(3 * th + side) + 0.006 * math.cos(5 * th + side)) * _smooth((t - 0.84) / 0.16)
                 verts.append(p + direction * rr)
             final_u, final_v = u, v
         obj = mesh(name, verts, grid_faces(len(points), cols, True), mat=inner,
@@ -193,7 +205,7 @@ def build_sleeves(mesh, interp, grid_faces, bezier, inner):
             a = 2 * math.pi * i / ring_rows
             for j in range(cols):
                 th = 2 * math.pi * j / cols
-                radius = 0.198 + 0.004 * math.cos(5 * th + side)
+                radius = 0.198 + 0.012 * math.sin(3 * th + side) + 0.006 * math.cos(5 * th + side)
                 radial = final_u * math.cos(th) + final_v * math.sin(th)
                 verts.append(center + radial * (radius + 0.026 * math.cos(a))
                              + tangent * (0.026 * math.sin(a)))
