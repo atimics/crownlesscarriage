@@ -82,8 +82,8 @@ def build_hands(mesh, sphere, tube, bezier, skin):
         obj.data.remesh_voxel_size = 0.0045
         bpy.ops.object.voxel_remesh()
         soft = obj.modifiers.new("Soft hand joins", "SMOOTH")
-        soft.factor = 0.35
-        soft.iterations = 4
+        soft.factor = 0.42
+        soft.iterations = 6
         bpy.ops.object.modifier_apply(modifier=soft.name)
         sculpt_surface(obj, paths, point, normal, across, length)
         for poly in obj.data.polygons:
@@ -142,8 +142,8 @@ def build_hands(mesh, sphere, tube, bezier, skin):
         wrist = Vector(cuff_center)
         start = wrist - length * 0.060 + Vector((0, 0.018, -0.016))
         pts = bezier(start, wrist + length * 0.078,
-                     point(0.008, -0.003, -0.178), point(0, 0, -0.102), 32)
-        rr = [0.081 - 0.017 * i / 31 for i in range(32)]
+                     point(0.008, -0.003, -0.120), point(0, 0, -0.012), 32)
+        rr = [0.081 - 0.038 * i / 31 for i in range(32)]
         parts.append(tube("hand | narrow wrist", pts, rr, mat=skin,
                           sides=28, flatten=0.72, subdivision=1))
 
@@ -154,32 +154,39 @@ def build_hands(mesh, sphere, tube, bezier, skin):
                  ("little", 0.092, 0.219, 0.025))
         for index, (digit, width, digit_length, radius) in enumerate(specs):
             width *= size
-            root_height = 0.096 - 0.012 * (index == 3)
+            root_height = -0.027 - 0.012 * (index == 3)
+            tip_height = 0.096 - 0.012 * (index == 3) + digit_length
             bend = (0.028 + 0.008 * index) * (1 if label.startswith("08") else -1)
-            end_width = width - 0.011 + 0.007 * index
-            pts = bezier(point(width, 0.004, root_height),
-                         point(width + 0.009, 0.013, root_height + digit_length * 0.34),
+            end_width = width - (0.037 - 0.004 * index) if bend > 0 else width - 0.011 + 0.007 * index
+            pts = bezier(point(width * 0.62, 0.001, root_height),
+                         point(width + 0.025, 0.013, 0.164),
                          point(end_width, -0.018 if bend > 0 else 0.028,
-                               root_height + digit_length * 0.80),
-                         point(end_width, -bend, root_height + digit_length), 42)
+                               tip_height - digit_length * 0.21),
+                         point(end_width, -bend, tip_height), 42)
             rr = []
             for i in range(42):
                 t = i / 41
                 r = radius * size * (1 - 0.28 * t)
-                r += 0.0024 * bell(t, 0.41, 0.065)
-                r += 0.0015 * bell(t, 0.68, 0.050)
+                r += 0.0024 * bell(t, 0.64, 0.065)
+                r += 0.0015 * bell(t, 0.83, 0.050)
                 if t > 0.89:
                     r *= math.sqrt(max(0.02, 1 - ((t - 0.89) / 0.112) ** 2))
                 rr.append(r)
             parts.append(tube("hand | " + digit, pts, rr, mat=skin,
                               sides=28, flatten=0.80, subdivision=1))
-            finger_paths.append((pts, rr))
+            finger_paths.append((pts[12:], rr[12:]))
 
         # The thumb curves alongside the index finger with a small open web.
-        pts = bezier(point(-0.092, 0.003, -0.125),
-                     point(-0.171, 0.015, -0.063),
-                     point(-0.187, 0.014, 0.070),
-                     point(-0.144, -0.017, 0.168), 38)
+        if label.startswith("08"):
+            pts = bezier(point(-0.074, 0.001, -0.135),
+                         point(-0.163, 0.015, -0.059),
+                         point(-0.174, 0.014, 0.068),
+                         point(-0.138, -0.005, 0.157), 38)
+        else:
+            pts = bezier(point(-0.071, 0.001, -0.134),
+                         point(-0.159, 0.017, -0.059),
+                         point(-0.122, 0.031, 0.125),
+                         point(-0.035, 0.047, 0.225), 38)
         rr = []
         for i in range(38):
             t = i / 37
