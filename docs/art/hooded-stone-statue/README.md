@@ -1,10 +1,12 @@
-# Hooded stone figure
+# Bowed stone figure
 
-A Blender sculpture study from the supplied front-view photo. The figure has an adult face with closed eyes, soft cheekbones, a natural nose, and a slight smile. Full palms, curved fingers, and rounded thumbs meet in a gentle prayer pose. Deep curved folds sweep through the cloak and skirt. The front edges fall unevenly, the hem opens outward, and the gown follows a gentle sway. The shoulders, collar, sleeves, and cuffs have soft joins and rounded edges. A close veil follows the head, with soft temple folds and a thin uneven edge. Its fabric falls into the shoulder drape. The stone has a fine grain and subtle wear.
+An editable Blender sculpture from the supplied photo, refined through art and anatomy studies. A thin veil rests on the bowed crown and one temple. A small brow gather and a deeper cheek fold lead into the shoulder drape. The face has closed eyes, clear cheeks, soft brows, shaped nostrils, and a slight smile. The hands rest loosely across the chest with tapered fingers, small joints, nail beds, and carved skin creases.
 
-The back, full hem, and base are artistic extensions of the visible shape. The prayer pose and calm expression follow the user's later request.
+The body has a gentle weight shift and unequal shoulder and elbow heights. Broad chest planes stretch between points of support. Short folds gather inside the elbows, while unequal skirt folds open toward the hem. Thin turned cuffs frame the wrists. The stone has a smooth face and hands, fine grain and small chisel traces within folds, and wear on exposed edges.
 
-Open `docs/art/hooded-stone-statue/hooded_stone_statue.blend` in Blender 5. The `STATUE` collection has separate editable meshes for the veil, robe, face, sleeves, hands, cuffs, and base. The `STUDIO` collection has the camera, lights, and floor. The procedural stone materials have a shared grain scale and a smoother finish on the face and hands.
+The back, full hem, and base are artistic extensions of the front photo. The gentle expression follows the user's request for an angelic face and hands.
+
+Open `hooded_stone_statue.blend` in Blender 5. The `STATUE` collection has separate editable meshes for the veil, gown, neck, collar, face, sleeves, hands, and base. The `STUDIO` collection has the camera, lights, and floor. The cloth modifiers control thickness and light wear. The stone finishes use procedural nodes.
 
 ![Front view](hooded_stone_statue.png)
 
@@ -14,12 +16,25 @@ Open `docs/art/hooded-stone-statue/hooded_stone_statue.blend` in Blender 5. The 
 
 ![Hands](hooded_stone_statue_hands.png)
 
-Rebuild the model and four views with:
+Rebuild the model, four views, and OBJ export from the repository root:
 
 ```sh
 blender --background --python tools/blender/build_hooded_statue.py -- --output /tmp/hooded-statue --samples 48
 ```
 
-The builder uses three small modules for the face, hands, and cloth. The output folder contains a compressed Blender file, four PNG previews, and an OBJ mesh with its MTL file. The OBJ contains the sculpture pieces. The Blender file includes the full studio and procedural materials.
+Make a small front view during sculpt review:
 
-Validation: the build, four renders, and OBJ export completed in Blender 5.0.1. The saved file was reopened to check its camera, finite mesh coordinates, and closed face and hand surfaces. The front, side, back, face, and hands were checked in rendered views. The repository art inventory check and `git diff --check` passed.
+```sh
+blender --background --python tools/blender/build_hooded_statue.py -- --output /tmp/hooded-statue-preview --samples 16 --preview
+```
+
+The builder has separate face, hand, and cloth modules. The output folder contains a compressed Blender file, four PNG previews, and an OBJ mesh with an MTL file. The OBJ contains the sculpture pieces. The Blender file includes the full studio and procedural materials.
+
+Art references used for the refinement:
+
+- [Corradini's Modesty, Sansevero Museum](https://www.museosansevero.it/en/the-chapel-and-the-veiled-christ/the-statues/modesty): fabric contact and thin carved cloth.
+- [Dürer's Praying Hands, Albertina](https://sammlungenonline.albertina.at/objects/40233): finger structure and small surface forms.
+- [Late Medieval Sculpture, The Met](https://resources.metmuseum.org/resources/metpublications/pdf/Late_Medieval_Sculpture_The_Metropolitan_Museum_of_Art_Bulletin_v_64_no_4_Spring_2007.pdf): varied fold shapes and surface contrast.
+- [Sculpture techniques, V&A](https://www.vam.ac.uk/articles/sculpture-techniques): carving traces and varied stone finishes.
+
+Validation: built, rendered, and exported in Blender 5.0.1. The saved file was reopened to check finite mesh data, the camera, and closed surfaces. Front, three quarter, back, face, and hand views were checked. The repository art inventory check and `git diff --check` passed.
