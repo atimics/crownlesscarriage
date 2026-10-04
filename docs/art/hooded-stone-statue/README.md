@@ -1,6 +1,6 @@
 # Hooded stone figure
 
-A quick Blender sculpture study from the supplied front-view photo. The figure has a bowed head, gathered hands, a deep hood, soft cloth folds, and a worn limestone surface. The back, full hem, and base are artistic extensions of the visible shape.
+A quick Blender sculpture study from the supplied front-view photo. The figure has a calm, angelic face with closed eyes and a gentle smile. Its hands rest together in prayer. A deep hood, soft cloth folds, and a worn limestone surface follow the photo. The back, full hem, and base are artistic extensions of the visible shape.
 
 Open `docs/art/hooded-stone-statue/hooded_stone_statue.blend` in Blender 5. The `STATUE` collection has separate editable meshes for the hood, robe, face, sleeves, hands, and base. The `STUDIO` collection has the camera, lights, and floor. The stone materials use procedural mottling and grain.
 

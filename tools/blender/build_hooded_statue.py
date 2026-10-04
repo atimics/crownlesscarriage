@@ -210,8 +210,8 @@ def gauss(x, z, cx, cz, sx, sz):
 
 
 # Facial forms are built into a single dense surface.
-head_center = Vector((0.015, -0.17, 5.25))
-bow = math.radians(13)
+head_center = Vector((0.015, -0.17, 5.22))
+bow = math.radians(9)
 
 
 def head_point(p):
@@ -225,36 +225,38 @@ verts = []
 for i in range(rows):
     lat = math.pi * (i + 0.001) / (rows - 1 + 0.002)
     z = 0.67 * math.cos(lat)
-    jaw = interp([(-0.67, 0.59), (-0.43, 0.76), (-0.15, 0.96), (0.22, 1.02), (0.67, 1)], z)
+    jaw = interp([(-0.67, 0.74), (-0.43, 0.86), (-0.15, 1.00), (0.22, 0.98), (0.67, 1)], z)
     for j in range(cols):
         phi = 2 * math.pi * j / cols
         x = 0.455 * math.sin(lat) * math.sin(phi) * jaw
         y = 0.365 * math.sin(lat) * math.cos(phi)
-        front = max(0, -math.cos(phi)) ** 7
+        front = max(0, -math.cos(phi)) ** 3
         d = 0
         for side in (-1, 1):
-            d += 0.095 * gauss(x, z, side * 0.171, 0.015, 0.103, 0.082)
-            brow_z = 0.125 + 0.21 * (abs(x) - 0.08)
-            d -= 0.086 * gauss(x, z, side * 0.16, brow_z, 0.124, 0.045)
-            d -= 0.068 * gauss(x, z, side * 0.235, -0.145, 0.105, 0.095)
-            d -= 0.028 * gauss(x, z, side * 0.166, -0.024, 0.088, 0.032)
-            d += 0.021 * gauss(x, z, side * 0.24, -0.305, 0.044, 0.097)
-            d -= 0.042 * gauss(x, z, side * 0.064, -0.215, 0.038, 0.043)
-            d += 0.037 * gauss(x, z, side * 0.060, -0.238, 0.023, 0.017)
-        d -= 0.093 * gauss(x, z, 0, 0.002, 0.041, 0.16)
-        d -= 0.175 * gauss(x, z, 0, -0.16, 0.056, 0.070)
-        d += 0.017 * gauss(x, z, 0, -0.275, 0.019, 0.047)
-        lip_z = -0.340 - 0.055 * (abs(x) / 0.15) ** 2
-        d -= 0.038 * gauss(x, z, 0, lip_z + 0.019, 0.110, 0.019)
-        d += 0.037 * gauss(x, z, 0, lip_z, 0.135, 0.010)
-        d -= 0.043 * gauss(x, z, 0, lip_z - 0.027, 0.107, 0.021)
-        d += 0.021 * gauss(x, z, 0, -0.415, 0.110, 0.021)
-        d -= 0.042 * gauss(x, z, 0, -0.480, 0.15, 0.061)
+            # Relaxed brows, full cheeks and softly closed eyes.
+            d += 0.041 * gauss(x, z, side * 0.173, 0.004, 0.106, 0.083)
+            brow_z = 0.141 - 0.055 * (abs(x) - 0.10)
+            d -= 0.019 * gauss(x, z, side * 0.16, brow_z, 0.124, 0.053)
+            d -= 0.038 * gauss(x, z, side * 0.230, -0.144, 0.131, 0.121)
+            eye_z = -0.006 - 0.027 * math.exp(-((abs(x) - 0.174) / 0.083) ** 2)
+            d -= 0.033 * gauss(x, z, side * 0.171, eye_z + 0.020, 0.083, 0.031)
+            d += 0.036 * gauss(x, z, side * 0.171, eye_z, 0.090, 0.009)
+            d -= 0.019 * gauss(x, z, side * 0.050, -0.188, 0.041, 0.045)
+            d += 0.009 * gauss(x, z, side * 0.052, -0.215, 0.018, 0.012)
+        d -= 0.051 * gauss(x, z, 0, 0.007, 0.055, 0.155)
+        d -= 0.089 * gauss(x, z, 0, -0.154, 0.063, 0.066)
+        d += 0.008 * gauss(x, z, 0, -0.260, 0.022, 0.042)
+        lip_z = -0.333 + 0.043 * (abs(x) / 0.16) ** 2
+        d -= 0.024 * gauss(x, z, 0, lip_z + 0.018, 0.116, 0.023)
+        d += 0.018 * gauss(x, z, 0, lip_z, 0.138, 0.009)
+        d -= 0.031 * gauss(x, z, 0, lip_z - 0.028, 0.113, 0.024)
+        d += 0.010 * gauss(x, z, 0, -0.400, 0.125, 0.028)
+        d -= 0.025 * gauss(x, z, 0, -0.464, 0.168, 0.073)
         y += d * front
         # Low amplitude asymmetry keeps the face soft.
-        x += 0.006 * front * math.sin(z * 13)
+        x += 0.003 * front * math.sin(z * 13)
         verts.append(head_point((x, y, z)))
-head = mesh("04 | bowed face", verts, grid_faces(rows, cols, True), mat=skin, weather=0.006)
+head = mesh("04 | serene bowed face", verts, grid_faces(rows, cols, True), mat=skin, weather=0.003)
 
 
 def tube(name, points, radii, mat=skin, sides=16, flatten=1, subdivision=1, closed_caps=True):
@@ -275,18 +277,6 @@ def tube(name, points, radii, mat=skin, sides=16, flatten=1, subdivision=1, clos
         faces.extend([tuple(reversed(range(sides))),
                       tuple((len(points) - 1) * sides + j for j in range(sides))])
     return mesh(name, verts, faces, mat=mat, subdiv=subdivision)
-
-
-# Small upper lids follow the eyes. Their ends sit inside the face.
-for side in (-1, 1):
-    pts = []
-    for i in range(15):
-        t = i / 14
-        x = side * (0.070 + 0.208 * t)
-        z = 0.012 + 0.021 * math.sin(math.pi * t) + 0.023 * t
-        y = -0.283 - 0.010 * math.sin(math.pi * t)
-        pts.append(head_point((x, y, z)))
-    tube("05 | soft upper eyelid", pts, [0.006 + 0.006 * math.sin(math.pi * i / 14) for i in range(15)], sides=10)
 
 
 def bezier(a, b, c, d, count):
@@ -314,9 +304,9 @@ def sleeve(name, a, b, c, d):
 
 
 sleeve("06 | left sleeve, raised forearm", (-0.77, 0.02, 4.12), (-1.40, -0.28, 2.42),
-       (-0.94, -0.71, 3.42), (-0.43, -0.88, 3.81))
+       (-0.79, -0.73, 2.96), (-0.26, -0.94, 3.46))
 sleeve("07 | right sleeve, gathered forearm", (0.77, 0.02, 4.12), (1.36, -0.24, 2.43),
-       (0.78, -0.70, 2.91), (0.27, -0.91, 3.45))
+       (0.79, -0.73, 2.94), (0.26, -0.94, 3.44))
 
 
 def union_hand(name, pieces):
@@ -342,36 +332,29 @@ def union_hand(name, pieces):
     return obj
 
 
-# The upper hand rests across the lower hand. Each digit has a bent taper.
-parts = [sphere("upper palm", (-0.19, -0.975, 3.91), (0.235, 0.112, 0.142)),
-         sphere("upper wrist", (-0.405, -0.900, 3.81), (0.172, 0.127, 0.150))]
-for k in range(4):
-    z = 3.82 + k * 0.077
-    length = [0.34, 0.43, 0.42, 0.34][k]
-    pts = bezier((-0.10, -1.01, z), (0.03, -1.085, z + 0.055),
-                 (length - 0.06, -1.065, z + 0.12), (length, -1.01, z + 0.065), 16)
-    rr = [0.036 * (1 - 0.39 * i/15) for i in range(16)]
-    rr[-1] = 0.012
-    parts.append(tube("upper finger", pts, rr, sides=12))
-parts.append(tube("upper thumb", bezier((-0.28, -1.04, 3.83), (-0.22, -1.10, 3.69),
-                                          (-0.07, -1.14, 3.69), (0.045, -1.07, 3.77), 18),
-                  [0.057 * (1 - 0.60*i/17) for i in range(18)], sides=14))
-union_hand("08 | upper hand, five sculpted digits", parts)
-
-parts = [sphere("lower palm", (0.085, -0.980, 3.57), (0.137, 0.085, 0.177)),
-         sphere("lower wrist", (0.259, -0.923, 3.41), (0.135, 0.116, 0.174))]
-for k in range(4):
-    x = -0.065 + k * 0.071
-    length = [0.26, 0.36, 0.37, 0.30][k]
-    pts = bezier((x, -1.015, 3.62), (x - 0.12, -1.085, 3.79),
-                 (x - 0.17, -1.085, 3.62+length), (x - 0.12, -1.020, 3.65+length), 16)
-    rr = [0.033 * (1 - 0.39*i/15) for i in range(16)]
-    rr[-1] = 0.012
-    parts.append(tube("lower finger", pts, rr, sides=12))
-parts.append(tube("lower thumb", bezier((0.18, -1.0, 3.59), (0.28, -1.08, 3.72),
-                                         (0.24, -1.11, 3.85), (0.12, -1.10, 3.86), 18),
-                  [0.052 * (1 - 0.6*i/17) for i in range(18)], sides=14))
-union_hand("09 | lower hand, five sculpted digits", parts)
+# Tapered fingers rest together in a calm prayer pose.
+for side, label in ((-1, "08 | left prayer hand"), (1, "09 | right prayer hand")):
+    lift = 0.012 if side == -1 else 0
+    parts = [sphere("prayer palm", (side * 0.086, -1.015, 3.704 + lift), (0.083, 0.146, 0.187)),
+             sphere("prayer wrist", (side * 0.255, -0.943, 3.446 + lift), (0.119, 0.106, 0.145))]
+    pts = bezier((side * 0.254, -0.943, 3.442 + lift), (side * 0.207, -0.976, 3.531 + lift),
+                 (side * 0.134, -1.002, 3.617 + lift), (side * 0.090, -1.015, 3.704 + lift), 16)
+    parts.append(tube("gentle wrist transition", pts, [0.105 - 0.018 * i / 15 for i in range(16)],
+                      sides=16, flatten=0.9))
+    for k in range(4):
+        y = -1.116 + k * 0.071
+        length = [0.30, 0.39, 0.375, 0.292][k]
+        pts = bezier((side * 0.086, y, 3.819 + lift), (side * 0.062, y - 0.010, 3.960 + lift),
+                     (side * 0.045, y + 0.005, 3.819 + length + lift),
+                     (side * 0.025, y + 0.018, 3.843 + length + lift), 20)
+        rr = [0.036 * (1 - 0.32 * i / 19) for i in range(20)]
+        rr[-1] = 0.014
+        parts.append(tube("relaxed prayer finger", pts, rr, sides=14))
+    pts = bezier((side * 0.136, -1.145, 3.620 + lift), (side * 0.092, -1.193, 3.695 + lift),
+                 (side * 0.053, -1.197, 3.805 + lift), (side * 0.036, -1.155, 3.857 + lift), 20)
+    parts.append(tube("resting prayer thumb", pts,
+                      [0.051 * (1 - 0.45 * i / 19) for i in range(20)], sides=16))
+    union_hand(label, parts)
 
 # A small stone base completes the inferred lower portion.
 bpy.ops.mesh.primitive_cylinder_add(vertices=128, radius=1.36, depth=0.22, location=(0, 0, 0.15))
@@ -400,7 +383,7 @@ def area(name, location, energy, size, color):
 
 
 area("Large soft key", (-4.5, -6, 9.3), 950, 5, (1, 0.87, 0.72))
-area("Soft front fill", (4, -4, 5), 190, 4, (0.72, 0.81, 1))
+area("Soft front fill", (4, -4, 5), 320, 4, (0.84, 0.88, 1))
 area("Mantle edge light", (1.5, 3.5, 8), 1050, 4, (1, 0.90, 0.76))
 bpy.ops.mesh.primitive_plane_add(size=200, location=(0, 0, 0.025))
 floor = place(bpy.context.object, studio)
