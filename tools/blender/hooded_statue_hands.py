@@ -32,8 +32,8 @@ def build_hands(mesh, sphere, tube, bezier, skin):
         obj.data.remesh_voxel_size = 0.007
         bpy.ops.object.voxel_remesh()
         soft = obj.modifiers.new("Soft palm and finger joins", "SMOOTH")
-        soft.factor = 0.30
-        soft.iterations = 3
+        soft.factor = 0.42
+        soft.iterations = 6
         bpy.ops.object.modifier_apply(modifier=soft.name)
         for poly in obj.data.polygons:
             poly.use_smooth = True
@@ -71,7 +71,7 @@ def build_hands(mesh, sphere, tube, bezier, skin):
         rr = []
         for i in range(30):
             t = i / 29
-            rr.append(0.111 - 0.022 * math.sin(math.pi * t) + 0.017 * t * t)
+            rr.append(0.111 - 0.030 * t - 0.006 * math.sin(math.pi * t))
         parts.append(tube("hand | smooth wrist", pts, rr, mat=skin,
                           sides=24, flatten=0.85, subdivision=1))
 
