@@ -1,6 +1,6 @@
 """Organic cloth forms for the hooded limestone statue.
 
-The open hood, hanging mantle, gown and sleeves remain separate editable meshes.
+The gathered veil, hanging mantle, gown and sleeves remain separate editable meshes.
 Fold placement uses smooth, fixed functions so each build has the same shape.
 """
 import math
@@ -18,33 +18,34 @@ def _smooth(value):
 
 
 def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
-    """Build the hood, weighted mantle, gown, neck and soft folded collar."""
+    """Build the veil, weighted mantle, gown, neck and soft folded collar."""
     rows, cols = 172, 177
     verts = []
     for i in range(rows):
-        z = 0.27 + 6.35 * i / (rows - 1)
+        z = 0.27 + 5.83 * i / (rows - 1)
         rx = interp([(0.27, 1.44), (0.70, 1.47), (1.55, 1.40), (2.55, 1.34),
                      (3.26, 1.47), (3.83, 1.33), (4.27, 1.10), (4.66, 0.88),
-                     (5.30, 0.87), (5.91, 0.875), (6.62, 0.0)], z)
+                     (5.05, 0.65), (5.36, 0.64), (6.10, 0.0)], z)
         ry = interp([(0.27, 0.68), (1.50, 0.67), (2.80, 0.70), (3.60, 0.70),
-                     (4.23, 0.59), (4.80, 0.575), (5.91, 0.66), (6.62, 0.0)], z)
+                     (4.23, 0.59), (4.80, 0.575), (5.36, 0.57), (6.10, 0.0)], z)
         center_y = interp([(0.27, 0.045), (3.60, 0.05), (4.68, 0.06),
-                           (5.91, 0.06), (6.62, 0.03)], z)
-        if z > 5.91:
-            dome = math.sqrt(max(0.0, 1.0 - ((z - 5.91) / 0.71) ** 2))
-            rx, ry = 0.875 * dome, 0.66 * dome
+                           (5.28, -0.02), (5.82, -0.065), (6.10, -0.04)], z)
+        if z > 5.36:
+            dome = math.sqrt(max(0.0, 1.0 - ((z - 5.36) / 0.74) ** 2))
+            rx, ry = 0.64 * dome, 0.57 * dome
         limit = interp([(0.27, 2.43), (1.65, 2.43), (2.60, 2.47),
                         (3.35, 2.32), (4.15, 2.28), (4.70, 2.36),
-                        (5.90, 2.337), (6.62, math.pi)], z)
-        # A shallow arch spans the face. Its center flows into the crown.
-        if 5.90 < z < 6.005:
-            opening_x = 0.63 * math.sqrt(max(0.0, (6.005 - z) / 0.105))
+                        (5.56, 2.16), (6.10, math.pi)], z)
+        # The soft opening follows the forehead and turns down at the temples.
+        if 5.56 < z < 5.79:
+            opening_x = 0.50 * math.sqrt(max(0.0, 1.0 - ((z - 5.56) / 0.23) ** 2))
             limit = math.pi - math.asin(min(1.0, opening_x / max(0.001, rx)))
-        elif z >= 6.005:
+        elif z >= 5.79:
             limit = math.pi
         falling = _smooth((4.90 - z) / 1.15)
         shoulder = _bell(z, 4.05, 0.48)
-        crown = _smooth((6.62 - z) / 0.28)
+        crown = _smooth((6.10 - z) / 0.24)
+        gathered = _smooth((z - 4.72) / 0.60) * crown
         for j in range(cols):
             th = -limit + 2 * limit * j / (cols - 1)
             edge = (abs(th) / limit) ** 12
@@ -55,7 +56,11 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
                               + 0.046 * math.cos(9 * phase - 0.28 * z)
                               + 0.018 * math.sin(14 * phase + z * 0.30))
             fold += shoulder * 0.065 * math.cos(4 * th - 1.7 * z)
-            fold += 0.012 * crown * math.cos(5 * th + z * 0.83)
+            fold += 0.006 * crown * math.cos(3 * th + z * 0.83)
+            # Soft folds travel from the brow into the shoulder drape.
+            fold += gathered * (0.028 * math.sin(2 * th + 0.8 * z)
+                                + 0.012 * math.cos(4 * th - 0.6 * z))
+            fold += gathered * 0.023 * _bell(abs(th), 2.2 + 0.09 * math.sin(z), 0.15) * _bell(z, 5.25, 0.6)
             fold += edge * (0.060 + 0.045 * math.sin(1.55 * z + th)) * falling
             # The front edges turn out softly where the cloth crosses the arms.
             curl = edge * (0.090 * _bell(z, 3.23, 0.80)
@@ -63,8 +68,10 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
             x = (rx + fold) * math.sin(th)
             x += 0.070 * falling * math.sin(1.20 * z + 0.6 * th)
             x += edge * falling * 0.155 * math.sin(1.45 * z + 0.75 * th)
+            x += gathered * 0.018 * math.sin(3 * th + 0.8 * z)
             y = center_y + (ry + fold * 0.90) * math.cos(th) - curl
             y += 0.050 * falling * math.sin(z * 1.15 + 2 * th)
+            y -= gathered * edge * (0.038 + 0.018 * math.cos(2 * th + z)) * _smooth((5.78 - z) / 0.24)
             back = max(0.0, math.cos(th)) ** 4
             drop = _smooth((4.48 - z) / 1.65)
             # Long uneven back folds begin under the shoulder drape.
@@ -79,11 +86,12 @@ def build_cloth(mesh, sphere, interp, grid_faces, stone, inner, skin):
             zz += 0.035 * _smooth((0.65 - z) / 0.38) * math.cos(3 * th + 0.6)
             # Cloth bridges the shoulders with shallow diagonal gathers.
             zz += shoulder * 0.026 * math.cos(4 * th - 1.8)
+            zz += gathered * (0.021 * math.sin(th) + 0.012 * edge * math.cos(2 * th + 0.8))
             verts.append((x, y, zz))
-    mantle = mesh("01 | soft hood and weighted mantle", verts,
+    mantle = mesh("01 | gathered veil and flowing mantle", verts,
                   grid_faces(rows, cols), mat=stone, subdiv=1,
-                  thickness=0.090, weather=0.014)
-    mantle["Cloth form"] = "Deep sweeping folds, uneven front drape and a softly flared hem"
+                  thickness=0.055, weather=0.010)
+    mantle["Cloth form"] = "Close gathered veil, soft temple folds and a flowing shoulder drape"
 
     rows, cols = 138, 160
     verts = []

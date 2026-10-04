@@ -231,10 +231,10 @@ floor.data.materials.append(floor_mat)
 cam_data = bpy.data.cameras.new("Portrait camera")
 cam = bpy.data.objects.new("Portrait camera", cam_data)
 studio.objects.link(cam)
-cam.location = (0.65, -16, 6.0)
-track(cam, (0, -0.05, 3.42))
+cam.location = (0.65, -16, 5.7)
+track(cam, (0, -0.05, 3.15))
 cam_data.type = "ORTHO"
-cam_data.ortho_scale = 7.35
+cam_data.ortho_scale = 6.90
 scene.camera = cam
 scene.world.use_nodes = True
 scene.world.node_tree.nodes.get("Background").inputs["Color"].default_value = (0.28, 0.31, 0.35, 1)
@@ -251,9 +251,9 @@ scene.view_settings.view_transform = "AgX"
 
 scene["Reference"] = "User supplied photo of a hooded stone figure with bowed head and gathered hands"
 scene["Study notes"] = "Front view follows the photo. Back, hem and base are an artistic extension."
-scene["Build"] = "Separate editable hood, robe, face, sleeves and hands. Stone nodes and studio are included."
+scene["Build"] = "Separate editable veil, robe, face, sleeves and hands. Stone nodes and studio are included."
 readme = bpy.data.texts.new("READ ME | hooded stone study")
-readme.write("HOODED STONE FIGURE\n\nAn organic study with sweeping folds, a serene face and gentle prayer hands.\n"
+readme.write("HOODED STONE FIGURE\n\nAn organic study with a soft gathered veil, sweeping folds and gentle prayer hands.\n"
              "The back, full hem and base are inferred.\n\n"
              "STATUE contains the editable mesh pieces. STUDIO contains the camera, floor and lights.\n"
              "The warm limestone materials include mottling and fine grain.\n"
@@ -283,9 +283,9 @@ bpy.ops.render.render(write_still=True)
 # Two closer views make the anatomy and fabric easy to inspect.
 portrait_state = (cam.location.copy(), cam.rotation_euler.copy(), cam_data.ortho_scale,
                   scene.render.resolution_x, scene.render.resolution_y)
-cam.location = (3.8, -11.0, 5.8)
-track(cam, (0, -0.1, 3.48))
-cam_data.ortho_scale = 7.25
+cam.location = (3.8, -11.0, 5.6)
+track(cam, (0, -0.1, 3.17))
+cam_data.ortho_scale = 6.85
 scene.render.filepath = str(opt.output / "hooded_stone_statue_three_quarter.png")
 bpy.ops.render.render(write_still=True)
 cam.location = (1.05, -12, 5.9)

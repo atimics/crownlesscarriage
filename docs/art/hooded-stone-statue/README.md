@@ -1,10 +1,10 @@
 # Hooded stone figure
 
-A Blender sculpture study from the supplied front-view photo. The figure has an adult face with closed eyes, soft cheekbones, a natural nose, and a slight smile. Full palms, curved fingers, and rounded thumbs meet in a gentle prayer pose. Deep curved folds sweep through the cloak and skirt. The front edges fall unevenly, the hem opens outward, and the gown follows a gentle sway. The shoulders, collar, sleeves, and cuffs have soft joins and rounded edges. The stone has a fine grain and subtle wear.
+A Blender sculpture study from the supplied front-view photo. The figure has an adult face with closed eyes, soft cheekbones, a natural nose, and a slight smile. Full palms, curved fingers, and rounded thumbs meet in a gentle prayer pose. Deep curved folds sweep through the cloak and skirt. The front edges fall unevenly, the hem opens outward, and the gown follows a gentle sway. The shoulders, collar, sleeves, and cuffs have soft joins and rounded edges. A close veil follows the head, with soft temple folds and a thin uneven edge. Its fabric falls into the shoulder drape. The stone has a fine grain and subtle wear.
 
 The back, full hem, and base are artistic extensions of the visible shape. The prayer pose and calm expression follow the user's later request.
 
-Open `docs/art/hooded-stone-statue/hooded_stone_statue.blend` in Blender 5. The `STATUE` collection has separate editable meshes for the hood, robe, face, sleeves, hands, cuffs, and base. The `STUDIO` collection has the camera, lights, and floor. The procedural stone materials have a shared grain scale and a smoother finish on the face and hands.
+Open `docs/art/hooded-stone-statue/hooded_stone_statue.blend` in Blender 5. The `STATUE` collection has separate editable meshes for the veil, robe, face, sleeves, hands, cuffs, and base. The `STUDIO` collection has the camera, lights, and floor. The procedural stone materials have a shared grain scale and a smoother finish on the face and hands.
 
 ![Front view](hooded_stone_statue.png)
 
