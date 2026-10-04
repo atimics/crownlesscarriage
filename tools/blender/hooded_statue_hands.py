@@ -3,6 +3,7 @@
 import math
 
 import bpy
+import bmesh
 from mathutils import Matrix, Vector
 from mathutils.kdtree import KDTree
 
@@ -81,6 +82,28 @@ def build_hands(mesh, sphere, tube, bezier, skin):
         obj.name = name
         obj.data.remesh_voxel_size = 0.0045
         bpy.ops.object.voxel_remesh()
+        # The fine voxel grid can leave a tiny stone chip near a narrow tip.
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        unseen, groups = set(bm.verts), []
+        while unseen:
+            group, visit = [], [unseen.pop()]
+            while visit:
+                vert = visit.pop()
+                group.append(vert)
+                for edge in vert.link_edges:
+                    other = edge.other_vert(vert)
+                    if other in unseen:
+                        unseen.remove(other)
+                        visit.append(other)
+            groups.append(group)
+        groups.sort(key=len, reverse=True)
+        loose = [v for group in groups[1:] for v in group]
+        if loose:
+            bmesh.ops.delete(bm, geom=loose, context="VERTS")
+            bm.to_mesh(obj.data)
+            obj.data.update()
+        bm.free()
         soft = obj.modifiers.new("Soft hand joins", "SMOOTH")
         soft.factor = 0.42
         soft.iterations = 6
