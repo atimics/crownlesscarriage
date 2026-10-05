@@ -1249,6 +1249,30 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(len(self.worlds.view(self.id, self.a)['crew']), 2)
         self.assertEqual(self.worlds.db.execute('SELECT count(*) FROM receipts WHERE world=?', (self.id,)).fetchone()[0], 1)
 
+    def test_public_origins_preserve_sessions_and_one_command_receipt(self):
+        app = Application(self.worlds, public_origin=
+            'https://crownless.ca/, https://crownless.ratimics.com/')
+        state_path = f'/api/worlds/{self.id}/state'
+        for origin in ('https://crownless.ca', 'https://crownless.ratimics.com'):
+            status, view = self.request(state_path, origin=origin, application=app)
+            self.assertEqual(status, 200)
+            self.assertEqual(view['id'], self.id)
+            self.assertEqual(len(view['crew']), 2)
+        for origin in ('https://elsewhere.test', 'https://crownless.ca.evil.test',
+                       'http://crownless.ca', 'http://localhost:8787'):
+            self.assertEqual(self.request(state_path, origin=origin, application=app)[0], 403)
+        command = self.command(self.a, amount=1, good=0)
+        path = f'/api/worlds/{self.id}/command'
+        status, saved = self.request(path, command, origin='https://crownless.ca', application=app)
+        self.assertEqual(status, 200)
+        self.assertTrue(saved['accepted'])
+        status, retried = self.request(path, command,
+            origin='https://crownless.ratimics.com', application=app)
+        self.assertEqual(status, 200)
+        self.assertTrue(retried['duplicate'])
+        self.assertEqual(retried['world']['state']['hash'], saved['world']['state']['hash'])
+        self.assertEqual(retried['world']['state']['company']['cargo'][0], 1)
+
     def test_protocol_auth_and_clock_boundary(self):
         path = f'/api/worlds/{self.id}/command'
         self.assertEqual(self.request(path, self.command(self.a, 'advance'))[0], 400)

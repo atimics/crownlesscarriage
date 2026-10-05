@@ -179,7 +179,7 @@
     localStorage.removeItem(key);
   }
   function openLobby() {
-    location.assign(location.pathname.startsWith('/game/') ? '/' : 'https://crownless.ratimics.com/');
+    location.assign(location.pathname.startsWith('/game/') ? '/' : 'https://crownless.ca/');
   }
   async function saveAppearance(choices) {
     const next = await request('appearance', {appearance:CcAvatar.unpack(choices)});

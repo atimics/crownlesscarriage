@@ -65,7 +65,9 @@ async function main() {
       Object.defineProperty(navigator, 'share', {configurable: true, value: async data => { window.sharedInvitation = data.url; }});
     });
     await owner.goto(origin);
-    assert.equal(await owner.getByRole('link').count(), 1);
+    assert.equal(await owner.getByRole('link', {name:'Start', exact:true}).count(), 1);
+    assert.equal(await owner.getByRole('link', {name:'Continue at the earlier address', exact:true}).isVisible(),
+      new URL(origin).hostname === 'crownless.ca');
     await owner.getByRole('link', {name:'Start', exact:true}).click();
     await owner.waitForFunction(() => window.Module?.crownlessScreen === 'title', undefined, {timeout:120000});
     await ownerControls.button('Online').click();
