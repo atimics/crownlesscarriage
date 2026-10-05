@@ -96,6 +96,20 @@
     Module.crownlessDiagnostics?.publishFrame(frame);
   };
   const fields = new Map();
+  // The game listens at the window during capture, before an input's handlers.
+  // Leave editing keys to the focused field and return to the canvas on exit.
+  for (const type of ['keydown', 'keypress']) {
+    window.addEventListener(type, event => {
+      const input = event.target;
+      if (!input?.classList?.contains('game-field')) return;
+      event.stopImmediatePropagation();
+      if (type === 'keydown' && (event.key === 'Enter' || event.key === 'Escape')) {
+        event.preventDefault();
+        input.blur();
+        canvas.focus();
+      }
+    }, true);
+  }
   Module.renderCrownlessFields = descriptors => {
     const present = new Set();
     const bounds = canvas.getBoundingClientRect();
@@ -121,10 +135,6 @@
         input.addEventListener('input', publish);
         input.addEventListener('focus', publish);
         input.addEventListener('blur', () => Module._CrownlessCompanyText(0, 0));
-        input.addEventListener('keydown', event => {
-          event.stopPropagation();
-          if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); input.blur(); canvas.focus(); }
-        });
         input.addEventListener('keyup', event => event.stopPropagation());
         input.addEventListener('keypress', event => event.stopPropagation());
         document.body.append(input);

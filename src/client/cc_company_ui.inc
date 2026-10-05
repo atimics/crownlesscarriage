@@ -37,7 +37,7 @@ EM_JS(void, CompanyInvitation, (char *invitation, int capacity), {
 });
 EM_JS(int, CompanySharedHost, (), {
     if (location.hostname.endsWith('.github.io')) {
-        location.assign('https://crownless.ratimics.com/game/index.html?lobby=1');
+        location.assign('https://crownless.ca/game/index.html?lobby=1');
         return 0;
     }
     return 1;
@@ -68,7 +68,7 @@ static void CompanyInvitationLink(const char *code, char *link, int capacity)
 {
     const char *origin = getenv("CC_COOP_ORIGIN");
     (void)snprintf(link, (size_t)capacity, "%s/#join=%.97s",
-        origin != NULL ? origin : "https://crownless.ratimics.com", code);
+        origin != NULL ? origin : "https://crownless.ca", code);
 }
 #endif
 

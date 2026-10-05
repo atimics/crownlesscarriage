@@ -237,7 +237,7 @@ assert.equal(requests.length, requestCount);
 coop.openLobby();
 assert.equal(navigations.at(-1), '/');
 client('/index.html').openLobby();
-assert.equal(navigations.at(-1), 'https://crownless.ratimics.com/');
+assert.equal(navigations.at(-1), 'https://crownless.ca/');
 assert.equal(responses.length, 0);
 console.log('Shared browser recovery, ordering, menus, and save ownership passed.');
 
