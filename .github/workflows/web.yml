@@ -260,7 +260,7 @@ jobs:
                       raise AssertionError(f'{origin} did not serve {expected}: {last!r}')
                   print(f'{origin} is serving {last!r}; checking again.')
                   time.sleep(5)
-          for origin in ('https://crownless-ratimics.fly.dev', 'https://crownless.ratimics.com'):
+          for origin in ('https://crownless-ratimics.fly.dev', 'https://crownless.ca', 'https://crownless.ratimics.com'):
               reading = health(origin, os.environ['EXPECTED_REVISION'], time.monotonic() + 180)
               stranded = reading.get('worlds_needing_recovery', 0)
               if stranded:

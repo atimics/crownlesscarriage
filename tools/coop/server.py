@@ -799,7 +799,9 @@ class Worlds:
 class Application:
     def __init__(self, worlds, public_origin=None, game_dir=None):
         self.worlds = worlds
-        self.public_origin = public_origin.rstrip("/") if public_origin else None
+        self.public_origins = frozenset(
+            value.strip().rstrip("/") for value in (public_origin or "").split(",")
+            if value.strip())
         self.static = Path(__file__).resolve().parents[2] / "web" / "coop"
         self.game_dir = Path(game_dir).resolve() if game_dir else None
         self.rates = {}
@@ -827,8 +829,9 @@ class Application:
             require(file.is_file(), "This game file is still being prepared.", 404)
             return 200, b"" if method == "HEAD" else file.read_bytes(), mimetypes.guess_type(str(file))[0] or "application/octet-stream"
         origin = env.get("HTTP_ORIGIN")
-        expected = self.public_origin or env.get("wsgi.url_scheme", "http") + "://" + env.get("HTTP_HOST", "")
-        require(origin is None or origin == expected, "Open the carriage on its host address.", 403)
+        expected = self.public_origins or {
+            env.get("wsgi.url_scheme", "http") + "://" + env.get("HTTP_HOST", "")}
+        require(origin is None or origin in expected, "Open the carriage on its host address.", 403)
         auth = env.get("HTTP_AUTHORIZATION", "")
         token = auth[7:] if auth.startswith("Bearer ") else ""
         require(HEX64.fullmatch(token), "Open or restore your crew session.", 401)
@@ -914,7 +917,7 @@ def main():
     parser.add_argument("--database", default="out/worlds.sqlite3")
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
-    parser.add_argument("--public-origin", help="Public HTTPS origin when hosted behind a proxy")
+    parser.add_argument("--public-origin", help="Comma-separated public HTTPS origins when hosted behind a proxy")
     parser.add_argument("--game-dir", help="Built WebAssembly site to serve at /game/")
     operation = parser.add_mutually_exclusive_group()
     operation.add_argument("--backup-to", help="Write a consistent host database backup, then exit")

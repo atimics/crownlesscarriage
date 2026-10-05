@@ -184,7 +184,7 @@ bool CcCompanyRequestStatus(const char *path, const char *body, char **result, i
         return false;
     }
     const char *origin = getenv("CC_COOP_ORIGIN");
-    if (origin == NULL) origin = "https://crownless.ratimics.com";
+    if (origin == NULL) origin = "https://crownless.ca";
     (void)snprintf(url, sizeof(url), "%s%s", origin, path);
     (void)snprintf(authorization, sizeof(authorization), "Authorization: Bearer %s", token);
     CURL *curl = curl_easy_init();

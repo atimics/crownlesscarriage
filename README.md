@@ -5,7 +5,7 @@ town streets, meet the people who live there, and prepare your carriage for the
 road. Follow a lead into Low Silver Pit, bargain with its haulers, and bring
 goods or news home.
 
-[Play in your browser](https://crownless.ratimics.com).
+[Play in your browser](https://crownless.ca).
 
 <img width="800" alt="Thornford gameplay view: timber granary, townspeople, harvest board, and talk and trade controls under an amber sky" src="docs/screenshots/2026-09-24/thornford.png" />
 

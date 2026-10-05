@@ -7,7 +7,7 @@ kill_timeout = 30
   dockerfile = "tools/coop/Dockerfile"
 
 [env]
-  CROWNLESS_PUBLIC_ORIGIN = "https://crownless.ratimics.com"
+  CROWNLESS_PUBLIC_ORIGIN = "https://crownless.ca,https://crownless.ratimics.com"
 
 [http_service]
   internal_port = 8787
