@@ -20,5 +20,8 @@ for (const domain of ['crownless.ca', 'crownless.ratimics.com']) {
   const response = await edge.fetch(request, origin);
   assert.equal(await response.text(), '{"saved":true}');
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  const redirected = await edge.fetch(new Request(`http://${domain}/game/index.html?world=123`), origin);
+  assert.equal(redirected.status, 308);
+  assert.equal(redirected.headers.get('Location'), `https://${domain}/game/index.html?world=123`);
 }
 console.log('Both public domains preserve the shared command, session, and origin.');
