@@ -12,7 +12,7 @@ The sheet shows both at the same metre scale.
 | Model | GLB | Triangles | Bones | Height |
 | --- | --- | ---: | ---: | ---: |
 | Wolf | `assets/exports/creatures/creature_wolf_v01.glb` | 1,864 | 19 | 1.43 m |
-| Rabbit | `assets/exports/creatures/creature_rabbit_v01.glb` | 1,692 | 19 | 0.82 m |
+| Rabbit | `assets/exports/creatures/creature_rabbit_v01.glb` | 1,692 | 19 | 0.84 m |
 
 Open `assets/blender/crownless_creature_library.blend` for the editable meshes
 and armatures. Reveal the objects in `CREATURE_WOLF_IDLE` or
@@ -24,6 +24,8 @@ palette, value, and fold data. The game supplies the coat colours and motion.
 Each has its own quadruped body profile, palette, and contact shadow. The
 browser startup asset list includes both GLBs. This PR supplies the models
 and their renderer support. Wildlife placement is a later game feature.
+The tracked art budget rises from 64 to 65 MiB for the two skins and the
+larger Blender library. Tracked art uses 64.7 MiB with this addition.
 
 Rebuild and inspect:
 
