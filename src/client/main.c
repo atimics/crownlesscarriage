@@ -12978,8 +12978,14 @@ int main(int argc, char **argv)
     InitWindow(opening_width, opening_height,
                "Crownless Carriage — living world spine");
     if (!IsWindowReady()) {
+#if defined(PLATFORM_WEB)
+        (void)fprintf(stderr,
+                      "Crownless Carriage could not create a WebGL 2 graphics context.\n");
+        EM_ASM({ Module.showCrownlessStartupFailure(); });
+#else
         (void)fprintf(stderr,
                       "Crownless Carriage could not connect to the desktop window server.\n");
+#endif
         CcClientInstanceLockRelease(&instance_lock);
         return 1;
     }

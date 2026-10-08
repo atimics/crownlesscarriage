@@ -135,10 +135,48 @@ async function main() {
     };
   });
   try {
+    /* A failed initial context returns from main without a window error or
+       context-loss event. Exercise that path before the normal startup. */
+    const failedContext = await browser.newContext();
+    try {
+      const failedPage = await failedContext.newPage();
+      await failedPage.addInitScript(() => {
+        const getContext = HTMLCanvasElement.prototype.getContext;
+        window.blockedGraphicsContexts = 0;
+        HTMLCanvasElement.prototype.getContext = function(type) {
+          if (/^(webgl2?|experimental-webgl)$/.test(type)) {
+            window.blockedGraphicsContexts++;
+            return null;
+          }
+          return getContext.apply(this, arguments);
+        };
+      });
+      await failedPage.goto(`http://127.0.0.1:${server.address().port}/`);
+      await failedPage.waitForFunction(() => window.Module &&
+        Module.crownlessRecoveryActive && Module.crownlessRuntimeReady,
+        undefined, {timeout: 120000});
+      assert.deepEqual(await failedPage.evaluate(() => ({
+        attempted: window.blockedGraphicsContexts > 0,
+        visible: !document.querySelector('#loading').hidden,
+        text: document.querySelector('#status').textContent,
+        progressHidden: document.querySelector('#progress').hidden,
+        focused: document.activeElement === document.querySelector('#loading')
+      })), {
+        attempted: true,
+        visible: true,
+        text: 'The game could not start its graphics. WebGL 2 is required. Check that browser graphics acceleration is enabled, then reload the page.',
+        progressHidden: true,
+        focused: true
+      });
+      await failedPage.screenshot({path: path.join(output, 'startup-graphics-recovery.png')});
+    } finally {
+      await failedContext.close();
+    }
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => window.Module && Module.crownlessCampaignAccess === 0 &&
       document.querySelector('#loading').hidden, undefined, {timeout: 120000});
     await page.waitForFunction(() => Module.crownlessScreen === 'title');
+    assert.equal(await page.evaluate(() => Boolean(Module.crownlessRecoveryActive)), false);
     assert.equal(await page.evaluate(() => Module._CrownlessRoadGeometrySelfTest()), 1,
       'WebAssembly road geometry must match the native known fixtures');
     const startupMemory = await page.evaluate(() => {

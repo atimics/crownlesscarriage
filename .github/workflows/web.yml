@@ -23,6 +23,7 @@ jobs:
       - name: Check browser input contracts
         run: |
           node tests/web_diagnostics_tests.cjs
+          node tests/web_startup_recovery_tests.cjs
           node tests/travel_touch_tests.cjs
       - uses: emscripten-core/setup-emsdk@v15
         with:
