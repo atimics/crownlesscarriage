@@ -57,6 +57,43 @@ int main(void)
     EXPECT(sheep_idle.bones[CC_QUADRUPED_TAIL].tail.z >
                cow_idle.bones[CC_QUADRUPED_TAIL].tail.z,
            "sheep keeps a short readable tail");
+    CcQuadrupedPose wolf_idle = {0};
+    CcQuadrupedPose rabbit_idle = {0};
+    CcQuadrupedPoseResolve(CC_QUADRUPED_WOLF, 0.0f, false, &wolf_idle);
+    CcQuadrupedPoseResolve(CC_QUADRUPED_RABBIT, 0.0f, false, &rabbit_idle);
+    EXPECT(wolf_idle.valid && rabbit_idle.valid,
+           "wildlife idle poses resolve");
+    EXPECT(wolf_idle.bones[CC_QUADRUPED_BODY].head.y >
+               rabbit_idle.bones[CC_QUADRUPED_BODY].head.y * 2.0f,
+           "wolf and rabbit keep their own body sizes");
+    EXPECT(Distance(wolf_idle.bones[CC_QUADRUPED_TAIL_ROOT].head,
+                    wolf_idle.bones[CC_QUADRUPED_TAIL].tail) >
+               Distance(rabbit_idle.bones[CC_QUADRUPED_TAIL_ROOT].head,
+                        rabbit_idle.bones[CC_QUADRUPED_TAIL].tail) * 4.0f,
+           "wolf brush and rabbit cotton tail keep distinct lengths");
+    for (int32_t animal = CC_QUADRUPED_WOLF;
+         animal <= CC_QUADRUPED_RABBIT; ++animal) {
+        CcQuadrupedPose idle = {0};
+        CcQuadrupedPoseResolve((CcQuadrupedMorphology)animal, 0.0f, false, &idle);
+        float paw_travel = 0.0f;
+        for (int32_t frame = 0; frame < 16; ++frame) {
+            CcQuadrupedPose step = {0};
+            CcQuadrupedPoseResolve((CcQuadrupedMorphology)animal,
+                                   (float)frame * 0.4f, true, &step);
+            EXPECT(step.valid, "wildlife walking pose resolves");
+            for (int32_t bone = 0; bone < CC_QUADRUPED_BONE_COUNT; ++bone) {
+                EXPECT(isfinite(step.bones[bone].head.x) &&
+                           isfinite(step.bones[bone].head.y) &&
+                           isfinite(step.bones[bone].head.z) &&
+                           Distance(step.bones[bone].head, step.bones[bone].tail) > 0.01f,
+                       "wildlife walking bones stay finite and keep useful lengths");
+            }
+            paw_travel = fmaxf(paw_travel,
+                Distance(step.bones[CC_QUADRUPED_HOOF_FL].head,
+                         idle.bones[CC_QUADRUPED_HOOF_FL].head));
+        }
+        EXPECT(paw_travel > 0.02f, "wildlife paws move through a walking cycle");
+    }
     EXPECT(horse_step.bones[CC_QUADRUPED_HOOF_FL].head.z >
                horse_idle.bones[CC_QUADRUPED_HOOF_FL].head.z,
            "front-left hoof advances during its swing");

@@ -86,6 +86,26 @@ static const CcQuadrupedProfile PROFILES[] = {
         {0.0f, 0.86f, -0.75f},
         {0.0f, 0.74f, -0.86f},
     },
+    [CC_QUADRUPED_WOLF] = {
+        0.82f, 0.21f,
+        -0.34f, 0.26f, 0.12f, 0.54f,
+        0.90f, 0.35f, 0.98f, 0.63f,
+        1.00f, 0.86f, 0.09f, 1.15f,
+        0.40f, -0.40f,
+        {0.0f, 0.86f, -0.56f},
+        {0.0f, 0.69f, -0.94f},
+        {0.0f, 0.40f, -1.23f},
+    },
+    [CC_QUADRUPED_RABBIT] = {
+        0.30f, 0.14f,
+        -0.18f, 0.12f, 0.08f, 0.24f,
+        0.37f, 0.17f, 0.43f, 0.27f,
+        0.44f, 0.35f, 0.03f, 0.48f,
+        0.18f, -0.19f,
+        {0.0f, 0.31f, -0.30f},
+        {0.0f, 0.34f, -0.37f},
+        {0.0f, 0.37f, -0.43f},
+    },
 };
 
 static CcLimbVec3 Subtract(CcLimbVec3 a, CcLimbVec3 b)

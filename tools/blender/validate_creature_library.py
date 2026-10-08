@@ -31,6 +31,8 @@ EXPECTED_VARIANTS = (
     "dragon_wanderer",
     "dragon_deep_wyrm",
     "sheep",
+    "wolf",
+    "rabbit",
 )
 EXPECTED_FAMILIES = ("goblin", "dragon", "animal")
 EXPECTED_DRAGON_POSES = ("idle", "stalk_a", "stalk_b", "threat", "rest")
@@ -59,6 +61,8 @@ EXPECTED_SKELETON = {
     "horse": "quadruped",
     "cow": "quadruped",
     "sheep": "quadruped",
+    "wolf": "quadruped",
+    "rabbit": "quadruped",
 }
 SKELETON_BONES = {
     "humanoid": EXPECTED_HUMANOID_BONES,
@@ -81,6 +85,8 @@ EXPECTED_MORPHOLOGY = {
     "dragon_wanderer": "quadruped",
     "dragon_deep_wyrm": "quadruped",
     "sheep": "quadruped",
+    "wolf": "quadruped",
+    "rabbit": "quadruped",
 }
 EXPECTED_GAIT = {
     "goblin_scavenger": "humanoid_runtime_skin",
@@ -93,6 +99,8 @@ EXPECTED_GAIT = {
     "dragon_wanderer": "dragon_authored",
     "dragon_deep_wyrm": "dragon_authored",
     "sheep": "quadruped_runtime_skin",
+    "wolf": "quadruped_runtime_skin",
+    "rabbit": "quadruped_runtime_skin",
 }
 HEIGHT_LIMITS = {
     # Head to the tip of the hair crest; the body alone is about 1.8m.
@@ -100,6 +108,8 @@ HEIGHT_LIMITS = {
     "horse": (1.15, 2.00),
     "cow": (1.15, 1.90),
     "sheep": (0.75, 1.45),
+    "wolf": (1.15, 1.55),
+    "rabbit": (0.65, 0.95),
     "dragon_whelp": (0.65, 2.80),
     "dragon_wanderer": (2.00, 8.40),
     "dragon": (3.60, 14.40),
@@ -110,6 +120,8 @@ TRIANGLE_LIMITS = {
     "horse": 3200,
     "cow": 3600,
     "sheep": 3600,
+    "wolf": 4200,
+    "rabbit": 4200,
     "dragon": 7500,
 }
 

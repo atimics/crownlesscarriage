@@ -675,6 +675,8 @@ if(CC_BUILD_CLIENT)
                 creature_horse_v01.glb
                 creature_cow_v01.glb
                 creature_sheep_v01.glb
+                creature_wolf_v01.glb
+                creature_rabbit_v01.glb
                 creature_dragon_v01.glb
                 creature_dragon_whelp_v01.glb
                 creature_dragon_wanderer_v01.glb
