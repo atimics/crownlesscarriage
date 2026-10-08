@@ -40,16 +40,18 @@ static void TestAnimalModels(const char *path)
         CC_CREATURE_HORSE, CC_CREATURE_HORSE, CC_CREATURE_HORSE,
         CC_CREATURE_HORSE, CC_CREATURE_HORSE, CC_CREATURE_HORSE,
         CC_CREATURE_HORSE, CC_CREATURE_COW, CC_CREATURE_SHEEP,
+        CC_CREATURE_WOLF, CC_CREATURE_RABBIT,
     };
+    const int32_t animal_count = (int32_t)(sizeof(animals) / sizeof(animals[0]));
     RenderTexture2D scene = LoadRenderTexture(96, 96);
     RequireRenderer(IsRenderTextureValid(scene), "animal target must load");
-    Image sheet = GenImageColor(768, 864, BLACK);
+    Image sheet = GenImageColor(768, 96 * animal_count, BLACK);
     Camera3D camera = {
         .position = {3.0f, 2.4f, 4.0f}, .target = {0.0f, 0.8f, 0.0f},
         .up = {0.0f, 1.0f, 0.0f}, .fovy = 3.5f,
         .projection = CAMERA_ORTHOGRAPHIC,
     };
-    for (int32_t animal = 0; animal < 9; ++animal) {
+    for (int32_t animal = 0; animal < animal_count; ++animal) {
         CreatureModelCache *model = &creature_models[animals[animal]][CC_CREATURE_POSE_IDLE];
         RequireRenderer(model->ready && model->model.meshCount == 1,
                         "animal review must use the shipped skin");
@@ -108,7 +110,7 @@ static void TestAnimalModels(const char *path)
     RequireRenderer(ExportImage(sheet, output), "animal sheet must be written");
     UnloadImage(sheet);
     UnloadRenderTexture(scene);
-    (void)puts("PASS animal skins: seven pony colors and two farm species, four turns, two walking poses");
+    (void)puts("PASS animal skins: seven pony colors, cow, sheep, wolf and rabbit, four turns, two walking poses");
 }
 
 static void TestPonyPortraits(const char *path)

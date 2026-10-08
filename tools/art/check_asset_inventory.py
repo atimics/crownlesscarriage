@@ -8,7 +8,8 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MAX_TRACKED_ASSET_BYTES = 64 * 1024 * 1024
+# One additional MiB covers the wolf/rabbit skins and their editable source.
+MAX_TRACKED_ASSET_BYTES = 65 * 1024 * 1024
 MAX_BUNDLED_MUSIC_BYTES = 128 * 1024 * 1024
 MAX_BUNDLED_MUSIC_FILES = 27
 MAX_HOSTED_MUSIC_BYTES = 96 * 1024 * 1024

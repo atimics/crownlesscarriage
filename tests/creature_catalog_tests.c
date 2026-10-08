@@ -31,6 +31,21 @@ int main(void)
            "cow uses one runtime-driven skin");
     EXPECT(CcCreaturePoseCount(CC_CREATURE_SHEEP) == 1,
            "sheep uses one runtime-driven skin");
+    const CcCreatureVariant wildlife[] = {CC_CREATURE_WOLF, CC_CREATURE_RABBIT};
+    const char *const wildlife_names[] = {"wolf", "rabbit"};
+    for (int32_t animal = 0; animal < 2; ++animal) {
+        CcCreatureVariant variant = wildlife[animal];
+        const CcCreatureDefinition *definition = CcCreatureDefinitionAt(variant);
+        EXPECT(definition->skinned && definition->quadruped &&
+                   strcmp(definition->skeleton, "quadruped") == 0,
+               "wildlife uses the quadruped skin");
+        EXPECT(CcCreaturePoseCount(variant) == 1 &&
+                   CcCreatureSteppedPose(variant, 1.0f, true) == CC_CREATURE_POSE_IDLE,
+               "walking wildlife keeps its runtime skin");
+        EXPECT(strstr(CcCreatureAssetPath(variant, CC_CREATURE_POSE_IDLE),
+                      wildlife_names[animal]) != NULL,
+               "wildlife resolves its own asset");
+    }
     for (int32_t goblin = CC_CREATURE_GOBLIN_SCAVENGER;
          goblin <= CC_CREATURE_GOBLIN_TRIBUTE_BEARER; ++goblin) {
         const CcCreatureDefinition *definition =

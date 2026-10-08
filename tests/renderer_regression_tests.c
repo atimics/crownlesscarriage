@@ -216,6 +216,7 @@ int main(int argc, char **argv)
     if (argc == 3 && (strcmp(argv[1], "--sky-captures") == 0 ||
                       strcmp(argv[1], "--sky-graphics") == 0 ||
                       strcmp(argv[1], "--graphics") == 0 ||
+                      strcmp(argv[1], "--animal-captures") == 0 ||
                       strcmp(argv[1], "--abandoned-town") == 0 ||
                       strcmp(argv[1], "--travel-graphics") == 0 ||
                       strcmp(argv[1], "--carriage-graphics") == 0 ||
@@ -241,6 +242,8 @@ int main(int argc, char **argv)
             TestEncounterDrawReadOnly();
             TestSiteDrawReadOnly();
             TestConvoyDrawReadOnly();
+        } else if (strcmp(argv[1], "--animal-captures") == 0) {
+            TestAnimalModels(argv[2]);
         } else if (strcmp(argv[1], "--graphics") == 0) {
             TestBodyText();
             TestLitPrimitiveNormals();

@@ -106,6 +106,28 @@ FAMILY_PALETTES = {
         "accent": (0.56, 0.43, 0.32, 1.0),
         "eye": (0.012, 0.010, 0.009, 1.0),
     },
+    "wolf": {
+        "skin": (0.36, 0.40, 0.43, 1.0),
+        "secondary": (0.17, 0.20, 0.23, 1.0),
+        "hide": (0.67, 0.66, 0.59, 1.0),
+        "cloth": (0.46, 0.49, 0.49, 1.0),
+        "leather": (0.065, 0.075, 0.085, 1.0),
+        "horn": (0.86, 0.82, 0.69, 1.0),
+        "metal": (0.31, 0.36, 0.36, 1.0),
+        "accent": (0.49, 0.35, 0.33, 1.0),
+        "eye": (0.90, 0.58, 0.14, 1.0),
+    },
+    "rabbit": {
+        "skin": (0.46, 0.33, 0.22, 1.0),
+        "secondary": (0.27, 0.19, 0.14, 1.0),
+        "hide": (0.83, 0.77, 0.64, 1.0),
+        "cloth": (0.59, 0.45, 0.32, 1.0),
+        "leather": (0.08, 0.055, 0.045, 1.0),
+        "horn": (0.96, 0.89, 0.74, 1.0),
+        "metal": (0.31, 0.36, 0.36, 1.0),
+        "accent": (0.73, 0.43, 0.40, 1.0),
+        "eye": (0.025, 0.018, 0.016, 1.0),
+    },
     "dragon": {
         "skin": (0.075, 0.16, 0.16, 1.0),
         "secondary": (0.30, 0.075, 0.070, 1.0),
@@ -177,6 +199,14 @@ CREATURES = (
                  "small round fleece with a dark narrow face and short legs",
                  "quadruped", "quadruped_runtime_skin",
                  ("fleece", "ears", "short_tail")),
+    CreatureSpec("wolf", "wolf", 10,
+                 "lean grey hunter with pointed ears, long muzzle and brush tail",
+                 "quadruped", "quadruped_runtime_skin",
+                 ("ruff", "pointed_ears", "paws", "brush_tail")),
+    CreatureSpec("rabbit", "rabbit", 11,
+                 "small brown rabbit with tall ears, round haunches and cream tail",
+                 "quadruped", "quadruped_runtime_skin",
+                 ("long_ears", "hind_paws", "cheeks", "cotton_tail")),
 )
 
 
@@ -190,7 +220,7 @@ def skeleton_for(spec: CreatureSpec) -> str:
     """The skeleton family of docs/design/unified-characters.md."""
     if spec.family == "goblin":
         return "humanoid"
-    if spec.family in ("horse", "cow", "sheep"):
+    if spec.family in ("horse", "cow", "sheep", "wolf", "rabbit"):
         return "quadruped"
     return "none"
 
@@ -1963,12 +1993,193 @@ def build_dragon(spec: CreatureSpec,
             obj["cc_dragon_authored_size"] = authored_size
 
 
+WILDLIFE_BIND = {
+    "wolf": {
+        "body": ((0.0, 0.34, 0.82), (0.0, -0.26, 0.82)),
+        "chest": ((0.0, -0.12, 0.88), (0.0, -0.54, 0.88)),
+        "neck": ((0.0, -0.35, 0.90), (0.0, -0.63, 0.98)),
+        "head": ((0.0, -0.86, 1.00), (0.0, -1.15, 0.91)),
+        "tail.root": ((0.0, 0.56, 0.86), (0.0, 0.94, 0.69)),
+        "tail": ((0.0, 0.94, 0.69), (0.0, 1.23, 0.40)),
+        "body_height": 0.82, "half_width": 0.21,
+        "front_y": -0.40, "hind_y": 0.40,
+    },
+    "rabbit": {
+        "body": ((0.0, 0.18, 0.30), (0.0, -0.12, 0.30)),
+        "chest": ((0.0, -0.08, 0.36), (0.0, -0.24, 0.36)),
+        "neck": ((0.0, -0.17, 0.37), (0.0, -0.27, 0.43)),
+        "head": ((0.0, -0.35, 0.44), (0.0, -0.48, 0.41)),
+        "tail.root": ((0.0, 0.30, 0.31), (0.0, 0.37, 0.34)),
+        "tail": ((0.0, 0.37, 0.34), (0.0, 0.43, 0.37)),
+        "body_height": 0.30, "half_width": 0.14,
+        "front_y": -0.18, "hind_y": 0.19,
+    },
+}
+
+
+def wildlife_bone_points(spec: CreatureSpec) -> dict[str, tuple[Vector, Vector]]:
+    bind = WILDLIFE_BIND[spec.family]
+    points = {name: (Vector(pair[0]), Vector(pair[1]))
+              for name, pair in bind.items() if isinstance(pair, tuple)}
+    points["root"] = (Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.20)))
+    for name, sign, front in (("FL", -1, True), ("FR", 1, True),
+                              ("HL", -1, False), ("HR", 1, False)):
+        x = sign * bind["half_width"]
+        y = bind["front_y"] if front else bind["hind_y"]
+        root = Vector((x, y, bind["body_height"] - (0.08 if front else 0.10)))
+        paw = Vector((x, y, 0.10))
+        knee = (root + paw) * 0.5 + Vector((0.0, -0.10 if front else 0.10, 0.02))
+        points[f"upper_leg.{name}"] = (root, knee)
+        points[f"lower_leg.{name}"] = (knee, paw)
+        points[f"hoof.{name}"] = (paw, paw + Vector((0.0, -0.20, -0.015)))
+    return points
+
+
+def build_wildlife(spec: CreatureSpec, collection: bpy.types.Collection) -> None:
+    wolf = spec.family == "wolf"
+    prefix = spec.family.upper()
+    points = wildlife_bone_points(spec)
+    head = points["head"][0]
+    body_z = WILDLIFE_BIND[spec.family]["body_height"]
+    add_ellipsoid(f"{prefix}_Body", (0.0, 0.03, body_z),
+                  (0.29, 0.60, 0.26) if wolf else (0.21, 0.30, 0.20),
+                  "skin", collection, spec, "barrel", subdivisions=2)
+    add_ellipsoid(f"{prefix}_Chest", (0.0, -0.33 if wolf else -0.14, body_z),
+                  (0.30, 0.29, 0.31) if wolf else (0.17, 0.18, 0.20),
+                  "skin", collection, spec, "chest", subdivisions=2)
+    add_ellipsoid(f"{prefix}_Bib",
+                  (0.0, -0.51 if wolf else -0.25, body_z - 0.08),
+                  (0.19, 0.12, 0.24) if wolf else (0.12, 0.06, 0.12),
+                  "hide", collection, spec, "chest", subdivisions=2)
+    neck_a, neck_b = points["neck"]
+    add_segment(f"{prefix}_Neck", neck_a, neck_b,
+                0.25 if wolf else 0.13, 0.19 if wolf else 0.12,
+                "skin", collection, spec, "neck", sides=8)
+    add_ellipsoid(f"{prefix}_Head", head,
+                  (0.22, 0.26, 0.21) if wolf else (0.17, 0.18, 0.16),
+                  "skin", collection, spec, "head", subdivisions=2)
+    if wolf:
+        add_ellipsoid("WOLF_BackSaddle", (0.0, 0.06, body_z + 0.18),
+                      (0.23, 0.47, 0.13), "secondary", collection, spec,
+                      "barrel", subdivisions=2)
+        add_ellipsoid("WOLF_Muzzle", head + Vector((0.0, -0.27, -0.075)),
+                      (0.13, 0.27, 0.11), "hide", collection, spec,
+                      "muzzle", subdivisions=2)
+        add_ellipsoid("WOLF_Nose", head + Vector((0.0, -0.50, -0.052)),
+                      (0.093, 0.059, 0.060), "leather", collection, spec,
+                      "muzzle")
+        add_ellipsoid("WOLF_Jaw", head + Vector((0.0, -0.24, -0.145)),
+                      (0.12, 0.24, 0.060), "secondary", collection, spec,
+                      "muzzle")
+    else:
+        for sign in (-1, 1):
+            add_ellipsoid(f"RABBIT_Cheek_{sign}",
+                          head + Vector((sign * 0.065, -0.14, -0.025)),
+                          (0.095, 0.082, 0.075), "hide", collection, spec,
+                          "muzzle", subdivisions=2)
+        add_ellipsoid("RABBIT_Nose", head + Vector((0.0, -0.222, 0.002)),
+                      (0.037, 0.025, 0.028), "accent", collection, spec, "muzzle")
+        add_segment("RABBIT_Mouth", head + Vector((0.0, -0.22, -0.016)),
+                    head + Vector((0.0, -0.225, -0.058)), 0.005, 0.004,
+                    "leather", collection, spec, "muzzle", sides=4)
+
+    for side, sign in (("L", -1), ("R", 1)):
+        if wolf:
+            ear = ((sign * 0.12, head.y + 0.08, head.z + 0.10),
+                   (sign * 0.21, head.y + 0.035, head.z + 0.43),
+                   (sign * 0.21, head.y - 0.12, head.z + 0.13))
+            inner = ((sign * 0.165, head.y - 0.006, head.z + 0.17),
+                     (sign * 0.21, head.y + 0.014, head.z + 0.34),
+                     (sign * 0.21, head.y - 0.082, head.z + 0.17))
+            add_lateral_prism(f"WOLF_Ear_{side}", ear, 0.08, "skin",
+                              collection, spec, f"ear_{side.lower()}")
+            add_lateral_prism(f"WOLF_InnerEar_{side}", inner, 0.085, "accent",
+                              collection, spec, f"ear_{side.lower()}")
+            # Cheek tufts and shoulder fur break the outline into sharp planes.
+            for index, (y, z) in enumerate(((-0.66, 0.90), (-0.49, 0.95),
+                                          (-0.32, 0.93))):
+                add_cone(f"WOLF_Ruff_{side}_{index}",
+                         (sign * 0.25, y, z), 0.12, 0.25, "skin",
+                         collection, spec, "neck" if index == 0 else "chest",
+                         rotation=(0.0, sign * math.radians(120), 0.0))
+            eye_pos = head + Vector((sign * 0.19, -0.105, 0.045))
+            eye_scale = (0.015, 0.034, 0.025)
+        else:
+            ear_base = head + Vector((sign * 0.086, 0.025, 0.11))
+            ear_top = ear_base + Vector((sign * 0.050, 0.045, 0.30))
+            add_tube(f"RABBIT_Ear_{side}",
+                     (ear_base, ear_base.lerp(ear_top, 0.45), ear_top),
+                     (0.045, 0.059, 0.006), "skin", collection, spec,
+                     f"ear_{side.lower()}", sides=6)
+            add_tube(f"RABBIT_InnerEar_{side}",
+                     (ear_base + Vector((0.0, -0.037, 0.035)),
+                      ear_base.lerp(ear_top, 0.45) + Vector((0.0, -0.047, 0.0)),
+                      ear_top + Vector((0.0, -0.010, -0.035))),
+                     (0.017, 0.025, 0.004), "accent", collection, spec,
+                     f"ear_{side.lower()}", sides=6)
+            eye_pos = head + Vector((sign * 0.142, -0.082, 0.045))
+            eye_scale = (0.026, 0.035, 0.037)
+        add_ellipsoid(f"{prefix}_Eye_{side}", eye_pos, eye_scale,
+                      "eye", collection, spec, f"eye_{side.lower()}", subdivisions=2)
+        add_ellipsoid(f"{prefix}_Pupil_{side}",
+                      eye_pos + Vector((sign * (0.011 if wolf else 0.017), -0.008, 0.0)),
+                      (0.006, 0.015, 0.019) if wolf else (0.014, 0.023, 0.028),
+                      "leather", collection, spec, f"eye_{side.lower()}")
+        add_ellipsoid(f"{prefix}_EyeGlint_{side}",
+                      eye_pos + Vector((sign * (0.017 if wolf else 0.028), -0.009, 0.014)),
+                      (0.003, 0.006, 0.006) if wolf else (0.006, 0.009, 0.009),
+                      "horn", collection, spec,
+                      f"eye_{side.lower()}")
+
+    for name in ("FL", "FR", "HL", "HR"):
+        front = name.startswith("F")
+        root, knee = points[f"upper_leg.{name}"]
+        _, paw = points[f"lower_leg.{name}"]
+        part = name.lower()
+        add_segment(f"{prefix}_UpperLeg_{name}", root, knee,
+                    0.09 if wolf else 0.07, 0.060 if wolf else 0.045,
+                    "skin", collection, spec, f"upper_leg_{part}")
+        add_segment(f"{prefix}_LowerLeg_{name}", knee, paw,
+                    0.055 if wolf else 0.035, 0.042 if wolf else 0.027,
+                    "skin", collection, spec, f"lower_leg_{part}")
+        if not front:
+            add_ellipsoid(f"{prefix}_Haunch_{name}",
+                          root + Vector((0.0, 0.015, -0.02)),
+                          (0.13, 0.19, 0.21) if wolf else (0.13, 0.18, 0.17),
+                          "skin", collection, spec, f"upper_leg_{part}", subdivisions=2)
+        add_ellipsoid(f"{prefix}_Paw_{name}", paw + Vector((0.0, -0.045, -0.032)),
+                      (0.09, 0.135, 0.065) if wolf else
+                      (0.065, 0.08 if front else 0.135, 0.044),
+                      "hide" if not wolf else "skin", collection, spec,
+                      f"hoof_{part}", subdivisions=2)
+        if wolf:
+            for toe in (-1, 0, 1):
+                add_segment(f"WOLF_Claw_{name}_{toe}",
+                            paw + Vector((toe * 0.038, -0.14, -0.042)),
+                            paw + Vector((toe * 0.038, -0.18, -0.052)),
+                            0.013, 0.004, "leather", collection, spec,
+                            f"hoof_{part}", sides=5)
+
+    tail_a, tail_b = points["tail.root"]
+    _, tail_c = points["tail"]
+    if wolf:
+        add_tube("WOLF_TailRoot", (tail_a, tail_a.lerp(tail_b, 0.5), tail_b),
+                 (0.10, 0.16, 0.17), "skin", collection, spec, "tail_root", sides=8)
+        add_tube("WOLF_TailBrush", (tail_b, tail_b.lerp(tail_c, 0.55), tail_c),
+                 (0.17, 0.16, 0.012), "secondary", collection, spec, "tail", sides=8)
+    else:
+        add_ellipsoid("RABBIT_CottonTail", tail_b, (0.10, 0.12, 0.10),
+                      "hide", collection, spec, "tail_root", subdivisions=2)
+
+
 def build_creature(spec: CreatureSpec,
                    collection: bpy.types.Collection) -> None:
     if spec.family == "goblin":
         build_goblin(spec, collection)
     elif spec.family in ("horse", "cow", "sheep"):
         build_quadruped(spec, collection)
+    elif spec.family in ("wolf", "rabbit"):
+        build_wildlife(spec, collection)
     elif spec.family == "dragon":
         build_dragon(spec, collection)
     else:
@@ -1994,6 +2205,8 @@ def duplicate_preview_parts(collection: bpy.types.Collection,
 def quadruped_bone_points(
     spec: CreatureSpec,
 ) -> dict[str, tuple[Vector, Vector]]:
+    if spec.family in WILDLIFE_BIND:
+        return wildlife_bone_points(spec)
     cow = spec.family == "cow"
     sheep = spec.family == "sheep"
     pony = spec.family == "horse"
@@ -2306,9 +2519,11 @@ def add_preview_scene(
     placements = {
 
 
-        "horse": (-12.00, 0.20, 9.0, 2.4),
-        "cow": (2.00, 0.40, 9.0, 2.4),
-        "sheep": (14.00, 0.62, 9.0, 2.4),
+        "horse": (-16.00, 0.20, 9.0, 2.4),
+        "cow": (-6.00, 0.40, 9.0, 2.4),
+        "sheep": (3.00, 0.62, 9.0, 2.4),
+        "wolf": (10.00, 0.40, 9.0, 2.4),
+        "rabbit": (18.00, 0.40, 9.0, 2.4),
 
         "dragon_whelp": (-43.00, 0.75, 0.0, 0.35),
         "dragon_wanderer": (-36.50, 0.95, 0.0, 0.35),
@@ -2335,7 +2550,7 @@ def add_preview_scene(
             stage_scale = Matrix.Diagonal((scale, scale, scale, 1.0))
             preview_turn = (
                 math.pi * 0.5 if spec.family in ("dragon", "horse") else
-                math.pi * 0.22 if spec.family in ("cow", "sheep") else
+                math.pi * 0.22 if spec.family in ("cow", "sheep", "wolf", "rabbit") else
                 0.0)
             side_turn = Matrix.Rotation(preview_turn, 4, "Z")
             duplicate.matrix_world = (
@@ -2447,7 +2662,7 @@ def build() -> None:
         "library_version": LIBRARY_VERSION,
         "art_direction": "silhouette_first_pseudo_pixel_creatures",
         "generation": "offline_curated_procedural_geometry",
-        "runtime_strategy": "one skinned GLB per character posed at runtime (goblins: humanoid skeleton; horse, cow, sheep: quadruped skeleton); dragons still use held poses until their migration (docs/design/unified-characters.md)",
+        "runtime_strategy": "one skinned GLB per character posed at runtime (goblins: humanoid skeleton; horse, cow, sheep, wolf, rabbit: quadruped skeleton); dragons use authored poses (docs/design/unified-characters.md)",
         "coordinate_system": "glTF +Y up, +Z forward",
         "material_contract": "single indexed material; COLOR_0 stores palette, value, and fold",
         "material_order": list(MATERIAL_ORDER),

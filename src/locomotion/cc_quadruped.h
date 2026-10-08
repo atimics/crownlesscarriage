@@ -10,6 +10,8 @@ typedef enum CcQuadrupedMorphology {
     CC_QUADRUPED_HORSE,
     CC_QUADRUPED_COW,
     CC_QUADRUPED_SHEEP,
+    CC_QUADRUPED_WOLF,
+    CC_QUADRUPED_RABBIT,
     CC_QUADRUPED_MORPHOLOGY_COUNT
 } CcQuadrupedMorphology;
 

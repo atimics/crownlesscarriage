@@ -1814,6 +1814,26 @@ static CreatureRenderPalette CreaturePalette(CcCreatureVariant variant,
             colors[7] = (Color){142, 109, 82, 255};
             colors[8] = (Color){12, 10, 9, 255};
             break;
+        case CC_CREATURE_WOLF:
+            colors[0] = primary.a > 0 ? primary : (Color){92, 102, 110, 255};
+            colors[1] = (Color){43, 51, 59, 255};
+            colors[2] = (Color){171, 168, 150, 255};
+            colors[3] = (Color){117, 125, 125, 255};
+            colors[4] = (Color){17, 19, 22, 255};
+            colors[5] = (Color){219, 209, 176, 255};
+            colors[7] = (Color){125, 89, 84, 255};
+            colors[8] = (Color){230, 148, 36, 255};
+            break;
+        case CC_CREATURE_RABBIT:
+            colors[0] = primary.a > 0 ? primary : (Color){117, 84, 56, 255};
+            colors[1] = (Color){69, 48, 36, 255};
+            colors[2] = (Color){212, 196, 163, 255};
+            colors[3] = (Color){150, 115, 82, 255};
+            colors[4] = (Color){20, 14, 11, 255};
+            colors[5] = (Color){245, 227, 189, 255};
+            colors[7] = (Color){186, 110, 102, 255};
+            colors[8] = (Color){6, 5, 4, 255};
+            break;
         case CC_CREATURE_DRAGON_WHELP:
             colors[0] = (Color){92, 132, 101, 255};
             colors[1] = (Color){42, 66, 54, 255};
@@ -1871,6 +1891,8 @@ static CcCreatureRigProfile CreatureRigProfileForVariant(
         case CC_CREATURE_HORSE: return CC_CREATURE_RIG_HORSE;
         case CC_CREATURE_COW: return CC_CREATURE_RIG_COW;
         case CC_CREATURE_SHEEP: return CC_CREATURE_RIG_COW;
+        case CC_CREATURE_WOLF: return CC_CREATURE_RIG_COW;
+        case CC_CREATURE_RABBIT: return CC_CREATURE_RIG_COW;
         case CC_CREATURE_DRAGON:
         case CC_CREATURE_DRAGON_WHELP:
         case CC_CREATURE_DRAGON_WANDERER:
@@ -2789,6 +2811,8 @@ static CcQuadrupedMorphology QuadrupedMorphologyForCreature(
     if (variant == CC_CREATURE_HORSE) return CC_QUADRUPED_HORSE;
     if (variant == CC_CREATURE_COW) return CC_QUADRUPED_COW;
     if (variant == CC_CREATURE_SHEEP) return CC_QUADRUPED_SHEEP;
+    if (variant == CC_CREATURE_WOLF) return CC_QUADRUPED_WOLF;
+    if (variant == CC_CREATURE_RABBIT) return CC_QUADRUPED_RABBIT;
     return CC_QUADRUPED_MORPHOLOGY_COUNT;
 }
 
@@ -3043,6 +3067,10 @@ static bool DrawCreatureGait3D(CcCreatureVariant variant,
         shadow_size = (Vector2){1.10f, 1.72f};
     } else if (variant == CC_CREATURE_SHEEP) {
         shadow_size = (Vector2){0.80f, 1.15f};
+    } else if (variant == CC_CREATURE_WOLF) {
+        shadow_size = (Vector2){0.58f, 1.35f};
+    } else if (variant == CC_CREATURE_RABBIT) {
+        shadow_size = (Vector2){0.40f, 0.58f};
     } else if (variant == CC_CREATURE_DRAGON_WHELP) {
         shadow_size = (Vector2){2.20f, 3.60f};
     } else if (variant == CC_CREATURE_DRAGON_WANDERER) {
