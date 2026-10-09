@@ -1218,8 +1218,7 @@ void CcLocalBindPlace(const CcSim *sim)
 {
     const CcSettlement *place = sim != NULL ?
         CcSimSettlement(sim, sim->player.location_id) : NULL;
-    CcSettlementFunction function = place != NULL ? place->function :
-                                                    CC_SETTLEMENT_MARKET;
+    CcSettlementFunction function = CcLocalPlaceProfileForSettlement(place)->function;
     uint32_t seed = sim != NULL ? CcLocalPlaceTerrainSeed(sim->world_seed, place) :
         UINT32_C(0xc0a71a9e);
     if (function != active_place_function || seed != street_terrain_seed) {
@@ -1487,9 +1486,9 @@ static int32_t GatherTownCollisionBoxes(const CcWorldManifest *manifest,
     for (int32_t town = 0; town < manifest->settlement_count; ++town) {
         const CcWorldSettlementPlacement *place = &manifest->settlements[town];
         if (place->profile_scale <= 0.0001f) continue;
-        const CcLocalPlaceProfile *profile =
-            CcLocalPlaceProfileForFunction(place->function);
-        if (profile == NULL) continue;
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForBlueprint(
+            place->blueprint_id, place->blueprint_version);
+        if (profile == NULL) profile = CcLocalPlaceProfileForFunction(place->function);
         if (profile->function == CC_SETTLEMENT_MARKET) {
             AddTownCollisionBox(manifest, place, GLOAMGATE_FOUNTAIN,
                                 0.68f, 0.0f, boxes, &count);

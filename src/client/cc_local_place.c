@@ -7,8 +7,8 @@
 static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     {
         .function = CC_SETTLEMENT_FARMING,
-        .blueprint_id = 1U,
-        .blueprint_version = 1U,
+        .blueprint_id = CC_BLUEPRINT_THORNFORD,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE GRANARY COUNTRY",
         .purpose = "Fields, mills, and guarded food stores",
         .primary_hall = "Granary hall",
@@ -183,8 +183,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_MINING,
-        .blueprint_id = 2U,
-        .blueprint_version = 1U,
+        .blueprint_id = CC_BLUEPRINT_SILVERWICK,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE WORKING DEEPS",
         .purpose = "Ore, furnaces, and the Lower Silverworks",
         .primary_hall = "Company store",
@@ -321,8 +321,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_MARKET,
-        .blueprint_id = 3U,
-        .blueprint_version = 1U,
+        .blueprint_id = CC_BLUEPRINT_GLOAMGATE,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE CROSSROADS MARKET",
         .purpose = "Carriages, contracts, and regional trade",
         .primary_hall = "Market hall",
@@ -455,8 +455,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_FORTRESS,
-        .blueprint_id = 4U,
-        .blueprint_version = 1U,
+        .blueprint_id = CC_BLUEPRINT_ALDERWATCH,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE CONTESTED BRIDGE",
         .purpose = "Garrison, inspections, and the eastern crossing",
         .primary_hall = "Quartermaster",
@@ -592,8 +592,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_CAPITAL,
-        .blueprint_id = 5U,
-        .blueprint_version = 1U,
+        .blueprint_id = CC_BLUEPRINT_ROSESPIRE,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE ROYAL SEAT",
         .purpose = "Court, treasury, and the realm's petitions",
         .primary_hall = "Royal exchange",
@@ -736,8 +736,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_DUNGEON_TOWN,
-        .blueprint_id = 6U,
-        .blueprint_version = 1U,
+        .blueprint_id = CC_BLUEPRINT_HOLLOWBARROW,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE FRONTIER WARD",
         .purpose = "Expeditions, salvage, and a guarded underworld",
         .primary_hall = "Expedition store",
@@ -891,9 +891,26 @@ const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
     return CcLocalPlaceProfileForFunction(CC_SETTLEMENT_MARKET);
 }
 
+const CcLocalPlaceProfile *CcLocalPlaceProfileForBlueprint(
+    uint32_t blueprint_id, uint32_t blueprint_version)
+{
+    if (blueprint_version == CC_BUILDING_BLUEPRINT_VERSION) {
+        for (size_t i = 0; i < sizeof(PLACE_PROFILES) / sizeof(PLACE_PROFILES[0]); ++i) {
+            if (PLACE_PROFILES[i].blueprint_id == blueprint_id)
+                return &PLACE_PROFILES[i];
+        }
+    }
+    return NULL;
+}
+
 const CcLocalPlaceProfile *CcLocalPlaceProfileForSettlement(
     const CcSettlement *settlement)
 {
+    if (settlement != NULL) {
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForBlueprint(
+            settlement->blueprint_id, settlement->blueprint_version);
+        if (profile != NULL) return profile;
+    }
     return CcLocalPlaceProfileForFunction(
         settlement != NULL ? settlement->function : CC_SETTLEMENT_MARKET);
 }

@@ -230,6 +230,8 @@ typedef struct CcLocalPlaceProfile {
 
 const CcLocalPlaceBuilding *CcLocalPlaceBuildingForPlot(
     const CcLocalPlaceProfile *profile, uint32_t plot_id);
+const CcLocalPlaceProfile *CcLocalPlaceProfileForBlueprint(
+    uint32_t blueprint_id, uint32_t blueprint_version);
 const CcLocalHouseholdPlot *CcLocalPlaceHouseholdForPlot(
     const CcLocalPlaceProfile *profile, uint32_t plot_id);
 int32_t CcLocalPlaceHouseholdObstacleCount(const CcLocalPlaceProfile *profile);

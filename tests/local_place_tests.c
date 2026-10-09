@@ -22,6 +22,8 @@ static int ProfileContract(void)
         CHECK(profile->function == (CcSettlementFunction)function);
         CHECK(profile->blueprint_id == (uint32_t)function + 1U);
         CHECK(profile->blueprint_version == 1U);
+        CHECK(profile->building_count ==
+              CcSettlementBlueprintBuildingCount(profile->blueprint_id));
         CHECK(profile->identity != NULL && profile->identity[0] != '\0');
         CHECK(profile->purpose != NULL && profile->purpose[0] != '\0');
         CHECK(profile->primary_hall != NULL && profile->primary_hall[0] != '\0');
@@ -492,6 +494,17 @@ static int HouseholdPlots(void)
         CcLocalPlaceProfileForFunction(CC_SETTLEMENT_FARMING);
     CHECK(profile->building_count == 12);
     CHECK(profile->household_count == 12);
+    CcSettlement changed_town = {0};
+    changed_town.function = CC_SETTLEMENT_MINING;
+    changed_town.blueprint_id = CC_BLUEPRINT_THORNFORD;
+    changed_town.blueprint_version = CC_BUILDING_BLUEPRINT_VERSION;
+    CHECK(CcLocalPlaceProfileForSettlement(&changed_town) == profile);
+    CHECK(CcLocalPlaceProfileForBlueprint(CC_BLUEPRINT_THORNFORD,
+                                         CC_BUILDING_BLUEPRINT_VERSION) == profile);
+    CHECK(CcLocalPlaceProfileForBlueprint(CC_BLUEPRINT_THORNFORD, 0U) == NULL);
+    CHECK(CcLocalPlaceProfileForBlueprint(0U, CC_BUILDING_BLUEPRINT_VERSION) == NULL);
+    changed_town.blueprint_id = 0U;
+    CHECK(CcLocalPlaceProfileForSettlement(&changed_town)->function == CC_SETTLEMENT_MINING);
     CcLocalPlaceProfile reordered = *profile;
     CcLocalPlaceBuilding first = reordered.building[0];
     reordered.building[0] = reordered.building[11];

@@ -494,6 +494,8 @@ bool CcWorldManifestBuild(CcWorldManifest *manifest, const CcSim *sim)
         CcWorldSettlementPlacement *placement = &manifest->settlements[i];
         placement->settlement_id = settlement->id;
         placement->function = settlement->function;
+        placement->blueprint_id = settlement->blueprint_id;
+        placement->blueprint_version = settlement->blueprint_version;
         placement->center = (CcWorldPoint){
             CC_WORLD_MARGIN +
                 (float)(settlement->map_x - minimum_map_x) * CC_WORLD_MAP_SCALE,

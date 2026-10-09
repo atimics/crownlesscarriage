@@ -39,6 +39,8 @@ typedef enum CcWorldSiteKind {
 typedef struct CcWorldSettlementPlacement {
     CcId settlement_id;
     CcSettlementFunction function;
+    uint32_t blueprint_id;
+    uint32_t blueprint_version;
     CcWorldPoint center;
     CcWorldPoint gate;
     CcWorldPoint junction;
