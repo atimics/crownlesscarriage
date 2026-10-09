@@ -20,6 +20,8 @@ static int ProfileContract(void)
             CcLocalPlaceProfileForFunction((CcSettlementFunction)function);
         CHECK(profile != NULL);
         CHECK(profile->function == (CcSettlementFunction)function);
+        CHECK(profile->blueprint_id == (uint32_t)function + 1U);
+        CHECK(profile->blueprint_version == 1U);
         CHECK(profile->identity != NULL && profile->identity[0] != '\0');
         CHECK(profile->purpose != NULL && profile->purpose[0] != '\0');
         CHECK(profile->primary_hall != NULL && profile->primary_hall[0] != '\0');
@@ -129,6 +131,10 @@ static int ProfileContract(void)
                     (CcSettlementFunction)function, building);
             CHECK(structure != NULL);
             CHECK(structure->name != NULL && structure->name[0] != '\0');
+            CHECK(structure->plot_id > 0U);
+            CHECK(CcLocalPlaceBuildingForPlot(profile, structure->plot_id) == structure);
+            for (int32_t earlier = 0; earlier < building; ++earlier)
+                CHECK(profile->building[earlier].plot_id != structure->plot_id);
             CHECK(structure->width >= 4.5f);
             CHECK(structure->depth >= 4.5f);
             float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f :
@@ -175,6 +181,9 @@ static int ProfileContract(void)
               CC_SETTLEMENT_MARKET,
               CC_LOCAL_CARRIAGE_ROUTE_COUNT) == NULL);
     CHECK(CcLocalPlaceBuildingAt(CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalPlaceBuildingForPlot(NULL, 1U) == NULL);
+    CHECK(CcLocalPlaceBuildingForPlot(
+        CcLocalPlaceProfileForFunction(CC_SETTLEMENT_FARMING), 0U) == NULL);
     CHECK(CcLocalPlaceBuildingAt(
               CC_SETTLEMENT_MARKET,
               CC_LOCAL_PLACE_BUILDING_CAPACITY) == NULL);
