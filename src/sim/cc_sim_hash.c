@@ -177,6 +177,19 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= 45U) {
             HASH_VALUE(item->fire_damage); HASH_VALUE(item->last_fire_day);
         }
+        if (sim->schema_version >= CC_BUILDING_SCHEMA_VERSION) {
+            HASH_VALUE(item->blueprint_id); HASH_VALUE(item->blueprint_version);
+            HASH_VALUE(item->building_count);
+            for (uint32_t plot = 1U; plot <= (uint32_t)item->building_count; ++plot) {
+                const CcBuildingState *house = CcSettlementBuilding(item, plot);
+                if (house == NULL) continue;
+                HASH_VALUE(house->plot_id); HASH_VALUE(house->style_seed);
+                HASH_VALUE(house->health); HASH_VALUE(house->roof_health);
+                HASH_VALUE(house->upkeep); HASH_VALUE(house->fire_damage);
+                HASH_VALUE(house->repair_progress); HASH_VALUE(house->built_day);
+                HASH_VALUE(house->last_change_day); HASH_VALUE(house->last_repair_day);
+            }
+        }
         if (sim->schema_version >= 5U) {
             HASH_VALUE(item->size); HASH_VALUE(item->service_mask);
             HASH_VALUE(item->service_project);

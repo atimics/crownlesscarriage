@@ -5080,6 +5080,7 @@ void CcSimInit(CcSim *sim, uint32_t seed)
     CcScrivenInit(sim);
     CcWantsInit(sim);
     CcCensusInit(sim);
+    CcBuildingsInitialize(sim);
 }
 
 static CcDungeon *DungeonByIdMutable(CcSim *sim, CcId id)
@@ -5119,12 +5120,13 @@ uint32_t CcSimTownConditions(const CcSim *sim, CcId settlement_id)
 
 static void RepairSettlementFire(CcSim *sim, CcSettlement *place)
 {
+    CcSettlementBuildingsSync(sim, place);
     if (sim->schema_version < 45U || !CcSettlementCanRepairFire(place) ||
         sim->current_day - place->last_fire_day < 7) return;
     place->stock[CC_GOOD_WOOD] -= 2;
     place->stock[CC_GOOD_STONE] -= 1;
     place->stock[CC_GOOD_TOOLS] -= 1;
-    place->fire_damage = MaximumI32(0, place->fire_damage - 10);
+    CcSettlementBuildingsSetFire(sim, place, MaximumI32(0, place->fire_damage - 10));
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
         "%s's builders use 2 Wood, 1 Stone, and 1 Tools to repair fire damage; %d%% remains.",
@@ -9852,7 +9854,7 @@ static void AdvanceDragonRetaliation(CcSim *sim)
     target->service_project_days = 0;
     RemoveBurnedService(target);
     if (sim->schema_version >= 45U) {
-        target->fire_damage = ClampI32(target->fire_damage + 60, 0, 100);
+        CcSettlementBuildingsSetFire(sim, target, ClampI32(target->fire_damage + 60, 0, 100));
         target->last_fire_day = sim->current_day;
     }
     for (int32_t i = 0; i < sim->route_count; ++i) {
@@ -20792,6 +20794,7 @@ bool CcSimValidate(const CcSim *sim, char *error, size_t error_capacity)
         return false;
     }
     if (!CcIdentityValidate(sim, error, error_capacity)) return false;
+    if (!CcBuildingsValidate(sim, error, error_capacity)) return false;
     if (sim->schema_version >= 97U) {
         for (int i = 0; i < CC_MAX_SITUATIONS; ++i) {
             const CcNotice *notice = &sim->notice_board.notices[i];

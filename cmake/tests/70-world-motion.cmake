@@ -11,6 +11,11 @@ target_link_libraries(town_evolution_tests PRIVATE
 cc_strict_warnings(town_evolution_tests)
 add_test(NAME town_evolution COMMAND town_evolution_tests)
 
+add_executable(building_state_tests tests/building_state_tests.c)
+target_link_libraries(building_state_tests PRIVATE crownless_persistence)
+cc_strict_warnings(building_state_tests)
+add_test(NAME settlement_building_state COMMAND building_state_tests)
+
 add_executable(world_stream_tests tests/world_stream_tests.c)
 target_link_libraries(world_stream_tests PRIVATE crownless_world)
 cc_strict_warnings(world_stream_tests)
@@ -72,4 +77,3 @@ target_link_libraries(creature_catalog_tests PRIVATE
 )
 cc_strict_warnings(creature_catalog_tests)
 add_test(NAME generated_creature_catalog COMMAND creature_catalog_tests)
-
