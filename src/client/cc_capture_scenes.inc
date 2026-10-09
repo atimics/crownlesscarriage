@@ -349,6 +349,13 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
     }
     if (request->capture_town_state) {
         CcSettlement *town = &sim->settlements[request->capture_town_index];
+        bool village = strcmp(argv[6], "village") == 0 ||
+                       strcmp(argv[6], "winter") == 0 ||
+                       strcmp(argv[6], "wet") == 0;
+        if (village) {
+            sim->current_day = strcmp(argv[6], "winter") == 0 ? 306 :
+                               strcmp(argv[6], "wet") == 0 ? 98 : 96;
+        }
         town->security = 75;
         town->prosperity = strcmp(argv[6], "thriving") == 0 ? 85 : 45;
         town->hunger = 10;
@@ -369,6 +376,27 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
             town->hunger = 70;
             town->stock[CC_GOOD_BREAD] = 0;
             town->stock[CC_GOOD_WHEAT] = 0;
+        }
+        CcSettlementBuildingsSync(sim, town);
+        if (village) {
+            /* A staged neighbourhood for visual review: the same saved house
+             * records go through the ordinary renderer in each weather state. */
+            town->last_fire_day = sim->current_day - 20;
+            CcSettlementBuildingsSetFire(sim, town, 25);
+            for (int32_t h = 0; h < town->building_count; ++h) {
+                CcBuildingState *house = &town->buildings[h];
+                house->last_change_day = sim->current_day;
+                if (house->plot_id == 10U) {
+                    house->built_day = sim->current_day - 8;
+                    house->upkeep = 96;
+                }
+                if (house->plot_id == 11U) house->upkeep = 20;
+                if (house->plot_id == 12U ||
+                    (house->fire_damage > 0 && house->fire_damage < 75)) {
+                    house->repair_progress = 40;
+                    house->last_repair_day = sim->current_day;
+                }
+            }
         }
         for (int32_t a = 0; a < sim->kingdom_count; ++a) {
             for (int32_t b = 0; b < sim->kingdom_count; ++b) {

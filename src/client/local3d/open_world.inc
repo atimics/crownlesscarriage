@@ -12,6 +12,7 @@ static uint32_t storybook_seed = 0;
 static uint32_t storybook_generator = 0;
 static Vector2 storybook_center = {0};
 static bool storybook_ground_ready = false;
+static int32_t storybook_snow_band;
 enum { STORYBOOK_FOREST_CELL_COUNT = 121 };
 typedef struct StorybookForestCell {
     TreeSceneryBatchCache batch;
@@ -54,8 +55,10 @@ static Color StorybookMeadowColor(float x, float z, Vector3 normal)
         sinf(z * 0.064f) * 2.0f);
     Color color = BlendColor((Color){47, 83, 59, 255},
                              (Color){115, 130, 75, 255}, meadow);
-    return BlendColor(color, WORLD_STONE,
+    color = BlendColor(color, WORLD_STONE,
                        fmaxf(0.0f, 0.93f - normal.y) * 3.0f);
+    return BlendColor(color, BUILDING_SNOW,
+                      terrain_snow_cover * fmaxf(0.0f, normal.y) * 0.88f);
 }
 
 static void StorybookMeadowTuft(TerrainMeshWriter *writer, Vector3 base,
@@ -88,6 +91,7 @@ static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
     Vector2 center = {floorf(focus.x / 32.0f) * 32.0f,
                       floorf(focus.z / 32.0f) * 32.0f};
     if (!storybook_ground_ready || storybook_seed != manifest->world_seed ||
+        storybook_snow_band != (int32_t)lroundf(terrain_snow_cover * 20.0f) ||
         storybook_generator != manifest->generator_version ||
         center.x != storybook_center.x || center.y != storybook_center.y) {
         if (storybook_ground_ready) UnloadModel(storybook_ground);
@@ -188,6 +192,7 @@ static void DrawStorybookGround(const CcWorldManifest *manifest, Vector3 focus)
         storybook_seed = manifest->world_seed;
         storybook_generator = manifest->generator_version;
         storybook_center = center;
+        storybook_snow_band = (int32_t)lroundf(terrain_snow_cover * 20.0f);
     }
     if (storybook_ground_ready) {
         SetWorldTerrainSurface(true);
@@ -311,6 +316,9 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
 
     if (profile->function == CC_SETTLEMENT_MARKET) DrawGloamgateFountain(0.0f);
 
+    DrawVillageHouseholdPlots(settlement, profile, false,
+                              CcBuildingWeatherForDay(sim->current_day).snow_cover);
+
     for (int32_t building_index = 0;
          building_index < profile->building_count; ++building_index) {
         const CcLocalPlaceBuilding *source =
@@ -324,10 +332,9 @@ static void DrawOpenWorldSettlement(const CcSim *sim,
         };
         rlPushMatrix();
         RotateBuildingPlot(building.footprint, profile->building_yaw_degrees[building_index]);
-        DrawSettlementBuilding(
-            &building, BuildingWallColor(building.style, profile),
-            BuildingRoofColor(building.style, kingdom, profile),
-            profile, building_index, false);
+        (void)DrawConditionedSettlementBuilding(settlement, profile, &building,
+            building_index, sim->current_day, BuildingWallColor(building.style, profile),
+            BuildingRoofColor(building.style, kingdom, profile));
         rlPopMatrix();
     }
 
@@ -1473,6 +1480,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
                             Rectangle destination)
 {
     if (sim == NULL || stream == NULL || agent == NULL) return;
+    terrain_snow_cover = roundf(CcBuildingWeatherForDay(sim->current_day).snow_cover * 20.0f) / 20.0f;
     CcLocalBindOpenWorld(stream);
     float state_camera_weight = carriage != NULL ?
         fmaxf(0.0f, fminf(1.0f, carriage->camera_weight)) : 0.0f;
@@ -1684,7 +1692,7 @@ void CcLocalDrawOpenWorld3D(const CcSim *sim,
     EndWorldLighting();
     EndMode3D();
     rlSetClipPlanes(0.05, 4000.0);
-    DrawTargetAtmosphere(target, clock);
+    DrawTargetAtmosphere(target, clock, sim->current_day, true);
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);

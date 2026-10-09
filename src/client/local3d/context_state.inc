@@ -9,6 +9,8 @@
 #include "client/cc_client_policy.h"
 #include "client/cc_road_book.h"
 #include "client/cc_local_place.h"
+#include "client/cc_building_weather.h"
+#include "sim/cc_buildings.h"
 #include "client/cc_creature_catalog.h"
 #include "client/cc_overlay.h"
 #include "client/cc_visual_style.h"
@@ -504,6 +506,7 @@ static ArtAtmosphereState art_atmosphere = {
     .blend = 1.0f,
     .duration = 1.0f,
 };
+
 
 static float ArtAtmosphereClamp(float value)
 {

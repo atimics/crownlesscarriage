@@ -272,9 +272,10 @@ static bool CcCaptureRequestParse(int argc, char **argv, CcCaptureRequest *reque
         if (argc != 7 || (strcmp(argv[6], "burnt") != 0 &&
             strcmp(argv[6], "rebuilding") != 0 && strcmp(argv[6], "lawless") != 0 &&
             strcmp(argv[6], "peaceful") != 0 && strcmp(argv[6], "thriving") != 0 &&
-            strcmp(argv[6], "hungry") != 0)) {
+            strcmp(argv[6], "hungry") != 0 && strcmp(argv[6], "winter") != 0 &&
+            strcmp(argv[6], "wet") != 0 && strcmp(argv[6], "village") != 0)) {
             (void)fprintf(stderr,
-                "capture town state: INDEX X Z FRAME burnt|rebuilding|lawless|peaceful|thriving|hungry\n");
+                "capture town state: INDEX X Z FRAME burnt|rebuilding|lawless|peaceful|thriving|hungry|village|wet|winter\n");
             return false;
         }
     }
