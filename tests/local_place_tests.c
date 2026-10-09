@@ -135,6 +135,13 @@ static int ProfileContract(void)
             CHECK(structure->name != NULL && structure->name[0] != '\0');
             CHECK(structure->plot_id > 0U);
             CHECK(CcLocalPlaceBuildingForPlot(profile, structure->plot_id) == structure);
+            const CcBuildingPlotPosition *position = CcSettlementBlueprintPlotPosition(
+                profile->blueprint_id, structure->plot_id);
+            CHECK(position != NULL);
+            CHECK(position->x_centimetres == (int32_t)lroundf(
+                (structure->x + structure->width * 0.5f) * 100.0f));
+            CHECK(position->z_centimetres == (int32_t)lroundf(
+                (structure->z + structure->depth * 0.5f) * 100.0f));
             for (int32_t earlier = 0; earlier < building; ++earlier)
                 CHECK(profile->building[earlier].plot_id != structure->plot_id);
             CHECK(structure->width >= 4.5f);
