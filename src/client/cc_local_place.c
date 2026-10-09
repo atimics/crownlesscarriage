@@ -74,7 +74,7 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              -10.00f, 3.00f, 11.00f, 11.50f},
             {CC_LOCAL_TOWN_SCENE_HOUSEHOLD_THIRD, "EAST ORCHARD CROFT",
              77.50f, 66.80f, 76.50f, 2.80f, 63.00f,
-             10.00f, 3.00f, 8.00f, 11.50f},
+             2.00f, 3.80f, 12.00f, 11.50f},
         },
         .terrain_salt = UINT32_C(0x16f11fe9),
         .feature_mask = CC_LOCAL_PLACE_FARMLAND |
