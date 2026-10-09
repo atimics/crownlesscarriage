@@ -11,7 +11,7 @@ croft, the reed cutter's cottage and east orchard croft join the existing nine
 buildings. Each plot has an authored household yard. Kitchen gardens, working
 yards, sheds and fences give the streets a clear purpose. Two garden lanes join
 the road network. Shared obstacle descriptions keep fences and sheds in step
-with walking and collision.
+with walking and collision. Three added street views show the new croft lanes.
 
 The other five towns use their existing authored buildings with the same saved
 house conditions. Each town keeps its blueprint when its economic role changes.
@@ -71,6 +71,17 @@ a later landscape step.
 
 The native review modes stage a mixed neighbourhood through the normal renderer.
 They set the campaign day and house records for a clear visual comparison.
+The combined native build passed all 259 checks. The final orchard camera
+adjustment also passed the full renderer checks across two seeds.
+
+![Willow croft with a fresh house and kitchen gardens](village-plots/willow-croft.png)
+
+![Snow around the burned reed cutter's cottage](village-plots/reed-cutter-winter.png)
+
+![Repairs at the east orchard croft](village-plots/east-orchard-repairs.png)
+
+These images are staged native captures. Willow and the orchard use day 96;
+the snowy reed cutter's close uses day 306.
 
 ```sh
 cmake -S . -B build-villages -DCMAKE_BUILD_TYPE=Release -DCC_WARNINGS_AS_ERRORS=ON -DCC_BUILD_GRAPHICS_PROBES=ON
@@ -88,6 +99,7 @@ Example review captures, with the native executable named `game`:
 ```sh
 game --capture-town-state 0 25 52 thornford-crofts.png village
 game --capture-town-state 0 70 54 thornford-winter.png winter
+game --capture-town-state 0 77 67 east-orchard-repairs.png village
 game --capture-town-state 1 44 29 gloamgate-wet.png wet
 ```
 
