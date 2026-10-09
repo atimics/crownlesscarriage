@@ -76,18 +76,18 @@ static void DrawBuildingCare(const WorldBuilding *building,
                 (Vector3){0.18f, eaves * 0.85f, 0.16f}, WORLD_WOOD_LIGHT);
     }
     if (appearance.repair > 0.0f) {
-        /* Work stands beside the wall within the roof overhang. Its front
-         * keeps the same clear approach used by the shop and house doors. */
-        float x = p.x + p.width + 0.22f;
+        /* Shallow repair framing uses the same clearance as facade trim.
+         * Work timber sits in the household garden or the open ruin. */
+        float x = p.x + p.width + 0.04f;
         for (int32_t end = 0; end < 2; ++end) {
             float z = p.y + p.height * (end == 0 ? 0.18f : 0.82f);
             DrawBox((Vector3){x, (h + 0.4f) * 0.5f, z},
-                    (Vector3){0.18f, h + 0.4f, 0.18f}, WORLD_WOOD_LIGHT);
+                    (Vector3){0.10f, h + 0.4f, 0.18f}, WORLD_WOOD_LIGHT);
         }
         for (int32_t level = 1; level <= 2; ++level) {
             DrawBox((Vector3){x, h * (float)level / 2.7f,
                               p.y + p.height * 0.5f},
-                    (Vector3){0.38f, 0.16f, p.height * 0.73f}, WORLD_WOOD);
+                    (Vector3){0.12f, 0.16f, p.height * 0.73f}, WORLD_WOOD);
         }
         for (int32_t timber = 0; appearance.gutted && timber < 4; ++timber) {
             DrawBox((Vector3){p.x + p.width * 0.36f,
