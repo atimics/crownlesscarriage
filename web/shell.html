@@ -140,6 +140,9 @@
         canvas,
         print: console.log.bind(console),
         printErr: console.error.bind(console),
+        showCrownlessStartupFailure() {
+          showRecovery("The game could not start its graphics. WebGL 2 is required. Check that browser graphics acceleration is enabled, then reload the page.");
+        },
         setStatus(text) {
           if (!text) {
             if (!this.crownlessRecoveryActive) loading.hidden = true;

@@ -4,6 +4,9 @@ if(CC_NODE_EXECUTABLE)
     add_test(NAME browser_timing_diagnostics
              COMMAND ${CC_NODE_EXECUTABLE}
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_diagnostics_tests.cjs)
+    add_test(NAME browser_startup_recovery
+             COMMAND ${CC_NODE_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_startup_recovery_tests.cjs)
     add_test(NAME web_speech_delivery COMMAND ${CC_NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/web_voice_tests.cjs)
     add_test(NAME browser_persistence_contract
              COMMAND ${CC_NODE_EXECUTABLE}
