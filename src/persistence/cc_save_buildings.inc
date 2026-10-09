@@ -6,7 +6,7 @@ static bool SaveBuildings(sqlite3 *database, const CcSim *sim,
     if (sim->schema_version < CC_BUILDING_SCHEMA_VERSION) return true;
     sqlite3_stmt *blueprint = NULL;
     sqlite3_stmt *building = NULL;
-    if (!Prepare(database, "INSERT INTO settlement_blueprint VALUES(?,?,?,?);",
+    if (!Prepare(database, "INSERT INTO settlement_blueprint VALUES(?,?,?,?,?);",
                  &blueprint, error, capacity)) return false;
     if (!Prepare(database, "INSERT INTO settlement_building VALUES(?,?,?,?,?,?,?,?,?,?,?);",
                  &building, error, capacity)) {
@@ -20,6 +20,7 @@ static bool SaveBuildings(sqlite3 *database, const CcSim *sim,
         BindId(blueprint, 2, place->blueprint_id);
         BindId(blueprint, 3, place->blueprint_version);
         BindInt(blueprint, 4, place->building_count);
+        BindInt(blueprint, 5, place->building_fire_level);
         ok = StepDone(database, blueprint, error, capacity) &&
              ResetStatement(database, blueprint, error, capacity);
         for (int32_t i = 0; ok && i < place->building_count; ++i) {
@@ -56,7 +57,7 @@ static bool ReadBuildings(sqlite3 *database, CcSim *sim,
 {
     if (sim->schema_version < CC_BUILDING_SCHEMA_VERSION) return true;
     sqlite3_stmt *statement = NULL;
-    if (!Prepare(database, "SELECT settlement_id,blueprint_id,version,building_count "
+    if (!Prepare(database, "SELECT settlement_id,blueprint_id,version,building_count,fire_level "
                  "FROM settlement_blueprint ORDER BY settlement_id;", &statement, error, capacity))
         return false;
     bool towns[CC_MAX_SETTLEMENTS] = {false};
@@ -64,10 +65,10 @@ static bool ReadBuildings(sqlite3 *database, CcSim *sim,
     bool ok = true;
     int step = SQLITE_DONE;
     while (ok && (step = sqlite3_step(statement)) == SQLITE_ROW) {
-        int64_t values[4];
-        const int64_t maximum[4] = {INT64_MAX, UINT32_MAX, UINT32_MAX, CC_SETTLEMENT_BUILDING_CAPACITY};
-        for (int column = 0; ok && column < 4; ++column)
-            ok = ReadIntegerColumn(statement, column, 1, maximum[column], &values[column],
+        int64_t values[5];
+        const int64_t maximum[5] = {INT64_MAX, UINT32_MAX, UINT32_MAX, CC_SETTLEMENT_BUILDING_CAPACITY, 100};
+        for (int column = 0; ok && column < 5; ++column)
+            ok = ReadIntegerColumn(statement, column, column == 4 ? 0 : 1, maximum[column], &values[column],
                                    "settlement blueprint", error, capacity);
         if (!ok) break;
         int32_t town = BuildingTownSlot(sim, values[0]);
@@ -77,6 +78,7 @@ static bool ReadBuildings(sqlite3 *database, CcSim *sim,
         place->blueprint_id = (uint32_t)values[1];
         place->blueprint_version = (uint32_t)values[2];
         place->building_count = (int32_t)values[3];
+        place->building_fire_level = (int32_t)values[4];
     }
     ok = ok && step == SQLITE_DONE;
     sqlite3_finalize(statement);

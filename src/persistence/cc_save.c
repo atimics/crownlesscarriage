@@ -1082,7 +1082,7 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
     const char *realm_schema =
         "CREATE TABLE IF NOT EXISTS settlement_blueprint ("
         " settlement_id INTEGER PRIMARY KEY, blueprint_id INTEGER NOT NULL,"
-        " version INTEGER NOT NULL, building_count INTEGER NOT NULL);"
+        " version INTEGER NOT NULL, building_count INTEGER NOT NULL, fire_level INTEGER NOT NULL);"
         "CREATE TABLE IF NOT EXISTS settlement_building ("
         " settlement_id INTEGER NOT NULL, plot_id INTEGER NOT NULL, style_seed INTEGER NOT NULL,"
         " health INTEGER NOT NULL, roof_health INTEGER NOT NULL, upkeep INTEGER NOT NULL,"

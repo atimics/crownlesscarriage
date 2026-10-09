@@ -180,7 +180,9 @@ uint64_t CcSimHash(const CcSim *sim)
         if (sim->schema_version >= CC_BUILDING_SCHEMA_VERSION) {
             HASH_VALUE(item->blueprint_id); HASH_VALUE(item->blueprint_version);
             HASH_VALUE(item->building_count);
-            for (uint32_t plot = 1U; plot <= (uint32_t)item->building_count; ++plot) {
+            HASH_VALUE(item->building_fire_level);
+            for (uint32_t plot = 1U; item->building_count > 0 &&
+                 plot <= (uint32_t)item->building_count && plot <= CC_SETTLEMENT_BUILDING_CAPACITY; ++plot) {
                 const CcBuildingState *house = CcSettlementBuilding(item, plot);
                 if (house == NULL) continue;
                 HASH_VALUE(house->plot_id); HASH_VALUE(house->style_seed);

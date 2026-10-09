@@ -5126,7 +5126,7 @@ static void RepairSettlementFire(CcSim *sim, CcSettlement *place)
     place->stock[CC_GOOD_WOOD] -= 2;
     place->stock[CC_GOOD_STONE] -= 1;
     place->stock[CC_GOOD_TOOLS] -= 1;
-    CcSettlementBuildingsSetFire(sim, place, MaximumI32(0, place->fire_damage - 10));
+    CcSettlementBuildingsRecordFundedRepair(sim, place, MaximumI32(0, place->fire_damage - 10));
     char text[CC_EVENT_TEXT_CAPACITY];
     (void)snprintf(text, sizeof(text),
         "%s's builders use 2 Wood, 1 Stone, and 1 Tools to repair fire damage; %d%% remains.",

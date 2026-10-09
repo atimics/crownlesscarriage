@@ -67,6 +67,7 @@ static void EveryFieldHasHashAndSave(void)
 {
     CcSimInit(&before, 74U);
     CcSimAdvanceDays(&before, 19);
+    before.settlements[0].buildings[0].last_repair_day = 1;
     uint64_t baseline = CcSimHash(&before);
     for (int field = 0; field < 9; ++field) {
         after = before;
@@ -77,16 +78,35 @@ static void EveryFieldHasHashAndSave(void)
             case 2: house->roof_health = 49; break;
             case 3: house->upkeep = 17; break;
             case 4: house->fire_damage = 31; break;
-            case 5: house->repair_progress = 19; house->last_repair_day = 1; break;
+            case 5: house->repair_progress = 19; break;
             case 6: house->built_day -= 1; break;
             case 7: house->last_change_day = 20; break;
-            case 8: house->last_repair_day = 1; break;
+            case 8: house->last_repair_day = 0; break;
         }
         CC_CHECK(CcSimHash(&after) != baseline);
         RoundTrip(&after, &restored);
         CC_CHECK(CcSimHash(&after) == CcSimHash(&restored));
         CC_CHECK(memcmp(house, &restored.settlements[0].buildings[0], sizeof(*house)) == 0);
     }
+}
+
+static void FireSpreadsFromTheGateThroughNearbyHouses(void)
+{
+    CcSimInit(&before, 78U);
+    CcSettlement *town = &before.settlements[0];
+    CcSettlementBuildingsSetFire(&before, town, 5);
+    CC_CHECK(CcSettlementBuilding(town, 7)->fire_damage == 60);
+    CC_CHECK(CcSettlementBuilding(town, 11)->fire_damage == 0);
+    CcSettlementBuildingsSetFire(&before, town, 10);
+    CC_CHECK(CcSettlementBuilding(town, 7)->fire_damage == 100);
+    CC_CHECK(CcSettlementBuilding(town, 11)->fire_damage == 20);
+    CcSettlementBuildingsSetFire(&before, town, 20);
+    CC_CHECK(CcSettlementBuilding(town, 11)->fire_damage == 100);
+    CC_CHECK(CcSettlementBuilding(town, 12)->fire_damage == 40);
+    CC_CHECK(CcSettlementBuilding(town, 1)->fire_damage == 0);
+    CcSettlementBuildingsSetFire(&before, town, 10);
+    for (int32_t i = 0; i < town->building_count; ++i)
+        CC_CHECK(town->buildings[i].last_repair_day == 0 && town->buildings[i].repair_progress == 0);
 }
 
 static void FundedRepairSurvivesReturn(void)
@@ -141,7 +161,14 @@ static void LegacyMigrationKeepsTownDamage(void)
     CC_CHECK(restored.schema_version == CC_BUILDING_SCHEMA_VERSION);
     CC_CHECK(restored.settlements[0].blueprint_id == CC_BLUEPRINT_THORNFORD);
     CC_CHECK(restored.settlements[0].fire_damage == 63);
-    CC_CHECK(FireSum(&restored.settlements[0]) == 63 * 12);
+    int32_t old_total = 0;
+    for (int32_t rank = 0; rank < 9; ++rank) {
+        int32_t burn = (63 * 9 * 2 - (rank * 2 + 1) * 80) * 100 / (9 * 50);
+        old_total += burn < 0 ? 0 : burn > 100 ? 100 : burn;
+    }
+    CC_CHECK(FireSum(&restored.settlements[0]) == old_total);
+    CC_CHECK(CcSettlementBuilding(&restored.settlements[0], 10)->fire_damage == 0);
+    CC_CHECK(restored.settlements[0].building_fire_level == 63);
     before = restored;
     RoundTrip(&before, &restored);
     CC_CHECK(CcSimHash(&before) == CcSimHash(&restored));
@@ -159,6 +186,7 @@ static void CorruptRowsAreRejected(void)
         "UPDATE settlement_building SET style_seed=4294967296 WHERE plot_id=1;",
         "UPDATE settlement_blueprint SET version=2 WHERE blueprint_id=1;",
         "UPDATE settlement_blueprint SET building_count=13 WHERE blueprint_id=1;",
+        "UPDATE settlement_blueprint SET fire_level=101 WHERE blueprint_id=1;",
         "UPDATE settlement_building SET repair_progress=100,fire_damage=10,last_repair_day=1 WHERE plot_id=1;",
         "UPDATE settlement_building SET last_change_day=99999999 WHERE plot_id=1;"
     };
@@ -181,6 +209,7 @@ int main(void)
 {
     SeededIdentityAndReorder();
     EveryFieldHasHashAndSave();
+    FireSpreadsFromTheGateThroughNearbyHouses();
     FundedRepairSurvivesReturn();
     LegacyMigrationKeepsTownDamage();
     CorruptRowsAreRejected();

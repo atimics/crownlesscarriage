@@ -830,6 +830,7 @@ typedef struct CcSettlement {
     uint32_t blueprint_id;
     uint32_t blueprint_version;
     int32_t building_count;
+    int32_t building_fire_level; /* Last town fire total applied to the saved houses. */
     CcBuildingState buildings[CC_SETTLEMENT_BUILDING_CAPACITY];
 } CcSettlement;
 

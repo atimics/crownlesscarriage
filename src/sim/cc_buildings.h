@@ -31,6 +31,12 @@ typedef struct CcBuildingState {
     int32_t last_repair_day; /* 0 until a funded repair has started. */
 } CcBuildingState;
 
+typedef struct CcBuildingPlotPosition {
+    uint32_t plot_id;
+    int32_t x_centimetres;
+    int32_t z_centimetres;
+} CcBuildingPlotPosition;
+
 struct CcSettlement;
 struct CcSim;
 
@@ -39,12 +45,18 @@ const CcBuildingState *CcSettlementBuilding(const struct CcSettlement *place,
 float CcSettlementBuildingBurn(const struct CcSettlement *place, uint32_t plot_id);
 uint32_t CcSettlementBlueprintForFunction(int32_t function);
 int32_t CcSettlementBlueprintBuildingCount(uint32_t blueprint_id);
+const CcBuildingPlotPosition *CcSettlementBlueprintPlotPosition(uint32_t blueprint_id,
+                                                               uint32_t plot_id);
 void CcBuildingsInitialize(struct CcSim *sim);
+void CcBuildingsMigrate(struct CcSim *sim);
 /* Reconcile a changed town total with saved plots, preserving their identities.
    This also supports old capture fixtures that assign town fire_damage directly. */
 void CcSettlementBuildingsSync(struct CcSim *sim, struct CcSettlement *place);
 void CcSettlementBuildingsSetFire(struct CcSim *sim, struct CcSettlement *place,
                                   int32_t damage);
+/* Called by the town repair step after it spends Wood, Stone and Tools. */
+void CcSettlementBuildingsRecordFundedRepair(struct CcSim *sim,
+                                             struct CcSettlement *place, int32_t damage);
 bool CcBuildingsValidate(const struct CcSim *sim, char *error, size_t capacity);
 
 #endif
