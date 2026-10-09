@@ -137,6 +137,7 @@ static void WriteViewportFixture(const char *path)
 
 #include "physical_goods_tests.inc"
 #include "building_cutaway_tests.inc"
+#include "building_conditions_tests.inc"
 #include "box_batch_tests.inc"
 #include "lit_primitive_tests.inc"
 #include "character_material_captures.inc"
@@ -192,6 +193,8 @@ static void TestBodyText(void)
 
 int main(int argc, char **argv)
 {
+    TestBuildingConditions();
+    if (argc == 2 && strcmp(argv[1], "--building-conditions") == 0) return 0;
     if (argc == 2 && strcmp(argv[1], "--physical-goods") == 0) {
         TestPhysicalGoods();
         return 0;

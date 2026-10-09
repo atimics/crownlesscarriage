@@ -742,8 +742,27 @@ static int TestSavedRoadPose(void)
     return 0;
 }
 
+static int TestSavedBlueprintPlacement(void)
+{
+    CcSim sim;
+    CcWorldManifest manifest;
+    CcSimInit(&sim, UINT32_C(0xc0a7118e));
+    CcSettlement *village = &sim.settlements[0];
+    CHECK(village->blueprint_id == CC_BLUEPRINT_THORNFORD);
+    village->function = CC_SETTLEMENT_MINING;
+    CHECK(CcWorldManifestBuild(&manifest, &sim));
+    const CcWorldSettlementPlacement *placed =
+        CcWorldSettlementPlacementForId(&manifest, village->id);
+    CHECK(placed != NULL);
+    CHECK(placed->function == CC_SETTLEMENT_MINING);
+    CHECK(placed->blueprint_id == CC_BLUEPRINT_THORNFORD);
+    CHECK(placed->blueprint_version == CC_BUILDING_BLUEPRINT_VERSION);
+    return 0;
+}
+
 int main(void)
 {
+    if (TestSavedBlueprintPlacement() != 0) return 1;
     if (TestSavedRoadPose() != 0) return 1;
     if (TestRoadQueryParity() != 0) return 1;
     if (TestStreamFollowsCarriage() != 0) return 1;

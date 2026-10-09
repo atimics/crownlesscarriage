@@ -577,6 +577,12 @@ static float TerrainRoadProfile(const TerrainRoad *road, float x, float z)
 
 static bool TerrainPointInsideMajorFoundation(float x, float z)
 {
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    for (int32_t i = 0; i < profile->household_count; ++i) {
+        CcLocalPlotRect shed = profile->household[i].shed;
+        if (shed.width > 0.0f && x >= shed.x && x <= shed.x + shed.width &&
+            z >= shed.z && z <= shed.z + shed.depth) return true;
+    }
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         Rectangle footprint = ActiveWorldBuildingAt(i).footprint;
         Vector2 local = BuildingUnrotatedPoint(i, x, z);
@@ -815,6 +821,12 @@ static void TerrainGradeBuildingPlots(void)
                     (elevation - street_terrain_height[slot]) * weight;
             }
         }
+    }
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    for (int32_t i = 0; i < profile->household_count; ++i) {
+        CcLocalPlotRect yard = profile->household[i].yard;
+        Rectangle pad = {yard.x, yard.z, yard.width, yard.depth};
+        TerrainGradePad(pad, TerrainRectangleAverage(pad), 0.65f);
     }
 }
 
@@ -1206,8 +1218,7 @@ void CcLocalBindPlace(const CcSim *sim)
 {
     const CcSettlement *place = sim != NULL ?
         CcSimSettlement(sim, sim->player.location_id) : NULL;
-    CcSettlementFunction function = place != NULL ? place->function :
-                                                    CC_SETTLEMENT_MARKET;
+    CcSettlementFunction function = CcLocalPlaceProfileForSettlement(place)->function;
     uint32_t seed = sim != NULL ? CcLocalPlaceTerrainSeed(sim->world_seed, place) :
         UINT32_C(0xc0a71a9e);
     if (function != active_place_function || seed != street_terrain_seed) {
@@ -1443,7 +1454,7 @@ static bool CircleTouchesFootprint(float x, float z, float radius,
 /* The town renderer uses this same profile origin, scale and Y rotation. */
 #define CC_LOCAL_COLLISION_BOX_CAPACITY (72 + CC_MAX_SETTLEMENTS * \
     (CC_LOCAL_PLACE_BUILDING_CAPACITY + CC_LOCAL_PLACE_COMPOUND_CAPACITY + \
-     CC_LOCAL_PLACE_LANDMARK_COUNT))
+     CC_LOCAL_PLACE_LANDMARK_COUNT + CC_LOCAL_HOUSEHOLD_OBSTACLE_CAPACITY))
 typedef CcCollisionBox LocalCollisionBox;
 
 static void AddTownCollisionBox(const CcWorldManifest *manifest,
@@ -1475,9 +1486,9 @@ static int32_t GatherTownCollisionBoxes(const CcWorldManifest *manifest,
     for (int32_t town = 0; town < manifest->settlement_count; ++town) {
         const CcWorldSettlementPlacement *place = &manifest->settlements[town];
         if (place->profile_scale <= 0.0001f) continue;
-        const CcLocalPlaceProfile *profile =
-            CcLocalPlaceProfileForFunction(place->function);
-        if (profile == NULL) continue;
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForBlueprint(
+            place->blueprint_id, place->blueprint_version);
+        if (profile == NULL) profile = CcLocalPlaceProfileForFunction(place->function);
         if (profile->function == CC_SETTLEMENT_MARKET) {
             AddTownCollisionBox(manifest, place, GLOAMGATE_FOUNTAIN,
                                 0.68f, 0.0f, boxes, &count);
@@ -1491,6 +1502,15 @@ static int32_t GatherTownCollisionBoxes(const CcWorldManifest *manifest,
                 (Rectangle){building->x, building->z, building->width,
                              building->depth}, building->height,
                 profile->building_yaw_degrees[i], boxes, &count);
+        }
+        int32_t household_count = CcLocalPlaceHouseholdObstacleCount(profile);
+        for (int32_t i = 0; i < household_count; ++i) {
+            CcLocalHouseholdObstacle prop;
+            if (!CcLocalPlaceHouseholdObstacleAt(profile, i, &prop)) continue;
+            CcLocalPlotRect f = prop.footprint;
+            AddTownCollisionBox(manifest, place,
+                (Rectangle){f.x, f.z, f.width, f.depth}, prop.height,
+                0.0f, boxes, &count);
         }
         for (int32_t i = 0; i < profile->compound_structure_count; ++i) {
             const CcLocalPlaceCompoundStructure *structure =
@@ -1580,6 +1600,15 @@ static bool StaticBodyBlocked(CcLocalSceneKind scene, float x, float z,
         Vector2 local = BuildingUnrotatedPoint(i, x, z);
         if (CircleTouchesFootprint(local.x, local.y, radius,
                                    building.footprint)) return true;
+    }
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    int32_t household_count = CcLocalPlaceHouseholdObstacleCount(profile);
+    for (int32_t i = 0; i < household_count; ++i) {
+        CcLocalHouseholdObstacle prop;
+        if (!CcLocalPlaceHouseholdObstacleAt(profile, i, &prop)) continue;
+        CcLocalPlotRect f = prop.footprint;
+        if (CircleTouchesFootprint(x, z, radius,
+            (Rectangle){f.x, f.z, f.width, f.depth})) return true;
     }
     for (int32_t i = 0; i < ActiveCompoundStructureCount(); ++i) {
         WorldStructure structure = ActiveCompoundStructureAt(i);
@@ -2061,6 +2090,16 @@ static int32_t GatherLocalCollisionBoxes(const LocalProbeContext *context,
                              world.height);
         if (count > previous_count) boxes[count - 1].yaw =
             ActivePlaceProfile()->building_yaw_degrees[building] * DEG2RAD;
+    }
+    const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+    int32_t household_count = CcLocalPlaceHouseholdObstacleCount(profile);
+    for (int32_t i = 0; i < household_count; ++i) {
+        CcLocalHouseholdObstacle prop;
+        if (!CcLocalPlaceHouseholdObstacleAt(profile, i, &prop)) continue;
+        CcLocalPlotRect f = prop.footprint;
+        Rectangle pad = {f.x, f.z, f.width, f.depth};
+        AddLocalCollisionBox(boxes, &count, pad,
+            TerrainFootprintHeight(pad), prop.height);
     }
     for (int32_t structure = 0;
          structure < ActiveCompoundStructureCount(); ++structure) {

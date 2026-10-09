@@ -3144,6 +3144,7 @@ static void CheckDragonHairPersistence(void)
     court.schema_version = CC_SIM_SCHEMA_VERSION;
     CcSimInitializeGoblinPolitics(&court);
     CcCensusInit(&court);
+    CcBuildingsMigrate(&court);
     court.wants = (CcWantsState){.initialized = 1, .last_day = court.current_day};
     CC_CHECK(CcSimHash(&court) == CcSimHash(&restored));
     RemoveDatabase(path);
@@ -3166,6 +3167,7 @@ static void CheckSchema41Upgrade(void)
     CcSimInitializeGoblinPolitics(legacy);
     CcSimInitializeSupplyEconomy(legacy);
     CcCensusInit(legacy);
+    CcBuildingsMigrate(legacy);
     legacy->wants = (CcWantsState){.initialized = 1, .last_day = legacy->current_day};
     /* The new active-state clock starts at the migration date. */
     for (int32_t i = 0; i < legacy->character_count; ++i) {

@@ -32,7 +32,7 @@ static void DrawTownGableRoof(float x, float z, float width, float depth,
     const float length = sqrtf(half * half + rise * rise);
     float angle = atanf(rise / half) * RAD2DEG;
     for (int32_t side = -1; side <= 1; side += 2) {
-        DrawTiltedBox((Vector3){x + width * 0.5f + (float)side * half * 0.5f,
+        DrawBuildingRoofSlope((Vector3){x + width * 0.5f + (float)side * half * 0.5f,
                                 eaves + rise * 0.5f, z + depth * 0.5f},
                       (Vector3){length, 0.20f, depth + 0.44f},
                       (Vector3){0, 0, 1}, -(float)side * angle,
@@ -203,7 +203,7 @@ static void DrawSilverwickArchitecture(const WorldBuilding *b, Color wall,
             float run = d / 3.0f;
             float sz = z + (float)tooth * run;
             float rise = 1.15f;
-            DrawTiltedBox((Vector3){x + w * 0.5f, eaves + rise * 0.5f,
+            DrawBuildingRoofSlope((Vector3){x + w * 0.5f, eaves + rise * 0.5f,
                                     sz + run * 0.5f},
                           (Vector3){w + 0.24f,0.18f,sqrtf(run * run + rise * rise)},
                           (Vector3){1,0,0}, atanf(rise / run) * RAD2DEG, roof);

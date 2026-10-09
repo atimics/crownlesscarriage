@@ -11,7 +11,38 @@ static void TestGroundTownCameras(void)
         for (int town = 0; town < 6; ++town) {
             sim.player.location_id = sim.settlements[town].id;
             CcLocalBindPlace(&sim);
-            for (int shot = 0; shot < CC_LOCAL_PLACE_SCENE_COUNT; ++shot) {
+            if (active_place_function == CC_SETTLEMENT_FARMING) {
+                RequireRenderer(TownCameraSceneFor((Vector3){25,0,52},
+                    CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD) == CC_LOCAL_TOWN_SCENE_HOUSEHOLD_FIRST,
+                    "Willow croft walk must select its household view");
+                RequireRenderer(TownCameraSceneFor((Vector3){70,0,54},
+                    CC_LOCAL_TOWN_SCENE_ARRIVAL) == CC_LOCAL_TOWN_SCENE_HOUSEHOLD_SECOND,
+                    "Reed cutter walk must select its household view");
+                RequireRenderer(TownCameraSceneFor((Vector3){77,0,67},
+                    CC_LOCAL_TOWN_SCENE_ARRIVAL) == CC_LOCAL_TOWN_SCENE_HOUSEHOLD_THIRD,
+                    "East orchard walk must select its household view");
+                const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+                for (size_t tree = 0; tree < sizeof(THORNFORD_TREES) / sizeof(THORNFORD_TREES[0]); ++tree) {
+                    Vector2 point = THORNFORD_TREES[tree].position;
+                    for (int32_t building = 0; building < profile->building_count; ++building) {
+                        Vector2 local = BuildingUnrotatedPoint(building, point.x, point.y);
+                        RequireRenderer(TerrainDistanceToRectangle(local.x, local.y,
+                            ActiveWorldBuildingAt(building).footprint) > 0.55f,
+                            "Thornford tree trunks must stand clear of household buildings");
+                    }
+                    int32_t props = CcLocalPlaceHouseholdObstacleCount(profile);
+                    for (int32_t prop = 0; prop < props; ++prop) {
+                        CcLocalHouseholdObstacle obstacle;
+                        RequireRenderer(CcLocalPlaceHouseholdObstacleAt(profile, prop, &obstacle),
+                            "household obstacle must exist");
+                        CcLocalPlotRect f = obstacle.footprint;
+                        RequireRenderer(TerrainDistanceToRectangle(point.x, point.y,
+                            (Rectangle){f.x,f.z,f.width,f.depth}) > 0.55f,
+                            "Thornford tree trunks must stand clear of sheds and fences");
+                    }
+                }
+            }
+            for (int shot = 0; shot < CcLocalTownSceneCount(active_place_function); ++shot) {
                 const CcLocalTownScene *scene = CcLocalTownSceneAt(
                     active_place_function, shot);
                 street_camera_rig = (FixedCameraRig){0};
@@ -57,6 +88,6 @@ static void TestGroundTownCameras(void)
         }
     }
     CcLocalBindPlace(NULL);
-    printf("PASS ground town cameras: 36 screens, two seeds; max eye %.3f, max dive %.3f degrees\n",
+    printf("PASS ground town cameras: all authored screens, two seeds; max eye %.3f, max dive %.3f degrees\n",
            maximum_eye, maximum_dive);
 }

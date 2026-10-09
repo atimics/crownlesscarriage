@@ -189,6 +189,7 @@ static void CheckSuccessionSaves(void)
             }
         }
         if (version < 117U) CcCensusInit(&sim);
+        if (version < CC_BUILDING_SCHEMA_VERSION) CcBuildingsMigrate(&sim);
         if (version < 121U)
             sim.wants = (CcWantsState){.initialized = 1, .last_day = sim.current_day};
         CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));

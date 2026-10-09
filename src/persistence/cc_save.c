@@ -1080,6 +1080,15 @@ static bool CreateSchema(sqlite3 *database, char *error, size_t error_capacity)
         " pretender_crises INTEGER NOT NULL DEFAULT 0,"
         " anointed INTEGER NOT NULL DEFAULT 0);";
     const char *realm_schema =
+        "CREATE TABLE IF NOT EXISTS settlement_blueprint ("
+        " settlement_id INTEGER PRIMARY KEY, blueprint_id INTEGER NOT NULL,"
+        " version INTEGER NOT NULL, building_count INTEGER NOT NULL, fire_level INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS settlement_building ("
+        " settlement_id INTEGER NOT NULL, plot_id INTEGER NOT NULL, style_seed INTEGER NOT NULL,"
+        " health INTEGER NOT NULL, roof_health INTEGER NOT NULL, upkeep INTEGER NOT NULL,"
+        " fire_damage INTEGER NOT NULL, repair_progress INTEGER NOT NULL, built_day INTEGER NOT NULL,"
+        " last_change_day INTEGER NOT NULL, last_repair_day INTEGER NOT NULL,"
+        " PRIMARY KEY(settlement_id,plot_id));"
         "CREATE TABLE IF NOT EXISTS town_recovery ("
         " slot INTEGER PRIMARY KEY, fire_damage INTEGER NOT NULL,"
         " last_fire_day INTEGER NOT NULL);"
@@ -1708,6 +1717,7 @@ static bool SaveKingdoms(sqlite3 *database, const CcSim *sim,
 #include "cc_save_archive_recruitment.inc"
 #include "cc_save_archive_convoy.inc"
 #include "cc_save_war.inc"
+#include "cc_save_buildings.inc"
 
 static bool SaveTownRecovery(sqlite3 *database, const CcSim *sim,
                              char *error, size_t error_capacity)
@@ -3751,6 +3761,7 @@ static bool SaveSnapshotContents(sqlite3 *database, const CcSim *sim,
         SaveKingdoms(database, sim, error, error_capacity) &&
         SaveSettlements(database, sim, error, error_capacity) &&
         SaveTownRecovery(database, sim, error, error_capacity) &&
+        SaveBuildings(database, sim, error, error_capacity) &&
               SaveGrainSupplies(database, sim, error, error_capacity) &&
               SaveArchiveRecruitment(database, sim, error, error_capacity) &&
               SaveArchiveConvoy(database, sim, error, error_capacity) &&
@@ -6480,6 +6491,7 @@ static bool LoadDatabase(sqlite3 *database, CcSim *sim, bool *upgraded,
                                        error, error_capacity) &&
               ReadSettlements(database, sim, error, error_capacity) &&
               ReadTownRecovery(database, sim, error, error_capacity) &&
+              ReadBuildings(database, sim, error, error_capacity) &&
               ReadGrainSupplies(database, sim, error, error_capacity) &&
               ReadArchiveRecruitment(database, sim, error, error_capacity) &&
               ReadArchiveConvoy(database, sim, error, error_capacity) &&

@@ -7,6 +7,7 @@
 #include "sim/cc_custody.h"
 #include "sim/cc_scriven_types.h"
 #include "sim/cc_wants_types.h"
+#include "sim/cc_buildings.h"
 
 #define CC_MAX_KINGDOMS 3
 #define CC_MAX_SETTLEMENTS 6
@@ -75,7 +76,7 @@
    with matching migration branches and persistence_tests coverage. */
 /* Schemas 75-92 shipped ahead of this branch; the first archive
    convoy leg is schema 93. */
-#define CC_SIM_SCHEMA_VERSION 125
+#define CC_SIM_SCHEMA_VERSION 126
 /* The Return: the company's last view of each town (cc_return.h). */
 #define CC_RETURN_SCHEMA_VERSION 122U
 /* The Return, milestone 4: news met on the road (cc_road_news.h). */
@@ -826,6 +827,11 @@ typedef struct CcSettlement {
     int32_t pony_foals;
     int32_t pony_condition;
     int32_t pony_hunger;
+    uint32_t blueprint_id;
+    uint32_t blueprint_version;
+    int32_t building_count;
+    int32_t building_fire_level; /* Last town fire total applied to the saved houses. */
+    CcBuildingState buildings[CC_SETTLEMENT_BUILDING_CAPACITY];
 } CcSettlement;
 
 typedef enum CcTownCondition {
@@ -2427,7 +2433,7 @@ typedef struct CcSim {
    The value is identical on arm64, x86_64 and wasm32: CcSim holds only
    fixed-width integers, bools, enums, char arrays and nested structs of the
    same, so there is no pointer or size_t to make it vary by target. */
-_Static_assert(sizeof(CcSim) == 1737200,
+_Static_assert(sizeof(CcSim) == 1740176,
                "CcSim changed size: update CcSimHash, the cc_save.c read and "
                "write paths, and CcSimValidate, then update this size.");
 

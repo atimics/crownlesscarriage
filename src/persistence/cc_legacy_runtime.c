@@ -800,5 +800,6 @@ bool CcSaveUpgradeLegacyRuntime(CcSim *sim,
     if (legacy_version < 113U) CcScrivenInit(sim);
     if (legacy_version < 115U) CcCrownCalendarInit(sim);
     if (legacy_version < 121U) CcWantsInit(sim);
+    if (legacy_version < CC_BUILDING_SCHEMA_VERSION) CcBuildingsMigrate(sim);
     return true;
 }
