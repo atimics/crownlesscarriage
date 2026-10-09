@@ -610,9 +610,9 @@ EM_JS(void, ClientBrowserFullscreen, (), {
     Module.toggleCrownlessFullscreen();
 });
 EM_JS(void, ClientBrowserTouchControls, (), { Module.toggleCrownlessTouch(); });
-EM_JS(void, ClientBrowserStartupFailure, (), {
+EM_JS(void, ClientBrowserStartupFailure, (void), {
     Module.showCrownlessStartupFailure();
-});
+})
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
         ? Module.crownlessCampaignAccess : 1;
