@@ -5,7 +5,7 @@ static void TestBuildingConditions(void)
         .id = 1U, .function = CC_SETTLEMENT_FARMING, .population = 30, .fire_damage = 45,
         .blueprint_id = CC_BLUEPRINT_THORNFORD,
         .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
-        .building_count = 2,
+        .building_count = 2, .building_fire_level = 45,
         .buildings = {
             {.plot_id = 1U, .style_seed = 31U, .health = 15, .roof_health = 0,
              .upkeep = 20, .fire_damage = 90, .built_day = -100,
@@ -31,6 +31,11 @@ static void TestBuildingConditions(void)
     BuildingAppearance summer = BuildingAppearanceForPlot(&place, &profile, 1, 110);
     RequireRenderer(summer.snow == 0.0f && summer.burn == burnt.burn,
                     "a season change must preserve house damage");
+    BuildingAppearance rain = BuildingAppearanceForPlot(&place, &profile, 1, 98);
+    BuildingAppearance dry = BuildingAppearanceForPlot(&place, &profile, 1, 96);
+    RequireRenderer(rain.wetness > 0.80f && dry.wetness == 0.0f &&
+                    rain.burn == dry.burn && rain.seed == dry.seed,
+                    "rain must wet the saved house while keeping its damage and identity");
     CcLocalRendererSetAtmosphere(CC_LOCAL_ATMOSPHERE_MOONLIT_NIGHT, 0.0f);
     BuildingAppearance night = BuildingAppearanceForPlot(&place, &profile, 1, 306);
     CcLocalRendererSetAtmosphere(CC_LOCAL_ATMOSPHERE_CLEAR_DAY, 0.0f);

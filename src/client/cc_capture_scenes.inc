@@ -381,8 +381,8 @@ static bool CcCapturePrepareWorld(const CcCaptureRequest *request, CcSim *sim, c
         if (village) {
             /* A staged neighbourhood for visual review: the same saved house
              * records go through the ordinary renderer in each weather state. */
-            town->last_fire_day = sim->current_day - 20;
             CcSettlementBuildingsSetFire(sim, town, 25);
+            town->last_fire_day = sim->current_day - 20;
             for (int32_t h = 0; h < town->building_count; ++h) {
                 CcBuildingState *house = &town->buildings[h];
                 house->last_change_day = sim->current_day;

@@ -4,6 +4,7 @@ typedef struct BuildingAppearance {
     float roof_wear;
     float fresh;
     float snow;
+    float wetness;
     float repair;
     uint32_t seed;
     bool gutted;
@@ -37,6 +38,7 @@ static BuildingAppearance BuildingAppearanceForPlot(
         }
     }
     CcBuildingWeather weather = CcBuildingWeatherForDay(day);
+    result.wetness = weather.wetness;
     result.snow = CcBuildingRoofSnow(weather, 0.55f, 0.85f,
         result.gutted || place->population <= 0 ? 0.0f : 0.5f);
     return result;
@@ -110,6 +112,8 @@ static BuildingAppearance DrawConditionedSettlementBuilding(
         .seed = appearance.seed,
     };
     wall = BlendColor(wall, WORLD_STONE, appearance.wear * 0.20f);
+    wall = ShadeColor(wall, 1.0f - appearance.wetness * 0.10f);
+    roof = ShadeColor(roof, 1.0f - appearance.wetness * 0.18f);
     if (appearance.burn > 0.0f) {
         wall = BlendColor(wall, TOWN_CHAR, 0.30f + 0.40f * appearance.burn);
         roof = BlendColor(roof, TOWN_CHAR, 0.65f + 0.35f * appearance.burn);
