@@ -47,6 +47,12 @@ EXPECTED_HASHES = {
         2: "2120351378912900971",
         3: "11514222242231557551",
     },
+    # Schema 126 saves house conditions and funded repairs by permanent plot ID.
+    126: {
+        1: "4215728006965347490",
+        2: "1511639753439094658",
+        3: "12434013097758275763",
+    },
 }
 
 

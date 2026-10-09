@@ -20,6 +20,10 @@ static int ProfileContract(void)
             CcLocalPlaceProfileForFunction((CcSettlementFunction)function);
         CHECK(profile != NULL);
         CHECK(profile->function == (CcSettlementFunction)function);
+        CHECK(profile->blueprint_id == (uint32_t)function + 1U);
+        CHECK(profile->blueprint_version == 1U);
+        CHECK(profile->building_count ==
+              CcSettlementBlueprintBuildingCount(profile->blueprint_id));
         CHECK(profile->identity != NULL && profile->identity[0] != '\0');
         CHECK(profile->purpose != NULL && profile->purpose[0] != '\0');
         CHECK(profile->primary_hall != NULL && profile->primary_hall[0] != '\0');
@@ -43,7 +47,7 @@ static int ProfileContract(void)
         CHECK(profile->compound_structure[5].kind ==
               CC_LOCAL_COMPOUND_HALL);
         for (int32_t scene = 0;
-             scene < CC_LOCAL_PLACE_SCENE_COUNT; ++scene) {
+             scene < CcLocalTownSceneCount((CcSettlementFunction)function); ++scene) {
             const CcLocalTownScene *camera = CcLocalTownSceneAt(
                 (CcSettlementFunction)function, scene);
             CHECK(camera != NULL);
@@ -75,7 +79,7 @@ static int ProfileContract(void)
             }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
-                             profile->scene[previous].name) != 0);
+                             CcLocalTownSceneAt((CcSettlementFunction)function, previous)->name) != 0);
             }
         }
         for (int32_t room = 0; room < CC_LOCAL_PLACE_ROOM_COUNT; ++room) {
@@ -129,6 +133,17 @@ static int ProfileContract(void)
                     (CcSettlementFunction)function, building);
             CHECK(structure != NULL);
             CHECK(structure->name != NULL && structure->name[0] != '\0');
+            CHECK(structure->plot_id > 0U);
+            CHECK(CcLocalPlaceBuildingForPlot(profile, structure->plot_id) == structure);
+            const CcBuildingPlotPosition *position = CcSettlementBlueprintPlotPosition(
+                profile->blueprint_id, structure->plot_id);
+            CHECK(position != NULL);
+            CHECK(position->x_centimetres == (int32_t)lroundf(
+                (structure->x + structure->width * 0.5f) * 100.0f));
+            CHECK(position->z_centimetres == (int32_t)lroundf(
+                (structure->z + structure->depth * 0.5f) * 100.0f));
+            for (int32_t earlier = 0; earlier < building; ++earlier)
+                CHECK(profile->building[earlier].plot_id != structure->plot_id);
             CHECK(structure->width >= 4.5f);
             CHECK(structure->depth >= 4.5f);
             float minimum_height = function == CC_SETTLEMENT_FARMING ? 3.0f :
@@ -175,6 +190,9 @@ static int ProfileContract(void)
               CC_SETTLEMENT_MARKET,
               CC_LOCAL_CARRIAGE_ROUTE_COUNT) == NULL);
     CHECK(CcLocalPlaceBuildingAt(CC_SETTLEMENT_MARKET, -1) == NULL);
+    CHECK(CcLocalPlaceBuildingForPlot(NULL, 1U) == NULL);
+    CHECK(CcLocalPlaceBuildingForPlot(
+        CcLocalPlaceProfileForFunction(CC_SETTLEMENT_FARMING), 0U) == NULL);
     CHECK(CcLocalPlaceBuildingAt(
               CC_SETTLEMENT_MARKET,
               CC_LOCAL_PLACE_BUILDING_CAPACITY) == NULL);
@@ -454,6 +472,116 @@ static int AuthoredTownMaps(void)
     return 0;
 }
 
+static float PlotPointDistance(CcLocalPlotRect f, CcLocalLanePoint point)
+{
+    float dx = fmaxf(f.x - point.x, fmaxf(0.0f, point.x - f.x - f.width));
+    float dz = fmaxf(f.z - point.z, fmaxf(0.0f, point.z - f.z - f.depth));
+    return hypotf(dx, dz);
+}
+
+static bool PlotTouchesBuilding(CcLocalPlotRect f,
+                                const CcLocalPlaceBuilding *building,
+                                float yaw_degrees)
+{
+    float angle = yaw_degrees * (3.14159265358979323846f / 180.0f);
+    float c = cosf(angle), s = sinf(angle);
+    float dx = f.x + f.width * 0.5f - building->x - building->width * 0.5f;
+    float dz = f.z + f.depth * 0.5f - building->z - building->depth * 0.5f;
+    float x = f.width * 0.5f, z = f.depth * 0.5f;
+    float bx = building->width * 0.5f, bz = building->depth * 0.5f;
+    return fabsf(dx) < x + fabsf(c) * bx + fabsf(s) * bz &&
+           fabsf(dz) < z + fabsf(s) * bx + fabsf(c) * bz &&
+           fabsf(dx * c - dz * s) < bx + x * fabsf(c) + z * fabsf(s) &&
+           fabsf(dx * s + dz * c) < bz + x * fabsf(s) + z * fabsf(c);
+}
+
+static int HouseholdPlots(void)
+{
+    const CcLocalPlaceProfile *profile =
+        CcLocalPlaceProfileForFunction(CC_SETTLEMENT_FARMING);
+    CHECK(profile->building_count == 12);
+    CHECK(profile->household_count == 12);
+    CcSettlement changed_town = {0};
+    changed_town.function = CC_SETTLEMENT_MINING;
+    changed_town.blueprint_id = CC_BLUEPRINT_THORNFORD;
+    changed_town.blueprint_version = CC_BUILDING_BLUEPRINT_VERSION;
+    CHECK(CcLocalPlaceProfileForSettlement(&changed_town) == profile);
+    CHECK(CcLocalPlaceProfileForBlueprint(CC_BLUEPRINT_THORNFORD,
+                                         CC_BUILDING_BLUEPRINT_VERSION) == profile);
+    CHECK(CcLocalPlaceProfileForBlueprint(CC_BLUEPRINT_THORNFORD, 0U) == NULL);
+    CHECK(CcLocalPlaceProfileForBlueprint(0U, CC_BUILDING_BLUEPRINT_VERSION) == NULL);
+    changed_town.blueprint_id = 0U;
+    CHECK(CcLocalPlaceProfileForSettlement(&changed_town)->function == CC_SETTLEMENT_MINING);
+    CcLocalPlaceProfile reordered = *profile;
+    CcLocalPlaceBuilding first = reordered.building[0];
+    reordered.building[0] = reordered.building[11];
+    reordered.building[11] = first;
+    CHECK(strcmp(CcLocalPlaceBuildingForPlot(&reordered, 1U)->name,
+                 "Long threshing barn") == 0);
+    CHECK(strcmp(CcLocalPlaceBuildingForPlot(&reordered, 12U)->name,
+                 "East orchard croft") == 0);
+    CHECK(CcLocalPlaceBuildingForPlot(profile, 13U) == NULL);
+    CHECK(CcLocalPlaceHouseholdForPlot(NULL, 1U) == NULL);
+    CHECK(CcLocalPlaceHouseholdForPlot(profile, 13U) == NULL);
+    CHECK(CcLocalPlaceHouseholdObstacleCount(NULL) == 0);
+    int32_t count = CcLocalPlaceHouseholdObstacleCount(profile);
+    CHECK(count >= 20 && count <= CC_LOCAL_HOUSEHOLD_OBSTACLE_CAPACITY);
+    CcLocalHouseholdObstacle prop;
+    CHECK(!CcLocalPlaceHouseholdObstacleAt(profile, -1, &prop));
+    CHECK(!CcLocalPlaceHouseholdObstacleAt(profile, count, &prop));
+    CHECK(!CcLocalPlaceHouseholdObstacleAt(profile, 0, NULL));
+    for (int32_t i = 0; i < profile->household_count; ++i) {
+        const CcLocalHouseholdPlot *plot = &profile->household[i];
+        CHECK(CcLocalPlaceHouseholdForPlot(profile, plot->plot_id) == plot);
+        CHECK(CcLocalPlaceBuildingForPlot(profile, plot->plot_id) != NULL);
+        CHECK(plot->name != NULL && plot->name[0] != '\0');
+        CHECK(plot->yard.x > 0 && plot->yard.z > 0);
+        CHECK(plot->yard.x + plot->yard.width < 90);
+        CHECK(plot->yard.z + plot->yard.depth < 72);
+        CHECK(plot->fence_edges != 15U); /* Every yard has an open entrance. */
+    }
+    for (int32_t i = 0; i < count; ++i) {
+        CHECK(CcLocalPlaceHouseholdObstacleAt(profile, i, &prop));
+        CHECK(prop.height > 0.0f);
+        for (int32_t building = 0; building < profile->building_count; ++building) {
+            const CcLocalPlaceBuilding *house = &profile->building[building];
+            CHECK(!PlotTouchesBuilding(prop.footprint, house,
+                                       profile->building_yaw_degrees[building]));
+            float angle = profile->building_yaw_degrees[building] *
+                (3.14159265358979323846f / 180.0f);
+            CcLocalLanePoint approach = {
+                house->x + house->width * 0.5f + sinf(angle) * (house->depth * 0.5f + 1.55f),
+                house->z + house->depth * 0.5f + cosf(angle) * (house->depth * 0.5f + 1.55f)};
+            CHECK(PlotPointDistance(prop.footprint, approach) > 0.65f);
+        }
+        for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
+            for (int32_t sample = 0; sample <= 400; ++sample) {
+                CcLocalLanePoint point = CcLocalLaneSample(&profile->lane[lane],
+                    (float)sample / 400.0f);
+                float clearance = profile->lane[lane].width * 0.5f + 0.30f;
+                if (PlotPointDistance(prop.footprint, point) <= clearance) {
+                    fprintf(stderr, "plot %u obstacle %d touches lane %s at %.2f %.2f\n",
+                        prop.plot_id, i, profile->lane[lane].name, point.x, point.z);
+                    return 1;
+                }
+            }
+        }
+    }
+    /* The added homes retain the lane width, including the curved approaches. */
+    for (int32_t building = 9; building < profile->building_count; ++building) {
+        const CcLocalPlaceBuilding *house = &profile->building[building];
+        CcLocalPlotRect f = {house->x,house->z,house->width,house->depth};
+        for (int32_t lane = 0; lane < profile->lane_count; ++lane) {
+            for (int32_t sample = 0; sample <= 400; ++sample) {
+                CcLocalLanePoint point = CcLocalLaneSample(&profile->lane[lane],
+                    (float)sample / 400.0f);
+                CHECK(PlotPointDistance(f, point) > profile->lane[lane].width * 0.5f + 0.30f);
+            }
+        }
+    }
+    return 0;
+}
+
 static int CarriageRoutePlans(void)
 {
     for (int32_t function = CC_SETTLEMENT_FARMING;
@@ -645,6 +773,7 @@ int main(void)
     if (FourAuthoredSceneContracts() != 0) return 1;
     if (AuthoredLandmarkLayouts() != 0) return 1;
     if (AuthoredTownMaps() != 0) return 1;
+    if (HouseholdPlots() != 0) return 1;
     if (CarriageRoutePlans() != 0) return 1;
     if (CanonicalRegionProfiles() != 0) return 1;
     if (StableDistinctTerrain() != 0) return 1;

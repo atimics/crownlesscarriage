@@ -7,6 +7,8 @@
 static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     {
         .function = CC_SETTLEMENT_FARMING,
+        .blueprint_id = CC_BLUEPRINT_THORNFORD,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE GRANARY COUNTRY",
         .purpose = "Fields, mills, and guarded food stores",
         .primary_hall = "Granary hall",
@@ -15,8 +17,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         .compound = "Manor granary",
         .keeper_name = "Edda — Granary keeper",
         .interior_service = "Provisions, seed, and harvest accounts",
-        .map_form = "Dispersed crofts around a threshing green",
-        .lane_count = 10,
+        .map_form = "Twelve household plots around the ford and threshing green",
+        .lane_count = 12,
         .lane = {
             {"Ford road", 4.8f, 11, {{96,36}, {90,36}, {84,34}, {77,38}, {66,40},
                 {57,35}, {49,33}, {41,32}, {32,28.5f}, {24,29.4f}, {7,27}}},
@@ -33,6 +35,10 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
             {"Cart yard", 3.4f, 3, {{42,51.2f}, {40,51.4f}, {37.4f,51.2f}}},
             {"Stationers' footway", 2.0f, 4, {{8,48}, {10,55},
                 {11,65.5f}, {17.5f,65.5f}}},
+            {"West garden walk", 1.8f, 5, {{13,47}, {15.5f,49},
+                {15.5f,53}, {15.5f,56.5f}, {21.5f,56.5f}}},
+            {"River croft lane", 1.8f, 8, {{66,59}, {69,54}, {74,52},
+                {77,51}, {81,53}, {82,58}, {82,67}, {76.5f,67}}},
         },
         .carriage_lane_count = 3,
         .carriage_lane = {{0,7}, {1,3}, {8,2}},
@@ -58,10 +64,22 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              9.00f, 2.90f, 12.00f, 10.50f},
         },
         .keeper_seed = UINT32_C(0xedda1001),
+        .household_scene_count = 3,
+        .household_scene = {
+            {CC_LOCAL_TOWN_SCENE_HOUSEHOLD_FIRST, "WILLOW CROFT",
+             23.00f, 57.00f, 23.50f, 2.80f, 52.50f,
+             9.00f, 3.00f, 13.00f, 11.50f},
+            {CC_LOCAL_TOWN_SCENE_HOUSEHOLD_SECOND, "REED CUTTER'S CLOSE",
+             77.00f, 51.30f, 78.00f, 2.80f, 47.20f,
+             -10.00f, 3.00f, 11.00f, 11.50f},
+            {CC_LOCAL_TOWN_SCENE_HOUSEHOLD_THIRD, "EAST ORCHARD CROFT",
+             77.50f, 66.80f, 76.50f, 2.80f, 63.00f,
+             2.00f, 3.80f, 12.00f, 11.50f},
+        },
         .terrain_salt = UINT32_C(0x16f11fe9),
         .feature_mask = CC_LOCAL_PLACE_FARMLAND |
                         CC_LOCAL_PLACE_CARRIAGE,
-        .building_count = 9,
+        .building_count = 12,
         .primary_building = 2,
         .compound_structure_count = 9,
         .room_name = {
@@ -100,23 +118,67 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         },
         .building = {
             {"Long threshing barn", 17.00f, 15.00f, 11.00f, 8.50f,
-             5.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             5.60f, CC_LOCAL_BUILDING_WORKSHOP, true, 1U},
             {"Crofter cottages", 30.00f, 17.00f, 6.20f, 6.50f,
-             3.40f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             3.40f, CC_LOCAL_BUILDING_DOMESTIC, true, 2U},
             {"Provision hall", 44.00f, 16.00f, 12.00f, 10.00f,
-             6.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             6.20f, CC_LOCAL_BUILDING_WORKSHOP, true, 3U},
             {"Drovers' longhouse", 18.00f, 35.00f, 10.50f, 6.50f,
-             3.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             3.80f, CC_LOCAL_BUILDING_DOMESTIC, true, 4U},
             {"Dairy cottage", 30.00f, 38.50f, 4.50f, 6.00f,
-             3.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             3.20f, CC_LOCAL_BUILDING_DOMESTIC, true, 5U},
             {"Cartwright sheds", 55.00f, 42.00f, 9.00f, 6.20f,
-             3.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             3.80f, CC_LOCAL_BUILDING_WORKSHOP, true, 6U},
             {"Ford watermill", 84.00f, 21.00f, 5.50f, 8.00f,
-             4.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             4.80f, CC_LOCAL_BUILDING_DOMESTIC, true, 7U},
             {"Orchard bunkhouse", 53.00f, 60.00f, 8.00f, 6.00f,
-             3.60f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             3.60f, CC_LOCAL_BUILDING_DOMESTIC, true, 8U},
             {"Stationer's cottage", 14.00f, 58.00f, 7.00f, 6.00f,
-             3.50f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             3.50f, CC_LOCAL_BUILDING_WORKSHOP, true, 9U},
+            {"Willow croft", 18.50f, 47.50f, 6.00f, 6.00f,
+             3.40f, CC_LOCAL_BUILDING_DOMESTIC, true, 10U},
+            {"Reed cutter's cottage", 74.00f, 43.00f, 6.00f, 6.00f,
+             3.30f, CC_LOCAL_BUILDING_DOMESTIC, true, 11U},
+            {"East orchard croft", 73.00f, 59.00f, 7.00f, 6.00f,
+             3.60f, CC_LOCAL_BUILDING_DOMESTIC, true, 12U},
+        },
+        .household_count = 12,
+        .household = {
+            {1U, "Thresher's stack yard", CC_LOCAL_YARD_THRESHING,
+             {16,4,13,8}, {16.8f,4.5f,6.5f,6.5f}, {25,5,3,3},
+             CC_LOCAL_PLOT_FENCE_NORTH | CC_LOCAL_PLOT_FENCE_WEST},
+            {2U, "North kitchen garden", CC_LOCAL_YARD_GARDEN,
+             {30,2,8,5}, {30.5f,2.6f,6.5f,3.5f}, {0},
+             CC_LOCAL_PLOT_FENCE_NORTH | CC_LOCAL_PLOT_FENCE_EAST},
+            {3U, "Hall herb garden", CC_LOCAL_YARD_GARDEN,
+             {43,3,17,10}, {44,3.6f,7,7.5f}, {55,5,3.5f,4},
+             CC_LOCAL_PLOT_FENCE_NORTH | CC_LOCAL_PLOT_FENCE_EAST},
+            {4U, "Drovers' grazing close", CC_LOCAL_YARD_LIVESTOCK,
+             {17.5f,44.2f,10,2.5f}, {18,44.7f,8.5f,1.3f}, {0},
+             CC_LOCAL_PLOT_FENCE_WEST},
+            {5U, "Dairy herb beds", CC_LOCAL_YARD_GARDEN,
+             {30,33,5,3.5f}, {30.4f,33.4f,3,2.5f}, {0},
+             CC_LOCAL_PLOT_FENCE_NORTH},
+            {6U, "Cartwright timber yard", CC_LOCAL_YARD_WORKSHOP,
+             {49,41,4,8}, {49.4f,41.5f,1.5f,6}, {0},
+             CC_LOCAL_PLOT_FENCE_WEST},
+            {7U, "Miller's drying yard", CC_LOCAL_YARD_MILL,
+             {84.5f,16.5f,3.2f,2.5f}, {0}, {0}, 0U},
+            {8U, "Press workers' garden", CC_LOCAL_YARD_ORCHARD,
+             {53,54,7,3.5f}, {53.6f,54.5f,5.5f,2}, {0},
+             CC_LOCAL_PLOT_FENCE_NORTH},
+            {9U, "Stationer's dye garden", CC_LOCAL_YARD_GARDEN,
+             {13.5f,67.5f,9,3}, {14,68,4,2}, {19,68,2.5f,2},
+             CC_LOCAL_PLOT_FENCE_SOUTH | CC_LOCAL_PLOT_FENCE_EAST},
+            {10U, "Willow vegetable close", CC_LOCAL_YARD_GARDEN,
+             {25.5f,54,8.5f,10}, {26,55.5f,3.4f,7}, {30.5f,60,3,3},
+             CC_LOCAL_PLOT_FENCE_EAST},
+            {11U, "Reed drying close", CC_LOCAL_YARD_WORKSHOP,
+             {81.5f,42,5,8}, {83,46.5f,3,2.5f}, {83,42.5f,2.5f,3},
+             CC_LOCAL_PLOT_FENCE_NORTH | CC_LOCAL_PLOT_FENCE_EAST},
+            {12U, "East orchard herb beds", CC_LOCAL_YARD_ORCHARD,
+             {73,54,6.5f,3}, {73.5f,54.5f,5,1.8f}, {0},
+             CC_LOCAL_PLOT_FENCE_NORTH | CC_LOCAL_PLOT_FENCE_WEST},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 67.50f, 8.00f, 0.70f, 18.00f, 1.10f},
@@ -133,6 +195,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_MINING,
+        .blueprint_id = CC_BLUEPRINT_SILVERWICK,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE WORKING DEEPS",
         .purpose = "Ore, furnaces, and the Lower Silverworks",
         .primary_hall = "Company store",
@@ -231,27 +295,27 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         },
         .building = {
             {"Lower bunk row", 19.50f, 15.00f, 9.00f, 10.00f,
-             5.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.80f, CC_LOCAL_BUILDING_WORKER_ROW, true, 1U},
             {"Lampwright row", 31.00f, 14.50f, 7.40f, 9.50f,
-             5.60f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.60f, CC_LOCAL_BUILDING_WORKER_ROW, true, 2U},
             {"Company store", 44.00f, 16.00f, 12.00f, 10.00f,
-             9.40f, CC_LOCAL_BUILDING_CIVIC, true},
+             9.40f, CC_LOCAL_BUILDING_CIVIC, true, 3U},
             {"Foundry tenement", 20.00f, 34.00f, 10.50f, 8.00f,
-             5.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.80f, CC_LOCAL_BUILDING_WORKER_ROW, true, 4U},
             {"Assay house", 31.00f, 34.50f, 4.50f, 8.30f,
-             4.40f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.40f, CC_LOCAL_BUILDING_WORKSHOP, true, 5U},
             {"Ore warehouse", 54.50f, 42.00f, 10.00f, 7.00f,
-             4.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.80f, CC_LOCAL_BUILDING_WORKSHOP, true, 6U},
             {"Shift kitchen", 57.00f, 25.50f, 7.00f, 5.50f,
-             3.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             3.80f, CC_LOCAL_BUILDING_DOMESTIC, true, 7U},
             {"Miners' butcher", 70.00f, 56.00f, 8.00f, 10.00f,
-             6.20f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             6.20f, CC_LOCAL_BUILDING_WORKER_ROW, true, 8U},
             {"Mine supply office", 17.50f, 50.00f, 8.20f, 6.50f,
-             4.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.20f, CC_LOCAL_BUILDING_WORKSHOP, true, 9U},
             {"Smelter lodging", 50.00f, 58.00f, 10.50f, 7.50f,
-             5.40f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.40f, CC_LOCAL_BUILDING_WORKER_ROW, true, 10U},
             {"East weigh house", 83.00f, 55.00f, 6.50f, 8.00f,
-             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true, 11U},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 66.50f, 9.50f, 0.90f, 21.00f, 4.20f},
@@ -269,6 +333,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_MARKET,
+        .blueprint_id = CC_BLUEPRINT_GLOAMGATE,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE CROSSROADS MARKET",
         .purpose = "Carriages, contracts, and regional trade",
         .primary_hall = "Market hall",
@@ -364,25 +430,25 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         },
         .building = {
             {"West hostel", 17.00f, 12.00f, 8.00f, 9.00f,
-             5.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             5.20f, CC_LOCAL_BUILDING_DOMESTIC, true, 1U},
             {"Archive and mapmakers", 29.00f, 10.00f, 8.00f, 10.00f,
-             5.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             5.60f, CC_LOCAL_BUILDING_WORKSHOP, true, 2U},
             {"Market hall", 44.00f, 12.00f, 12.00f, 10.00f,
-             6.20f, CC_LOCAL_BUILDING_CIVIC, true},
+             6.20f, CC_LOCAL_BUILDING_CIVIC, true, 3U},
             {"Spice warehouse", 12.00f, 34.00f, 10.00f, 8.00f,
-             5.00f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             5.00f, CC_LOCAL_BUILDING_WORKER_ROW, true, 4U},
             {"Money changers", 24.00f, 38.00f, 6.00f, 7.00f,
-             4.00f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             4.00f, CC_LOCAL_BUILDING_DOMESTIC, true, 5U},
             {"Caravan hostel", 66.00f, 54.00f, 9.00f, 7.00f,
-             4.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.80f, CC_LOCAL_BUILDING_WORKSHOP, true, 6U},
             {"Public kitchen", 58.00f, 23.00f, 6.50f, 5.50f,
-             4.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             4.20f, CC_LOCAL_BUILDING_DOMESTIC, true, 7U},
             {"Guild factors", 58.00f, 10.00f, 6.00f, 9.00f,
-             6.10f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             6.10f, CC_LOCAL_BUILDING_WORKER_ROW, true, 8U},
             {"Cloth stores", 17.00f, 56.00f, 9.00f, 7.00f,
-             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true, 9U},
             {"Eastern exchange", 49.00f, 62.00f, 10.00f, 7.00f,
-             4.80f, CC_LOCAL_BUILDING_CIVIC, true},
+             4.80f, CC_LOCAL_BUILDING_CIVIC, true, 10U},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 66.00f, 9.00f, 1.20f, 23.00f, 6.50f},
@@ -401,6 +467,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_FORTRESS,
+        .blueprint_id = CC_BLUEPRINT_ALDERWATCH,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE CONTESTED BRIDGE",
         .purpose = "Garrison, inspections, and the eastern crossing",
         .primary_hall = "Quartermaster",
@@ -501,23 +569,23 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         },
         .building = {
             {"West barrack block", 19.00f, 15.00f, 10.00f, 10.00f,
-             7.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             7.80f, CC_LOCAL_BUILDING_WORKER_ROW, true, 1U},
             {"Armourers' block", 31.50f, 14.00f, 7.50f, 10.00f,
-             7.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             7.20f, CC_LOCAL_BUILDING_WORKSHOP, true, 2U},
             {"Toll hall", 44.00f, 16.00f, 12.00f, 10.00f,
-             9.80f, CC_LOCAL_BUILDING_CIVIC, true},
+             9.80f, CC_LOCAL_BUILDING_CIVIC, true, 3U},
             {"South barracks", 19.00f, 34.00f, 12.00f, 8.00f,
-             7.60f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             7.60f, CC_LOCAL_BUILDING_WORKER_ROW, true, 4U},
             {"Surgeon's house", 31.00f, 35.00f, 4.50f, 8.00f,
-             6.20f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             6.20f, CC_LOCAL_BUILDING_DOMESTIC, true, 5U},
             {"Supply arsenal", 55.00f, 42.00f, 9.00f, 7.00f,
-             7.40f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             7.40f, CC_LOCAL_BUILDING_WORKSHOP, true, 6U},
             {"Gate sergeants", 57.00f, 24.50f, 7.00f, 5.00f,
-             6.40f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             6.40f, CC_LOCAL_BUILDING_WORKER_ROW, true, 7U},
             {"Garrison bakery", 72.00f, 55.00f, 8.00f, 10.00f,
-             7.10f, CC_LOCAL_BUILDING_CIVIC, true},
+             7.10f, CC_LOCAL_BUILDING_CIVIC, true, 8U},
             {"March stores", 50.00f, 58.00f, 10.00f, 7.50f,
-             6.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             6.80f, CC_LOCAL_BUILDING_WORKSHOP, true, 9U},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 65.00f, 8.00f, 1.50f, 24.50f, 8.00f},
@@ -536,6 +604,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_CAPITAL,
+        .blueprint_id = CC_BLUEPRINT_ROSESPIRE,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE ROYAL SEAT",
         .purpose = "Court, treasury, and the realm's petitions",
         .primary_hall = "Royal exchange",
@@ -637,29 +707,29 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         },
         .building = {
             {"West chancery row", 19.00f, 15.00f, 10.00f, 10.00f,
-             9.40f, CC_LOCAL_BUILDING_CIVIC, true},
+             9.40f, CC_LOCAL_BUILDING_CIVIC, true, 1U},
             {"Goldsmith court", 31.00f, 14.00f, 8.00f, 10.00f,
-             8.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             8.60f, CC_LOCAL_BUILDING_WORKSHOP, true, 2U},
             {"Royal exchange", 44.00f, 16.00f, 12.00f, 10.00f,
-             11.20f, CC_LOCAL_BUILDING_CIVIC, true},
+             11.20f, CC_LOCAL_BUILDING_CIVIC, true, 3U},
             {"Petitioners' hall", 19.00f, 34.00f, 12.00f, 8.00f,
-             8.80f, CC_LOCAL_BUILDING_CIVIC, true},
+             8.80f, CC_LOCAL_BUILDING_CIVIC, true, 4U},
             {"Guild registry", 31.00f, 35.00f, 4.50f, 8.00f,
-             8.20f, CC_LOCAL_BUILDING_CIVIC, true},
+             8.20f, CC_LOCAL_BUILDING_CIVIC, true, 5U},
             {"Ambassadors' house", 55.00f, 42.00f, 9.50f, 7.00f,
-             9.10f, CC_LOCAL_BUILDING_CIVIC, true},
+             9.10f, CC_LOCAL_BUILDING_CIVIC, true, 6U},
             {"Court kitchens", 57.00f, 25.00f, 7.00f, 5.00f,
-             6.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             6.80f, CC_LOCAL_BUILDING_WORKSHOP, true, 7U},
             {"Rose ward butcher", 68.00f, 57.00f, 8.00f, 8.00f,
-             9.60f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             9.60f, CC_LOCAL_BUILDING_DOMESTIC, true, 8U},
             {"Scribes' terrace", 17.00f, 47.00f, 8.50f, 7.00f,
-             8.00f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             8.00f, CC_LOCAL_BUILDING_WORKER_ROW, true, 9U},
             {"East guildhall", 50.00f, 58.00f, 10.50f, 7.50f,
-             9.20f, CC_LOCAL_BUILDING_CIVIC, true},
+             9.20f, CC_LOCAL_BUILDING_CIVIC, true, 10U},
             {"Rose ward lodging", 83.00f, 54.00f, 6.00f, 9.00f,
-             8.40f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             8.40f, CC_LOCAL_BUILDING_DOMESTIC, true, 11U},
             {"Procession offices", 82.50f, 42.00f, 8.00f, 7.00f,
-             8.80f, CC_LOCAL_BUILDING_CIVIC, true},
+             8.80f, CC_LOCAL_BUILDING_CIVIC, true, 12U},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 65.50f, 8.50f, 1.00f, 23.00f, 5.80f},
@@ -678,6 +748,8 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
     },
     {
         .function = CC_SETTLEMENT_DUNGEON_TOWN,
+        .blueprint_id = CC_BLUEPRINT_HOLLOWBARROW,
+        .blueprint_version = CC_BUILDING_BLUEPRINT_VERSION,
         .identity = "THE FRONTIER WARD",
         .purpose = "Expeditions, salvage, and a guarded underworld",
         .primary_hall = "Expedition store",
@@ -778,23 +850,23 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
         },
         .building = {
             {"Delvers' lodging", 19.50f, 15.00f, 9.50f, 10.00f,
-             6.80f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             6.80f, CC_LOCAL_BUILDING_WORKER_ROW, true, 1U},
             {"Lamp house", 32.00f, 15.00f, 6.50f, 8.50f,
-             6.20f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             6.20f, CC_LOCAL_BUILDING_WORKSHOP, true, 2U},
             {"Supply house", 44.00f, 16.00f, 12.00f, 10.00f,
-             8.40f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             8.40f, CC_LOCAL_BUILDING_WORKSHOP, true, 3U},
             {"Salvage hall", 20.00f, 34.00f, 11.00f, 7.50f,
-             6.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             6.60f, CC_LOCAL_BUILDING_WORKSHOP, true, 4U},
             {"Chirurgeon's rooms", 31.00f, 35.00f, 4.50f, 7.50f,
-             5.80f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             5.80f, CC_LOCAL_BUILDING_DOMESTIC, true, 5U},
             {"Timber merchants", 82.00f, 54.00f, 8.00f, 8.00f,
-             7.00f, CC_LOCAL_BUILDING_WORKER_ROW, true},
+             7.00f, CC_LOCAL_BUILDING_WORKER_ROW, true, 6U},
             {"Returned goods shed", 50.00f, 58.00f, 10.00f, 7.00f,
-             5.80f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             5.80f, CC_LOCAL_BUILDING_WORKSHOP, true, 7U},
             {"Wayfarers' bakery", 14.00f, 58.00f, 7.00f, 6.00f,
-             4.60f, CC_LOCAL_BUILDING_DOMESTIC, true},
+             4.60f, CC_LOCAL_BUILDING_DOMESTIC, true, 8U},
             {"Expedition stationer", 68.00f, 53.00f, 8.00f, 7.00f,
-             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true},
+             4.60f, CC_LOCAL_BUILDING_WORKSHOP, true, 9U},
         },
         .compound_structure = {
             {CC_LOCAL_COMPOUND_WALL, 67.00f, 10.00f, 0.80f, 20.50f, 4.60f},
@@ -831,9 +903,26 @@ const CcLocalPlaceProfile *CcLocalPlaceProfileForFunction(
     return CcLocalPlaceProfileForFunction(CC_SETTLEMENT_MARKET);
 }
 
+const CcLocalPlaceProfile *CcLocalPlaceProfileForBlueprint(
+    uint32_t blueprint_id, uint32_t blueprint_version)
+{
+    if (blueprint_version == CC_BUILDING_BLUEPRINT_VERSION) {
+        for (size_t i = 0; i < sizeof(PLACE_PROFILES) / sizeof(PLACE_PROFILES[0]); ++i) {
+            if (PLACE_PROFILES[i].blueprint_id == blueprint_id)
+                return &PLACE_PROFILES[i];
+        }
+    }
+    return NULL;
+}
+
 const CcLocalPlaceProfile *CcLocalPlaceProfileForSettlement(
     const CcSettlement *settlement)
 {
+    if (settlement != NULL) {
+        const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForBlueprint(
+            settlement->blueprint_id, settlement->blueprint_version);
+        if (profile != NULL) return profile;
+    }
     return CcLocalPlaceProfileForFunction(
         settlement != NULL ? settlement->function : CC_SETTLEMENT_MARKET);
 }
@@ -888,6 +977,73 @@ const CcLocalPlaceBuilding *CcLocalPlaceBuildingAt(
     return &profile->building[building_index];
 }
 
+const CcLocalPlaceBuilding *CcLocalPlaceBuildingForPlot(
+    const CcLocalPlaceProfile *profile, uint32_t plot_id)
+{
+    if (profile == NULL || plot_id == 0U) return NULL;
+    for (int32_t i = 0; i < profile->building_count; ++i) {
+        if (profile->building[i].plot_id == plot_id) return &profile->building[i];
+    }
+    return NULL;
+}
+
+const CcLocalHouseholdPlot *CcLocalPlaceHouseholdForPlot(
+    const CcLocalPlaceProfile *profile, uint32_t plot_id)
+{
+    if (profile == NULL || plot_id == 0U) return NULL;
+    for (int32_t i = 0; i < profile->household_count; ++i) {
+        if (profile->household[i].plot_id == plot_id) return &profile->household[i];
+    }
+    return NULL;
+}
+
+int32_t CcLocalPlaceHouseholdObstacleCount(const CcLocalPlaceProfile *profile)
+{
+    if (profile == NULL) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < profile->household_count; ++i) {
+        const CcLocalHouseholdPlot *plot = &profile->household[i];
+        if (plot->shed.width > 0.0f && plot->shed.depth > 0.0f) ++count;
+        for (uint32_t edge = 1U; edge <= CC_LOCAL_PLOT_FENCE_WEST; edge <<= 1U) {
+            if ((plot->fence_edges & edge) != 0U) ++count;
+        }
+    }
+    return count;
+}
+
+bool CcLocalPlaceHouseholdObstacleAt(const CcLocalPlaceProfile *profile,
+    int32_t index, CcLocalHouseholdObstacle *obstacle)
+{
+    if (profile == NULL || obstacle == NULL || index < 0) return false;
+    for (int32_t i = 0; i < profile->household_count; ++i) {
+        const CcLocalHouseholdPlot *plot = &profile->household[i];
+        if (plot->shed.width > 0.0f && plot->shed.depth > 0.0f) {
+            if (index-- == 0) {
+                *obstacle = (CcLocalHouseholdObstacle){plot->plot_id,
+                    CC_LOCAL_HOUSEHOLD_SHED, plot->shed, 2.55f};
+                return true;
+            }
+        }
+        for (uint32_t edge = 1U; edge <= CC_LOCAL_PLOT_FENCE_WEST; edge <<= 1U) {
+            if ((plot->fence_edges & edge) == 0U) continue;
+            if (index-- != 0) continue;
+            CcLocalPlotRect rail = plot->yard;
+            if (edge == CC_LOCAL_PLOT_FENCE_NORTH ||
+                edge == CC_LOCAL_PLOT_FENCE_SOUTH) {
+                if (edge == CC_LOCAL_PLOT_FENCE_SOUTH) rail.z += rail.depth - 0.14f;
+                rail.depth = 0.14f;
+            } else {
+                if (edge == CC_LOCAL_PLOT_FENCE_EAST) rail.x += rail.width - 0.14f;
+                rail.width = 0.14f;
+            }
+            *obstacle = (CcLocalHouseholdObstacle){plot->plot_id,
+                CC_LOCAL_HOUSEHOLD_FENCE, rail, 0.95f};
+            return true;
+        }
+    }
+    return false;
+}
+
 const CcLocalPlaceCompoundStructure *CcLocalPlaceCompoundStructureAt(
     CcSettlementFunction function, int32_t structure_index)
 {
@@ -900,14 +1056,22 @@ const CcLocalPlaceCompoundStructure *CcLocalPlaceCompoundStructureAt(
     return &profile->compound_structure[structure_index];
 }
 
+int32_t CcLocalTownSceneCount(CcSettlementFunction function)
+{
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForFunction(function);
+    return CC_LOCAL_PLACE_SCENE_COUNT + profile->household_scene_count;
+}
+
 const CcLocalTownScene *CcLocalTownSceneAt(
     CcSettlementFunction function, int32_t scene_index)
 {
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForFunction(function);
-    if (scene_index < 0 || scene_index >= CC_LOCAL_PLACE_SCENE_COUNT) {
+    if (scene_index < 0 || scene_index >= CcLocalTownSceneCount(function)) {
         return NULL;
     }
+    if (scene_index >= CC_LOCAL_PLACE_SCENE_COUNT)
+        return &profile->household_scene[scene_index - CC_LOCAL_PLACE_SCENE_COUNT];
     return &profile->scene[scene_index];
 }
 

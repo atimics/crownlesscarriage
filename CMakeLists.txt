@@ -136,6 +136,7 @@ add_library(crownless_sim
     src/sim/cc_custody.c
     src/sim/cc_sim_custody.c
     src/sim/cc_sim_hash.c
+    src/sim/cc_buildings.c
     src/sim/cc_occupations.c
     src/sim/cc_gossip_topics.c
     src/sim/cc_doubt.c

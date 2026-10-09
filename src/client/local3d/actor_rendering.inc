@@ -4122,7 +4122,8 @@ static void DrawDragonOmenSilhouette(int32_t width, int32_t height,
                  thin_shadow);
 }
 
-static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
+static void DrawTargetAtmosphere(RenderTexture2D target, float clock,
+                                  int32_t day, bool exterior)
 {
     ArtAtmosphereDefinition atmosphere =
         visual_style.presentation_atmosphere;
@@ -4208,7 +4209,11 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
     }
 
 
-    int32_t drop_count = (int32_t)roundf(atmosphere.rain * 88.0f);
+    bool snowfall = exterior && CcCalendar(day).season == 3;
+    float precipitation = snowfall ?
+        (CcBuildingWeatherPrecipitation(day) ? 0.82f : 0.0f) :
+        atmosphere.rain;
+    int32_t drop_count = (int32_t)roundf(precipitation * 88.0f);
     for (int32_t drop = 0; drop < drop_count; ++drop) {
         float seed_x = ArtAtmosphereHash(
             UINT32_C(0x91e10da5) + (uint32_t)drop * UINT32_C(0x9e3779b9));
@@ -4217,11 +4222,18 @@ static void DrawTargetAtmosphere(RenderTexture2D target, float clock)
         float speed = 74.0f + ArtAtmosphereHash(
             UINT32_C(0x27d4eb2d) + (uint32_t)drop * UINT32_C(0xc2b2ae35)) *
             38.0f;
-        float x = fmodf(seed_x * (float)(width + 36) + clock * 18.0f,
+        if (snowfall) speed *= 0.20f;
+        float x = fmodf(seed_x * (float)(width + 36) + clock * (snowfall ? 5.0f : 18.0f),
                         (float)(width + 36)) - 18.0f;
         float y = fmodf(seed_y * (float)(height + 24) + clock * speed,
                         (float)(height + 24)) - 12.0f;
-        float opacity = atmosphere.rain * (0.20f + seed_y * 0.14f);
+        float opacity = precipitation * (0.20f + seed_y * 0.14f);
+        if (snowfall) {
+            DrawCircleV((Vector2){x + sinf(clock * 0.5f + seed_y * 12.0f) * 4.0f, y},
+                        0.8f + seed_x * 0.8f,
+                        Fade(BUILDING_SNOW, fminf(1.0f, opacity * 2.0f)));
+            continue;
+        }
         Vector2 start = {x, y};
         Vector2 end = {x - 2.4f, y + 7.0f + seed_x * 3.0f};
         DrawLineEx(start, end, seed_x > 0.74f ? 1.4f : 1.0f,

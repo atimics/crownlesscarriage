@@ -236,6 +236,7 @@ int main(int argc, char **argv)
         sim.characters[i].introduced_day = 0;
     }
     CcCensusInit(&sim);
+    CcBuildingsMigrate(&sim);
     CC_CHECK(CcSimHash(&sim) == CcSimHash(&restored));
     FILE *source = fopen(CC_TEST_SOURCE_DIR "/tests/fixtures/shipped/schema-73-generator-25-cast-journal.ccsave", "rb");
     FILE *copy = fopen(path, "wb");

@@ -12,9 +12,11 @@
 #define CC_LOCAL_PLACE_ROAD_COUNT 3
 #define CC_LOCAL_CARRIAGE_ROUTE_COUNT 5
 #define CC_LOCAL_PLACE_BUILDING_CAPACITY 12
+#define CC_LOCAL_HOUSEHOLD_OBSTACLE_CAPACITY (CC_LOCAL_PLACE_BUILDING_CAPACITY * 5)
 #define CC_LOCAL_PLACE_COMPOUND_CAPACITY 12
 #define CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT 3
 #define CC_LOCAL_PLACE_SCENE_COUNT 6
+#define CC_LOCAL_HOUSEHOLD_SCENE_CAPACITY 3
 #define CC_LOCAL_LANE_CAPACITY 12
 #define CC_LOCAL_LANE_POINT_CAPACITY 12
 #define CC_LOCAL_CARRIAGE_LANE_CAPACITY 3
@@ -101,7 +103,53 @@ typedef struct CcLocalPlaceBuilding {
     float height;
     CcLocalBuildingStyle style;
     bool door;
+    uint32_t plot_id; /* Saved identity, independent of the array order. */
 } CcLocalPlaceBuilding;
+
+typedef struct CcLocalPlotRect {
+    float x;
+    float z;
+    float width;
+    float depth;
+} CcLocalPlotRect;
+
+typedef enum CcLocalYardKind {
+    CC_LOCAL_YARD_GARDEN = 0,
+    CC_LOCAL_YARD_THRESHING,
+    CC_LOCAL_YARD_LIVESTOCK,
+    CC_LOCAL_YARD_WORKSHOP,
+    CC_LOCAL_YARD_MILL,
+    CC_LOCAL_YARD_ORCHARD
+} CcLocalYardKind;
+
+typedef enum CcLocalPlotFence {
+    CC_LOCAL_PLOT_FENCE_NORTH = 1U << 0,
+    CC_LOCAL_PLOT_FENCE_EAST = 1U << 1,
+    CC_LOCAL_PLOT_FENCE_SOUTH = 1U << 2,
+    CC_LOCAL_PLOT_FENCE_WEST = 1U << 3
+} CcLocalPlotFence;
+
+typedef struct CcLocalHouseholdPlot {
+    uint32_t plot_id;
+    const char *name;
+    CcLocalYardKind kind;
+    CcLocalPlotRect yard;
+    CcLocalPlotRect garden;
+    CcLocalPlotRect shed;
+    uint32_t fence_edges; /* Edges of the yard; open sides provide access. */
+} CcLocalHouseholdPlot;
+
+typedef enum CcLocalHouseholdObstacleKind {
+    CC_LOCAL_HOUSEHOLD_SHED = 0,
+    CC_LOCAL_HOUSEHOLD_FENCE
+} CcLocalHouseholdObstacleKind;
+
+typedef struct CcLocalHouseholdObstacle {
+    uint32_t plot_id;
+    CcLocalHouseholdObstacleKind kind;
+    CcLocalPlotRect footprint;
+    float height;
+} CcLocalHouseholdObstacle;
 
 typedef enum CcLocalCompoundKind {
     CC_LOCAL_COMPOUND_WALL = 0,
@@ -126,7 +174,10 @@ typedef enum CcLocalTownSceneKind {
     CC_LOCAL_TOWN_SCENE_LANDMARK,
     CC_LOCAL_TOWN_SCENE_CLOSE_FIRST,
     CC_LOCAL_TOWN_SCENE_CLOSE_SECOND,
-    CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD
+    CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD,
+    CC_LOCAL_TOWN_SCENE_HOUSEHOLD_FIRST,
+    CC_LOCAL_TOWN_SCENE_HOUSEHOLD_SECOND,
+    CC_LOCAL_TOWN_SCENE_HOUSEHOLD_THIRD
 } CcLocalTownSceneKind;
 
 typedef struct CcLocalTownScene {
@@ -175,7 +226,25 @@ typedef struct CcLocalPlaceProfile {
     int32_t carriage_lane_count;
     CcLocalCarriageLane carriage_lane[CC_LOCAL_CARRIAGE_LANE_CAPACITY];
     float building_yaw_degrees[CC_LOCAL_PLACE_BUILDING_CAPACITY];
+    uint32_t blueprint_id;
+    uint32_t blueprint_version;
+    int32_t household_count;
+    CcLocalHouseholdPlot household[CC_LOCAL_PLACE_BUILDING_CAPACITY];
+    int32_t household_scene_count;
+    CcLocalTownScene household_scene[CC_LOCAL_HOUSEHOLD_SCENE_CAPACITY];
 } CcLocalPlaceProfile;
+
+int32_t CcLocalTownSceneCount(CcSettlementFunction function);
+
+const CcLocalPlaceBuilding *CcLocalPlaceBuildingForPlot(
+    const CcLocalPlaceProfile *profile, uint32_t plot_id);
+const CcLocalPlaceProfile *CcLocalPlaceProfileForBlueprint(
+    uint32_t blueprint_id, uint32_t blueprint_version);
+const CcLocalHouseholdPlot *CcLocalPlaceHouseholdForPlot(
+    const CcLocalPlaceProfile *profile, uint32_t plot_id);
+int32_t CcLocalPlaceHouseholdObstacleCount(const CcLocalPlaceProfile *profile);
+bool CcLocalPlaceHouseholdObstacleAt(const CcLocalPlaceProfile *profile,
+    int32_t index, CcLocalHouseholdObstacle *obstacle);
 
 /* Same wall-front convention as the existing service door. Silverwick's
  * primary hall faces the lane; rendering and pointing share this anchor. */

@@ -709,10 +709,11 @@ static int32_t StreetNavigationRoomFor(Vector3 focus,
 static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
 {
     const float close_activation_radius = 10.50f;
+    int32_t scene_count = CcLocalTownSceneCount(active_place_function);
     int32_t nearest = 0;
     float nearest_distance = FLT_MAX;
     for (int32_t scene = 0;
-         scene < CC_LOCAL_PLACE_SCENE_COUNT; ++scene) {
+         scene < scene_count; ++scene) {
         const CcLocalTownScene *candidate = CcLocalTownSceneAt(
             active_place_function, scene);
         float x = focus.x - candidate->trigger_x;
@@ -732,7 +733,7 @@ static int32_t TownCameraSceneFor(Vector3 focus, int32_t current_scene)
         nearest_distance = distance;
     }
     if (current_scene >= 0 &&
-        current_scene < CC_LOCAL_PLACE_SCENE_COUNT &&
+        current_scene < scene_count &&
         current_scene != nearest) {
         const CcLocalTownScene *current = CcLocalTownSceneAt(
             active_place_function, current_scene);

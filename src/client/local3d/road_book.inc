@@ -1504,7 +1504,7 @@ void CcLocalDrawRoad3D(const CcSim *sim, const CcLocalAgent *agent,
     EndWorldLighting();
     EndMode3D();
     rlSetClipPlanes(0.05, 4000.0);
-    DrawTargetAtmosphere(target, clock);
+    DrawTargetAtmosphere(target, clock, sim->current_day, true);
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);
@@ -2131,7 +2131,8 @@ void CcLocalDrawSite3D(const CcSim *sim, const CcLocalAgent *agent,
     EndWorldLighting();
     EndMode3D();
     rlSetClipPlanes(0.05, 4000.0);
-    DrawTargetAtmosphere(target, clock);
+    DrawTargetAtmosphere(target, clock, sim->current_day,
+                         site_art.light_profile != ART_LIGHT_INTERIOR_EMBER);
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);
@@ -2440,7 +2441,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     SetTownSkyFog(sim, place);
 
     uint32_t town_conditions = CcSimTownConditions(sim, place->id);
-    DrawExteriorTerrain(place, town_conditions, scenery_focus, clock);
+    DrawExteriorTerrain(place, sim->current_day, town_conditions, scenery_focus, clock);
     if (!CcSettlementIsAbandoned(place)) DrawTownRaidStaging(course, scenery_focus);
     const CcLocalAgent *sightline_opponent = conversation_partner != NULL ?
         conversation_partner : course != NULL && course->alarm_active ?
@@ -2509,7 +2510,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     };
     secondary_reveal_valid = sightline_opponent != NULL;
     secondary_reveal_subject = opponent_sightline;
-    DrawWorldBuildings(place, town_conditions, kingdom, scenery_focus, profile, camera,
+    DrawWorldBuildings(place, sim->current_day, town_conditions, kingdom, scenery_focus, profile, camera,
                        foreground_reveal_world,
                        target.texture.width, target.texture.height, clock);
     DrawCastle(sim, place, kingdom, profile, scenery_focus, camera,
@@ -2735,7 +2736,7 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     EndWorldLighting();
     EndMode3D();
     rlSetClipPlanes(0.05, 4000.0);
-    DrawTargetAtmosphere(target, clock);
+    DrawTargetAtmosphere(target, clock, sim->current_day, true);
     EndTextureMode();
     PresentTarget(target, destination);
     DrawCrewLabels(camera, destination);
@@ -2746,8 +2747,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     int32_t scene_index = presented_scene;
     if (!combat_presentation && conversation_partner == NULL &&
         scene_index >= 0 &&
-        scene_index < CC_LOCAL_PLACE_SCENE_COUNT) {
-        const char *scene_name = profile->scene[scene_index].name;
+        scene_index < CcLocalTownSceneCount(profile->function)) {
+        const char *scene_name = CcLocalTownSceneAt(profile->function, scene_index)->name;
         int32_t title_width = CcOverlayMeasureText(scene_name, 10);
         DrawRectangleRounded(
             ViewportRectangle(destination, 11.0f, 10.0f,

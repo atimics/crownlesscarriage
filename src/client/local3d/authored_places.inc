@@ -99,6 +99,12 @@ static void DrawTiltedBox(Vector3 center, Vector3 size, Vector3 axis,
     rlPopMatrix();
 }
 
+#include "client/local3d/building_roof_surfaces.inc"
+
+static float terrain_snow_cover;
+static int32_t terrain_ground_snow_band;
+static int32_t terrain_detail_snow_band;
+
 static float DrawPitchedRoof(float x, float z, float width, float depth,
                              float wall_height, Color wall, Color roof)
 {
@@ -132,7 +138,7 @@ static float DrawPitchedRoof(float x, float z, float width, float depth,
         Vector3 axis = ridge_along_x ? (Vector3){1.0f, 0.0f, 0.0f} :
                                           (Vector3){0.0f, 0.0f, 1.0f};
         float plane_angle = ridge_along_x ? sign * angle : -sign * angle;
-        DrawTiltedBox(center, size, axis, plane_angle,
+        DrawBuildingRoofSlope(center, size, axis, plane_angle,
                       side > 0 ? roof : shadow);
 
 
@@ -2006,6 +2012,11 @@ static Color TerrainSurfaceColor(const CcSettlement *place,
 
     float broad = TerrainValueNoise(x, z, 11.0f, 21U);
     float detail = TerrainValueNoise(x + 5.0f, z - 9.0f, 3.4f, 22U);
+    float traffic = fmaxf(road_amount, fmaxf(place_road_amount,
+        fmaxf(carriage_road_amount, plaza_amount)));
+    float snow = terrain_snow_cover * fmaxf(0.0f, normal.y) *
+                 (1.0f - traffic * 0.87f);
+    color = BlendColor(color, BUILDING_SNOW, snow * 0.88f);
     return ShadeColor(color, 1.0f + broad * 0.035f + detail * 0.014f);
 }
 
@@ -2305,6 +2316,7 @@ static bool TerrainRenderCacheBuild(const CcSettlement *place)
     terrain_render_cache.prosperity_band =
         place != NULL ? place->prosperity / 5 : 10;
     terrain_render_cache.vertex_count = stats.vertex_count;
+    terrain_ground_snow_band = (int32_t)lroundf(terrain_snow_cover * 20.0f);
     terrain_render_cache.ready = true;
     TraceLog(LOG_INFO,
              "TERRAIN: cached %d vertices and %d indices (%.1f MiB)",
@@ -2322,6 +2334,7 @@ static void DrawCachedTerrain(const CcSettlement *place)
                  terrain_render_cache.place_id !=
                      (place != NULL ? place->id : 0U) ||
                  terrain_render_cache.hunger_band != hunger_band ||
+                 terrain_ground_snow_band != (int32_t)lroundf(terrain_snow_cover * 20.0f) ||
                  terrain_render_cache.prosperity_band != prosperity_band;
     if (stale && !TerrainRenderCacheBuild(place)) return;
     DrawModel(terrain_render_cache.model, (Vector3){0.0f, 0.0f, 0.0f},
@@ -2794,6 +2807,7 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
     Color grass_top = BlendColor(WORLD_GRASS_LIGHT,
                                  WORLD_EARTH,
                                  hunger * 0.58f);
+    grass_top = BlendColor(grass_top, BUILDING_SNOW, terrain_snow_cover * 0.85f);
     const float spacing = 1.65f;
     int32_t first_column = terrain_detail_cache_building ? 0 :
         (int32_t)floorf(fmaxf(0.0f, focus.x - 24.0f) / spacing);
@@ -2843,6 +2857,7 @@ static void DrawTerrainPlantCover(const CcSettlement *place, Vector3 focus)
     Color crop_top = BlendColor(WORLD_CROP,
                                 WORLD_CROP_LIGHT,
                                 prosperity * 0.42f);
+    crop_top = BlendColor(crop_top, BUILDING_SNOW, terrain_snow_cover * 0.82f);
     for (int32_t field_index = 0;
          field_index < (int32_t)(sizeof(TERRAIN_FIELDS) /
                                   sizeof(TERRAIN_FIELDS[0])); ++field_index) {
@@ -2981,6 +2996,7 @@ static bool TerrainDetailRenderCacheBuild(const CcSettlement *place)
     terrain_detail_render_cache.prosperity_band =
         place != NULL ? place->prosperity / 5 : 10;
     terrain_detail_render_cache.vertex_count = counter.cursor;
+    terrain_detail_snow_band = (int32_t)lroundf(terrain_snow_cover * 20.0f);
     terrain_detail_render_cache.ready = true;
     TraceLog(LOG_INFO, "TERRAIN: cached %d detail vertices on the GPU",
              counter.cursor);
@@ -2997,6 +3013,7 @@ static void DrawTerrainSurfaceDetails(const CcSettlement *place,
                  terrain_detail_render_cache.place_id !=
                      (place != NULL ? place->id : 0U) ||
                  terrain_detail_render_cache.hunger_band != hunger_band ||
+                 terrain_detail_snow_band != (int32_t)lroundf(terrain_snow_cover * 20.0f) ||
                  terrain_detail_render_cache.prosperity_band !=
                      prosperity_band;
     if (stale && !TerrainDetailRenderCacheBuild(place)) {
@@ -3123,6 +3140,9 @@ static void DrawThornfordGardens(const CcSettlement *place, Vector3 focus)
     TerrainDetailBegin();
     for (int32_t index = 0; index < ActiveWorldBuildingCount(); ++index) {
         WorldBuilding building = ActiveWorldBuildingAt(index);
+        const CcLocalPlaceProfile *profile = ActivePlaceProfile();
+        if (CcLocalPlaceHouseholdForPlot(profile, profile->building[index].plot_id) != NULL)
+            continue;
         if (building.style != CC_LOCAL_BUILDING_DOMESTIC || index == 6 ||
             !SceneryFootprintVisible(building.footprint, focus)) continue;
         Rectangle pad = building.footprint;
@@ -3514,9 +3534,10 @@ static void DrawTownTerrainStage(const CcSettlement *place, uint32_t conditions,
     }
 }
 
-static void DrawExteriorTerrain(const CcSettlement *place, uint32_t conditions,
+static void DrawExteriorTerrain(const CcSettlement *place, int32_t day, uint32_t conditions,
                                  Vector3 focus, float clock)
 {
+    terrain_snow_cover = roundf(CcBuildingWeatherForDay(day).snow_cover * 20.0f) / 20.0f;
     SetWorldTerrainSurface(true);
     DrawCachedTerrain(place);
     DrawTerrainSurfaceDetails(place, focus);
@@ -4212,6 +4233,12 @@ static float TownFireBurnForRank(const CcSettlement *place, int32_t rank,
 
 static float TownBuildingBurn(const CcSettlement *place, int32_t index)
 {
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForSettlement(place);
+    if (place != NULL && profile != NULL && index >= 0 &&
+        index < profile->building_count &&
+        CcSettlementBuilding(place, profile->building[index].plot_id) != NULL) {
+        return CcSettlementBuildingBurn(place, profile->building[index].plot_id);
+    }
     if (place == NULL || place->fire_damage <= 0) return 0.0f;
     int32_t count = ActiveWorldBuildingCount();
     float mine = TownFireOrderKey(place, 0U, index,
@@ -4365,9 +4392,6 @@ static void DrawGuttedBuildingShell(Rectangle footprint, float height,
                       (Vector3){0.0f, 1.0f, 0.0f}, 40.0f * u,
                       heap % 2 == 0 ? TOWN_ASH : ShadeColor(stump, 0.8f));
     }
-    /* Embers still glow in the heap nearest the door. */
-    DrawBox((Vector3){x0 + w * 0.5f, 0.30f, z0 + d * 0.62f},
-            (Vector3){0.55f, 0.10f, 0.40f}, TOWN_EMBER);
 }
 
 /* A building the fire caught but did not gut: soot streaks climbing the
@@ -5047,7 +5071,10 @@ static void DrawReturnArrivalStaging(const CcSim *sim, const CcSettlement *place
     if (cues->bandit_camp) DrawReturnBanditCamp(cues->camp, clock);
 }
 
-static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
+#include "client/local3d/building_conditions.inc"
+#include "client/local3d/village_plots.inc"
+
+static void DrawWorldBuildings(const CcSettlement *place, int32_t day, uint32_t conditions,
                                Color kingdom, Vector3 focus,
                                const CcLocalPlaceProfile *profile,
                                Camera3D camera, Vector3 reveal_world,
@@ -5060,6 +5087,8 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
 
 
     SetWorldForegroundReveal(0.0f, reveal_cut_height);
+    DrawVillageHouseholdPlots(place, profile, true,
+                              CcBuildingWeatherForDay(day).snow_cover);
     for (int32_t i = 0; i < ActiveWorldBuildingCount(); ++i) {
         WorldBuilding building = ActiveWorldBuildingAt(i);
         if (!SceneryFootprintVisible(building.footprint, focus)) continue;
@@ -5088,31 +5117,12 @@ static void DrawWorldBuildings(const CcSettlement *place, uint32_t conditions,
         bool farming = profile->function == CC_SETTLEMENT_FARMING;
         bool market = profile->function == CC_SETTLEMENT_MARKET;
         bool mining = profile->function == CC_SETTLEMENT_MINING;
-        float burn = TownBuildingBurn(place, i);
-        bool burnt = burn > 0.0f;
-        bool gutted = burn >= 0.75f;
-        uint32_t fire_seed = TownFireHash((uint32_t)place->id * UINT32_C(31) +
-                                          (uint32_t)i);
         Color wall = BuildingWallColor(building.style, profile);
         Color roof = BuildingRoofColor(building.style, kingdom, profile);
-        if (burnt) {
-            /* Char, not shade: a warm black that stays black under the
-               dusk and overcast palettes, where the old cool-ink tint
-               read as ordinary evening shadow. */
-            wall = BlendColor(wall, TOWN_CHAR, 0.30f + 0.40f * burn);
-            roof = BlendColor(roof, TOWN_CHAR, 0.65f + 0.35f * burn);
-            DrawFireScorch(building.footprint, burn, fire_seed);
-        }
-        if (gutted) {
-            DrawGuttedBuildingShell(building.footprint, building.height,
-                                    wall, fire_seed);
-        } else {
-            DrawSettlementBuilding(&building, wall, roof, profile, i, burnt);
-            if (burnt) {
-                DrawScorchedBuildingMarks(building.footprint, building.height,
-                                          burn, fire_seed);
-            }
-        }
+        BuildingAppearance appearance = DrawConditionedSettlementBuilding(
+            place, profile, &building, i, day, wall, roof);
+        bool burnt = appearance.burn > 0.0f;
+        bool gutted = appearance.gutted;
         if (farming && !gutted) {
             DrawThornfordStores(place, &building, i, burnt, conditions);
             DrawThornfordBuildingLife(&building, conditions, burnt,
