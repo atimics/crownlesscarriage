@@ -47,7 +47,7 @@ static int ProfileContract(void)
         CHECK(profile->compound_structure[5].kind ==
               CC_LOCAL_COMPOUND_HALL);
         for (int32_t scene = 0;
-             scene < CC_LOCAL_PLACE_SCENE_COUNT; ++scene) {
+             scene < CcLocalTownSceneCount((CcSettlementFunction)function); ++scene) {
             const CcLocalTownScene *camera = CcLocalTownSceneAt(
                 (CcSettlementFunction)function, scene);
             CHECK(camera != NULL);
@@ -79,7 +79,7 @@ static int ProfileContract(void)
             }
             for (int32_t previous = 0; previous < scene; ++previous) {
                 CHECK(strcmp(camera->name,
-                             profile->scene[previous].name) != 0);
+                             CcLocalTownSceneAt((CcSettlementFunction)function, previous)->name) != 0);
             }
         }
         for (int32_t room = 0; room < CC_LOCAL_PLACE_ROOM_COUNT; ++room) {

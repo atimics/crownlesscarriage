@@ -64,6 +64,18 @@ static const CcLocalPlaceProfile PLACE_PROFILES[] = {
              9.00f, 2.90f, 12.00f, 10.50f},
         },
         .keeper_seed = UINT32_C(0xedda1001),
+        .household_scene_count = 3,
+        .household_scene = {
+            {CC_LOCAL_TOWN_SCENE_HOUSEHOLD_FIRST, "WILLOW CROFT",
+             23.00f, 57.00f, 23.50f, 2.80f, 52.50f,
+             9.00f, 3.00f, 13.00f, 11.50f},
+            {CC_LOCAL_TOWN_SCENE_HOUSEHOLD_SECOND, "REED CUTTER'S CLOSE",
+             77.00f, 51.30f, 78.00f, 2.80f, 47.20f,
+             -10.00f, 3.00f, 11.00f, 11.50f},
+            {CC_LOCAL_TOWN_SCENE_HOUSEHOLD_THIRD, "EAST ORCHARD CROFT",
+             77.50f, 66.80f, 76.50f, 2.80f, 63.00f,
+             10.00f, 3.00f, 8.00f, 11.50f},
+        },
         .terrain_salt = UINT32_C(0x16f11fe9),
         .feature_mask = CC_LOCAL_PLACE_FARMLAND |
                         CC_LOCAL_PLACE_CARRIAGE,
@@ -1044,14 +1056,22 @@ const CcLocalPlaceCompoundStructure *CcLocalPlaceCompoundStructureAt(
     return &profile->compound_structure[structure_index];
 }
 
+int32_t CcLocalTownSceneCount(CcSettlementFunction function)
+{
+    const CcLocalPlaceProfile *profile = CcLocalPlaceProfileForFunction(function);
+    return CC_LOCAL_PLACE_SCENE_COUNT + profile->household_scene_count;
+}
+
 const CcLocalTownScene *CcLocalTownSceneAt(
     CcSettlementFunction function, int32_t scene_index)
 {
     const CcLocalPlaceProfile *profile =
         CcLocalPlaceProfileForFunction(function);
-    if (scene_index < 0 || scene_index >= CC_LOCAL_PLACE_SCENE_COUNT) {
+    if (scene_index < 0 || scene_index >= CcLocalTownSceneCount(function)) {
         return NULL;
     }
+    if (scene_index >= CC_LOCAL_PLACE_SCENE_COUNT)
+        return &profile->household_scene[scene_index - CC_LOCAL_PLACE_SCENE_COUNT];
     return &profile->scene[scene_index];
 }
 

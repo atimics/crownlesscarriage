@@ -2747,8 +2747,8 @@ void CcLocalDrawStreet3D(const CcSim *sim, const CcLocalAgent *agent,
     int32_t scene_index = presented_scene;
     if (!combat_presentation && conversation_partner == NULL &&
         scene_index >= 0 &&
-        scene_index < CC_LOCAL_PLACE_SCENE_COUNT) {
-        const char *scene_name = profile->scene[scene_index].name;
+        scene_index < CcLocalTownSceneCount(profile->function)) {
+        const char *scene_name = CcLocalTownSceneAt(profile->function, scene_index)->name;
         int32_t title_width = CcOverlayMeasureText(scene_name, 10);
         DrawRectangleRounded(
             ViewportRectangle(destination, 11.0f, 10.0f,

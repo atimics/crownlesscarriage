@@ -16,6 +16,7 @@
 #define CC_LOCAL_PLACE_COMPOUND_CAPACITY 12
 #define CC_LOCAL_PLACE_ESTABLISHING_SCENE_COUNT 3
 #define CC_LOCAL_PLACE_SCENE_COUNT 6
+#define CC_LOCAL_HOUSEHOLD_SCENE_CAPACITY 3
 #define CC_LOCAL_LANE_CAPACITY 12
 #define CC_LOCAL_LANE_POINT_CAPACITY 12
 #define CC_LOCAL_CARRIAGE_LANE_CAPACITY 3
@@ -173,7 +174,10 @@ typedef enum CcLocalTownSceneKind {
     CC_LOCAL_TOWN_SCENE_LANDMARK,
     CC_LOCAL_TOWN_SCENE_CLOSE_FIRST,
     CC_LOCAL_TOWN_SCENE_CLOSE_SECOND,
-    CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD
+    CC_LOCAL_TOWN_SCENE_CARRIAGE_YARD,
+    CC_LOCAL_TOWN_SCENE_HOUSEHOLD_FIRST,
+    CC_LOCAL_TOWN_SCENE_HOUSEHOLD_SECOND,
+    CC_LOCAL_TOWN_SCENE_HOUSEHOLD_THIRD
 } CcLocalTownSceneKind;
 
 typedef struct CcLocalTownScene {
@@ -226,7 +230,11 @@ typedef struct CcLocalPlaceProfile {
     uint32_t blueprint_version;
     int32_t household_count;
     CcLocalHouseholdPlot household[CC_LOCAL_PLACE_BUILDING_CAPACITY];
+    int32_t household_scene_count;
+    CcLocalTownScene household_scene[CC_LOCAL_HOUSEHOLD_SCENE_CAPACITY];
 } CcLocalPlaceProfile;
+
+int32_t CcLocalTownSceneCount(CcSettlementFunction function);
 
 const CcLocalPlaceBuilding *CcLocalPlaceBuildingForPlot(
     const CcLocalPlaceProfile *profile, uint32_t plot_id);
