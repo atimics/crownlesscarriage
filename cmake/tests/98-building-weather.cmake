@@ -1,0 +1,4 @@
+add_executable(building_weather_tests tests/building_weather_tests.c)
+target_include_directories(building_weather_tests PRIVATE src)
+cc_strict_warnings(building_weather_tests)
+add_test(NAME building_weather COMMAND building_weather_tests)
