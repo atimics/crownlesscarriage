@@ -40,14 +40,13 @@ static inline CcBuildingWeather CcBuildingWeatherForDay(int32_t absolute_day)
     for (int32_t ago = 31; ago >= 0; --ago) {
         int64_t day = (int64_t)absolute_day - ago;
         int32_t phase = CcBuildingWeatherPhase(day, CC_SOLAR_DAYS);
-        float cold = 0.0f;
         float melt = 0.22f;
         if (phase >= winter_start) {
             float onset = CcBuildingWeatherUnit(
                 (float)(phase - winter_start + 1) / 14.0f);
             float ending = CcBuildingWeatherUnit(
                 (float)(CC_SOLAR_DAYS - phase) / 28.0f);
-            cold = onset < ending ? onset : ending;
+            float cold = onset < ending ? onset : ending;
             if (CcBuildingWeatherPrecipitation(day)) {
                 cover += (0.18f + 0.36f * cold) * onset;
             }
