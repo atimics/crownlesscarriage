@@ -610,6 +610,9 @@ EM_JS(void, ClientBrowserFullscreen, (), {
     Module.toggleCrownlessFullscreen();
 });
 EM_JS(void, ClientBrowserTouchControls, (), { Module.toggleCrownlessTouch(); });
+EM_JS(void, ClientBrowserStartupFailure, (), {
+    Module.showCrownlessStartupFailure();
+});
 EM_JS(int, ClientBrowserCampaignAccess, (), {
     return Number.isInteger(Module.crownlessCampaignAccess)
         ? Module.crownlessCampaignAccess : 1;
@@ -12981,7 +12984,7 @@ int main(int argc, char **argv)
 #if defined(PLATFORM_WEB)
         (void)fprintf(stderr,
                       "Crownless Carriage could not create a WebGL 2 graphics context.\n");
-        EM_ASM({ Module.showCrownlessStartupFailure(); });
+        ClientBrowserStartupFailure();
 #else
         (void)fprintf(stderr,
                       "Crownless Carriage could not connect to the desktop window server.\n");
