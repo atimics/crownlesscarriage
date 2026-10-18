@@ -19,7 +19,7 @@ permissions:
 jobs:
   runner:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,3 +31,9 @@ jobs:
         env:
           PARADEE_SOURCE_ARCHIVE: ${{ runner.temp }}/paradee/source.tar.gz
         run: python tests/paradee_training_tests.py
+      - name: Install the CPU checkpoint test dependencies
+        run: |
+          python -m pip install numpy
+          python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Check continuation with real CPU training
+        run: python tests/paradee_training_tests.py RandomStateTests
