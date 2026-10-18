@@ -1,0 +1,44 @@
+name: Paradee training runner
+
+on:
+  pull_request:
+    paths:
+      - 'tools/audio/paradee/**'
+      - 'tests/paradee_training_tests.py'
+      - '.github/workflows/paradee-training.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audio/paradee/**'
+      - 'tests/paradee_training_tests.py'
+      - '.github/workflows/paradee-training.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check the pinned source and compile the adapted trainers
+        run: python tools/audio/paradee/run.py prepare --run "$RUNNER_TEMP/paradee"
+      - name: Check the frozen dependency environment
+        run: |
+          python -m pip install uv==0.12.3
+          cd "$RUNNER_TEMP/paradee/training"
+          uv sync --frozen --dry-run --no-python-downloads --python "$(command -v python)"
+      - name: Test plans, voice isolation, source drift, and costs
+        env:
+          PARADEE_SOURCE_ARCHIVE: ${{ runner.temp }}/paradee/source.tar.gz
+        run: python tests/paradee_training_tests.py
+      - name: Install the CPU checkpoint test dependencies
+        run: |
+          python -m pip install numpy
+          python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Check continuation with real CPU training
+        run: python tests/paradee_training_tests.py RandomStateTests
