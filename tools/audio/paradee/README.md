@@ -24,7 +24,8 @@ python3 tools/audio/paradee/run.py prepare \
 
 `plan` prints the settings and stage commands. `prepare` downloads the fixed
 source commit and checks each training file against its SHA-256 checksum.
-It then applies small source edits for device selection, stable data seeds,
+It aligns the project name with the upstream dependency lock, then applies
+small source edits for device selection, stable data seeds,
 atomic checkpoint writes, and saved random state. The adapted source also has
 a checksum receipt. An existing run must keep its original settings and code.
 

@@ -27,6 +27,11 @@ jobs:
           python-version: '3.12'
       - name: Check the pinned source and compile the adapted trainers
         run: python tools/audio/paradee/run.py prepare --run "$RUNNER_TEMP/paradee"
+      - name: Check the frozen dependency environment
+        run: |
+          python -m pip install uv==0.12.3
+          cd "$RUNNER_TEMP/paradee/training"
+          uv sync --frozen --dry-run --no-python-downloads --python "$(command -v python)"
       - name: Test plans, voice isolation, source drift, and costs
         env:
           PARADEE_SOURCE_ARCHIVE: ${{ runner.temp }}/paradee/source.tar.gz

@@ -86,6 +86,7 @@ class TrainingTests(unittest.TestCase):
         pipeline.prepare(self.root, self.settings, archive)
         pipeline.verify_sources(self.root, self.settings)
         pipeline.prepare(self.root, self.settings, archive)
+        self.assertIn('name = "research"', (self.root / 'training/pyproject.toml').read_text())
         source = self.root / 'training/scripts/train_text.py'
         self.assertIn('cc_restore_rng(ck)', source.read_text())
         self.assertIn('cc_preserve_rng', source.read_text())

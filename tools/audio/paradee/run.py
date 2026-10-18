@@ -72,6 +72,8 @@ def replace_once(text, old, new):
 
 def adapt(name, text, settings):
     """Small checked edits; the rest of the published training recipe stays intact."""
+    if name == 'pyproject.toml':
+        text = replace_once(text, 'name = "paradee-training"', 'name = "research"')
     if name == 'scripts/gen_teacher.py':
         text = replace_once(text, 'SHARD = 500; DEV = "mps"',
                             f'SHARD = 500; DEV = {settings["device"]!r}')
