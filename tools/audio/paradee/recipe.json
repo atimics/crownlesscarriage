@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "upstream_commit": "9c8b4d7504cbee7e64de2d0341bb690f0b0ab708",
+  "teacher_repo": "hexgrad/Kokoro-82M",
+  "teacher_revision": "f3ff3571791e39611d31c381e3a41a3af07b4987",
+  "python": "3.12.12",
+  "uv": "0.12.3",
+  "pronunciation_wheel": {
+    "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    "sha256": "1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
+  },
+  "sentences": 12000,
+  "held_out": 200,
+  "seed": 20261018,
+  "threads": 2,
+  "stages": {
+    "text": 8000,
+    "decoder": 50000,
+    "gan10": 5000,
+    "gan3": 5000
+  },
+  "source_sha256": {
+    "README.md": "b4c2d7f98855d5af82891c4e98bd1bfc4ef18148c662dae1ded2fc651bc59cf7",
+    "data/wikitext_sents.json": "95d7edd69cfbacb67ef7c4df120d31c1dab2a3c91a12fd287abe506760c6ac15",
+    "pyproject.toml": "a45656d70df4166700d1d14e1462cf3b13c43275744e3cda089f6bc1f91fae13",
+    "scripts/common.py": "76faab4b54f633c1dfee28bfb08c981d4adb3f4ee99b42271cf80a3fc0e9fc9c",
+    "scripts/discriminators.py": "d2c645c123376f7181f8499e9829da001c156780771abe7b1326d6a19065355e",
+    "scripts/eval_full.py": "63cf0764ab1a32cf415fe70a3fefa6fb235056eda854f8471c5f863a951c8bac",
+    "scripts/export_paradee.py": "5656e4eb725fdd97bb46fc00cbe824a1e9adac4bc4b46440ba27a5b8f326a4db",
+    "scripts/gen_teacher.py": "ce8bfce04329b89745faa1c6975adac23d5bcd6e14e0610afc76045e00957664",
+    "scripts/phase_lock.py": "d502744ccb2ede9fc10f56d481020b368a414d4f35b964ffbace14bcd37bbe86",
+    "scripts/quantize_student.py": "6092fe86eaf4a3670543521066bf84c79175f2bc950f9301fecd93c580dcd510",
+    "scripts/regen_audio.py": "10089996dc5b5fd2bf24684d48b9036f2313ccc3266aea7cd89054f3bfe81be9",
+    "scripts/rtf.py": "1115e5412d6893d3dcc42b5f927a90122961fa3121d0af14d72058c6dcb5250b",
+    "scripts/student.py": "90456f28ac3d6dd06e76ad8f253f9bcadd9060cdecb6880268651e0ff8ba0f8b",
+    "scripts/student_decoder.py": "2443f14fe8ff27be5702d88dc80f8c566e92c03273b6216825fa7787cd66b97c",
+    "scripts/train_decoder.py": "9385122204c0f0f9cfd39838064098bee5cb6da79f07e8a4badeb699e21f56e2",
+    "scripts/train_text.py": "0c2b660441c352c5ed3893ec43573e8a37942540fea63e2b9c539b58b4d1d029",
+    "scripts/utmos.py": "fad73154f2aaf058c5dc762bb696a721cb18de2919964bcb67aff5084fc5f5ba",
+    "scripts/wer.py": "5a87c86015ca546a60b924517aea5ecb20b675f01f4d0ccd008bb2aa7f74632e",
+    "uv.lock": "1fce8872e197b5cedfbdb934f902a9e3450a51fbd7804d0bd3eddc4c7ff54469"
+  },
+  "notice_sha256": {
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "README.md": "6f0969d0adfe1998c67c72151d57abaf7c04b34e306d123ac9c055858d381368"
+  }
+}

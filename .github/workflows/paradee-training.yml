@@ -1,0 +1,33 @@
+name: Paradee training runner
+
+on:
+  pull_request:
+    paths:
+      - 'tools/audio/paradee/**'
+      - 'tests/paradee_training_tests.py'
+      - '.github/workflows/paradee-training.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/audio/paradee/**'
+      - 'tests/paradee_training_tests.py'
+      - '.github/workflows/paradee-training.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check the pinned source and compile the adapted trainers
+        run: python tools/audio/paradee/run.py prepare --run "$RUNNER_TEMP/paradee"
+      - name: Test plans, voice isolation, source drift, and costs
+        env:
+          PARADEE_SOURCE_ARCHIVE: ${{ runner.temp }}/paradee/source.tar.gz
+        run: python tests/paradee_training_tests.py
